@@ -1,23 +1,24 @@
 {
   "expo": {
-    "name": "ANDROID",
+    "name": "CGPE Connect",
     "slug": "ANDROID",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "android",
+    "icon": "./assets/images/cgpe-logo.png",
+    "scheme": "cgpe",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.cgpe.connect",
+      "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "backgroundColor": "#ffffff",
+        "foregroundImage": "./assets/images/cgpe-logo.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.shivambhadoriya.ANDROID"
     },
     "web": {
       "output": "static",
@@ -25,18 +26,44 @@
     },
     "plugins": [
       "expo-router",
+      "expo-secure-store",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
+          "backgroundColor": "#ffffff",
+          "image": "./assets/images/cgpe-logo.png",
+          "imageWidth": 190
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "CGPE Connect uses your location to record field attendance when you clock in."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "CGPE Connect needs access to your photos to attach claim documents.",
+          "cameraPermission": "CGPE Connect needs camera access to capture claim and KYC documents."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "CGPE Connect uses Face ID to securely unlock the app."
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "6d177f14-d6e3-494a-8ae3-d764332ff256"
+      }
     }
   }
 }

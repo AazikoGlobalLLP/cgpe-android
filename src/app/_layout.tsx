@@ -1,18 +1,57 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import 'react-native-gesture-handler';
+import React, { useEffect, useState } from 'react';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { ThemeProvider, useTheme } from '@/theme/theme';
+import { AuthProvider, useAuth } from '@/store/auth';
+import { I18nProvider } from '@/i18n';
+import { ConfirmProvider } from '@/ui/Confirm';
+import { Splash } from '@/ui/Splash';
+import { AppLock } from '@/ui/AppLock';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
-SplashScreen.preventAutoHideAsync();
+function RootNav() {
+  const c = useTheme();
+  const { ready } = useAuth();
+  const [splashDone, setSplashDone] = useState(false);
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  // Hand off from the native splash to our animated one immediately.
+  useEffect(() => { SplashScreen.hideAsync().catch(() => {}); }, []);
+
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <>
+      <StatusBar style={c.scheme === 'dark' ? 'light' : 'dark'} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: c.bg },
+          animation: 'slide_from_right',
+        }}
+      />
+      <AppLock />
+      {(!ready || !splashDone) && <Splash onDone={() => setSplashDone(true)} />}
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <ThemeProvider>
+          <I18nProvider>
+            <AuthProvider>
+              <ConfirmProvider>
+                <RootNav />
+              </ConfirmProvider>
+            </AuthProvider>
+          </I18nProvider>
+        </ThemeProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
