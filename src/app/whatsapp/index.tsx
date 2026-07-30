@@ -26,7 +26,7 @@ export default function WhatsAppHub() {
           refreshing={false}
           contentContainerStyle={{ padding: spacing.lg, gap: 10, paddingBottom: 40 }}
           ListEmptyComponent={<EmptyState icon="chatbubbles-outline" title="No conversations" />}
-          renderItem={({ item }) => <ThreadRow t={item} onPress={() => router.push(`/whatsapp/${item.id}`)} />}
+          renderItem={({ item }) => <ThreadRow t={item} onPress={() => router.push(`/whatsapp/${encodeURIComponent(item.id)}`)} />}
         />
       )}
     </View>

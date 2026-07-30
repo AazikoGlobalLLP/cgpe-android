@@ -1,71 +1,80 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, FlatList, Pressable, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, FlatList, Pressable, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useTheme, spacing } from '@/theme/theme';
-import { Avatar, Card, Chips, EmptyState, Header, Loader, Pill, SearchBar } from '@/ui/kit';
-import { useData } from '@/hooks/useData';
+import { useTheme, spacing, radius } from '@/theme/theme';
+import { Avatar, Card, EmptyState, Header, Loader, SearchBar } from '@/ui/kit';
 import * as api from '@/data/api';
 import type { Client } from '@/data/types';
-import { inrShort } from '@/lib/format';
+import { inr } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
-
-const SEG_META: Record<string, { label: string; tone: any; icon: any }> = {
-  renewal_due: { label: 'Renewal due', tone: 'warning', icon: 'refresh-circle' },
-  maturity_soon: { label: 'Maturity soon', tone: 'info', icon: 'cash' },
-  birthday: { label: 'Birthday', tone: 'accent', icon: 'gift' },
-  cross_sell: { label: 'Cross-sell', tone: 'primary', icon: 'trending-up' },
-  hot_lead: { label: 'Hot', tone: 'danger', icon: 'flame' },
-};
 
 export default function Clients() {
   const c = useTheme();
   const router = useRouter();
-  const { data, loading, refresh } = useData(api.getClients);
+  const [items, setItems] = useState<Client[]>([]);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [q, setQ] = useState('');
-  const [seg, setSeg] = useState<'all' | string>('all');
+  const [total, setTotal] = useState<number | null>(null);
+  const reqId = useRef(0);
 
-  const clients = data ?? [];
-  const counts = useMemo(() => {
-    const m: Record<string, number> = { all: clients.length };
-    clients.forEach((cl) => cl.segment.forEach((s) => (m[s] = (m[s] ?? 0) + 1)));
-    return m;
-  }, [clients]);
+  // Portfolio total (un-scoped aggregate on the backend)
+  useEffect(() => { api.getClientStats().then((s) => s && setTotal(s.total_clients)); }, []);
 
-  const filtered = clients.filter((cl) => {
-    const matchSeg = seg === 'all' || cl.segment.includes(seg as any);
-    const matchQ = !q.trim() || cl.name.toLowerCase().includes(q.toLowerCase()) || cl.phone.includes(q);
-    return matchSeg && matchQ;
-  });
+  const fetchPage = useCallback(async (p: number, search: string, replace: boolean) => {
+    const my = ++reqId.current;
+    if (replace) setLoading(true); else setLoadingMore(true);
+    const res = await api.getClientsPage(p, search);
+    if (my !== reqId.current) return; // a newer search superseded this
+    setItems((prev) => (replace ? res.items : [...prev, ...res.items]));
+    setHasMore(res.hasMore);
+    setPage(p);
+    setLoading(false); setLoadingMore(false);
+  }, []);
 
-  const totalCover = clients.reduce((s, cl) => s + cl.totalCover, 0);
-  const options = [
-    { key: 'all', label: 'All', count: counts.all },
-    { key: 'renewal_due', label: 'Renewal due', count: counts.renewal_due },
-    { key: 'maturity_soon', label: 'Maturity', count: counts.maturity_soon },
-    { key: 'birthday', label: 'Birthday', count: counts.birthday },
-    { key: 'cross_sell', label: 'Cross-sell', count: counts.cross_sell },
-  ];
+  useEffect(() => { fetchPage(1, '', true); }, [fetchPage]);
+
+  // debounced server-side search
+  useEffect(() => {
+    const t = setTimeout(() => { fetchPage(1, q.trim(), true); }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
+
+  const loadMore = () => { if (!loadingMore && !loading && hasMore) fetchPage(page + 1, q.trim(), false); };
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Header title="Clients" subtitle={`${clients.length} clients · ${inrShort(totalCover)} total cover`} />
-
-      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, gap: spacing.md }}>
-        <SearchBar value={q} onChange={setQ} placeholder="Search clients by name or number" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <Chips options={options} value={seg} onChange={setSeg} />
-        </ScrollView>
+      <Header
+        title="Clients"
+        subtitle={total != null ? `${total.toLocaleString('en-IN')} clients · showing ${items.length}` : `${items.length} loaded`}
+      />
+      <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: 4 }}>
+        <SearchBar value={q} onChange={setQ} placeholder="Search all clients by name or number" />
       </View>
 
       {loading ? <Loader /> : (
         <FlatList
-          data={filtered}
-          keyExtractor={(cl) => cl.id}
-          contentContainerStyle={{ padding: spacing.lg, paddingTop: spacing.md, gap: 10, paddingBottom: 40 }}
-          onRefresh={refresh}
-          refreshing={false}
-          ListEmptyComponent={<EmptyState icon="people-outline" title="No clients found" subtitle="Try a different search or segment." />}
+          data={items}
+          keyExtractor={(cl, i) => cl.id + '_' + i}
+          contentContainerStyle={{ padding: spacing.lg, paddingTop: spacing.sm, gap: 10, paddingBottom: 40 }}
+          onEndReached={loadMore}
+          onEndReachedThreshold={0.6}
+          keyboardShouldPersistTaps="handled"
+          ListEmptyComponent={<EmptyState icon="people-outline" title="No clients found" subtitle={q ? `Nothing matches “${q}”.` : 'Pull to refresh or check your connection.'} />}
+          ListFooterComponent={
+            loadingMore ? <View style={{ paddingVertical: 18 }}><ActivityIndicator color={c.primary} /></View>
+              : hasMore && items.length > 0 ? (
+                <Pressable onPress={loadMore} style={{ paddingVertical: 14, alignItems: 'center' }}>
+                  <Text style={{ color: c.primary, fontWeight: '700', fontSize: 13.5 }}>Load more</Text>
+                </Pressable>
+              ) : items.length > 0 ? (
+                <Text style={{ color: c.faint, fontSize: 12, textAlign: 'center', paddingVertical: 16 }}>All {items.length} loaded</Text>
+              ) : null
+          }
           renderItem={({ item }) => <ClientCard client={item} onPress={() => router.push(`/client/${item.id}`)} />}
         />
       )}
@@ -75,27 +84,20 @@ export default function Clients() {
 
 function ClientCard({ client, onPress }: { client: Client; onPress: () => void }) {
   const c = useTheme();
+  const p = client.policies[0];
   return (
     <Card onPress={onPress} padded={false} style={{ padding: 13 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <Avatar name={client.name} size={46} />
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Text style={{ color: c.text, fontWeight: '700', fontSize: 15 }} numberOfLines={1}>{client.name}</Text>
+          <Text style={{ color: c.text, fontWeight: '700', fontSize: 14.5 }} numberOfLines={1}>{client.name}</Text>
           <Text style={{ color: c.muted, fontSize: 12.5, marginTop: 2 }} numberOfLines={1}>
-            {client.city} · {client.policies.length} {client.policies.length === 1 ? 'policy' : 'policies'} · {inrShort(client.totalCover)} cover
+            {p?.number && p.number !== '—' ? `Policy ${p.number}` : 'No policy no.'}{client.totalPremium ? ` · ${inr(client.totalPremium)}` : ''}
           </Text>
-          {client.segment.length > 0 && (
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
-              {client.segment.slice(0, 2).map((s) => {
-                const m = SEG_META[s];
-                return m ? <Pill key={s} label={m.label} tone={m.tone} small icon={m.icon} /> : null;
-              })}
-            </View>
-          )}
         </View>
         <View style={{ flexDirection: 'row', gap: 4 }}>
-          <Pressable onPress={() => call(client.phone)} hitSlop={6} style={{ padding: 4 }}><Ionicons name="call" size={19} color={c.primary} /></Pressable>
-          <Pressable onPress={() => whatsapp(client.phone)} hitSlop={6} style={{ padding: 4 }}><Ionicons name="logo-whatsapp" size={19} color={c.whatsapp} /></Pressable>
+          {!!client.phone && <Pressable onPress={() => call(client.phone)} hitSlop={6} style={{ padding: 5 }}><Ionicons name="call" size={19} color={c.primary} /></Pressable>}
+          {!!client.phone && <Pressable onPress={() => whatsapp(client.phone)} hitSlop={6} style={{ padding: 5 }}><Ionicons name="logo-whatsapp" size={19} color={c.whatsapp} /></Pressable>}
         </View>
       </View>
     </Card>

@@ -2,7 +2,7 @@
   "expo": {
     "name": "CGPE Connect",
     "slug": "ANDROID",
-    "version": "1.1.0",
+    "version": "1.4.1",
     "orientation": "portrait",
     "icon": "./assets/images/cgpe-logo.png",
     "scheme": "cgpe",
@@ -18,7 +18,11 @@
         "foregroundImage": "./assets/images/cgpe-logo.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.shivambhadoriya.ANDROID"
+      "package": "com.shivambhadoriya.ANDROID",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",
@@ -38,7 +42,7 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CGPE Connect uses your location to record field attendance when you clock in."
+          "locationWhenInUsePermission": "CGPE Connect uses your location to confirm you are at the office when you clock in, and to record your field route while you are on duty."
         }
       ],
       [

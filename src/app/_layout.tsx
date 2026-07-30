@@ -11,6 +11,8 @@ import { I18nProvider } from '@/i18n';
 import { ConfirmProvider } from '@/ui/Confirm';
 import { Splash } from '@/ui/Splash';
 import { AppLock } from '@/ui/AppLock';
+import { JobsProvider } from '@/store/jobs';
+import { JobPill } from '@/ui/JobPill';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -32,6 +34,7 @@ function RootNav() {
           animation: 'slide_from_right',
         }}
       />
+      <JobPill />
       <AppLock />
       {(!ready || !splashDone) && <Splash onDone={() => setSplashDone(true)} />}
     </>
@@ -45,9 +48,11 @@ export default function RootLayout() {
         <ThemeProvider>
           <I18nProvider>
             <AuthProvider>
-              <ConfirmProvider>
-                <RootNav />
-              </ConfirmProvider>
+              <JobsProvider>
+                <ConfirmProvider>
+                  <RootNav />
+                </ConfirmProvider>
+              </JobsProvider>
             </AuthProvider>
           </I18nProvider>
         </ThemeProvider>

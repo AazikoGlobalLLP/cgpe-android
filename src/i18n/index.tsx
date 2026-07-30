@@ -10,7 +10,11 @@ export const LANGS: { code: Lang; label: string; native: string }[] = [
 ];
 
 const en: Record<string, string> = {
-  'tab.home': 'Today', 'tab.leads': 'Leads', 'tab.clients': 'Clients', 'tab.claims': 'Claims', 'tab.more': 'More',
+  'tab.home': 'Today', 'tab.tasks': 'Tasks', 'tab.leads': 'Leads', 'tab.clients': 'Clients', 'tab.claims': 'Claims', 'tab.more': 'More',
+  'tasks.title': 'My Tasks', 'tasks.today': 'Today', 'tasks.overdue': 'Overdue', 'tasks.inProgress': 'In progress',
+  'tasks.upcoming': 'Upcoming', 'tasks.doneLabel': 'Done', 'tasks.dueNow': 'due now', 'tasks.add': 'Add task',
+  'tasks.todayProgress': "Today's progress", 'tasks.allClear': 'All clear!', 'tasks.nothingHere': 'No tasks in this view.',
+  'home.tasksToday': "Today's tasks", 'home.taskProgress': 'Task progress', 'home.viewAll': 'View all',
   'greet.morning': 'Good morning', 'greet.afternoon': 'Good afternoon', 'greet.evening': 'Good evening',
   'home.commission': "This month's commission", 'home.vsLast': 'vs last month', 'home.target': 'Monthly target',
   'home.markAttendance': 'Mark attendance', 'home.gpsCheckin': 'GPS check-in for the day',
@@ -32,7 +36,11 @@ const en: Record<string, string> = {
 };
 
 const gu: Record<string, string> = {
-  'tab.home': 'આજે', 'tab.leads': 'લીડ્સ', 'tab.clients': 'ગ્રાહકો', 'tab.claims': 'ક્લેમ', 'tab.more': 'વધુ',
+  'tab.home': 'આજે', 'tab.tasks': 'કાર્યો', 'tab.leads': 'લીડ્સ', 'tab.clients': 'ગ્રાહકો', 'tab.claims': 'ક્લેમ', 'tab.more': 'વધુ',
+  'tasks.title': 'મારા કાર્યો', 'tasks.today': 'આજે', 'tasks.overdue': 'મુદત વીતી', 'tasks.inProgress': 'ચાલુ',
+  'tasks.upcoming': 'આવનારા', 'tasks.doneLabel': 'પૂર્ણ', 'tasks.dueNow': 'બાકી', 'tasks.add': 'કાર્ય ઉમેરો',
+  'tasks.todayProgress': 'આજની પ્રગતિ', 'tasks.allClear': 'બધું પૂર્ણ!', 'tasks.nothingHere': 'આ યાદીમાં કોઈ કાર્ય નથી.',
+  'home.tasksToday': 'આજના કાર્યો', 'home.taskProgress': 'કાર્ય પ્રગતિ', 'home.viewAll': 'બધું જુઓ',
   'greet.morning': 'સુપ્રભાત', 'greet.afternoon': 'શુભ બપોર', 'greet.evening': 'શુભ સાંજ',
   'home.commission': 'આ મહિનાનું કમિશન', 'home.vsLast': 'ગયા મહિના કરતાં', 'home.target': 'માસિક લક્ષ્ય',
   'home.markAttendance': 'હાજરી નોંધો', 'home.gpsCheckin': 'આજની GPS હાજરી',
@@ -54,7 +62,11 @@ const gu: Record<string, string> = {
 };
 
 const hi: Record<string, string> = {
-  'tab.home': 'आज', 'tab.leads': 'लीड्स', 'tab.clients': 'ग्राहक', 'tab.claims': 'क्लेम', 'tab.more': 'और',
+  'tab.home': 'आज', 'tab.tasks': 'कार्य', 'tab.leads': 'लीड्स', 'tab.clients': 'ग्राहक', 'tab.claims': 'क्लेम', 'tab.more': 'और',
+  'tasks.title': 'मेरे कार्य', 'tasks.today': 'आज', 'tasks.overdue': 'अतिदेय', 'tasks.inProgress': 'चालू',
+  'tasks.upcoming': 'आगामी', 'tasks.doneLabel': 'पूर्ण', 'tasks.dueNow': 'बाकी', 'tasks.add': 'कार्य जोड़ें',
+  'tasks.todayProgress': 'आज की प्रगति', 'tasks.allClear': 'सब पूरा!', 'tasks.nothingHere': 'इस सूची में कोई कार्य नहीं.',
+  'home.tasksToday': 'आज के कार्य', 'home.taskProgress': 'कार्य प्रगति', 'home.viewAll': 'सभी देखें',
   'greet.morning': 'सुप्रभात', 'greet.afternoon': 'शुभ दोपहर', 'greet.evening': 'शुभ संध्या',
   'home.commission': 'इस महीने का कमीशन', 'home.vsLast': 'पिछले महीने से', 'home.target': 'मासिक लक्ष्य',
   'home.markAttendance': 'हाज़िरी दर्ज करें', 'home.gpsCheckin': 'आज की GPS हाज़िरी',

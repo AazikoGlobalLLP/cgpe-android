@@ -21,8 +21,8 @@ export default function Login() {
   const { login, loginOtp, biometricEnabled, biometricAvailable, authenticateBiometric } = useAuth();
 
   const [mode, setMode] = useState<Mode>('password');
-  const [id, setId] = useState('rahul.patel@cgpe.in');
-  const [pw, setPw] = useState('demo1234');
+  const [id, setId] = useState('');
+  const [pw, setPw] = useState('');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -32,7 +32,10 @@ export default function Login() {
   const cardMax = Math.min(width - 32, 440);
 
   const doPassword = async () => {
-    setError(''); setLoading(true);
+    setError('');
+    if (!id.trim()) { setError('Enter your email or mobile number.'); return; }
+    if (!pw) { setError('Enter your password.'); return; }
+    setLoading(true);
     try {
       if (biometricEnabled && biometricAvailable) {
         const ok = await authenticateBiometric();
@@ -127,9 +130,11 @@ export default function Login() {
                 </>
               )}
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.primarySoft, borderRadius: 12, padding: 12, marginTop: 2 }}>
-                <Ionicons name="sparkles" size={16} color={c.primary} />
-                <Text style={{ color: c.primary, fontSize: 12, flex: 1, lineHeight: 16 }}>Demo mode — any credentials or OTP work. On a device, unlock with fingerprint / Face ID next time.</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.cardAlt, borderRadius: 12, padding: 12, marginTop: 2 }}>
+                <Ionicons name="lock-closed" size={15} color={c.muted} />
+                <Text style={{ color: c.muted, fontSize: 12, flex: 1, lineHeight: 16 }}>
+                  Sign in with your CGPE account. Next time you can unlock with fingerprint / Face ID.
+                </Text>
               </View>
             </View>
 

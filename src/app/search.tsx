@@ -13,12 +13,12 @@ export default function Search() {
   const c = useTheme();
   const router = useRouter();
   const [q, setQ] = useState('');
-  const [res, setRes] = useState<{ leads: Lead[]; clients: Client[]; claims: Claim[] }>({ leads: [], clients: [], claims: [] });
+  const [res, setRes] = useState<{ leads: Lead[]; clients: Client[]; claims: Claim[]; tasks: any[] }>({ leads: [], clients: [], claims: [], tasks: [] });
   const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     let active = true;
-    if (!q.trim()) { setRes({ leads: [], clients: [], claims: [] }); return; }
+    if (!q.trim()) { setRes({ leads: [], clients: [], claims: [], tasks: [] }); return; }
     setSearching(true);
     const t = setTimeout(async () => {
       const r = await api.search(q);
@@ -27,7 +27,7 @@ export default function Search() {
     return () => { active = false; clearTimeout(t); };
   }, [q]);
 
-  const total = res.leads.length + res.clients.length + res.claims.length;
+  const total = res.leads.length + res.clients.length + res.claims.length + (res.tasks?.length || 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -53,6 +53,25 @@ export default function Search() {
                       <View style={{ flex: 1, marginLeft: 11 }}>
                         <Text style={{ color: c.text, fontWeight: '700', fontSize: 14 }}>{cl.name}</Text>
                         <Text style={{ color: c.muted, fontSize: 12 }}>{cl.city} · {inrShort(cl.totalCover)} cover</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color={c.faint} />
+                    </Card>
+                  ))}
+                </View>
+              </View>
+            )}
+            {res.tasks?.length > 0 && (
+              <View>
+                <SectionHeader title={`Tasks (${res.tasks.length})`} />
+                <View style={{ gap: 8 }}>
+                  {res.tasks.map((tk: any) => (
+                    <Card key={tk.id} onPress={() => router.push(`/task/${tk.id}`)} padded={false} style={{ padding: 11, flexDirection: 'row', alignItems: 'center' }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: c.cardAlt, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="checkbox-outline" size={19} color={c.primary} />
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 11 }}>
+                        <Text style={{ color: c.text, fontWeight: '700', fontSize: 14 }} numberOfLines={1}>{tk.title}</Text>
+                        <Text style={{ color: c.muted, fontSize: 12 }} numberOfLines={1}>{tk.category}{tk.client ? ` · ${tk.client}` : ''}</Text>
                       </View>
                       <Ionicons name="chevron-forward" size={18} color={c.faint} />
                     </Card>

@@ -26,7 +26,7 @@ export const APP = {
   tagline: 'Khushiyo Ka Financial Planner',
   org: 'C.G.P.E LLP',
   since: 'Since 1989',
-  version: '1.1.0',
+  version: '1.4.1',
 };
 
 /** true = always sample data; false = real-backend-first with graceful fallback. */
@@ -38,12 +38,18 @@ export const FORCE_DEMO = false;
  *    (or your PC's LAN IP for local testing: http://192.168.1.8:3001/api).
  *  - WEB deployed same-origin as the backend: leave the relative '/internal/api'.
  */
+/** Confirmed live production backend (verified: /health -> 200, environment: production). */
+export const PROD_API = 'https://cgpe.in/internal/api';
+
 export const API_BASE_URL =
   Platform.OS === 'web'
     ? (typeof window !== 'undefined' && /^https?:\/\/localhost/.test(window.location.origin)
-        ? 'http://localhost:3001/api'          // local web dev on the backend PC
-        : '/internal/api')                      // same-origin deploy (falls back to sample on *.expo.app)
-    : 'https://cgpe.in/internal/api';           // NATIVE build → your public backend (change if different)
+        ? 'http://localhost:3001/api' // local web dev on the backend PC
+        // Hosted web is a different origin, so the browser will CORS-block this and the
+        // app falls back to sample data. It starts working the moment the app's origin
+        // is added to the backend CORS allow-list — no rebuild needed.
+        : PROD_API)
+    : PROD_API; // NATIVE (APK / Expo Go) — no CORS limits, real data + real auth
 
 /** Per-request timeout (ms) before falling back to sample data. */
 export const REQUEST_TIMEOUT = 4500;

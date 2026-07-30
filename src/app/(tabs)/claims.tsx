@@ -14,6 +14,7 @@ export default function Claims() {
   const c = useTheme();
   const router = useRouter();
   const { data, loading, refresh } = useData(api.getClaims);
+  const { data: sum } = useData(api.getClaimsSummary);
   const [filter, setFilter] = useState<'all' | ClaimStatus>('all');
 
   const claims = data ?? [];
@@ -36,7 +37,28 @@ export default function Claims() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Header title="Claims" subtitle={`${claims.length} claims · ${inrShort(activeValue)} in progress`} />
+      <Header
+        title="Claims"
+        subtitle={sum
+          ? `${sum.total_claims} claims · ${inrShort(sum.pending_amount)} pending · ${inrShort(sum.paid_amount)} paid`
+          : `${claims.length} claims · ${inrShort(activeValue)} in progress`}
+      />
+
+      {/* Live claims register (un-scoped org totals) */}
+      {sum && (
+        <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: spacing.lg, paddingTop: spacing.sm }}>
+          {[
+            { label: 'Total', value: String(sum.total_claims), tint: c.primary },
+            { label: 'Paid', value: inrShort(sum.paid_amount), tint: c.success },
+            { label: 'Pending', value: inrShort(sum.pending_amount), tint: c.warning },
+          ].map((k) => (
+            <Card key={k.label} style={{ flex: 1, padding: spacing.md }}>
+              <Text style={{ color: c.text, fontSize: 17, fontWeight: '900' }} numberOfLines={1}>{k.value}</Text>
+              <Text style={{ color: k.tint, fontSize: 11, marginTop: 2, fontWeight: '700' }}>{k.label}</Text>
+            </Card>
+          ))}
+        </View>
+      )}
 
       <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.md, paddingBottom: 6 }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>

@@ -12,12 +12,12 @@ type Ion = React.ComponentProps<typeof Ionicons>['name'];
 
 const TAB_META: Record<string, { label: string; icon: Ion; active: Ion }> = {
   home: { label: 'Today', icon: 'home-outline', active: 'home' },
-  leads: { label: 'Leads', icon: 'funnel-outline', active: 'funnel' },
+  tasks: { label: 'Tasks', icon: 'checkbox-outline', active: 'checkbox' },
   clients: { label: 'Clients', icon: 'people-outline', active: 'people' },
   claims: { label: 'Claims', icon: 'shield-outline', active: 'shield' },
   more: { label: 'More', icon: 'ellipsis-horizontal', active: 'ellipsis-horizontal' },
 };
-const ORDER = ['home', 'leads', 'clients', 'claims', 'more'];
+const ORDER = ['home', 'tasks', 'clients', 'claims', 'more'];
 
 function TabBar({ state, navigation }: any) {
   const c = useTheme();
@@ -36,9 +36,10 @@ function TabBar({ state, navigation }: any) {
             const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
             if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
           };
+          const a11y = { accessibilityRole: 'tab' as const, accessibilityLabel: `tab-${route.name}`, accessibilityState: { selected: focused }, testID: `tab-${route.name}` };
           if (focused) {
             return (
-              <Pressable key={route.key} onPress={onPress} style={{ flex: 1, alignItems: 'center' }}>
+              <Pressable key={route.key} onPress={onPress} {...a11y} style={{ flex: 1, alignItems: 'center' }}>
                 <View style={{ borderRadius: radius.pill, overflow: 'hidden' }}>
                   <Grad colors={c.gradientBrand} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 9 }}>
                     <Ionicons name={meta.active} size={19} color="#fff" />
@@ -49,7 +50,7 @@ function TabBar({ state, navigation }: any) {
             );
           }
           return (
-            <Pressable key={route.key} onPress={onPress} style={{ flex: 1, alignItems: 'center', paddingVertical: 9 }}>
+            <Pressable key={route.key} onPress={onPress} {...a11y} style={{ flex: 1, alignItems: 'center', paddingVertical: 9 }}>
               <Ionicons name={meta.icon} size={22} color={c.faint} />
             </Pressable>
           );
@@ -66,10 +67,12 @@ export default function TabsLayout() {
   return (
     <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="home" />
-      <Tabs.Screen name="leads" />
+      <Tabs.Screen name="tasks" />
       <Tabs.Screen name="clients" />
       <Tabs.Screen name="claims" />
       <Tabs.Screen name="more" />
+      {/* Registered but hidden from the bar — reachable from More */}
+      <Tabs.Screen name="leads" />
     </Tabs>
   );
 }

@@ -48,17 +48,15 @@ export default function Profile() {
             </Card>
           </View>
 
-          {/* Snapshot */}
+          {/* Role */}
           <View>
-            <SectionHeader title="This year" />
-            <View style={{ flexDirection: 'row', gap: spacing.md }}>
-              <Snap label="Premium" value="₹1.2Cr" icon="cash" tint={c.success} />
-              <Snap label="Policies" value="86" icon="documents" tint={c.primary} />
-              <Snap label="Renewal %" value="94%" icon="refresh-circle" tint={c.accent} />
-            </View>
+            <SectionHeader title="Role" />
+            <Card padded={false} style={{ padding: 4 }}>
+              <Info icon="shield-checkmark" label="Access level" value={user.role.replace('_', ' ')} />
+              {!!user.agentCode && <Info icon="id-card" label="Agent code" value={user.agentCode} />}
+              <Info icon="ribbon" label="Tier" value={user.tier} last />
+            </Card>
           </View>
-
-          <Button label="Edit profile" icon="create-outline" variant="outline" full onPress={() => {}} />
         </View>
       </ScrollView>
     </View>
