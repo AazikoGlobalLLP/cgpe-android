@@ -14,22 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 2 — done.** Built 2026-08-10. `npm test` runs 140 tests across 5 files and exits 0;
-`npx tsc --noEmit` exits 0; `npm run lint` is byte-identical to the 46-error baseline.
-There are now **two** green gates instead of one.
+**Phase 3 — done.** Built 2026-08-10, commit `e0b0b2c`. `npm test` runs **164** tests across 6
+files and exits 0; `npx tsc --noEmit` exits 0; `npm run lint` is byte-identical to the 46-error
+baseline. **git is also unblocked** — Phases 1 and 2 had never been committed and are now in
+`123db30`.
 
 **Phase 1 — still code-complete, verification still outstanding.** Acceptance criteria 1–6 in
-`docs/spec/PHASE-1.md` need a handset in airplane mode. Phase 2 does **not** cover them: they are
-haptics, an AsyncStorage clock key and background GPS, none of which a Node test can exercise.
+`docs/spec/PHASE-1.md` need a handset in airplane mode. Neither Phase 2 nor Phase 3 covers them:
+they are haptics, an AsyncStorage clock key and background GPS, none of which a Node test can
+exercise.
 
 ## Next 3
 
-1. **Phase 3** — repair the data-health channel (`tryReal` reports nothing; `reportSuccess` wipes the
-   whole failure list; `getTeamActivity` fakes an outage on every Team screen load).
-2. **Phase 4** — the leads contract (envelope unwrap, `stage`→`status`, stage vocabulary).
+1. **Phase 4** — the leads contract (envelope unwrap, `stage`→`status`, stage vocabulary).
    Two tests in `adapt.test.ts` are pinned to today's wrong mapping and **must go red** when this
    lands; that is the signal, not a regression.
-3. **Phase 5** — WhatsApp send (`text` not `message`, phone from `waThreadCache`).
+2. **Phase 5** — WhatsApp send (`text` not `message`, phone from `waThreadCache`).
+3. **Phase 7** — geofence + tracking (INBOX D5 `session_id`, D10 the fence is up to 300 m).
+
+> **Carried out of Phase 3, small and specified:** `src/screens/dashboards.tsx:292-297` renders the
+> Master KPI tiles as `snapshot?.total_clients ?? 0`, so a **partial** outage (roster loads, org
+> endpoints down) still shows "0 clients · ₹0 claims paid" as fact. The hero directly above it at
+> `:266` already does the right thing with its `NO_VALUE` placeholder — the tile grid just needs the
+> same treatment. Left out because `dashboards.tsx` is not in Phase 3's file list and the phase's
+> own DONE-WHEN (a *fully* dead backend) is met without it.
 
 ## Status board
 
@@ -37,8 +45,8 @@ haptics, an AsyncStorage clock key and background GPS, none of which a Node test
 |---|---|---|
 | 1 | Write-path honesty | **Built** — handset verification outstanding |
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
-| 3 | Data-health channel | Next |
-| 4 | Leads contract | Not started |
+| 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
+| 4 | Leads contract | Next |
 | 5 | WhatsApp send | Not started |
 | 6 | Remaining envelope mismatches `[api]` | Blocked on `cgpe-api` |
 | 7 | Geofence + tracking (INBOX D5, D10) | Not started |
@@ -82,13 +90,31 @@ suite is not vacuous: `docs/spec/PHASE-2.md`.
 > `mapLeadStage` or Phase 7 changes the geofence, those tests **going red is the intended
 > signal** — read the case comment, then update the expectation on purpose.
 
-## Phase 3 — Repair the data-health honesty channel
+## Phase 3 — Repair the data-health honesty channel ✅ DONE 2026-08-10 (`e0b0b2c`)
 `tryReal` reports failures; `reportSuccess` clears per-endpoint instead of wiping the list;
 `getTeamActivity` stops fabricating an outage.
 **Files:** `src/data/api.ts`, `src/data/health.ts`, `src/ui/health-banner.tsx`,
-`src/app/team/index.tsx`
+`src/app/team/index.tsx`, `src/data/__tests__/{api-renewals,health}.test.ts`
 **Done when:** killing the backend and opening the Master dashboard raises the banner (today it
 renders a plausible all-zero org silently), and opening Team against a healthy backend raises none.
+
+**Result.** 24 new tests. Three things turned out to be true that the phase text did not say:
+
+1. **A `tryReal`-only fix could not have closed it.** `getClientStats` returned a truthy all-zeros
+   object on every path, which made `getOrgSnapshot`'s outage gate at `api.ts:275` *unreachable
+   dead code* — so the all-zero org was not a rendering choice, it was a dead branch. Fixing it
+   required the bare-`req()` paths too (`getClientsPage`, `getClientStats`, `scanRenewals`).
+2. **Not every failure is an outage.** 401/403/404/501 are answers, not faults. Reporting 403 would
+   have pinned a permanent banner on every advisor, because `GET /profiles` is admin-only — i.e.
+   the naive fix fails this phase's own second acceptance criterion.
+3. **`clone(undefined)` threw**, so `unavailable()` *rejected* for all six single-record lookups.
+   Those "could not load" empty states had never rendered either. Found by a new test.
+
+Full spec, the ten locked decisions, and what was deliberately left out: `docs/spec/PHASE-3.md`.
+
+> **`api-renewals.test.ts:187` was flipped deliberately.** It asserted `degraded === false` after a
+> failed `scanRenewals` page and was written in Phase 2 to go red exactly here. Same convention as
+> the `adapt.test.ts` pins that Phase 4 will flip.
 
 ## Phase 4 — Leads contract
 Unwrap the `{ lead }` envelope on `GET`/`POST`, send `status` with the server's own enum, and teach

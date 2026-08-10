@@ -64,8 +64,11 @@ Provider order is load-bearing:
 | `tasks.ts` / `team.ts` | Types + label maps. Seed arrays removed; a few orphaned helpers remain. |
 | `mock.ts` | **Dead by policy** — `export {}`. Do not repopulate. |
 
-`unavailable(endpoint, value)` is the only sanctioned failure path. `tryReal` returning `null`
-is **not** — it reports nothing (see `docs/PHASES.md` Phase 3).
+`unavailable(endpoint, value)` and `tryReal`/`tryEnvelope` are both sanctioned failure paths since
+**Phase 3** — the helpers now report too, and classify first: 401/403/404/501 are answers rather
+than faults and stay quiet, while a 200 with an unusable body is reported. The two meet on one
+string via `healthKey()`, so one broken endpoint is one banner row. A `suppressed` set carries the
+"this was an answer" verdict from the helper to `unavailable`, which would otherwise re-report it.
 
 ### 2.3 State — `src/store/`
 
@@ -168,7 +171,7 @@ Full detail and ownership in `docs/PHASES.md`. Summary of what is broken **today
 | Leads | `GET /leads/:id` envelope mismatch kills the detail screen; `PUT /leads/:id` sends `stage`, which is not a Lead schema path, so stage changes never persist; `adaptLead` does not recognise `policy_issued` or `docs_shared`. |
 | WhatsApp | `POST /whatsapp/hub/send` sends `message` (server reads `text`) with a phone resolved from an always-empty buffer. Every send is dropped, UI shows "sent". |
 | Commissions / LIC plans | Envelope shape mismatches — both screens can never show real data even against a healthy backend. |
-| Health channel | `tryReal` never calls `reportFailure` (~13 endpoints fail with no banner); `reportSuccess` wipes the whole failure list; `getTeamActivity` fakes an outage on every Team screen load. |
+| Health channel | **Fixed in Phase 3** (2026-08-10, `e0b0b2c`). One gap remains: `src/screens/dashboards.tsx:292-297` still renders `snapshot?.total_clients ?? 0` on the Master KPI tiles, so a *partial* outage shows "0 clients · ₹0 claims paid" as fact. The hero at `:266` already uses `NO_VALUE`. |
 | Geofence | Falls back to hardcoded Surat coords with `enforce: true`, `radius_m: 2000`, cached for the session. Per `contracts/INBOX.md` D10 the real server fence is up to **300 m**, not 200 m. |
 | Tracking | Per `contracts/INBOX.md` D5, `/track/points` reads `session_id`, not `sessionId`. |
-| Tests | **Phase 2 added Vitest** (2026-08-10): 140 tests over `adapt.ts`, `distanceMeters`/`checkGeofence`, `scanRenewals`, `taskProgress` and `normalizeUiConfig`. `npm test` is now a second green gate alongside `npx tsc --noEmit`. Everything else — every screen, every provider, every write path — still has zero coverage. |
+| Tests | **Phase 2 added Vitest**, **Phase 3 took it to 164** over 6 files (2026-08-10): `adapt.ts`, `distanceMeters`/`checkGeofence`, `scanRenewals`, `taskProgress`, `normalizeUiConfig`, and the whole data-health channel. `npm test` is a second green gate alongside `npx tsc --noEmit`. Everything else — every screen, every provider, every write path — still has zero coverage. |

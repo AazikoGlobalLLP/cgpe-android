@@ -23,19 +23,22 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   `expo start` targets the dev build. `--tunnel` for a phone on another network.
 - `npx expo start --web` — the only way to reach a localhost backend.
 - `npx tsc --noEmit` — a green gate. Run before every commit.
-- `npm test` — Vitest, 140 tests, ~0.4 s, no network. The second green gate (Phase 2).
+- `npm test` — Vitest, 164 tests over 6 files, ~0.5 s, no network. The second green gate.
   Config is `vitest.config.mts`; the four `test/stubs/*` files exist only so native modules
   resolve in Node. ~20 cases deliberately pin **known bugs** and live in `describe` blocks saying
   so — when Phase 4 or Phase 7 fixes one, that test going red is the signal, not a regression.
+  Phase 3 already flipped one of them (`api-renewals.test.ts:187`) on purpose.
 - `npm run lint` — 46 errors on a clean tree. Rule is **no new errors**, not zero.
 - `eas build -p android --profile preview` — the installable APK (`production` emits an AAB).
 - `npm run reset-project` — **NEVER RUN.** Deletes `src/` and `scripts/`.
 
-**git in this working copy fails before it starts.** Every git command aborts with
-`detected dubious ownership in repository at 'F:/…/ANDROID'` — the directory is owned by a
-different SID than the logged-in user. One-time fix, then git works normally:
+**git RESOLVED 2026-08-10 — do not re-diagnose it.** Every git command used to abort with
+`detected dubious ownership in repository at 'F:/…/ANDROID'` (the directory is owned by a different
+SID than the logged-in user), which is why Phases 1 and 2 went uncommitted for two sessions. The
+one-time fix has been applied and is global, so git now works normally here:
 `git config --global --add safe.directory F:/Shivam-Aaziko-Dev-MERN/CGPE-CURRENT-PROJECT/ANDROID`.
-Do not diagnose this as a corrupt repo, and never "fix" it by re-cloning.
+If it ever reappears (a new machine or a reset global config), re-run exactly that. It is **not** a
+corrupt repo, and it is never fixed by re-cloning. Work on branch `Shivam`; never push to `main`.
 
 ## Conventions
 1. Imports are `@/*` → `./src/*`. Zero `../` imports exist in `src/`; keep it that way.
