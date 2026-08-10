@@ -6,6 +6,81 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-10 — Not every failure is an outage: 401/403/404/501 are answers
+
+**Context.** Phase 3 taught `tryReal`/`tryEnvelope` to report failures. The naive version — report
+every non-2xx — fails the phase's own second acceptance criterion. `GET /profiles` is admin-only
+(`contracts/api.md:211`) and `getAgentLocations`/`getTeam` call it unconditionally, so every advisor
+would see a permanent "some data could not load" banner against a perfectly healthy backend. A 404
+is the same class: `/lic-plans` 404s in production by deployment state, not by fault.
+
+**Decision.** `reportIfOutage` filters 401 (session already ending), 403 (a permission result),
+404 and 501 (the endpoint is not there — Phase 1 already named this `unsupported`). Everything else,
+including every 5xx **and a 200 whose body fails `validate`**, is reported: the caller's next move is
+to render a zeroed shell, and an unlabelled zero is the exact lie the channel exists to prevent.
+
+**Consequence.** The suppression needs a hand-off, because most callers answer `tryReal`'s `null`
+with `?? unavailable(...)`, which reports unconditionally and would undo the verdict one line later.
+That is what the `suppressed` set in `api.ts` is for, and it is why `healthKey()` exists — producer
+and consumer have to meet on one string. **Do not "simplify" either away.**
+
+---
+
+## 2026-08-10 — `degraded` stays global and sticky; per-screen scoping is its own phase
+
+**Context.** Making `reportSuccess` clear per endpoint means `degraded` becomes
+`failures.length > 0` and stays true until *that* endpoint recovers. 31 screens read the global flag,
+and two endpoints are known-broken until Phase 6 (`/commissions`, `/lic-plans`), so the flag can stick
+for a whole session.
+
+**Decision.** Accept it. Checked all 31 consumers first: all but one gate their outage copy on
+`degraded && list.length === 0`, so a stuck flag can only mis-speak on a screen that is **genuinely
+empty** while a different endpoint is broken. That is strictly narrower than what it replaces — a
+real outage rendering "No clients in your book yet."
+
+**Consequence.** A truly per-endpoint `degraded` means touching all 31 screens and is a phase in its
+own right. Nobody should attempt it as a drive-by. A TTL was explicitly rejected: it would mean
+inventing a timing number that is written down nowhere.
+
+---
+
+## 2026-08-10 — `at` is the outage clock and re-stamps on every failure, repeats included
+
+**Context.** `src/app/search.tsx:489` snapshots `getHealth().at` before its fan-out and compares at
+`:508` to decide whether **this** query lost a collection, rather than whether the app has failed at
+any point since launch. Meanwhile the banner un-dismissed itself on every `at` change, so once
+Phase 3 made ~21 more endpoints report, a screen retrying a dead endpoint would re-open a banner the
+user had just closed and the close button would look broken.
+
+**Decision.** `at` keeps its every-failure semantics — including a repeat of an endpoint already in
+the list — and `reportSuccess` never moves it. The banner's dismissal was re-keyed onto the failure
+**set** instead.
+
+**Consequence.** These two are a matched pair. "Optimising" `reportFailure` to skip the re-stamp for
+an already-listed endpoint silently breaks `search.tsx`: a real outage on a retried search would
+render as "nothing matched". There is a test pinning both halves in `health.test.ts`.
+
+---
+
+## 2026-08-10 — A phase's file list is a floor when the DONE-WHEN cannot be met without more
+
+**Context.** Phase 3's brief named `tryReal`, `reportSuccess` and `getTeamActivity`. Its DONE-WHEN
+required the Master dashboard to stop rendering a plausible all-zero org. Those are not the same
+task: `getClientStats` returned a truthy all-zeros object on every path, which made
+`getOrgSnapshot`'s outage gate at `api.ts:275` **unreachable dead code**. Fixing only the three named
+things would have raised the banner while the dashboard still displayed "0 clients · ₹0 claims paid".
+
+**Decision.** Extend to the bare-`req()` read paths the criterion depends on — `getClientStats`,
+`getClientsPage`, `scanRenewals` — and write the reasoning into `docs/spec/PHASE-3.md` §2 rather than
+widening quietly. Everything genuinely outside the criterion was named and left
+(`src/screens/dashboards.tsx`, `uploadFile`, the Phase 4/5 write paths).
+
+**Consequence.** When a phase's stated files and its stated DONE-WHEN disagree, the DONE-WHEN wins
+and the deviation gets written down. That is the same rule `docs/spec/PHASE-2.md` used for its two
+deviations.
+
+---
+
 ## 2026-08-10 — Tests pin TODAY'S behaviour, bugs included
 
 **Context.** Phase 2 pinned five pure functions that are full of known-wrong behaviour that later
