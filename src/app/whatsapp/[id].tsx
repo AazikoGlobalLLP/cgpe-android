@@ -33,13 +33,20 @@ import { call, whatsapp } from '@/lib/actions';
  * on the app's own surfaces. Foreground on the green is `c.onPrimary`, never a hardcoded
  * white: in dark mode the token lifts to #3ddc84 and white text on it fails contrast.
  *
- * WHY A SENT MESSAGE GETS A SINGLE TICK AND NEVER A DELIVERY CLAIM. `api.sendWaMessage`
- * resolves the same way whether the gateway accepted the message or the request quietly
- * failed, so the only honest statement this screen can make is "this app handed it over".
- * The tick means exactly that. Nothing here claims delivery or a read receipt, because
- * nothing here can know either. For the same reason the send path fires `haptics.tap`
- * (the action was committed) and never `haptics.success`, which is reserved for a write
- * the server actually confirmed.
+ * WHY A SENT MESSAGE GETS A SINGLE TICK AND NEVER A DELIVERY CLAIM. The tick means "the
+ * gateway accepted this from us" and nothing more. Nothing here claims delivery or a read
+ * receipt, because nothing here can know either — the send endpoint reports what n8n did
+ * with the message, not what WhatsApp did. For the same reason the send path fires
+ * `haptics.tap` (the action was committed) and never `haptics.success`, which is reserved
+ * for a write the server actually confirmed.
+ *
+ * PHASE 5 — WHAT THE TICK USED TO MEAN, WHICH WAS NOTHING. `api.sendWaMessage` resolved
+ * `void` on every path, so the tick was painted unconditionally and the `catch` below was
+ * unreachable code that had never run. It resolves a `SendWaResult` now, and the one branch
+ * that earns a tick is `ok`. In particular a **200 is not a send**: the endpoint writes its
+ * log row before it calls the gateway and answers 200 either way, so `delivery.dispatched`
+ * — surfaced here as `reason: 'undelivered'` — is the only thing that separates a message
+ * that went out from one that was merely filed. See `docs/spec/PHASE-5.md` §1.
  *
  * WHAT `getWaThread` ACTUALLY DOES ON FAILURE. It resolves `undefined` (via the data
  * layer's `unavailable`, which reports the endpoint to `data/health`); it does not reject.
@@ -50,6 +57,41 @@ import { call, whatsapp } from '@/lib/actions';
 
 /** A message this session sent. `sending` while the request is in flight. */
 type Outgoing = { msg: WaMessage; state: 'sending' | 'sent' };
+
+/**
+ * What the last send attempt has to say for itself, or `null`.
+ *
+ * One piece of state rather than an error string, because the outcomes are not all errors:
+ * a message the gateway accepted in simulation mode did go out from here and still has to
+ * tell the user it will not arrive.
+ */
+type Notice = { tone: 'danger' | 'warning'; title: string; message: string };
+
+/** The banner for a send that did not go out. Every branch also returns the text to the box. */
+function failureNotice(r: Extract<api.SendWaResult, { ok: false }>): Notice {
+  switch (r.reason) {
+    case 'undelivered':
+      // The server writes this sentence itself and distinguishes the two cases better than we
+      // can — "webhook not configured" versus "n8n did not accept it" — so it is rendered
+      // rather than paraphrased. `configured` decides only whether retrying is worth offering.
+      return r.configured
+        ? { tone: 'danger', title: 'Message not sent',
+            message: `${r.note || 'The WhatsApp gateway did not accept it.'} Your text is back in the box, so you can try again.` }
+        : { tone: 'warning', title: 'WhatsApp sending is switched off on the server',
+            message: `${r.note || 'The gateway is not configured.'} Trying again will not help — use "Open in WhatsApp" to send it yourself.` };
+    case 'invalid':
+      return { tone: 'danger', title: 'Message not sent', message: r.message };
+    case 'forbidden':
+      return { tone: 'danger', title: 'Message not sent',
+        message: 'This account is not allowed to send WhatsApp messages. Your text is back in the box.' };
+    case 'unsupported':
+      return { tone: 'danger', title: 'Sending is not available',
+        message: 'This server has no WhatsApp send endpoint, so nothing can go out from here.' };
+    default:
+      return { tone: 'danger', title: 'Message not sent',
+        message: 'That message did not go out. Your text is back in the box, so you can try again.' };
+  }
+}
 
 type ChatRow =
   | { kind: 'day'; key: string; label: string }
@@ -120,7 +162,7 @@ export default function Chat() {
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [outbox, setOutbox] = useState<Outgoing[]>([]);
-  const [sendError, setSendError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [composerFocused, setComposerFocused] = useState(false);
 
   const listRef = useRef<FlatList<ChatRow>>(null);
@@ -208,7 +250,7 @@ export default function Chat() {
   const onChangeText = useCallback((v: string) => {
     setText(v);
     // The banner reported the LAST attempt. Once the user starts rewriting, it is stale.
-    setSendError((prev) => (prev ? null : prev));
+    setNotice((prev) => (prev ? null : prev));
   }, []);
 
   const send = useCallback(async () => {
@@ -228,21 +270,52 @@ export default function Chat() {
     atBottom.current = true;
     setOutbox((prev) => [...prev, { msg: local, state: 'sending' }]);
     setText('');
-    setSendError(null);
+    setNotice(null);
 
-    try {
-      await api.sendWaMessage(thread.id, outgoing);
-      if (!alive.current) return;
-      setOutbox((prev) => prev.map((o) => (o.msg.id === local.id ? { ...o, state: 'sent' } : o)));
-    } catch {
-      if (!alive.current) return;
-      // The words go back in the box. A message that vanished under the thumb is worse
-      // than one that was never sent. Only if the box is still empty, though: the send was
-      // async and the user may already have started typing the next message into it.
+    /** Take the words back out of the thread and put them where the user can edit them. */
+    const returnToComposer = () => {
       setOutbox((prev) => prev.filter((o) => o.msg.id !== local.id));
+      // Only if the box is still empty: the send was async and the user may already have
+      // started typing the next message into it. A message that vanished under the thumb is
+      // worse than one that was never sent, but so is one that eats what replaced it.
       setText((cur) => (cur.trim() ? cur : outgoing));
       haptics.error();
-      setSendError('That message did not go out. Your text is back in the box, so you can try again.');
+    };
+
+    let result: api.SendWaResult;
+    try {
+      result = await api.sendWaMessage(thread.id, outgoing);
+    } catch {
+      // Defensive only — `sendWaMessage` reports through its result and does not reject.
+      if (!alive.current) return;
+      returnToComposer();
+      setNotice(failureNotice({ ok: false, reason: 'network' }));
+      return;
+    }
+    if (!alive.current) return;
+
+    if (!result.ok) {
+      returnToComposer();
+      setNotice(failureNotice(result));
+      return;
+    }
+
+    // Accepted by the gateway. The bubble keeps the server's own timestamp rather than the
+    // handset's, so a phone with a wrong clock does not file the message under the wrong day.
+    setOutbox((prev) => prev.map((o) => (
+      o.msg.id === local.id
+        ? { ...o, state: 'sent', msg: { ...o.msg, at: result.message.at || o.msg.at } }
+        : o
+    )));
+    if (result.simulated) {
+      // n8n took it and deliberately did not deliver it (dev safe-mode). The tick is still
+      // honest — it only ever meant "the gateway accepted this" — but the customer has not
+      // received anything, and that is not something to leave the user to discover.
+      setNotice({
+        tone: 'warning',
+        title: 'Sent in test mode',
+        message: 'The gateway accepted this message but is simulating sends, so it has not reached the customer.',
+      });
     }
   }, [thread, text]);
 
@@ -329,13 +402,13 @@ export default function Chat() {
 
       {!loading && thread ? (
         <View>
-          {sendError ? (
+          {notice ? (
             <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.sm }}>
               <Banner
-                tone="danger"
-                title="Message not sent"
-                message={sendError}
-                onDismiss={() => setSendError(null)}
+                tone={notice.tone}
+                title={notice.title}
+                message={notice.message}
+                onDismiss={() => setNotice(null)}
               />
             </View>
           ) : null}

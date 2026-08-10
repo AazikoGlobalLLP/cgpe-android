@@ -36,7 +36,7 @@ import type { TeamMember, TeamActivity } from './team';
 import { Task, TaskStatus } from './tasks';
 import type {
   Claim, Client, Commission, Contest, Lead, LeadStage, LicPlan,
-  Reminder, User, WaThread, AppNotification,
+  Reminder, User, WaThread, WaMessage, AppNotification,
 } from './types';
 
 const wait = (ms = MOCK_LATENCY) => new Promise((r) => setTimeout(r, ms));
@@ -1069,6 +1069,34 @@ export async function getCommission(): Promise<Commission> {
   return (await tryReal<Commission>('/commissions', {}, isObj)) ?? unavailable('/commissions', EMPTY_COMMISSION);
 }
 const waThreadCache = new Map<string, WaThread>();
+
+/**
+ * The recipient's 10 digits recovered from a hub thread id, or `''`. PHASE 5.
+ *
+ * A hub thread's id IS its `thread_ref`, and the backend builds that itself as
+ * `` `custom:${pl10}` `` (`routes/whatsapp.js:829`), reads it back with its own `last10()`, and
+ * serves it as `thread_ref` unchanged (`normThread:665`). So the number is recoverable from the
+ * id alone — which is the only thing that makes a send work on a cold start straight into a chat,
+ * when `waThreadCache` is empty because `getWaThreads` has not run in this process.
+ *
+ * DELIBERATELY STRICT, because the failure mode is messaging a stranger. It accepts only the two
+ * shapes the server actually produces — `<prefix>:<10 digits>` and a bare 10 digits (`adaptWaThread`
+ * falls back to `phone_last10` when `thread_ref` is null) — and refuses anything else outright. A
+ * lenient "strip non-digits and take the last ten" would turn an id that merely *contains* digits,
+ * such as a Mongo `_id` hex, into a plausible Indian mobile number and send a customer's message
+ * to it. An unsendable chat is a bad afternoon; a message delivered to the wrong person is not
+ * recoverable.
+ */
+function waPhoneFromThreadId(threadId: string): string {
+  const tail = String(threadId || '').split(':').pop() ?? '';
+  return /^\d{10}$/.test(tail) ? tail : '';
+}
+
+/** The last 10 digits of a phone we were given by the server — `+919876543210` → `9876543210`. */
+function last10(phone: string): string {
+  const digits = String(phone || '').replace(/\D/g, '');
+  return digits.length >= 10 ? digits.slice(-10) : '';
+}
 /** Real WhatsApp hub threads — `?scope=all` unlocks the whole inbox; adaptWaThread
  *  maps thread_ref/preview/last_at/phone_last10 (the UI's id/lastMessage/lastAt/phone). */
 export async function getWaThreads(): Promise<WaThread[]> {
@@ -1096,23 +1124,141 @@ export async function getWaThread(id: string): Promise<WaThread | undefined> {
       const arr = Array.isArray(json?.data) ? json.data : null;
       if (ok && arr) {
         const messages = arr.map(adaptWaMessage);
-        return { ...(meta || { id, name: 'WhatsApp user', phone: '', lastMessage: '', lastAt: '', unread: 0, messages: [] }), messages };
+        // PHASE 5: the cold-cache stub used to carry `phone: ''`, so opening a chat without
+        // having loaded the inbox first (a cold start, a deep link) produced a thread nobody
+        // could call, WhatsApp, or send to. The id carries the number — see `waPhoneFromThreadId`.
+        const p10 = waPhoneFromThreadId(id);
+        const stub: WaThread = {
+          id, name: 'WhatsApp user', phone: p10 ? '+91' + p10 : '',
+          lastMessage: '', lastAt: '', unread: 0, messages: [],
+        };
+        return { ...(meta || stub), messages };
       }
     } catch { /* fall through */ }
   }
   return unavailable('/whatsapp/hub/messages', state.waThreads.find((t) => t.id === id));
 }
-export async function sendWaMessage(threadId: string, text: string): Promise<void> {
-  if (sessionReal && !FORCE_DEMO) {
-    const t = state.waThreads.find((x) => x.id === threadId);
-    await tryReal('/whatsapp/hub/send', { method: 'POST', body: JSON.stringify({ phone: t?.phone, message: text }) }, () => true);
+/**
+ * What `sendWaMessage` resolves to. Four outcomes that must not look alike to the composer.
+ *
+ * `dispatched` is the only one that earns a tick. The other three all leave the user's words
+ * needing somewhere to go, and the screen puts them back in the box.
+ */
+export type SendWaResult =
+  /** n8n accepted it. `simulated` = dev safe-mode took it and will not deliver it. */
+  | { ok: true; message: WaMessage; simulated: boolean }
+  /** 200, but the gateway never took it. The row is in the server's log and nothing was sent. */
+  | { ok: false; reason: 'undelivered'; configured: boolean; note: string }
+  /** 400: the server understood and refused — or we knew it would and did not ask. */
+  | { ok: false; reason: 'invalid'; message: string }
+  /** The request itself did not land. */
+  | { ok: false; reason: Exclude<WriteFailure, 'invalid'> };
+
+/**
+ * Send one WhatsApp message, and say what actually happened to it.
+ *
+ * FOUR THINGS WERE WRONG HERE AND THE FOURTH HID THE OTHER THREE.
+ *
+ * 1. The body said `message`. `routes/whatsapp.js:818` destructures `text`. The key was never
+ *    read, so `body` was `''` and — `purpose` being unsent and therefore `'custom'` — line 824
+ *    refused it with 400 `'Message text is required.'`
+ * 2. The phone came from `state.waThreads`, which is `[]` for the life of the process and always
+ *    was: four reads in this file, zero writes anywhere in `src/`. So `phone` was `undefined` and
+ *    line 821 refused it with 400 `'A valid 10-digit phone is required.'` first. The real thread
+ *    list is `waThreadCache`, ten lines up.
+ * 3. It then pushed the message into that same empty array and called it sent.
+ * 4. All of it ran through `tryReal(..., () => true)`, a validator that cannot fail, and the
+ *    `null` was discarded — so the screen's error branch, which returns the words to the composer
+ *    and raises a banner, had never once executed. Same shape of defect as Phase 1's write paths.
+ *
+ * WHY THIS CANNOT USE `tryReal`. The endpoint answers `200 success:true` for a message it never
+ * dispatched: the handler writes an optimistic `wa_comm_messages` row (`:834-857`), *then* tries
+ * the n8n webhook (`:869`), and returns 200 either way. The only honest signal is the **top-level
+ * `delivery` object** (`:888-896`) — and `tryReal` returns `json?.data ?? json`, which throws it
+ * away. `addLead` uses bare `req()` for the same reason.
+ *
+ * A 200 WITH `dispatched:false` IS NOT A SEND. The row exists, so "it saved" is true and beside
+ * the point: nothing reached the customer. `configured:false` additionally means retrying can
+ * never help — the webhook is unset on the server, not busy.
+ */
+export async function sendWaMessage(threadId: string, text: string): Promise<SendWaResult> {
+  const body = String(text || '').trim();
+  if (!body) return { ok: false, reason: 'invalid', message: 'There is nothing to send.' };
+
+  // Cache first, then the id itself. See `waPhoneFromThreadId` for why the id is authoritative.
+  const cached = waThreadCache.get(threadId);
+  const p10 = last10(cached?.phone || '') || waPhoneFromThreadId(threadId);
+  if (!p10) {
+    // The server's answer is already known (400, `:821`), and we can say something truer than it
+    // can: it is this conversation that has no number, not the message that is malformed.
+    return { ok: false, reason: 'invalid', message: 'This chat has no phone number, so nothing can be sent to it.' };
   }
-  const t = state.waThreads.find((x) => x.id === threadId);
-  if (t) {
-    t.messages.push({ id: 'm' + Date.now(), fromMe: true, text, at: new Date().toISOString() });
-    t.lastMessage = text; t.lastAt = new Date().toISOString(); t.unread = 0;
+
+  if (!sessionReal || FORCE_DEMO) return { ok: false, reason: 'network' };
+
+  const KEY = '/whatsapp/hub/send';
+  try {
+    const { ok, status, json } = await req(KEY, {
+      method: 'POST',
+      body: JSON.stringify({
+        phone: p10,
+        // The thread upsert is unconditional — `$set: { clientName: name || '' }` (`:860`) — so
+        // omitting this does not leave the stored name alone, it wipes it for the panel too. The
+        // placeholder is the one name we must NOT send: we only hold it when the server's own
+        // `name`/`clientName` were both already empty, so `''` is lossless and it is not.
+        name: cached && cached.name !== 'WhatsApp user' ? cached.name : '',
+        text: body,
+        // Explicit, though it matches the documented default: the server's "text is required"
+        // check only fires *when* purpose is 'custom', and our empty-text guard above has to mean
+        // the same thing that one does. Two validations kept in step by a default drift apart.
+        purpose: 'custom',
+        // `language` is deliberately absent. The server defaults it to 'hinglish'; the only
+        // language this app knows is the advisor's own UI preference, which says nothing about
+        // the customer whose thread it would be written onto.
+      }),
+    });
+
+    if (ok && isObj(json?.data)) {
+      const delivery = isObj(json?.delivery) ? json.delivery : {};
+      if (!delivery.dispatched) {
+        return {
+          ok: false,
+          reason: 'undelivered',
+          configured: !!delivery.configured,
+          // The server writes this sentence; rendering our own would guess at which of the two
+          // non-dispatch cases happened when it has already said.
+          note: String(delivery.note || ''),
+        };
+      }
+      return {
+        ok: true,
+        message: adaptWaMessage(json.data),
+        simulated: !!json.data.simulated,
+      };
+    }
+
+    if (status === 400) {
+      // This endpoint's two refusals are both `{ success:false, message }` (`:821`, `:824`).
+      // `error` is read as well because `enums.md` §15 records both keys in play across routers.
+      const msg = json?.message || json?.error;
+      return { ok: false, reason: 'invalid', message: String(msg || 'The server refused this message.') };
+    }
+
+    if (ok) { reportFailure(KEY); return { ok: false, reason: 'server' }; }   // 2xx, no usable body
+
+    reportIfOutage(status, KEY);
+    // `reportIfOutage` leaves a "this was an answer" note for `unavailable` to consume, and this
+    // function never calls `unavailable`. Left behind, it would be eaten by the next failure of a
+    // read on the same key — one real outage, silently unreported. Phase 4's `addLead` bug.
+    suppressed.delete(KEY);
+    return {
+      ok: false,
+      reason: status === 403 ? 'forbidden' : status === 404 || status === 501 ? 'unsupported' : 'server',
+    };
+  } catch {
+    reportFailure(KEY);
+    return { ok: false, reason: 'network' };
   }
-  await wait(120);
 }
 export async function getNotifications(): Promise<AppNotification[]> {
   if (sessionReal && !FORCE_DEMO) {
