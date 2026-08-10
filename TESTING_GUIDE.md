@@ -60,9 +60,9 @@ Expected: you land on the **Today** home screen with the gradient commission car
 |---|--------|-------------|-----------------|
 | 1 | **Today / Home** | Open after login | Gradient "This month's commission" card with ₹ figure, growth %, target bar; clock-in card; Hot leads / Open claims / Renewals stats; pastel quick actions; avatar contact row; today's follow-ups; hot leads |
 | 2 | **GPS attendance** | Tap **Clock in** | Asks location permission → shows "Clocked in · <time> · <place>". Tap **Clock out** to reverse. Persists for the day |
-| 3 | **Leads pipeline** | Tab **Leads** | 10 leads, ₹ pipeline total; filter chips (All/New/Contacted/Meeting/Proposal/Won) update the list with counts |
-| 4 | **Add lead** | Leads → **Add lead** (FAB) | Bottom sheet form; fill name + fields → **Add lead** → new lead appears at top |
-| 5 | **Lead 360 + stage** | Tap any lead | Profile, Call/WhatsApp/SMS, **pipeline stepper** — tap a stage (e.g. Proposal) and it advances; notes list |
+| 3 | **Leads pipeline** | Tab **Leads** | Your real leads and the ₹ pipeline total; filter chips **All / New / Meeting / Docs shared / Policy issued / Lost** update the list with counts. *(Phase 4: these five are `Lead.status` — the app no longer has Contacted or Proposal stages, because the server cannot store them.)* |
+| 4 | **Add lead** | Leads → **Add lead** (FAB) | Bottom sheet form. A **valid 10-digit mobile is required by the server**: submit without one and the sheet stays open with the server's own refusal in a red banner and nothing is added. With a valid one → the lead appears at top **under the name you typed** |
+| 5 | **Lead 360 + stage** | Tap any lead | Profile, Call/WhatsApp/SMS, **pipeline stepper** — tap a stage (e.g. Docs shared) and it advances; notes list. **Force-quit and reopen: the new stage is still there.** A lead belonging to another advisor will not open — the server refuses it, and the screen says so rather than claiming it was removed |
 | 6 | **Call / WhatsApp** | Tap the phone / WhatsApp icons | Opens the dialer / WhatsApp with the number (on a phone). On web, opens `wa.me` |
 | 7 | **Clients + segments** | Tab **Clients** | Search box + segment chips (Renewal due / Maturity / Birthday / Cross-sell); list with avatars, cover, segment pills |
 | 8 | **Client 360** | Tap a client | Profile, summary (cover/premium/policies), policy cards with sum assured, premium, maturity, **renewal countdown** (red if ≤7 days) |

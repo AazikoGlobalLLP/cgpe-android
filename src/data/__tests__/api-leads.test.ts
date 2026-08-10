@@ -149,9 +149,21 @@ describe('setLeadStage — the field the server actually stores', () => {
     expect(await api.setLeadStage('507f1f77bcf86cd799439011', 'lost')).toBeNull();
   });
 
-  it('resolves null on a refused write', async () => {
+  it('resolves null on a refused write, and DOES report it', async () => {
+    // Deliberately unlike `addLead`, whose 400 is a user's typo in a form. A 400 here means the
+    // app sent a status the server's own validator rejects (`routes/leads.js:367-370`), which
+    // can only be a contract drift between this app and the enum — nobody can fix it by
+    // retyping, and it is exactly what the health channel is for.
     fetchSpy.mockResolvedValue(reply(400, { success: false, error: 'Validation failed' }));
+
     expect(await api.setLeadStage('507f1f77bcf86cd799439011', 'lost')).toBeNull();
+    expect(health.getHealth().failures).toEqual(['/leads/:id']);
+  });
+
+  it('stays quiet when the caller may not update this lead (403)', async () => {
+    fetchSpy.mockResolvedValue(reply(403, { success: false, error: 'Not authorized to update this lead' }));
+    expect(await api.setLeadStage('507f1f77bcf86cd799439011', 'lost')).toBeNull();
+    expect(health.getHealth().degraded).toBe(false);
   });
 
   it('resolves null on a dead connection', async () => {
@@ -243,6 +255,32 @@ describe('addLead — a Lead document, not the app\'s own object', () => {
     fetchSpy.mockResolvedValue(reply(400, { success: false, message: 'Lead already exists' }));
     const result = await api.addLead({ name: 'Asha Patel', phone: '9876543210' });
     expect(result).toEqual({ ok: false, reason: 'invalid', message: 'Lead already exists' });
+  });
+
+  it('does NOT keep a record the server refused outright, and leaves no note behind', async () => {
+    // Two defects in one path, both found by review after the first commit.
+    //
+    // 1. A 403 (no `sales` module) or a 404/501 is as permanent as the 400 above — retrying
+    //    changes nothing — so buffering the record shows the user a lead that will never exist.
+    // 2. `reportIfOutage` records "this failure was an ANSWER" for `unavailable` to consume, and
+    //    this function never calls `unavailable`. The note used to sit there until the NEXT
+    //    failure of GET /leads ate it, silently swallowing one real outage.
+    fetchSpy.mockResolvedValue(reply(403, { success: false, code: 'RBAC_MODULE_DENIED', module: 'sales' }));
+
+    const add = api.addLead({ name: 'Asha Patel', phone: '9876543210' });
+    await vi.advanceTimersByTimeAsync(400);
+    const result = await add;
+
+    expect(!result.ok && result.reason).toBe('forbidden');
+    expect(health.getHealth().degraded).toBe(false);          // 403 is an answer, not an outage
+
+    // The note is gone, so a REAL outage on the next read is still reported...
+    fetchSpy.mockRejectedValue(new Error('network down'));
+    const list = api.getLeads();
+    await vi.advanceTimersByTimeAsync(400);
+    // ...and that read also proves nothing was buffered: it falls back to the local buffer.
+    expect(await list).toEqual([]);
+    expect(health.getHealth().failures).toEqual(['/leads']);
   });
 
   it('keeps the typed record when the write never lands, and says so', async () => {

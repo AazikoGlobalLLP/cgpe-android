@@ -84,9 +84,16 @@ reverse of today (`adapt.ts:174`) and the reverse of the backend's own `reports.
 display its stale `stage` forever and every save would look unconfirmed — the D2 symptom, moved
 rather than fixed. Filed to `cgpe-api` in `contracts/INBOX.md` as an observation, not a request.
 
-**L3 — Legacy `stage: 'contacted'` maps to `new_lead`.** It is vocabulary #2 and has no
-counterpart in the enum. Understating a lead's progress is the safe direction: overstating it to
-`meeting_scheduled` would invent a meeting nobody recorded.
+**L3 — Legacy `stage: 'contacted'` maps to `new_lead`, and nothing maps UP.** It is vocabulary #2
+and has no counterpart in the enum. Understating a lead's progress is the safe direction:
+overstating it to `meeting_scheduled` would invent a meeting nobody recorded.
+✏️ **Corrected during review, before this phase closed.** The first draft also aliased
+`converted → policy_issued`, which broke this rule in the one direction that costs money: a guess
+that a sale closed removes a lead from the open pipeline *and* adds it to a won figure. It was
+also a guess about a token that does not occur — `converted` is not a value of any lead
+vocabulary; it appears only in the `!converted` query sentinel (`routes/leads.js:109-111`) which
+`enums.md:218` records as unable to match anything. The alias is gone and a test pins that
+`converted` now lands on the default like any other unknown.
 
 **L4 — The mapper is an exact table plus a short anchored alias list.** No substring ladder
 (D6). Unknown input resolves to `new_lead`, which is the **schema default**
@@ -120,12 +127,24 @@ sheet never asks the user, the server has no `priority` path, and the field `ada
 priority *from* is `probability`, whose schema default is `10` → **cold**. Sending a probability
 chosen to make the badge say "warm" would be inventing a number. Every existing real lead already
 reads as cold for the same reason, so this is consistent, not a regression.
+✏️ **Corrected during review:** the *locally held* record was still being built with `'warm'`, so
+the same lead wore a different badge depending on whether the POST landed. It is now `'cold'` —
+what the server's own default would produce.
 
 **L10 — `400 Validation failed` is an answer, not an outage, and not a local save.** `addLead`
 stops using `tryReal` and classifies for itself: `201` → created; `400` → `invalid`, the server's
 own message is shown in the sheet and **the record is not buffered** (a lead the server refused
 does not exist and never will, so keeping it would be a fabrication); anything else → the existing
 outage path and the local buffer. `WriteFailure` gains `'invalid'` (`api.ts:85`).
+✏️ **Extended during review.** The same reasoning covers every *permanent* refusal, not just
+`400`: a `403` (no `sales` module) and a `404`/`501` cannot be fixed by trying again either, so
+those are no longer buffered — only `network` and `server` are. The sheet's caller receives the
+reason and picks copy accordingly, because "we are holding it, pull to refresh" and "this lead
+does not exist and nothing is holding it" are opposite instructions.
+⚠️ **And one real bug the review caught in this same branch.** `reportIfOutage` leaves a note in
+`suppressed` for `unavailable` to consume; `addLead` never calls `unavailable`, so after a `403`
+the note sat there until the **next** `GET /leads` failure ate it — one genuine outage, silently
+unreported. A write path has to clear its own note. Pinned by a test that fails without the fix.
 
 **L11 — No client-side phone rule is added.** The server owns it (`isMobilePhone`,
 `routes/leads.js:287-290`) and the app renders the server's refusal. Writing a second regex here
@@ -150,6 +169,7 @@ true blast radius is nine — the same "file list is a floor" rule Phase 3 recor
 | `src/app/search.tsx` | `:603` `?? STAGE_META.new` → `.new_lead` |
 | `src/data/__tests__/adapt.test.ts` | two pinned cases flipped **deliberately**; the correct-behaviour block updated |
 | `src/data/__tests__/api-leads.test.ts` | **new** — the wire contract: request bodies and response envelopes |
+| `TESTING_GUIDE.md` | rows 3–5 named stage chips that no longer exist, so the hand-test "Done means" requires could not be walked |
 
 ---
 
@@ -185,8 +205,13 @@ Needs a device and a live backend (carried, as Phases 1 and 3 were):
   answer, so no banner) makes silent. It also needs a different error reader: the RBAC denial body
   has **no `error` key**, only `code` / `module` / `message` (`middleware/rbacGuard.js:24-29`),
   which `enums.md` §15 lists as a system-wide envelope drift. Named here, not fixed.
-- **`GET /leads/:id` 403 for an unowned lead.** L6 removes it from the write path; the read path
-  still says "could not load" where the truth is "this lead is not yours". Same fix as above.
+- **`GET /leads/:id` 403 for an unowned lead.** L6 removes it from the write path. On the read
+  path the app still cannot tell a `403` from a `404` — `getLead` resolves `undefined` for both —
+  so the detail screen now names **both** possibilities instead of asserting the wrong one; it
+  used to say "It may have been reassigned or removed", which is a guess, and after the envelope
+  fix it became the *only* thing an advisor sees for a lead the list showed them. Distinguishing
+  the two properly means `getLead` carrying the status out, which is a signature change this
+  phase did not need.
 - **`/leads/:id/notes` and `/leads/:id/timeline`.** Both exist and are documented; the app
   synthesises notes from the free-text `notes` string instead. A real Phase.
 - **`GET /leads` pagination.** The app asks for `limit=500` and ignores `data.pagination`. Wrong

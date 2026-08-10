@@ -211,7 +211,7 @@ export default function Leads() {
     if (wonTarget) void advance(wonTarget);
   }, [advance, wonTarget]);
 
-  const onAdded = useCallback((lead: Lead, confirmed: boolean) => {
+  const onAdded = useCallback((lead: Lead, confirmed: boolean, reason?: api.WriteFailure) => {
     refresh();
     if (confirmed) {
       haptics.success();
@@ -219,9 +219,19 @@ export default function Leads() {
       return;
     }
     haptics.warn();
-    setNotice({
+    // The two failures need opposite copy, which is why the reason is passed up. A dropped
+    // connection means "we are holding it, try again"; a refusal means "this lead does not
+    // exist and nothing is holding it" — telling that user to pull to refresh would send them
+    // looking for a record that was never created and can never be.
+    const held = reason === 'network' || reason === 'server';
+    setNotice(held ? {
       title: 'That lead is not on the server yet',
       message: `${lead.name} was captured on this device, but the server did not confirm it. Pull to refresh and check before adding this lead again.`,
+    } : {
+      title: 'That lead was not added',
+      message: reason === 'forbidden'
+        ? `The server refused to create ${lead.name}: this account does not have access to Leads. Nothing was saved, on this device or on the server.`
+        : `The server has nowhere to create ${lead.name} — it answered that the leads endpoint is not there. Nothing was saved, on this device or on the server.`,
     });
   }, [refresh, toast]);
 
@@ -234,7 +244,7 @@ export default function Leads() {
    * Four genuinely different outcomes, and they must not look alike. "No match for this
    * search" and "nothing here yet" ask the user for opposite things, and an outage asks for
    * something different again. The ORDER matters: an empty book is reported as an empty
-   * book even while a stage chip is active, because "nothing at Contacted right now"
+   * book even while a stage chip is active, because "nothing at Docs shared right now"
    * implies there is something at the other stages. */
   const emptyKind = query ? 'search'
     : leads.length === 0 && health.degraded ? 'outage'
@@ -309,7 +319,11 @@ export default function Leads() {
         {!loading && openCount > 0 ? (
           <Row style={{ paddingHorizontal: spacing.lg }}>
             <Meter
-              label="Past first contact"
+              // PHASE 4: was "Past first contact". The server's enum has no "contacted" step —
+              // the first move out of New is a booked meeting — so the old label described a
+              // milestone the pipeline can no longer record, and read as an accusation on any
+              // day of calls that produced no meetings.
+              label="Meeting booked or further"
               value={engagedCount / openCount}
               valueLabel={`${engagedCount} of ${openCount}`}
               tone={engagedCount === 0 ? 'warning' : 'primary'}
@@ -535,7 +549,7 @@ function PipelineSheet({
       <View style={{ gap: spacing.xl, paddingTop: spacing.xs }}>
         {closedCount > 0 ? (
           <Meter
-            label="Won, out of every lead you have closed"
+            label="Policy issued, out of every lead you have closed"
             value={wonCount / closedCount}
             valueLabel={`${wonCount} of ${closedCount}`}
             tone="success"
@@ -585,7 +599,11 @@ function CloseOutSheet({ visible, lead, onClose, onConfirm }: {
       visible={visible}
       onClose={onClose}
       title="Close this lead as won?"
-      subtitle={`${lead.name} leaves the open pipeline. Every other stage move can be swiped straight back.`}
+      // "swiped straight back" was never true — a swipe only ever moves a lead FORWARD one step
+      // (NEXT_STAGE has no reverse), and the stage picker on the detail screen is the only way
+      // back. Telling someone a move is reversible by swipe sends them to swipe again, which
+      // advances it further.
+      subtitle={`${lead.name} leaves the open pipeline. Any stage can still be set again from the lead's own screen.`}
       footer={
         <Row>
           <Button label="Not yet" variant="outline" style={{ flex: 1 }} onPress={onClose} />
@@ -618,7 +636,7 @@ function CloseOutSheet({ visible, lead, onClose, onConfirm }: {
 function AddLeadSheet({ visible, onClose, onAdded }: {
   visible: boolean;
   onClose: () => void;
-  onAdded: (lead: Lead, confirmed: boolean) => void;
+  onAdded: (lead: Lead, confirmed: boolean, reason?: api.WriteFailure) => void;
 }) {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -683,7 +701,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
       }
       reset();
       onClose();
-      onAdded(result.lead, false);
+      onAdded(result.lead, false, result.reason);
       return;
     }
 
@@ -721,7 +739,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
         <Field
           label="Name"
           value={name}
-          onChange={(v) => { setName(v); if (error) setError(null); }}
+          onChange={(v) => { setName(v); if (error) setError(null); if (refused) setRefused(null); }}
           placeholder="Who is this lead?"
           error={error ?? undefined}
         />

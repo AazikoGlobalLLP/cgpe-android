@@ -761,7 +761,12 @@ export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
   const local: Lead = {
     id: 'l' + (Date.now() % 100000), name: data.name || 'New Lead', phone: data.phone || '',
     stage: 'new_lead', source: data.source || 'Manual', interest: data.interest || '',
-    potential: data.potential || 0, city: data.city || '', priority: data.priority || 'warm',
+    potential: data.potential || 0, city: data.city || '',
+    // 'cold', not the old invented 'warm'. This record has to read the same way the server's
+    // copy of it would: `probability` defaults to 10 (`models/Lead.js:47-52`) and `adaptLead`'s
+    // ladder turns 10 into 'cold'. A held record that reads 'warm' and a saved one that reads
+    // 'cold' would be the same lead wearing two badges depending on the connection.
+    priority: data.priority || 'cold',
     createdAt: new Date().toISOString(), lastActivity: new Date().toISOString(), notes: [],
   };
 
@@ -790,10 +795,23 @@ export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
         return { ok: false, reason: 'invalid', message: String(msg || 'The server refused this lead.') };
       }
       if (ok) { reportFailure('/leads'); reason = 'server'; }          // 2xx with no `data.lead`
-      else { reportIfOutage(status, '/leads'); reason = status === 403 ? 'forbidden' : status === 404 || status === 501 ? 'unsupported' : 'server'; }
+      else {
+        reportIfOutage(status, '/leads');
+        // `reportIfOutage` leaves a "this was an answer" note for `unavailable` to consume, and
+        // this function never calls `unavailable`. Left behind, that note would be eaten by the
+        // NEXT failure of `GET /leads` — one real outage, silently unreported. Read paths clear
+        // it for themselves; a write path has to clear its own.
+        suppressed.delete('/leads');
+        reason = status === 403 ? 'forbidden' : status === 404 || status === 501 ? 'unsupported' : 'server';
+      }
     } catch { reportFailure('/leads'); }
   }
-  state.leads.unshift(local);
+
+  // A refusal the user cannot fix by trying again — no `sales` module (403), or an endpoint that
+  // is not there (404/501) — is not held. Same reasoning as the 400 above: this lead will never
+  // exist, so keeping it in the list would be the fabrication this file was built to remove.
+  // A dropped connection or a 5xx IS held: that is what the buffer is for.
+  if (reason === 'network' || reason === 'server') state.leads.unshift(local);
   await wait(250);
   return { ok: false, reason, lead: clone(local) };
 }

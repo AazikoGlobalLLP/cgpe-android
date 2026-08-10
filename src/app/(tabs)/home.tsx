@@ -1351,7 +1351,7 @@ export default function Home() {
                 subtitle={unsure(leads.length)
                   ? 'The server did not answer, so an empty pipeline here is not confirmed. Pull down to refresh.'
                   : leads.length > 0
-                    ? 'Nothing is open right now. Won and lost leads stay on the pipeline screen.'
+                    ? 'Nothing is open right now. Closed leads — policy issued, or lost — stay on the pipeline screen.'
                     : 'New enquiries land here and move along the stages as you work them.'}
                 action={unsure(leads.length)
                   ? { label: 'Try again', onPress: retry }

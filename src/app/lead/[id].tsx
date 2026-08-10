@@ -23,18 +23,22 @@ import { call, sms, whatsapp } from '@/lib/actions';
  *
  * STAGE PROGRESSION IS THE PRIMARY ACTION, so it owns the pinned bar in the thumb arc and
  * never scrolls away. The one-tap button only ever moves the lead ONE step, and only while
- * that step is reversible; closing a lead (won or lost) always goes through the picker
- * sheet, because "Won" is the one change nobody wants to make with a stray thumb.
+ * that step is reversible; closing a lead (policy issued, or lost) always goes through the
+ * picker sheet, because a closed sale is the one change nobody wants to make with a stray thumb.
  *
- * A STAGE CHANGE IS READ BACK BEFORE IT IS BELIEVED. `api.setLeadStage` resolves the same
- * way whether the server accepted the write or quietly fell back to the in-memory buffer,
- * so the record is fetched again and compared. An unconfirmed change is rolled back on
- * screen and reported inline, rather than left looking saved.
+ * A STAGE CHANGE IS BELIEVED ONLY WHEN THE SERVER SENDS IT BACK. `api.setLeadStage` resolves to
+ * the lead as the server holds it after the update — `PUT /leads/:id` runs with `{ new: true }`,
+ * so its own reply is the post-update document — or to `null` when nothing landed. The stage is
+ * compared against that reply; an unconfirmed change is rolled back on screen and reported
+ * inline, rather than left looking saved.
+ *   PHASE 4 REPLACED A SECOND REQUEST WITH THAT REPLY, and the reason is not only the round
+ *   trip: `PUT` has no ownership check while `GET /leads/:id` has a strict one, so confirming a
+ *   write by re-reading told the user "not saved" for a change that had saved, on any lead they
+ *   do not own — which the list deliberately shows them.
  *
  * EVERY ASYNC PATH HERE IS CANCELLABLE. The load runs on focus (so it re-runs each time the
- * screen comes back) and the commit is two sequential round trips. Both can outlive the
- * screen: the focus effect cancels via its own cleanup, and the commit checks a mount flag
- * before it touches state.
+ * screen comes back) and a commit can still outlive the screen: the focus effect cancels via
+ * its own cleanup, and the commit checks a mount flag before it touches state.
  * ------------------------------------------------------------------ */
 
 /**
@@ -157,10 +161,15 @@ export default function LeadDetail() {
         <Header title="Lead" back />
         <EmptyState
           icon={health.degraded ? 'cloud-offline-outline' : 'person-circle-outline'}
-          title={health.degraded ? 'This lead could not load' : 'Lead not found'}
+          title={health.degraded ? 'This lead could not load' : 'This lead could not be opened'}
           subtitle={health.degraded
             ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
-            : 'This lead is no longer in the pipeline you can see. It may have been reassigned or removed.'}
+            // Two different refusals reach this branch and the app cannot tell them apart from
+            // here: the record is gone (404), or it belongs to another advisor and the server
+            // will not open it for you (403 — the list shows unowned leads that the detail route
+            // refuses). Naming both beats guessing one, which is what "it may have been
+            // reassigned or removed" was doing.
+            : 'The server would not open it. A lead can only be opened by the advisor it belongs to, and this one may belong to someone else or have been removed.'}
           action={{ label: 'Try again', onPress: retry }}
         />
       </Screen>

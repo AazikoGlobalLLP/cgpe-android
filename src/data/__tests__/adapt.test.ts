@@ -362,8 +362,22 @@ describe('adaptLead', () => {
     // resolving it to `meeting_scheduled` would invent a meeting nobody recorded.
     expect(adaptLead({ _id: 's4', stage: 'new' }).stage).toBe('new_lead');
     expect(adaptLead({ _id: 's5', stage: 'contacted' }).stage).toBe('new_lead');
-    // `converted` is not in the enum either, but routes/leads.js:109-111 filters on it.
-    expect(adaptLead({ _id: 's6', stage: 'converted' }).stage).toBe('policy_issued');
+    // NOTHING may resolve up into policy_issued. Guessing that a sale closed takes a lead out
+    // of the open pipeline and puts its premium into a won figure. `converted` is the tempting
+    // one — it reads like "won" and routes/leads.js:109-111 filters on it — but it is a value
+    // of no lead vocabulary (enums.md:218: the filter can never match), so an alias for it
+    // would fabricate a sale from a token that does not occur on a document.
+    expect(adaptLead({ _id: 's6', stage: 'converted' }).stage).toBe('new_lead');
+  });
+
+  it('cannot be walked into Object.prototype by a hostile stage string', () => {
+    // The raw `stage` key is written by non-Mongoose paths (the Excel bulk import, the bot), so
+    // its contents are arbitrary. A bare `TABLE[x]` lookup returns the Object constructor for
+    // 'constructor', and a stage that is a function crashes every STAGE_META[stage].label.
+    expect(adaptLead({ _id: 'p1', stage: 'constructor' }).stage).toBe('new_lead');
+    expect(adaptLead({ _id: 'p2', stage: '__proto__' }).stage).toBe('new_lead');
+    expect(adaptLead({ _id: 'p3', stage: 'toString' }).stage).toBe('new_lead');
+    expect(adaptLead({ _id: 'p4', stage: 'hasOwnProperty' }).stage).toBe('new_lead');
   });
 
   it('no longer substring-matches, so two real values stop inverting', () => {

@@ -143,8 +143,15 @@ function parseBudget(s: any): number {
   else if (unit === 'cr') n *= 10000000;
   return isFinite(n) ? n : 0;
 }
-/** `Lead.status`, verbatim — `contracts/enums.md:212`. The app's own vocabulary since Phase 4. */
-const LEAD_STATUS: readonly string[] = ['new_lead', 'meeting_scheduled', 'docs_shared', 'policy_issued', 'lost'];
+/**
+ * `Lead.status`, verbatim — `contracts/enums.md:212`. The app's own vocabulary since Phase 4.
+ *
+ * A `Record<LeadStage, true>` rather than an array, so it is the compiler that keeps this table
+ * and the union in step: add a sixth value to `LeadStage` and this object stops compiling.
+ */
+const LEAD_STATUS: Record<LeadStage, true> = {
+  new_lead: true, meeting_scheduled: true, docs_shared: true, policy_issued: true, lost: true,
+};
 
 /**
  * The only values that are NOT `Lead.status` and still reach a real document.
@@ -152,17 +159,25 @@ const LEAD_STATUS: readonly string[] = ['new_lead', 'meeting_scheduled', 'docs_s
  * `contracts/models.md:2138` (drift #5) records that the raw `leads` collection carries a
  * `stage` key which non-Mongoose readers use, and `enums.md:586` gives that key's vocabulary:
  * `new | contacted | meeting_scheduled | docs_shared`. Two of those four are already enforced
- * values; the other two are here. `converted` is here because `routes/leads.js:109-111` treats
- * it as a lead status worth filtering on, even though the enum has never contained it.
+ * values; the other two are here.
  *
  * `contacted` resolves DOWN to `new_lead` deliberately: the enforced enum has no counterpart,
- * and inventing `meeting_scheduled` would claim a meeting nobody recorded.
+ * and inventing `meeting_scheduled` would claim a meeting nobody recorded. Nothing here may
+ * resolve UP into `policy_issued` — a guess that a sale closed removes a lead from the open
+ * pipeline and adds it to a money figure, which is the one direction this app must not guess in.
+ * (An earlier draft mapped `converted` that way. `converted` is not a value of any lead
+ * vocabulary — it appears only as the `!converted` query sentinel at `routes/leads.js:109-111`,
+ * which `enums.md:218` notes can never match a document — so the alias fabricated a won sale
+ * out of a token that does not occur.)
+ *
+ * A `Map`, not an object literal: a lookup by an arbitrary server string must not be able to
+ * reach `Object.prototype`. `{}['constructor']` is truthy, and a stage of `Object` crashes every
+ * `STAGE_META[stage].label` in the app.
  */
-const LEAD_STATUS_ALIAS: Record<string, LeadStage> = {
-  new: 'new_lead',
-  contacted: 'new_lead',
-  converted: 'policy_issued',
-};
+const LEAD_STATUS_ALIAS = new Map<string, LeadStage>([
+  ['new', 'new_lead'],
+  ['contacted', 'new_lead'],
+]);
 
 /**
  * PHASE 4. Exact match first, then the short alias table — never a substring test.
@@ -178,8 +193,9 @@ const LEAD_STATUS_ALIAS: Record<string, LeadStage> = {
  */
 function mapLeadStage(s: any): LeadStage {
   const x = String(s ?? '').trim().toLowerCase();
-  if (LEAD_STATUS.includes(x)) return x as LeadStage;
-  return LEAD_STATUS_ALIAS[x] ?? 'new_lead';
+  // hasOwnProperty, not `in` and not a bare index: both of those walk the prototype chain.
+  if (Object.prototype.hasOwnProperty.call(LEAD_STATUS, x)) return x as LeadStage;
+  return LEAD_STATUS_ALIAS.get(x) ?? 'new_lead';
 }
 
 /** Real leads have a free-text `notes` string (not an array), `probability` instead
