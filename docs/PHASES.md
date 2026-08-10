@@ -14,10 +14,15 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 3 — done.** Built 2026-08-10, commit `e0b0b2c`. `npm test` runs **164** tests across 6
+**Phase 4 — done.** Built 2026-08-10, commit `5c08872`. `npm test` runs **185** tests across 7
 files and exits 0; `npx tsc --noEmit` exits 0; `npm run lint` is byte-identical to the 46-error
-baseline. **git is also unblocked** — Phases 1 and 2 had never been committed and are now in
-`123db30`.
+baseline. The app now speaks `Lead.status`; the two `adapt.test.ts` pins were flipped on purpose
+and a new `api-leads.test.ts` pins the request bodies and response envelopes themselves.
+**Acceptance criteria 7–9 need a device and a live backend** — see the spec.
+
+**Phase 3 — done.** Built 2026-08-10, commit `e0b0b2c`. `npm test` ran **164** tests across 6
+files and exited 0. **git is also unblocked** — Phases 1 and 2 had never been committed and are now
+in `123db30`.
 
 **Phase 1 — still code-complete, verification still outstanding.** Acceptance criteria 1–6 in
 `docs/spec/PHASE-1.md` need a handset in airplane mode. Neither Phase 2 nor Phase 3 covers them:
@@ -26,11 +31,11 @@ exercise.
 
 ## Next 3
 
-1. **Phase 4** — the leads contract (envelope unwrap, `stage`→`status`, stage vocabulary).
-   Two tests in `adapt.test.ts` are pinned to today's wrong mapping and **must go red** when this
-   lands; that is the signal, not a regression.
-2. **Phase 5** — WhatsApp send (`text` not `message`, phone from `waThreadCache`).
-3. **Phase 7** — geofence + tracking (INBOX D5 `session_id`, D10 the fence is up to 300 m).
+1. **Phase 5** — WhatsApp send (`text` not `message`, phone from `waThreadCache`).
+2. **Phase 7** — geofence + tracking (INBOX D5 `session_id`, D10 the fence is up to 300 m).
+3. **Phase 6** — the remaining envelope mismatches, if `cgpe-api` has un-shadowed
+   `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract row, read the
+   handler, then assert the envelope in a test that fails if the shape moves.
 
 > **Carried out of Phase 3, small and specified:** `src/screens/dashboards.tsx:292-297` renders the
 > Master KPI tiles as `snapshot?.total_clients ?? 0`, so a **partial** outage (roster loads, org
@@ -46,8 +51,8 @@ exercise.
 | 1 | Write-path honesty | **Built** — handset verification outstanding |
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
-| 4 | Leads contract | Next |
-| 5 | WhatsApp send | Not started |
+| 4 | Leads contract | **Done** 2026-08-10 — 185 tests green (`5c08872`); device checks outstanding |
+| 5 | WhatsApp send | Next |
 | 6 | Remaining envelope mismatches `[api]` | Blocked on `cgpe-api` |
 | 7 | Geofence + tracking (INBOX D5, D10) | Not started |
 | 8 | Last fabricated-data path + stale docs | Not started |
@@ -116,13 +121,36 @@ Full spec, the ten locked decisions, and what was deliberately left out: `docs/s
 > failed `scanRenewals` page and was written in Phase 2 to go red exactly here. Same convention as
 > the `adapt.test.ts` pins that Phase 4 will flip.
 
-## Phase 4 — Leads contract
+## Phase 4 — Leads contract ✅ DONE 2026-08-10 (`5c08872`)
 Unwrap the `{ lead }` envelope on `GET`/`POST`, send `status` with the server's own enum, and teach
 `mapLeadStage` the real vocabulary.
 **Files:** `src/data/api.ts`, `src/data/adapt.ts`, `src/app/lead/[id].tsx`,
-`src/app/(tabs)/leads.tsx`
+`src/app/(tabs)/leads.tsx` — **plus five the compiler forced**: `types.ts`, `labels.ts`,
+`(tabs)/home.tsx`, `search.tsx`, `__tests__/adapt.test.ts`, and a new `__tests__/api-leads.test.ts`.
 **Done when:** tapping a lead opens its detail screen with data; a stage change persists across a
 cold start; a `policy_issued` lead renders as won, not New; a newly created lead shows its real name.
+
+**Result.** 21 new tests. Four things turned out to be true that the phase text did not say:
+
+1. **The app had invented a vocabulary, not just a mapping.** Three of `LeadStage`'s six values
+   existed in no backend vocabulary that can be written, so "teach `mapLeadStage` the real
+   vocabulary" could not be done without replacing the union — the funnel is now four steps.
+2. **No stage change had ever persisted.** `{ stage }` is not a schema path; Mongoose strict mode
+   dropped it and the server answered 200 with the record unchanged. The read-back then failed, so
+   the app has been correctly reporting "not saved" for a write it was making impossible.
+3. **The write's own reply is the better confirmation.** `PUT` returns the post-update document,
+   and unlike `GET /:id` it has no ownership check — so the old two-call confirm reported "not
+   saved" for a genuinely saved change on any *unowned* lead, which the list deliberately shows.
+4. **`getLeads` could pin the outage banner open for a whole session.** Every `/api/leads` route is
+   behind `requireModule('sales')`; the 403 was never classified. Same defect Phase 3 fixed for
+   `/profiles`, still live on the busiest lead read.
+
+Full spec, the eleven locked decisions and what was deliberately left out: `docs/spec/PHASE-4.md`.
+
+> **The two `adapt.test.ts` pins were flipped deliberately** and moved out of the pinned-bugs block,
+> because they now assert correct behaviour. Same convention as `api-renewals.test.ts:187` in
+> Phase 3. The block still holds the `mapClaimStatus` pins, which are the same class of defect in
+> the claims mapper and are still open.
 
 ## Phase 5 — WhatsApp send
 Send `text` (not `message`), resolve the phone from `waThreadCache` (not the empty `state.waThreads`),

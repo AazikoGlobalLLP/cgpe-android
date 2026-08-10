@@ -6,6 +6,64 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-10 — The app's lead vocabulary is the server's enum, not one of its own
+
+**Context.** Phase 4. `LeadStage` was `new | contacted | meeting | proposal | closed_won |
+closed_lost` — six words the app invented. `Lead.status` is enum-enforced to five
+(`contracts/enums.md:212`), `stage` is not a path on the schema at all, and `enums.md` §15 lists
+two further lead vocabularies (the query-engine dropdown, `queryEngine.js:194`) with the
+instruction not to merge them. Keeping the six and translating on write was the smaller diff, but
+`contacted` and `proposal` have no target in the enum, so the translation is lossy exactly where
+the user can see it: they tap **Contacted**, the server stores `new_lead`, the confirming read
+disagrees, and the app reports "not saved" every time.
+
+**Decision.** `LeadStage` **is** `new_lead | meeting_scheduled | docs_shared | policy_issued |
+lost`. The app keeps no vocabulary of its own; the property is still called `stage` because that
+is internal, and `STAGE_META` supplies the labels (New · Meeting · Docs shared · Policy issued ·
+Lost). Unknown input resolves to `new_lead` — the schema's own default, not an invented fallback.
+
+**Consequence.** Nine files, all found by `tsc` because `STAGE_META` is an exhaustive
+`Record<LeadStage, …>`; keep it exhaustive for exactly that reason. The funnel is four steps, not
+five. Anything that still says `closed_won` is stale — including, per the INBOX item filed on
+2026-08-10, the admin panel's Android preview.
+
+---
+
+## 2026-08-10 — On a lead, `status` beats `stage` — the opposite of the backend's own reader
+
+**Context.** Real lead documents can carry both. `contracts/models.md:2138` (drift #5) records
+that raw readers use `stage`, and `reports.js:121` reads `l.stage || l.status`. `adaptLead` did
+the same. But no endpoint in `api.md` §Leads accepts `stage` in a request body — `status` is the
+only one of the two the app can write.
+
+**Decision.** Read `status` first, fall back to `stage`, and say so in the code. A stage-first
+reader displays a value nobody can change: a saved move stays invisible and every write reads as
+unconfirmed, which is the Phase 4 defect moved rather than fixed.
+
+**Consequence.** A lead moved from the app reads as moved to us and as unmoved to `reports.js`,
+on the same document. That is a real divergence, filed to `cgpe-api` as an observation with the
+suggestion that a backfill plus one canonical accessor is the honest fix. **We will not write
+`stage`** unless `api.md` documents us writing it.
+
+---
+
+## 2026-08-10 — A 400 is a refusal: not an outage, and not a local save
+
+**Context.** Phase 4. `POST /api/leads` requires `phone` and validates it server-side, so a typo
+is the likeliest failure the Add-lead sheet will ever see. Routed through `tryReal` it was
+reported to the health channel — one user's mistyped number raised "some data could not load" for
+the whole app — and the record was then held in the local write buffer as if it had been captured.
+
+**Decision.** `WriteFailure` gains `invalid`. A 400 shows the server's own sentence on the sheet,
+raises no banner, and **buffers nothing**: the server has refused this record and will keep
+refusing it until the user changes what they typed, so keeping it would be a fabrication. Network
+and 5xx failures keep the buffer, which is what it is for.
+
+**Consequence.** No client-side phone rule was added. The server owns that validation
+(`isMobilePhone`), and a second regex here would be a second source of truth that drifts.
+
+---
+
 ## 2026-08-10 — Not every failure is an outage: 401/403/404/501 are answers
 
 **Context.** Phase 3 taught `tryReal`/`tryEnvelope` to report failures. The naive version — report
