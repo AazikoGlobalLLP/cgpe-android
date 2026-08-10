@@ -143,14 +143,43 @@ function parseBudget(s: any): number {
   else if (unit === 'cr') n *= 10000000;
   return isFinite(n) ? n : 0;
 }
+/** `Lead.status`, verbatim — `contracts/enums.md:212`. The app's own vocabulary since Phase 4. */
+const LEAD_STATUS: readonly string[] = ['new_lead', 'meeting_scheduled', 'docs_shared', 'policy_issued', 'lost'];
+
+/**
+ * The only values that are NOT `Lead.status` and still reach a real document.
+ *
+ * `contracts/models.md:2138` (drift #5) records that the raw `leads` collection carries a
+ * `stage` key which non-Mongoose readers use, and `enums.md:586` gives that key's vocabulary:
+ * `new | contacted | meeting_scheduled | docs_shared`. Two of those four are already enforced
+ * values; the other two are here. `converted` is here because `routes/leads.js:109-111` treats
+ * it as a lead status worth filtering on, even though the enum has never contained it.
+ *
+ * `contacted` resolves DOWN to `new_lead` deliberately: the enforced enum has no counterpart,
+ * and inventing `meeting_scheduled` would claim a meeting nobody recorded.
+ */
+const LEAD_STATUS_ALIAS: Record<string, LeadStage> = {
+  new: 'new_lead',
+  contacted: 'new_lead',
+  converted: 'policy_issued',
+};
+
+/**
+ * PHASE 4. Exact match first, then the short alias table — never a substring test.
+ *
+ * The old ladder was five unanchored regexes, and two of its arms read real values backwards:
+ * `not_converted` contains `convert` and came back WON, `unqualified` contains `qualif` and came
+ * back contacted. It also knew none of the server's actual words, so `policy_issued` and
+ * `docs_shared` fell through to `new` — a closed sale was indistinguishable from a fresh lead
+ * on every screen that renders a stage.
+ *
+ * Anything unrecognised resolves to `new_lead`, which is the schema's own default
+ * (`models/Lead.js:32`) rather than a fallback this app invented.
+ */
 function mapLeadStage(s: any): LeadStage {
-  const x = String(s || '').toLowerCase();
-  if (/won|convert|closed_won/.test(x)) return 'closed_won';
-  if (/lost|closed_lost|dead|junk/.test(x)) return 'closed_lost';
-  if (/propos|quot/.test(x)) return 'proposal';
-  if (/meet|visit/.test(x)) return 'meeting';
-  if (/contact|call|follow|working|qualif/.test(x)) return 'contacted';
-  return 'new';
+  const x = String(s ?? '').trim().toLowerCase();
+  if (LEAD_STATUS.includes(x)) return x as LeadStage;
+  return LEAD_STATUS_ALIAS[x] ?? 'new_lead';
 }
 
 /** Real leads have a free-text `notes` string (not an array), `probability` instead
@@ -171,9 +200,15 @@ export function adaptLead(raw: any): Lead {
     id: String(raw._id || raw.id || raw.leadId),
     name: titleCase(raw.name || raw.clientName || raw.fullName) || 'Lead',
     phone: raw.phone ? String(raw.phone) : (p10.length === 10 ? '+91' + p10 : ''),
-    stage: mapLeadStage(raw.stage || raw.status),
+    // PHASE 4: `status` first. It used to be `stage || status`, which is also what the backend's
+    // own `reports.js:121` does — but `status` is the ONLY one of the two any endpoint will
+    // write (`api.md:369-370`), so a document carrying both would show a stale `stage` forever
+    // and every save would read as unconfirmed.
+    stage: mapLeadStage(raw.status || raw.stage),
     source: raw.source || 'Manual',
-    interest: raw.interest || raw.product || (typeof notesRaw === 'string' ? notesRaw.slice(0, 90) : '') || '',
+    // `insurance_need` is the schema's field for what the lead wants (`models/Lead.js:25-28`)
+    // and was the one source this never read, so the Interest column was blank for real leads.
+    interest: raw.insurance_need || raw.interest || raw.product || (typeof notesRaw === 'string' ? notesRaw.slice(0, 90) : '') || '',
     potential,
     city: (raw.address && raw.address.city) || raw.city || '',
     priority: raw.priority || (prob >= 70 ? 'hot' : prob > 0 && prob < 30 ? 'cold' : 'warm'),

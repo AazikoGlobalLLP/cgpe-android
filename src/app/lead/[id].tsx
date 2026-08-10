@@ -37,14 +37,16 @@ import { call, sms, whatsapp } from '@/lib/actions';
  * before it touches state.
  * ------------------------------------------------------------------ */
 
-/** The funnel, in order. `closed_lost` sits outside it: it is an exit, not a step. */
-const FLOW: LeadStage[] = ['new', 'contacted', 'meeting', 'proposal', 'closed_won'];
+/**
+ * The funnel, in order — and the order is the server's own enum order
+ * (`contracts/enums.md:212`). `lost` sits outside it: it is an exit, not a step.
+ */
+const FLOW: LeadStage[] = ['new_lead', 'meeting_scheduled', 'docs_shared', 'policy_issued'];
 
 const NEXT_STAGE: Partial<Record<LeadStage, LeadStage>> = {
-  new: 'contacted',
-  contacted: 'meeting',
-  meeting: 'proposal',
-  proposal: 'closed_won',
+  new_lead: 'meeting_scheduled',
+  meeting_scheduled: 'docs_shared',
+  docs_shared: 'policy_issued',
 };
 
 const PRIORITY_LABEL: Record<Lead['priority'], string> = {
@@ -61,13 +63,18 @@ function dateOr(iso?: string): string | null {
 }
 
 /**
- * Commit a stage and confirm it by reading the record back. Resolves to the server's own
- * copy of the lead, or null when the change could not be confirmed.
+ * Commit a stage. Resolves to the server's own copy of the lead, or null when the change could
+ * not be confirmed.
+ *
+ * PHASE 4: this used to be a write followed by a second read, because `setLeadStage` resolved
+ * `void` whether or not anything landed. It now returns the document `PUT` itself sends back
+ * (`{ new: true }`), so the confirmation is the write's own response — one round trip, and it no
+ * longer depends on `GET /:id`, which 403s for a lead this caller does not own even though the
+ * same caller is allowed to update it.
  */
 async function commitStage(id: string, stage: LeadStage): Promise<Lead | null> {
-  await api.setLeadStage(id, stage);
-  const fresh = await api.getLead(id);
-  return fresh && fresh.stage === stage ? fresh : null;
+  const saved = await api.setLeadStage(id, stage);
+  return saved && saved.stage === stage ? saved : null;
 }
 
 export default function LeadDetail() {
@@ -163,8 +170,8 @@ export default function LeadDetail() {
   const st = STAGE_META[lead.stage];
   const next = NEXT_STAGE[lead.stage];
   const step = FLOW.indexOf(lead.stage);
-  const lost = lead.stage === 'closed_lost';
-  const won = lead.stage === 'closed_won';
+  const lost = lead.stage === 'lost';
+  const won = lead.stage === 'policy_issued';
 
   // adaptLead always produces an array, but this screen also renders the locally buffered
   // record written when a POST could not reach the server, so it stays defensive.
@@ -176,10 +183,10 @@ export default function LeadDetail() {
 
   // One tap moves one step, and only while that step is reversible. Closing out always
   // goes through the picker.
-  const oneTap = next && next !== 'closed_won' ? next : null;
+  const oneTap = next && next !== 'policy_issued' ? next : null;
   const primaryLabel = saving ? 'Saving'
     : oneTap ? `Move to ${STAGE_META[oneTap].label}`
-      : next === 'closed_won' ? 'Close this lead'
+      : next === 'policy_issued' ? 'Close this lead'
         : 'Change stage';
 
   return (
@@ -260,7 +267,7 @@ export default function LeadDetail() {
               )}
 
               <Meter
-                label={lost ? 'Closed as lost' : won ? 'Closed as won' : 'Pipeline progress'}
+                label={lost ? 'Closed as lost' : won ? 'Policy issued' : 'Pipeline progress'}
                 value={lost ? 0 : step >= 0 ? (step + 1) / FLOW.length : 0}
                 valueLabel={lost ? 'Not proceeding' : step >= 0 ? `${step + 1} of ${FLOW.length}` : st.label}
                 tone={lost ? 'danger' : won ? 'success' : 'primary'}
@@ -454,15 +461,15 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
         >
           <DataRow
             label="Not proceeding"
-            value={STAGE_META.closed_lost.label}
+            value={STAGE_META.lost.label}
             tone="danger"
-            onPress={current === 'closed_lost' ? undefined : () => pick('closed_lost')}
-            right={current === 'closed_lost' ? <Pill label="Current" tone="danger" small dot /> : undefined}
+            onPress={current === 'lost' ? undefined : () => pick('lost')}
+            right={current === 'lost' ? <Pill label="Current" tone="danger" small dot /> : undefined}
           />
         </ListSection>
 
         <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center' }}>
-          The change is saved and then read back, so it is only confirmed once the server has it.
+          The change is only confirmed once the server sends the updated lead back.
         </Txt>
       </View>
     </Sheet>

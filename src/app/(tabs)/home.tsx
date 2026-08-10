@@ -962,12 +962,13 @@ export default function Home() {
 
   const activeLeads = useMemo(
     () => leads
-      .filter((l) => l.stage !== 'closed_won' && l.stage !== 'closed_lost')
+      .filter((l) => l.stage !== 'policy_issued' && l.stage !== 'lost')
       .sort((a, b) => new Date(b.lastActivity).getTime() - new Date(a.lastActivity).getTime()),
     [leads],
   );
   const leadStages = useMemo(() => {
-    const keys = ['new', 'contacted', 'meeting', 'proposal'] as const;
+    // The open stages, in the server's enum order — `lost` and `policy_issued` are the exits.
+    const keys = ['new_lead', 'meeting_scheduled', 'docs_shared'] as const;
     return keys
       .map((k) => ({ key: k, label: STAGE_META[k].label, tone: STAGE_META[k].tone as Tone, n: leads.filter((l) => l.stage === k).length }))
       .filter((s) => s.n > 0);

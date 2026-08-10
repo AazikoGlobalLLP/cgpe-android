@@ -327,13 +327,70 @@ describe('adaptLead', () => {
     expect(adaptLead({ _id: 'l9', phoneLast10: '91987654321' }).phone).toBe('');
   });
 
-  it('maps the lead stage vocabulary it does recognise', () => {
-    expect(adaptLead({ _id: 's1', stage: 'closed_won' }).stage).toBe('closed_won');
-    expect(adaptLead({ _id: 's2', stage: 'lost' }).stage).toBe('closed_lost');
-    expect(adaptLead({ _id: 's3', stage: 'proposal sent' }).stage).toBe('proposal');
-    expect(adaptLead({ _id: 's4', stage: 'meeting_scheduled' }).stage).toBe('meeting');
-    expect(adaptLead({ _id: 's5', stage: 'follow_up' }).stage).toBe('contacted');
-    expect(adaptLead({ _id: 's6', status: 'new_lead' }).stage).toBe('new');
+  /* ---------------------------------------------------------------- stage / status
+   *
+   * REWRITTEN DELIBERATELY BY PHASE 4, along with the two cases that used to sit in the
+   * pinned-known-bugs block at the foot of this file. They asserted the app's OWN six-word
+   * vocabulary (`new contacted meeting proposal closed_won closed_lost`), three words of
+   * which exist nowhere on the server. `Lead.status` is enum-enforced to five values
+   * (`contracts/enums.md:212`) and is the only lead vocabulary any endpoint will store.
+   */
+
+  it('passes every enforced Lead.status value through unchanged', () => {
+    // The whole enum, verbatim from contracts/enums.md:212. If this list and the LeadStage
+    // union ever disagree, one of them has invented a status.
+    for (const s of ['new_lead', 'meeting_scheduled', 'docs_shared', 'policy_issued', 'lost']) {
+      expect(adaptLead({ _id: `s-${s}`, status: s }).stage).toBe(s);
+    }
+  });
+
+  it('reads status FIRST and falls back to the raw stage key', () => {
+    // The reverse of what this did before Phase 4, and the reverse of the backend's own
+    // `reports.js:121` (`l.stage || l.status`). `status` is the only one of the two any
+    // endpoint writes, so a document carrying both must show `status` — otherwise a saved
+    // change would be invisible and every write would read as unconfirmed.
+    expect(adaptLead({ _id: 's1', status: 'policy_issued', stage: 'new' }).stage).toBe('policy_issued');
+    // ...and a document with only the raw key still maps (contracts/models.md:2138, drift #5).
+    expect(adaptLead({ _id: 's2', stage: 'docs_shared' }).stage).toBe('docs_shared');
+    // An empty status is not an answer, so it falls through rather than pinning 'new_lead'.
+    expect(adaptLead({ _id: 's3', status: '', stage: 'meeting_scheduled' }).stage).toBe('meeting_scheduled');
+  });
+
+  it('maps the raw stage vocabulary DOWN, never up', () => {
+    // enums.md:586 gives the raw/query-engine key its own four words. Two are already
+    // enforced values; these two are not, and `contacted` has no counterpart at all —
+    // resolving it to `meeting_scheduled` would invent a meeting nobody recorded.
+    expect(adaptLead({ _id: 's4', stage: 'new' }).stage).toBe('new_lead');
+    expect(adaptLead({ _id: 's5', stage: 'contacted' }).stage).toBe('new_lead');
+    // `converted` is not in the enum either, but routes/leads.js:109-111 filters on it.
+    expect(adaptLead({ _id: 's6', stage: 'converted' }).stage).toBe('policy_issued');
+  });
+
+  it('no longer substring-matches, so two real values stop inverting', () => {
+    // UPDATED DELIBERATELY BY PHASE 4 — this asserted `not_converted` → 'closed_won' and
+    // `unqualified` → 'contacted' and was written to go red exactly here. The old mapper was
+    // five unanchored regexes: the NEGATION 'not_converted' contains 'convert', and
+    // 'unqualified' contains 'qualif'. Unknown input now resolves to the schema's own default
+    // (`models/Lead.js:32`) rather than to whichever arm happened to match a fragment.
+    expect(adaptLead({ _id: 'b3', stage: 'not_converted' }).stage).toBe('new_lead');
+    expect(adaptLead({ _id: 'b4', stage: 'unqualified' }).stage).toBe('new_lead');
+    expect(adaptLead({ _id: 'b5', stage: 'anything at all' }).stage).toBe('new_lead');
+    expect(adaptLead({ _id: 'b6' }).stage).toBe('new_lead');
+  });
+
+  it('trims and lowercases before matching, but does not repair separators', () => {
+    expect(adaptLead({ _id: 's7', status: '  POLICY_ISSUED  ' }).stage).toBe('policy_issued');
+    // 'Policy Issued' with a space is NOT a Lead.status — enums.md:6 says casing and shape
+    // are exact — so it is unknown input and lands on the default.
+    expect(adaptLead({ _id: 's8', status: 'Policy Issued' }).stage).toBe('new_lead');
+  });
+
+  it('reads insurance_need for the interest line, ahead of the app-only keys', () => {
+    // The schema's field for what the lead wants (models/Lead.js:25-28) was the one source
+    // this never read, so the Interest column was blank for every real lead.
+    expect(adaptLead({ _id: 's9', insurance_need: 'Term plan' }).interest).toBe('Term plan');
+    expect(adaptLead({ _id: 's10', insurance_need: 'Term plan', interest: 'ignored' }).interest)
+      .toBe('Term plan');
   });
 });
 
@@ -511,20 +568,10 @@ describe('adaptNotification', () => {
 /* ------------------------------------------------------------------------------ */
 
 describe('pinned known bugs — these must be updated deliberately when fixed', () => {
-  it('mapLeadStage maps the real backend stage "policy_issued" to "new" [Phase 4]', () => {
-    // A WON lead is indistinguishable from a brand-new one. 'policy_issued' matches none of
-    // the five regexes at adapt.ts:148-152 and hits the `return 'new'` fallback.
-    // docs/PHASES.md Phase 4 fixes this; when it does, THIS TEST GOING RED IS CORRECT.
-    expect(adaptLead({ _id: 'b1', stage: 'policy_issued' }).stage).toBe('new');
-    expect(adaptLead({ _id: 'b2', stage: 'docs_shared' }).stage).toBe('new');
-  });
-
-  it('mapLeadStage substring-matches unanchored, inverting two real values', () => {
-    // /won|convert|closed_won/ is unanchored, so the NEGATION 'not_converted' contains
-    // 'convert' and reads as won; 'unqualified' contains 'qualif' and reads as contacted.
-    expect(adaptLead({ _id: 'b3', stage: 'not_converted' }).stage).toBe('closed_won');
-    expect(adaptLead({ _id: 'b4', stage: 'unqualified' }).stage).toBe('contacted');
-  });
+  /* Both lead-stage pins that lived here are GONE, not deleted: Phase 4 fixed the mapper, so
+   * they moved up into the `adaptLead` describe as assertions of correct behaviour. The one
+   * about `policy_issued` reading as New was this file's [Phase 4] marker. `mapClaimStatus`
+   * below is the same class of defect in the claims mapper and is still open. */
 
   it('mapClaimStatus resolves partial_paid to settled, because of arm order', () => {
     // adaptClaim's own docstring (adapt.ts:205-206) names 'partial_paid' as a real backend

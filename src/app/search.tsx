@@ -600,7 +600,7 @@ export default function Search() {
         order: 1,
         top: res.leads[0].score,
         rows: res.leads.map(({ item, hit }, i) => {
-          const st = STAGE_META[item.stage] ?? STAGE_META.new;
+          const st = STAGE_META[item.stage] ?? STAGE_META.new_lead;
           return {
             id: `lead-${item.id}-${i}`,
             icon: 'person-add-outline',

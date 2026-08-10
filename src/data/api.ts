@@ -81,8 +81,12 @@ export function isRealSession() { return sessionReal; }
  *
  * A write now reports what actually happened. `unsupported` is its own case because it is not
  * a transient fault: the endpoint is not there, and retrying will never help.
+ *
+ * PHASE 4 added `invalid`: the server understood the request and refused it (HTTP 400). That is
+ * neither an outage nor something to retry — the user has to change what they typed — so it must
+ * not raise the health banner and must not be held in the local buffer as if it were saved.
  */
-export type WriteFailure = 'network' | 'server' | 'forbidden' | 'unsupported';
+export type WriteFailure = 'network' | 'server' | 'forbidden' | 'unsupported' | 'invalid';
 
 /**
  * A request path reduced to the stable key the health channel reports under. PHASE 3.
@@ -646,40 +650,152 @@ export async function deleteAccount(): Promise<{ ok: boolean; reason?: WriteFail
   }
 }
 
-/* ------------------------------------------------------------------ Leads */
-/** /leads?scope=all returns { data: { leads: [...], pagination } } — real leads. */
+/* ------------------------------------------------------------------ Leads
+ *
+ * PHASE 4 — THE WHOLE SECTION SPOKE A VOCABULARY AND AN ENVELOPE THE SERVER DOES NOT HAVE.
+ *
+ * `contracts/api.md:366-370` — the four shapes every function below now depends on:
+ *   GET  /api/leads      → { success, data: { leads: Lead[], pagination } }
+ *   GET  /api/leads/:id  → { success, data: { lead } }
+ *   POST /api/leads      → 201 { success, data: { lead }, message }
+ *   PUT  /api/leads/:id  → { success, data: { lead }, message }   ← the POST-update document
+ *
+ * The record is under `data.lead` on three of the four. `tryReal` unwraps one level (`json.data`),
+ * so every validator here has to look one level further — which is precisely what the old
+ * `getLead` did not do, and why the detail screen had never rendered a real lead.
+ *
+ * The write field is `status`, not `stage`. See `src/data/types.ts` for the vocabulary and
+ * `docs/spec/PHASE-4.md` §2 for the other three that must not be merged with it.
+ */
+
+/**
+ * The pipeline, in one call. The array is at `data.leads` — not at `data`.
+ *
+ * PHASE 4 ALSO STOPPED THIS RAISING A FALSE OUTAGE. Every `/api/leads` route sits behind
+ * `requireModule('sales')` (`api.md:362`), so a user whose department is not granted that module
+ * gets 403 here on a perfectly healthy backend. This path never classified the status, so
+ * `unavailable()` reported unconditionally and pinned the banner open for their whole session —
+ * the same defect Phase 3 fixed for `GET /profiles`. `reportIfOutage` is the classifier.
+ */
 export async function getLeads(): Promise<Lead[]> {
   if (sessionReal && !FORCE_DEMO) {
     try {
-      const { ok, json } = await req('/leads?limit=500&scope=all');
-      const arr = Array.isArray(json?.data?.leads) ? json.data.leads : (Array.isArray(json?.data) ? json.data : null);
-      if (ok && arr) return arr.map(adaptLead);
-    } catch { /* fall through */ }
+      const { ok, status, json } = await req('/leads?limit=500&scope=all');
+      if (ok && Array.isArray(json?.data?.leads)) return json.data.leads.map(adaptLead);
+      if (!ok) reportIfOutage(status, '/leads');
+    } catch { /* fall through — `unavailable` reports the outage */ }
   }
   return unavailable('/leads', state.leads);
 }
+
+/**
+ * One lead. `?scope=all` is gone: `GET /:id` does not read a scope at all — it is a raw
+ * `lead.advisor_id === req.user.user_id` test with an admin bypass (`routes/leads.js:266`), so
+ * the parameter only ever implied a widening that does not exist.
+ */
 export async function getLead(id: string): Promise<Lead | undefined> {
-  const real = await tryReal<any>(`/leads/${id}?scope=all`, {}, (d) => d && (d.name || d._id || d.leadId));
-  return real ? adaptLead(real) : unavailable('/leads/:id', state.leads.find((l) => l.id === id));
+  const real = await tryReal<any>(`/leads/${id}`, {}, (d) => isObj(d) && isObj(d.lead));
+  return real ? adaptLead(real.lead) : unavailable('/leads/:id', state.leads.find((l) => l.id === id));
 }
-export async function setLeadStage(id: string, stage: LeadStage): Promise<void> {
-  const real = await tryReal(`/leads/${id}`, { method: 'PUT', body: JSON.stringify({ stage }) }, () => true);
-  if (real == null) {
-    const l = state.leads.find((x) => x.id === id);
-    if (l) { l.stage = stage; l.lastActivity = new Date().toISOString(); }
-    await wait(150);
-  }
+
+/**
+ * Move a lead, and resolve to the server's own copy of it — or `null` if it did not move.
+ *
+ * TWO THINGS CHANGED HERE AND BOTH ARE LOAD-BEARING.
+ *
+ * 1. The body is `{ status }`. It used to be `{ stage }`, and `stage` is not a path on the Lead
+ *    schema, so Mongoose strict mode dropped it: the server answered 200 with the record
+ *    unchanged and wrote no `status_change` timeline row. Every stage change in this app's
+ *    history was a no-op that reported success to a validator of `() => true`.
+ *
+ * 2. It returns the updated lead instead of `void`, so the caller no longer needs a second
+ *    request to confirm. `PUT` runs `findByIdAndUpdate(…, { new: true })` and returns the
+ *    POST-update document (`routes/leads.js:404-435`), which is the strongest confirmation
+ *    available — and it removes a real failure of the old read-back: `PUT` has no ownership
+ *    check while `GET /:id` has a strict one, so for an unowned lead (which the list
+ *    deliberately shows — `utils/scope.js:121-126`) the write succeeded and the confirming read
+ *    403'd, telling the user their change was not saved when it had been.
+ *
+ * A failed write no longer edits the local buffer. The screens roll the stage back and say so;
+ * a buffer holding the new value would contradict the message the user just read.
+ */
+export async function setLeadStage(id: string, stage: LeadStage): Promise<Lead | null> {
+  const real = await tryReal<any>(
+    `/leads/${id}`,
+    { method: 'PUT', body: JSON.stringify({ status: stage }) },
+    (d) => isObj(d) && isObj(d.lead),
+  );
+  return real ? adaptLead(real.lead) : null;
 }
-export async function addLead(data: Partial<Lead>): Promise<Lead> {
-  const lead: Lead = {
+
+/** What `addLead` resolves to. Three outcomes that must not look alike to the caller. */
+export type AddLeadResult =
+  /** The server created it. `lead` is the server's own record. */
+  | { ok: true; lead: Lead }
+  /** HTTP 400: the server understood and refused. Nothing was written, here or there. */
+  | { ok: false; reason: 'invalid'; message: string }
+  /** The write never landed. `lead` is what the user typed, held in the local buffer. */
+  | { ok: false; reason: Exclude<WriteFailure, 'invalid'>; lead: Lead };
+
+/**
+ * Create a lead.
+ *
+ * THE BODY IS NOW A LEAD DOCUMENT. It used to be the app's own object — `id`, `stage`,
+ * `interest`, `potential`, `city`, `priority`, `createdAt`, `lastActivity` and `notes: []`.
+ * `POST /api/leads` spreads the whole body into `Lead.create` (`routes/leads.js:315-320`), so
+ * strict mode dropped eight of those eleven keys and `notes: []` went at a `String` path. The
+ * fields below are the schema's own names (`models/Lead.js:10-56`).
+ *
+ * `priority` is deliberately not sent. The Add sheet never asked for it — it passed a hardcoded
+ * `'warm'` — the schema has no such path, and the field priority is *derived* from is
+ * `probability`, whose default is 10. Sending a probability picked to make the badge read "warm"
+ * would be inventing a number.
+ *
+ * A 400 IS NOT AN OUTAGE AND NOT A LOCAL SAVE. `phone` is required and validated server-side
+ * (`isMobilePhone`), so a typo is the likeliest failure of all — and routed through `tryReal` it
+ * would have reported "some data could not load" to the entire app. It is also the one failure
+ * where buffering the record would be a fabrication: the server has refused this lead, and it
+ * will keep refusing it until the user changes what they typed.
+ */
+export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
+  const local: Lead = {
     id: 'l' + (Date.now() % 100000), name: data.name || 'New Lead', phone: data.phone || '',
-    stage: 'new', source: data.source || 'Manual', interest: data.interest || '',
+    stage: 'new_lead', source: data.source || 'Manual', interest: data.interest || '',
     potential: data.potential || 0, city: data.city || '', priority: data.priority || 'warm',
     createdAt: new Date().toISOString(), lastActivity: new Date().toISOString(), notes: [],
   };
-  const real = await tryReal<any>('/leads', { method: 'POST', body: JSON.stringify(lead) }, isObj);
-  if (real) return adaptLead(real);
-  state.leads.unshift(lead); await wait(250); return clone(lead);
+
+  const body: Record<string, unknown> = {
+    name: (data.name || '').trim(),
+    phone: (data.phone || '').trim(),
+    // The sheet promises "It starts at the New stage" in writing. The schema default agrees
+    // (`models/Lead.js:32`), but the promise should not depend on a default.
+    status: 'new_lead' satisfies LeadStage,
+  };
+  if (data.interest) body.insurance_need = data.interest;
+  if (data.city) body.address = { city: data.city };
+  if (data.potential) body.expected_premium = data.potential;
+  if (data.source) body.source = data.source;
+
+  let reason: Exclude<WriteFailure, 'invalid'> = 'network';
+  if (sessionReal && !FORCE_DEMO) {
+    try {
+      const { ok, status, json } = await req('/leads', { method: 'POST', body: JSON.stringify(body) });
+      if (ok && isObj(json?.data?.lead)) return { ok: true, lead: adaptLead(json.data.lead) };
+      if (status === 400) {
+        // express-validator puts the human sentence in `details[].msg`. The two envelopes in
+        // play use different keys for the summary (`error` from routers, `message` from
+        // middleware — `enums.md` §15), so both are read.
+        const msg = json?.details?.[0]?.msg || json?.error || json?.message;
+        return { ok: false, reason: 'invalid', message: String(msg || 'The server refused this lead.') };
+      }
+      if (ok) { reportFailure('/leads'); reason = 'server'; }          // 2xx with no `data.lead`
+      else { reportIfOutage(status, '/leads'); reason = status === 403 ? 'forbidden' : status === 404 || status === 501 ? 'unsupported' : 'server'; }
+    } catch { reportFailure('/leads'); }
+  }
+  state.leads.unshift(local);
+  await wait(250);
+  return { ok: false, reason, lead: clone(local) };
 }
 
 /* ---------------------------------------------------------------- Clients */

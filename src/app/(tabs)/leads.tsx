@@ -39,10 +39,10 @@ import { call, whatsapp } from '@/lib/actions';
  * scannable at arm's length. DataRow does the label/value work it is good at inside the
  * sheets, where the pipeline breakdown genuinely is a column of figures.
  *
- * WHY A STAGE CHANGE IS READ BACK. `api.setLeadStage` returns void whether the server
- * accepted the write or quietly fell back to the in-memory buffer, so the only honest
- * confirmation is to fetch the record again and check. A write that cannot be confirmed is
- * rolled back on screen and reported, rather than left looking saved.
+ * WHY A STAGE CHANGE IS CHECKED AGAINST THE SERVER'S REPLY. `api.setLeadStage` resolves to the
+ * lead as the server holds it after the update, or to `null` when nothing landed. A write that
+ * cannot be confirmed is rolled back on screen and reported, rather than left looking saved.
+ * Until Phase 4 this took a second request, because the write resolved `void` either way.
  *
  * WHY "WON" IS NOT A ONE-SWIPE MOVE. Every other step in the funnel is reversible with a
  * second swipe; closing a lead is the one that leaves the open book and takes money out of
@@ -56,29 +56,28 @@ type StageFilter = 'all' | LeadStage;
 /** A screen-specific failure worth keeping on screen. The app-wide HealthBanner covers outages. */
 type Notice = { title: string; message: string };
 
-const STAGE_ORDER: LeadStage[] = ['new', 'contacted', 'meeting', 'proposal', 'closed_won', 'closed_lost'];
+/** The server's own enum order (`contracts/enums.md:212`), which is also the funnel order. */
+const STAGE_ORDER: LeadStage[] = ['new_lead', 'meeting_scheduled', 'docs_shared', 'policy_issued', 'lost'];
 
 /** One step forward through the funnel. Closed stages are terminal. */
 const NEXT_STAGE: Partial<Record<LeadStage, LeadStage>> = {
-  new: 'contacted',
-  contacted: 'meeting',
-  meeting: 'proposal',
-  proposal: 'closed_won',
+  new_lead: 'meeting_scheduled',
+  meeting_scheduled: 'docs_shared',
+  docs_shared: 'policy_issued',
 };
 
-const isOpen = (s: LeadStage) => s !== 'closed_won' && s !== 'closed_lost';
+const isOpen = (s: LeadStage) => s !== 'policy_issued' && s !== 'lost';
 
 /** Avatar (44) + its 12pt gap + the row's 16pt gutter. */
 const SEP_INSET = spacing.lg + 44 + spacing.md;
 
 /**
- * Commit a stage and confirm it by reading the record back. Resolves to the server's own
- * copy of the lead, or null when the change could not be confirmed.
+ * Commit a stage. Resolves to the server's own copy of the lead — the document `PUT` returns
+ * after the update — or null when the change could not be confirmed.
  */
 async function commitStage(id: string, stage: LeadStage): Promise<Lead | null> {
-  await api.setLeadStage(id, stage);
-  const fresh = await api.getLead(id);
-  return fresh && fresh.stage === stage ? fresh : null;
+  const saved = await api.setLeadStage(id, stage);
+  return saved && saved.stage === stage ? saved : null;
 }
 
 export default function Leads() {
@@ -120,12 +119,11 @@ export default function Leads() {
   /* ---------- derived pipeline shape ---------- */
   const byStage = useMemo(() => {
     const m: Record<LeadStage, { count: number; value: number }> = {
-      new: { count: 0, value: 0 },
-      contacted: { count: 0, value: 0 },
-      meeting: { count: 0, value: 0 },
-      proposal: { count: 0, value: 0 },
-      closed_won: { count: 0, value: 0 },
-      closed_lost: { count: 0, value: 0 },
+      new_lead: { count: 0, value: 0 },
+      meeting_scheduled: { count: 0, value: 0 },
+      docs_shared: { count: 0, value: 0 },
+      policy_issued: { count: 0, value: 0 },
+      lost: { count: 0, value: 0 },
     };
     leads.forEach((l) => {
       const b = m[l.stage];
@@ -137,10 +135,10 @@ export default function Leads() {
   }, [leads]);
 
   const openCount = leads.reduce((n, l) => (isOpen(l.stage) ? n + 1 : n), 0);
-  const engagedCount = leads.reduce((n, l) => (isOpen(l.stage) && l.stage !== 'new' ? n + 1 : n), 0);
+  const engagedCount = leads.reduce((n, l) => (isOpen(l.stage) && l.stage !== 'new_lead' ? n + 1 : n), 0);
   const openValue = leads.reduce((s, l) => (isOpen(l.stage) && Number.isFinite(l.potential) ? s + l.potential : s), 0);
-  const wonCount = byStage.closed_won.count;
-  const closedCount = wonCount + byStage.closed_lost.count;
+  const wonCount = byStage.policy_issued.count;
+  const closedCount = wonCount + byStage.lost.count;
 
   // The change is the information here: closing a lead moves money out of the open book.
   const openValueDisplay = useCountUp(openValue);
@@ -200,7 +198,7 @@ export default function Leads() {
 
   /** Reversible steps go straight through; closing out asks first. */
   const requestAdvance = useCallback((lead: Lead) => {
-    if (NEXT_STAGE[lead.stage] === 'closed_won') {
+    if (NEXT_STAGE[lead.stage] === 'policy_issued') {
       setWonTarget(lead);
       setWonOpen(true);
       return;
@@ -429,11 +427,11 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
   const actions: SwipeAction[] = [];
   if (next) {
     actions.push({
-      icon: next === 'closed_won' ? 'trophy' : 'arrow-forward',
+      icon: next === 'policy_issued' ? 'trophy' : 'arrow-forward',
       // "Close as won" rather than "Mark won": this one opens a confirmation, and a label
       // promising an immediate write would misdescribe what the swipe does.
-      label: next === 'closed_won' ? 'Close as won' : `To ${STAGE_META[next].label}`,
-      tone: next === 'closed_won' ? 'success' : 'primary',
+      label: next === 'policy_issued' ? 'Close as won' : `To ${STAGE_META[next].label}`,
+      tone: next === 'policy_issued' ? 'success' : 'primary',
       onPress: onAdvance,
     });
   }
@@ -599,14 +597,14 @@ function CloseOutSheet({ visible, lead, onClose, onConfirm }: {
         <ListSection title="What moves">
           <DataRow label="Lead" value={lead.name} icon="person-outline" />
           <DataRow label="From" value={STAGE_META[lead.stage].label} icon="flag-outline" />
-          <DataRow label="To" value={STAGE_META.closed_won.label} tone="success" icon="trophy-outline" />
+          <DataRow label="To" value={STAGE_META.policy_issued.label} tone="success" icon="trophy-outline" />
           {lead.potential > 0 ? (
             <DataRow label="Premium potential" value={inr(lead.potential)} icon="cash-outline" numeric />
           ) : null}
         </ListSection>
 
         <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center' }}>
-          The change is saved and then read back, so it is only confirmed once the server has it.
+          The change is only confirmed once the server sends the updated lead back.
         </Txt>
       </View>
     </Sheet>
@@ -629,9 +627,12 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
   const [city, setCity] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The server's own refusal sentence (HTTP 400). Kept apart from `error`, which belongs to
+   *  the one check this sheet makes for itself, so neither is shown under the wrong field. */
+  const [refused, setRefused] = useState<string | null>(null);
 
-  // Same contract as the screen: a POST plus a read-back is two round trips, and this
-  // component is unmounted along with the tab.
+  // Same contract as the screen: the POST outlives a thumb on the tab bar, and this component
+  // is unmounted along with the tab.
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -639,7 +640,8 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
   }, []);
 
   const reset = () => {
-    setName(''); setPhone(''); setInterest(''); setPotential(''); setCity(''); setError(null);
+    setName(''); setPhone(''); setInterest(''); setPotential(''); setCity('');
+    setError(null); setRefused(null);
   };
 
   const close = () => { if (!saving) { reset(); onClose(); } };
@@ -653,25 +655,41 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
     }
     haptics.tap();
     setError(null);
+    setRefused(null);
     setSaving(true);
 
-    const created = await api.addLead({
+    // `priority` is not passed any more. It was a hardcoded 'warm' this sheet never asked the
+    // user for, the server has no such field, and the value it derives priority from
+    // (`probability`) has its own default. Sending it was inventing data.
+    const result = await api.addLead({
       name: name.trim(),
       phone: phone.trim(),
       interest: interest.trim(),
       city: city.trim(),
       potential: Number(potential.replace(/[^\d]/g, '')) || 0,
-      priority: 'warm',
     });
-    // addLead resolves the same way whether the POST landed or fell back to the local
-    // buffer, so the record is read back before anyone is told it was saved.
-    const fresh = await api.getLead(created.id);
     if (!alive.current) return;
-
     setSaving(false);
+
+    if (!result.ok) {
+      // A refusal keeps the sheet open with the server's own sentence under the form. The lead
+      // does not exist and re-typing is the only way forward, so closing the sheet — or holding
+      // the record locally as if it were captured — would both be lies. `phone` is the usual
+      // cause: it is required and validated server-side.
+      if (result.reason === 'invalid') {
+        haptics.warn();
+        setRefused(result.message);
+        return;
+      }
+      reset();
+      onClose();
+      onAdded(result.lead, false);
+      return;
+    }
+
     reset();
     onClose();
-    onAdded(created, !!fresh);
+    onAdded(result.lead, true);
   };
 
   return (
@@ -692,6 +710,14 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
       }
     >
       <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
+        {refused ? (
+          <Banner
+            tone="danger"
+            title="The server did not accept this lead"
+            message={refused}
+            onDismiss={() => setRefused(null)}
+          />
+        ) : null}
         <Field
           label="Name"
           value={name}
@@ -702,11 +728,11 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
         <Field
           label="Mobile number"
           value={phone}
-          onChange={setPhone}
+          onChange={(v) => { setPhone(v); if (refused) setRefused(null); }}
           placeholder="10 digit mobile"
           keyboardType="phone-pad"
           icon="call-outline"
-          hint="Needed for the call and WhatsApp actions on the row."
+          hint="Needed for the call and WhatsApp actions on the row — and the server requires it."
         />
         <Field
           label="Interested in"

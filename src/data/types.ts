@@ -15,7 +15,20 @@ export interface User {
   tier: 'Star' | 'MDRT' | 'COT' | 'TOT' | 'Growth';
 }
 
-export type LeadStage = 'new' | 'contacted' | 'meeting' | 'proposal' | 'closed_won' | 'closed_lost';
+/**
+ * PHASE 4: these are `Lead.status`'s five enforced values, verbatim —
+ * `contracts/enums.md:212`, `contracts/models.md:147`, `models/Lead.js:29-34`.
+ *
+ * They are the ONLY lead words the server will store: `PUT /api/leads/:id` validates against
+ * this exact list (`routes/leads.js:367-370`) and `stage` is not a path on the schema at all.
+ * The app used to carry its own six (`new contacted meeting proposal closed_won closed_lost`),
+ * three of which existed nowhere on the server, so no stage change could ever persist.
+ *
+ * `contracts/enums.md` §15 lists three further lead vocabularies (the query-engine dropdown,
+ * `queryEngine.js:194`, and the raw `leads.stage` key) and says in terms: do not merge them.
+ * The app property is still called `stage` — it is internal and carries no vocabulary of its own.
+ */
+export type LeadStage = 'new_lead' | 'meeting_scheduled' | 'docs_shared' | 'policy_issued' | 'lost';
 
 export interface Lead {
   id: string;

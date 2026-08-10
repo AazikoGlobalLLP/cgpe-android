@@ -1,12 +1,17 @@
 import type { ClaimStatus, LeadStage } from './types';
 
+/**
+ * PHASE 4: keyed by `Lead.status`, so the key is the wire value and the label is only ever copy.
+ * Declaration order is the funnel order the server's own enum uses.
+ * `Record<LeadStage, …>` is exhaustive on purpose — it is what makes a vocabulary change a
+ * compile error in all four screens rather than a blank pill at runtime.
+ */
 export const STAGE_META: Record<LeadStage, { label: string; tone: any }> = {
-  new: { label: 'New', tone: 'info' },
-  contacted: { label: 'Contacted', tone: 'primary' },
-  meeting: { label: 'Meeting', tone: 'accent' },
-  proposal: { label: 'Proposal', tone: 'warning' },
-  closed_won: { label: 'Won', tone: 'success' },
-  closed_lost: { label: 'Lost', tone: 'danger' },
+  new_lead: { label: 'New', tone: 'info' },
+  meeting_scheduled: { label: 'Meeting', tone: 'accent' },
+  docs_shared: { label: 'Docs shared', tone: 'warning' },
+  policy_issued: { label: 'Policy issued', tone: 'success' },
+  lost: { label: 'Lost', tone: 'danger' },
 };
 
 export const PRIORITY_TONE: Record<string, any> = { hot: 'danger', warm: 'warning', cold: 'neutral' };
