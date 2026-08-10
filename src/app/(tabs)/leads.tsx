@@ -104,8 +104,8 @@ export default function Leads() {
   const [wonOpen, setWonOpen] = useState(false);
 
   /**
-   * Guards every setState that follows an await. A stage commit is two sequential network
-   * round trips; the tab can be swapped, or the app backgrounded, long before it resolves.
+   * Guards every setState that follows an await. A stage commit is a network round trip; the
+   * tab can be swapped, or the app backgrounded, long before it resolves.
    * Set true on mount as well as cleared on unmount, so a remount never inherits `false`.
    */
   const alive = useRef(true);
@@ -176,7 +176,7 @@ export default function Leads() {
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, stage: next } : l)));
 
     const confirmed = await commitStage(lead.id, next);
-    // Two round trips have gone by. If the screen is gone there is nobody to report to,
+    // A round trip has gone by. If the screen is gone there is nobody to report to,
     // and setting state here is the classic unmounted-screen leak.
     if (!alive.current) return;
     setBusyId(null);

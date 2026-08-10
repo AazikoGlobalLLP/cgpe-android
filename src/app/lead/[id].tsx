@@ -135,7 +135,7 @@ export default function LeadDetail() {
     setLead({ ...lead, stage });                 // optimistic
 
     const confirmed = await commitStage(lead.id, stage);
-    // A write plus a read-back. The user can have hit back twice by now.
+    // One write, and its reply. The user can still have hit back by now.
     if (!alive.current) return;
     setSaving(false);
 
