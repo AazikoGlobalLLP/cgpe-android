@@ -19,19 +19,35 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   a file there is missing or empty from one directory listing — check again with an explicit path.
   Confirmed again 2026-08-10: item headings moved between two reads **minutes apart**, so
   **anchor every edit on surrounding text, never on a line number**, and expect an offset-based
-  insert to land in the wrong item. Answer questions addressed to `cgpe-mobile` even when they are
-  not about your current phase — they block the sibling session's phase.
+  insert to land in the wrong item. `INBOX.md` went 77 KB → 103 KB inside the Phase 4 session
+  alone. Answer questions addressed to `cgpe-mobile` even when they are not about your current
+  phase — they block the sibling session's phase.
+- **Put the answer under the box that is blocking.** Phase 4 found two `cgpe-mobile` boxes still
+  open whose answer had been written weeks-equivalent earlier under a *different*, multi-recipient
+  item — so `cgpe-api` read "mobile has not answered" and held a phase. Say it twice rather than
+  once in the wrong place. Tick a box only when the item is addressed to this session alone;
+  otherwise reply underneath and say why the box is left open.
+- ⚠️ **`../contracts/` is not under version control by anyone.** The parent directory
+  `CGPE-CURRENT-PROJECT/` is a git repo with **zero commits** and `contracts/` is untracked in it,
+  so every INBOX reply exists only on that disk. Do not assume it is backed up, and do not create
+  that first commit yourself — it would sweep three project trees into one repo.
 
 ## Commands
 - `npx expo start --go` — Expo Go. **`--go` is required**; `expo-dev-client` is installed, so a bare
   `expo start` targets the dev build. `--tunnel` for a phone on another network.
 - `npx expo start --web` — the only way to reach a localhost backend.
 - `npx tsc --noEmit` — a green gate. Run before every commit.
-- `npm test` — Vitest, 164 tests over 6 files, ~0.5 s, no network. The second green gate.
+- `npm test` — Vitest, 188 tests over 7 files, ~0.5 s, no network. The second green gate.
   Config is `vitest.config.mts`; the four `test/stubs/*` files exist only so native modules
-  resolve in Node. ~20 cases deliberately pin **known bugs** and live in `describe` blocks saying
-  so — when Phase 4 or Phase 7 fixes one, that test going red is the signal, not a regression.
-  Phase 3 already flipped one of them (`api-renewals.test.ts:187`) on purpose.
+  resolve in Node. `globals: false`, so every file imports `describe`/`it`/`expect`/`vi` from
+  `vitest` explicitly. ~18 cases deliberately pin **known bugs** and live in `describe` blocks
+  saying so — when a phase fixes one, that test going red is the signal, not a regression.
+  Phase 3 flipped `api-renewals.test.ts:187` on purpose; Phase 4 flipped two `adapt.test.ts` cases
+  and moved them out of the pinned block, which now holds only the `mapClaimStatus` pins.
+  **A test that touches `src/data/api.ts` must `vi.resetModules()` and `await import('@/data/api')`
+  inside `beforeEach`** — that module holds mutable state (`authToken`, `sessionReal`,
+  `suppressed`, `state`) with no reset export, so a static import leaks one test into the next.
+  `api-leads.test.ts` and `api-renewals.test.ts` are the pattern to copy.
 - `npm run lint` — 46 errors on a clean tree. Rule is **no new errors**, not zero.
   **Takes longer than 120 s**, so it exceeds the default tool timeout — run it in the background or
   raise the timeout, and read the count off the `✖ N problems (46 errors, 15 warnings)` line.

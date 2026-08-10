@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-10 — A phase is reviewed adversarially before it is called done
+
+**Context.** Phase 4's first commit passed all three gates — `tsc` clean, 185 tests green, lint at
+baseline — and was still wrong in eight places. A five-lens review (contract fidelity, runtime
+correctness, screens, tests, regression sweep) raised 22 findings; each was then given to two
+independent skeptics whose instructions were to **refute** it, defaulting to refuted when
+uncertain. Eight survived. One was a real bug the phase itself introduced: `addLead` called
+`reportIfOutage`, which leaves a read-once note in `suppressed` for `unavailable` to consume, and
+`addLead` never calls `unavailable` — so the next genuine `GET /leads` outage was silently eaten.
+
+**Decision.** Green gates are necessary and not sufficient. The findings worth keeping are the
+ones that survive an attempt to kill them; "refuted because it is pre-existing behaviour this
+commit neither introduced nor worsened" retired 14 of the 22, which is exactly the noise a review
+without a refutation step would have spent the next session on.
+
+**Consequence.** Two corrections to decisions recorded hours earlier, both below: nothing may map
+UP into `policy_issued`, and no *permanent* refusal is buffered. Both were written as reasoned
+decisions the first time and were still wrong. A decision entry is not a proof.
+
+---
+
+## 2026-08-10 — Nothing may guess a lead UP into a closed sale
+
+**Context.** The first draft of `mapLeadStage` aliased `converted → policy_issued`. It broke this
+phase's own "understate, never overstate" rule in the one direction that costs money: guessing a
+sale closed removes a lead from the open pipeline *and* adds it to a won figure. It was also a
+guess about a token that occurs on no document — `converted` is not a value of any of the four
+lead vocabularies; it appears only in the `!converted` query sentinel, which `enums.md:218` records
+as unable to match anything.
+
+**Decision.** An alias may resolve a lead DOWN the funnel or not at all. Unknown input lands on
+`new_lead`, the schema default. The same rule retired the buffering of permanently-refused
+creates: a `403`/`404`/`501` is as final as a `400`, so the record is not held on the device
+either — only `network` and `server` failures are.
+
+**Consequence.** A genuinely-converted legacy document would read as New and sit in the open book,
+where a human sees it. That is the cheaper error: a wasted call, rather than a sale nobody made.
+
+---
+
 ## 2026-08-10 — The app's lead vocabulary is the server's enum, not one of its own
 
 **Context.** Phase 4. `LeadStage` was `new | contacted | meeting | proposal | closed_won |

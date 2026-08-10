@@ -14,10 +14,13 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 4 — done.** Built 2026-08-10, commit `5c08872`. `npm test` runs **185** tests across 7
-files and exits 0; `npx tsc --noEmit` exits 0; `npm run lint` is byte-identical to the 46-error
-baseline. The app now speaks `Lead.status`; the two `adapt.test.ts` pins were flipped on purpose
-and a new `api-leads.test.ts` pins the request bodies and response envelopes themselves.
+**Phase 4 — done.** Built 2026-08-10 across five commits, `5c08872` → `edc373c`. `npm test` runs
+**188** tests across 7 files and exits 0; `npx tsc --noEmit` exits 0; `npm run lint` is
+byte-identical to the 46-error baseline. The app now speaks `Lead.status`; the two `adapt.test.ts`
+pins were flipped on purpose and a new `api-leads.test.ts` pins the request bodies and response
+envelopes themselves. An adversarial review of the first commit raised 22 findings, of which **8
+survived two independent skeptics each** and were fixed in `06641b1` — including one real bug the
+phase itself introduced (a swallowed outage; see DECISIONS).
 **Acceptance criteria 7–9 need a device and a live backend** — see the spec.
 
 **Phase 3 — done.** Built 2026-08-10, commit `e0b0b2c`. `npm test` ran **164** tests across 6
@@ -51,7 +54,7 @@ exercise.
 | 1 | Write-path honesty | **Built** — handset verification outstanding |
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
-| 4 | Leads contract | **Done** 2026-08-10 — 185 tests green (`5c08872`); device checks outstanding |
+| 4 | Leads contract | **Done** 2026-08-10 — 188 tests green (`5c08872`…`edc373c`); device checks outstanding |
 | 5 | WhatsApp send | Next |
 | 6 | Remaining envelope mismatches `[api]` | Blocked on `cgpe-api` |
 | 7 | Geofence + tracking (INBOX D5, D10) | Not started |
