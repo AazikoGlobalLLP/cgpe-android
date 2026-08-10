@@ -296,8 +296,19 @@ that can run in parallel.
 
 ## Open INBOX items addressed to this session
 
-From `../contracts/INBOX.md`, dated 2026-08-10, **not yet ticked off** — no code has changed:
+From `../contracts/INBOX.md`, re-read 2026-08-10 at the close of Phase 5. **Two boxes are still
+open against this session and both are Phase 7's to close:**
 
-- `contracts/` now exists and is populated (426 endpoints). → adopted as the source of truth in `CLAUDE.md`.
-- **D5** `/track/points` reads `session_id`, not `sessionId`. → Phase 7.
-- **D10** the clock-in fence is up to 300 m, not a flat 200 m. → Phase 7.
+- **D5** `POST /time-tracker/track/points` reads `session_id`, not `sessionId`. A body sending
+  `sessionId` is silently ignored and falls through to `resolveActiveSession` — which works while
+  clocked in and 400s otherwise, i.e. exactly the persisted-buffer replay case. → Phase 7.
+- **D10** the clock-in fence is up to 300 m, not a flat 200 m (`utils/geofence.js:93-94` credits up
+  to 100 m of GPS accuracy). `cgpe-admin` has closed its half; ours is open. → Phase 7.
+
+Closed this session, and worth knowing they were closed **twice**: the `/auth` registration item
+and the blocking "does the app call any of these 31 endpoints" item were both answered and ticked
+in Phase 4, then **deleted from the file by a concurrent write** during Phase 5's boot. Both were
+re-verified from scratch — not re-pasted — and re-written. See `DECISIONS.md`.
+
+Awaiting a reply **to** us: whether the n8n hub webhook is configured in production. It decides
+whether the app can send WhatsApp messages at all, and no client can see it from the outside.

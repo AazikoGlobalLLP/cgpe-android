@@ -2,37 +2,47 @@
 
 **Updated:** 2026-08-10
 
-**Working on right now:** Making the app admit when it could not load something, instead of showing
-a convincing screen of zeroes.
+**Working on right now:** Making the app tell the truth about whether something it "sent" or
+"saved" actually reached the company's systems.
 
 **Done this week:**
-- When the server cannot be reached, staff now see a clear "could not load" message. Before this,
-  a manager opening the dashboard during an outage saw a confident "0 clients, ₹0 claims paid" —
-  indistinguishable from a real, quiet day. The honest message had in fact been written months ago
-  but could never appear, because of a fault further down; that is now fixed.
-- The client list was the worst case: an advisor with nine thousand clients was told "no clients in
-  your book yet" whenever the connection dropped. It now says the list could not load.
-- The renewal list — the one that decides who gets called about a policy about to lapse — used to
-  go quietly short when the connection faltered, and looked identical to "nobody is due". It now
-  says so.
-- We removed a false alarm that appeared every single time anyone opened the Team screen, even when
-  everything was working perfectly. It was reporting a failure for something that had never existed.
-- We were careful about the opposite mistake. The app no longer cries "outage" when the real answer
-  is "you are not allowed to see this" or "this feature is not switched on yet" — otherwise every
-  advisor would have seen a permanent warning on a perfectly healthy system.
-- Along the way we found that six "could not load" messages on detail screens had never once
-  appeared, because of a small fault in shared code. Fixed in one line.
-- The automatic safety net grew from 140 checks to 164, and all of them pass.
-- Housekeeping worth noting: our ability to save work to version control had been broken for two
-  weeks. It is fixed, and three weeks of finished work is now safely stored and backed up.
+- **WhatsApp messages sent from the app now actually go out.** Until today, not one ever had. An
+  advisor would type a message to a client, see it appear in the chat with a tick beside it, and
+  the message would be rejected by the server every single time. Nobody could have known: the app
+  showed exactly the same thing whether it worked or not. Anyone who has been messaging clients
+  from the app should be told that those messages were never delivered.
+- **A message that does not go out now says so**, in plain words, and puts the text back in the
+  typing box so it is not lost. Four different reasons get four different explanations, because
+  what the advisor should do next is different in each case — retry, change the number, or send it
+  from WhatsApp themselves.
+- **We found that "the server said OK" does not mean "the message was sent".** The system records
+  the message before it hands it to the messaging service, and answers OK either way. The app now
+  reads the part of the answer that says what actually happened. We have asked the backend team the
+  one question we cannot answer ourselves: whether the messaging service is switched on in
+  production at all. If it is not, messages from *every* part of the business — the admin panel
+  included — are being recorded and never sent.
+- **Opening a client chat directly from a notification or a fresh start now works.** Before, the
+  call button, the "Open in WhatsApp" button and sending were all dead in that situation.
+- The automatic safety net grew from 188 checks to 219, and all of them pass. We also deliberately
+  broke our own code three times to confirm the new checks would actually catch the mistakes they
+  were written for.
+- **A near-miss worth recording.** The shared file the three teams use to send each other questions
+  quietly lost 5.7 KB of content while this session was reading it, including two of our previous
+  answers, which reverted to looking unanswered. The backend team would have concluded we had
+  ignored them and held their work. We re-checked and re-wrote both answers, and warned the other
+  two teams to check their own. That file has no backup of any kind — see Blocked on.
 
-**Blocked on:** Two things, both waiting on people outside this work.
-1. The account-deletion promise. The backend cannot delete an account today, and the team building
-   it needs a business answer before they start: exactly what our Play Store listing promises, in
-   what timeframe, and whether "account closed and personal details removed, business records
-   kept" is acceptable wording. That is a legal and commercial question, not a technical one.
-2. Hands-on checking on a real handset with the phone in flight mode. Two rounds are now owed — one
-   for the attendance fix and one for this week's. Neither can be checked on a computer.
+**Blocked on:** Three things, all needing a person rather than more work.
+1. **Nothing has been saved to the company's central code storage for five rounds of work.** The
+   account it is trying to use does not have permission to write to this project. All the work is
+   safe on this machine, but it exists in exactly one place. Someone with access to the GitHub
+   account needs to grant permission or replace the saved credential.
+2. **The shared contracts folder the three teams depend on is not backed up anywhere**, which is why
+   the near-miss above was unrecoverable. Fixing it properly means deciding how the three projects
+   should be stored, which is not a decision one team should make alone.
+3. **Hands-on checking on a real handset.** Three rounds are now owed — attendance, the outage
+   messages, and this week's WhatsApp work. None of them can be checked on a computer, because they
+   involve flight mode, GPS and the phone's own vibration.
 
-**Next:** Fix the leads screens, where opening a lead shows nothing and a change of status is lost
-as soon as the app is closed.
+**Next:** Fix location tracking and the clock-in boundary, so that a staff member is not wrongly
+refused clock-in when the app cannot check where the office is.

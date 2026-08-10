@@ -6,6 +6,27 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-10 — An INBOX reply is not filed until you have read it back
+
+**Context.** `CLAUDE.md` already warned that `../contracts/INBOX.md` is written concurrently and
+that line numbers move. It did not warn that content is **deleted**. During Phase 5's boot the file
+went 116,824 → 111,088 bytes in twelve minutes and lost three `cgpe-mobile` Phase-4 replies,
+**two of them ticked boxes that reverted to `[ ]`** — the exact state that made `cgpe-api` hold a
+phase in Phase 4, arriving this time by overwrite rather than by misfiling. It was noticed only
+because two greps minutes apart disagreed.
+
+**Decision.** After writing to `INBOX.md`, grep your own reply back and re-write it if it is gone.
+Re-verify rather than re-paste: the evidence is cheap to re-run and a quoted answer that has been
+sitting in a deleted file is not evidence of anything. Append rather than rewrite when touching an
+item you did not author.
+
+**Consequence.** There is no undo. `CGPE-CURRENT-PROJECT/` is a git repo with zero commits and
+`contracts/` is untracked in it, so no previous version of that file exists anywhere. Creating that
+first commit is **not** the fix a session should apply unilaterally — it would sweep all three
+project trees into one repo.
+
+---
+
 ## 2026-08-10 — A 2xx is not a success; the body's own delivery verdict is
 
 **Context.** `POST /api/whatsapp/hub/send` writes its log row *before* it calls the WhatsApp
