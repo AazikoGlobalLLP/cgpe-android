@@ -267,15 +267,17 @@ describe('sendWaMessage — the delivery envelope', () => {
     expect(health.getHealth().degraded).toBe(false);
   });
 
-  it('treats a missing delivery object as undelivered, not as a send', async () => {
-    // Fail closed: an envelope we do not recognise must never be read as "it went out".
+  it('treats a MISSING delivery object as a contract fault, and reports it', async () => {
+    // Fail closed — an envelope we do not recognise must never be read as "it went out" — but
+    // not as `undelivered` either: that branch tells the user the gateway is switched off, and
+    // a missing envelope is not evidence of that. `api.md` documents `delivery` as always
+    // present, so its absence means the shape moved, which is what the banner is for.
     fetchSpy.mockResolvedValue(ok({ success: true, data: messageRow() }));
 
     const r = await api.sendWaMessage('custom:9876543210', 'Namaste');
 
-    expect(r.ok).toBe(false);
-    if (r.ok) throw new Error('unreachable');
-    expect(r.reason).toBe('undelivered');
+    expect(r).toEqual({ ok: false, reason: 'server' });
+    expect(health.getHealth().failures).toEqual(['/whatsapp/hub/send']);
   });
 });
 

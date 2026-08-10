@@ -107,9 +107,23 @@ user's connection.
 phase's DONE-WHEN read literally. The row is in the server's database either way, so "it saved" is
 true and irrelevant: the customer's phone did not ring.
 
+**D7b — A *missing* `delivery` object is a contract fault, not a non-delivery.** Added by the
+review pass. `api.md` documents it as always present, so its absence means the shape moved:
+reporting it as `undelivered` would make the screen say *"WhatsApp sending is switched off on this
+server"*, which we would have no evidence for. It reports to `data/health` and returns `server`,
+which is Phase 3's rule for a 200 with an unusable body.
+
 **D8 — The three non-dispatch cases get three different sentences**, because the user's next
 action differs. Not configured → nothing to retry, tell them and hand them "Open in WhatsApp".
 Gateway refused → worth one retry. Refused by validation (400) → change what you typed.
+
+**D8b — Only one of those quotes the server's own note.** Also from the review. For "the gateway
+refused it" the note is the only place the reason exists (it carries n8n's status code), so it is
+rendered rather than invented. For "not configured" the server's sentence is *"n8n webhook not
+configured — message logged locally only"* — an internal service name, shown to a field advisor
+reading the app in Gujarati, explaining nothing they can act on. We know exactly what happened in
+that case, so we say it in their terms instead. Quoting the producer is the house rule
+(`cgpe-admin` adopted it for the geofence rejection); it is not a rule to quote jargon.
 
 **D9 — A 400 is `invalid`, not an outage.** Phase 4's `WriteFailure` classification, unchanged and
 reused: `invalid` for 400, `forbidden` for 403, `unsupported` for 404/501, `server` for 5xx and a
@@ -154,7 +168,8 @@ already maps the `normMessage` shape the send response returns, and `normInbound
 2. The body carries a 10-digit `phone` resolved from `waThreadCache`. **(test)**
 3. With a cold cache, the phone is recovered from the `custom:<last10>` thread id. **(test)**
 4. A thread id with no 10 digits makes **no** request and returns `invalid`. **(test)**
-5. `200` + `delivery.dispatched:false` resolves **not ok**, and raises no health failure. **(test)**
+5. `200` + `delivery.dispatched:false` resolves **not ok**, and raises no health failure; a `200`
+   with **no** `delivery` object resolves `server` and **does** raise one. **(test)**
 6. `200` + `delivery.dispatched:true` resolves ok and carries the server's message and
    `simulated`. **(test)**
 7. 400/403/404/500/throw each map to `invalid`/`forbidden`/`unsupported`/`server`/`network`, and

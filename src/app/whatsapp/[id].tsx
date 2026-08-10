@@ -71,14 +71,17 @@ type Notice = { tone: 'danger' | 'warning'; title: string; message: string };
 function failureNotice(r: Extract<api.SendWaResult, { ok: false }>): Notice {
   switch (r.reason) {
     case 'undelivered':
-      // The server writes this sentence itself and distinguishes the two cases better than we
-      // can — "webhook not configured" versus "n8n did not accept it" — so it is rendered
-      // rather than paraphrased. `configured` decides only whether retrying is worth offering.
+      // WHY ONE BRANCH QUOTES THE SERVER AND THE OTHER DOES NOT. When the gateway is not
+      // configured we know exactly what happened and can say it in the user's terms; the
+      // server's own sentence for that case reads "n8n webhook not configured — message logged
+      // locally only", which names an internal service to a field advisor and explains nothing.
+      // When the gateway REFUSED the message we do not know why, and the server's note is the
+      // only place the reason (its status code) exists — so there it is rendered, not invented.
       return r.configured
         ? { tone: 'danger', title: 'Message not sent',
-            message: `${r.note || 'The WhatsApp gateway did not accept it.'} Your text is back in the box, so you can try again.` }
-        : { tone: 'warning', title: 'WhatsApp sending is switched off on the server',
-            message: `${r.note || 'The gateway is not configured.'} Trying again will not help — use "Open in WhatsApp" to send it yourself.` };
+            message: `The WhatsApp gateway did not accept it. Your text is back in the box, so you can try again.${r.note ? `\n\n${r.note}` : ''}` }
+        : { tone: 'warning', title: 'WhatsApp sending is switched off on this server',
+            message: 'Your message was saved but nothing was sent, and trying again will not change that until someone switches sending on. Use "Open in WhatsApp" to send it yourself.' };
     case 'invalid':
       return { tone: 'danger', title: 'Message not sent', message: r.message };
     case 'forbidden':

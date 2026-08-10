@@ -37,7 +37,7 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   `expo start` targets the dev build. `--tunnel` for a phone on another network.
 - `npx expo start --web` — the only way to reach a localhost backend.
 - `npx tsc --noEmit` — a green gate. Run before every commit.
-- `npm test` — Vitest, 188 tests over 7 files, ~0.5 s, no network. The second green gate.
+- `npm test` — Vitest, 219 tests over 8 files, ~0.5 s, no network. The second green gate.
   Config is `vitest.config.mts`; the four `test/stubs/*` files exist only so native modules
   resolve in Node. `globals: false`, so every file imports `describe`/`it`/`expect`/`vi` from
   `vitest` explicitly. ~18 cases deliberately pin **known bugs** and live in `describe` blocks
@@ -47,7 +47,10 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   **A test that touches `src/data/api.ts` must `vi.resetModules()` and `await import('@/data/api')`
   inside `beforeEach`** — that module holds mutable state (`authToken`, `sessionReal`,
   `suppressed`, `state`) with no reset export, so a static import leaks one test into the next.
-  `api-leads.test.ts` and `api-renewals.test.ts` are the pattern to copy.
+  `api-leads.test.ts`, `api-whatsapp.test.ts` and `api-renewals.test.ts` are the pattern to copy.
+  Timers are faked, so a call that reaches `unavailable()` **must not be awaited directly** — hold
+  the promise, `await vi.advanceTimersByTimeAsync(400)`, then await it, or the test times out on
+  `wait()`.
 - `npm run lint` — 46 errors on a clean tree. Rule is **no new errors**, not zero.
   **Takes longer than 120 s**, so it exceeds the default tool timeout — run it in the background or
   raise the timeout, and read the count off the `✖ N problems (46 errors, 15 warnings)` line.

@@ -1219,7 +1219,16 @@ export async function sendWaMessage(threadId: string, text: string): Promise<Sen
     });
 
     if (ok && isObj(json?.data)) {
-      const delivery = isObj(json?.delivery) ? json.delivery : {};
+      if (!isObj(json?.delivery)) {
+        // No `delivery` at all is a CONTRACT FAULT, not a quiet non-delivery. The endpoint
+        // documents it as always present (`api.md`, "returns a top-level `delivery` object …
+        // unique in this slice"), so its absence means the shape moved — and the health channel
+        // is exactly what Phase 3 built for that. Reporting it as `undelivered` instead would
+        // have made the screen say "the gateway is switched off", which we would not know.
+        reportFailure(KEY);
+        return { ok: false, reason: 'server' };
+      }
+      const delivery = json.delivery;
       if (!delivery.dispatched) {
         return {
           ok: false,

@@ -6,6 +6,48 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-10 — A 2xx is not a success; the body's own delivery verdict is
+
+**Context.** `POST /api/whatsapp/hub/send` writes its log row *before* it calls the WhatsApp
+gateway and answers `200 success:true` whether the gateway took the message or not. The truth is
+in a top-level `delivery: { dispatched, configured, note }` object that sits **beside** `data`.
+Phase 5 found the app painting a sent tick on the status code alone — and would have carried on
+doing so even after the `text`/`message` fix, because the 400 it was getting would have become a
+200 that still delivered nothing.
+
+**Decision.** Where an endpoint reports its own outcome in the body, that verdict outranks the
+HTTP status, and the client reads it. A helper that unwraps to `data` — `tryReal`, here — cannot
+be used on such an endpoint, because the verdict is not inside `data`. Use bare `req()`, as
+`addLead` does. Where the verdict is **absent**, that is a contract fault reported to
+`data/health`, not an outcome to guess at.
+
+**Consequence.** `sendWaMessage` returns a four-outcome union, not `void` and not a boolean:
+`dispatched` · `undelivered` (with `configured`, because it decides whether retrying is worth
+offering) · `invalid` · a transport `WriteFailure`. The same shape is owed to
+`POST /api/campaigns/send`, which `api.md` records as reporting `success:true` when the webhook is
+unset — same disease, different organ, and Phase 8's or a later phase's to fix.
+
+---
+
+## 2026-08-10 — Quote the producer's message, except when it is jargon
+
+**Context.** `cgpe-admin` adopted "render the server's own rejection message rather than compose
+our own" for the geofence, and it is a good rule — it stops three clients inventing three
+different explanations. Phase 5 applied it to the WhatsApp gateway and produced a banner reading
+*"n8n webhook not configured — message logged locally only"* for a field advisor who is reading
+the app in Gujarati and has never heard of n8n.
+
+**Decision.** Quote the producer when it knows something we do not — a status code, a distance, a
+validation reason. Write our own sentence when we already know exactly what happened and the
+server's phrasing names its own internals. The test is not *who wrote it* but *does the reader
+learn what to do next*.
+
+**Consequence.** The two `delivery.dispatched: false` cases are worded differently on purpose:
+"the gateway refused it" quotes the note (it carries n8n's status code, which exists nowhere else),
+"the gateway is switched off" does not (we know the cause, and can say retrying will not help).
+
+---
+
 ## 2026-08-10 — A phase is reviewed adversarially before it is called done
 
 **Context.** Phase 4's first commit passed all three gates — `tsc` clean, 185 tests green, lint at

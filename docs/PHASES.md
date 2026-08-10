@@ -14,6 +14,11 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 5 — done.** Built 2026-08-10, commit `95f1ccb` plus the review fixes. `npm test` runs
+**219** tests across 8 files and exits 0; `npx tsc --noEmit` exits 0; `npm run lint` is
+byte-identical to the 46-error baseline. Every WhatsApp message this app had ever "sent" was
+refused with a 400 and reported as sent. **Acceptance criteria 9–10 need a device** — see the spec.
+
 **Phase 4 — done.** Built 2026-08-10 across five commits, `5c08872` → `edc373c`. `npm test` runs
 **188** tests across 7 files and exits 0; `npx tsc --noEmit` exits 0; `npm run lint` is
 byte-identical to the 46-error baseline. The app now speaks `Lead.status`; the two `adapt.test.ts`
@@ -34,8 +39,9 @@ exercise.
 
 ## Next 3
 
-1. **Phase 5** — WhatsApp send (`text` not `message`, phone from `waThreadCache`).
-2. **Phase 7** — geofence + tracking (INBOX D5 `session_id`, D10 the fence is up to 300 m).
+1. **Phase 7** — geofence + tracking (INBOX D5 `session_id`, D10 the fence is up to 300 m). Both
+   INBOX boxes are still open against this session and Phase 7 is what closes them.
+2. **Phase 8** — the last fabricated-data path (`generateReport`'s ₹42,00,000) and the stale docs.
 3. **Phase 6** — the remaining envelope mismatches, if `cgpe-api` has un-shadowed
    `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract row, read the
    handler, then assert the envelope in a test that fails if the shape moves.
@@ -55,7 +61,7 @@ exercise.
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
 | 4 | Leads contract | **Done** 2026-08-10 — 188 tests green (`5c08872`…`edc373c`); device checks outstanding |
-| 5 | WhatsApp send | Next |
+| 5 | WhatsApp send | **Done** 2026-08-10 — 219 tests green (`95f1ccb`); device checks outstanding |
 | 6 | Remaining envelope mismatches `[api]` | Blocked on `cgpe-api` |
 | 7 | Geofence + tracking (INBOX D5, D10) | Not started |
 | 8 | Last fabricated-data path + stale docs | Not started |
@@ -155,12 +161,36 @@ Full spec, the eleven locked decisions and what was deliberately left out: `docs
 > Phase 3. The block still holds the `mapClaimStatus` pins, which are the same class of defect in
 > the claims mapper and are still open.
 
-## Phase 5 — WhatsApp send
+## Phase 5 — WhatsApp send ✅ DONE 2026-08-10 (`95f1ccb`)
 Send `text` (not `message`), resolve the phone from `waThreadCache` (not the empty `state.waThreads`),
 and let a failure reach the UI.
-**Files:** `src/data/api.ts`, `src/app/whatsapp/[id].tsx`, `src/data/adapt.ts`
+**Files:** `src/data/api.ts`, `src/app/whatsapp/[id].tsx` — **not** `src/data/adapt.ts`, which the
+phase text listed and which turned out to need nothing; plus a new `__tests__/api-whatsapp.test.ts`.
 **Done when:** a sent message reaches the gateway; a rejected send returns the text to the composer
 instead of painting a sent tick.
+
+**Result.** 31 new tests. Three things turned out to be true that the phase text did not say:
+
+1. **A 200 from this endpoint is not a send.** The handler writes its `wa_comm_messages` log row
+   *before* it calls the gateway (`routes/whatsapp.js:834-857`) and answers `200 success:true`
+   either way. The only honest signal is the **top-level `delivery` object** — which sits beside
+   `data`, so `tryReal` (`json?.data ?? json`) destroys it. That one fact decided the shape of the
+   fix: bare `req()`, as `addLead` does, and a four-outcome union.
+2. **Both 400s were already firing, and the phone one fired first.** `phone` came from
+   `state.waThreads`, which is empty for the life of the process, so the send was refused at
+   `:821` before the missing `text` was ever reached. Fixing the field name alone would have
+   changed nothing a user could see.
+3. **The error branch had never executed.** `tryReal(..., () => true)` cannot fail, and the `null`
+   was discarded, so the composer's rollback-and-banner path — words back in the box, error haptic
+   — was unreachable code. Same defect class as Phase 1's write paths.
+
+Full spec, the fourteen locked decisions and what was deliberately left out: `docs/spec/PHASE-5.md`.
+
+> **The phone is recovered from the `custom:<last10>` thread id when the cache is cold**, which is
+> the backend's own convention (`:829`, and `GET /hub/messages` parses a bare `threadRef` the same
+> way). It is deliberately strict — `<prefix>:<10 digits>` or a bare ten digits, nothing else.
+> The lenient reading turns a Mongo `_id` hex into a plausible Indian mobile and sends a
+> customer's message to a stranger. There is a test named after exactly that.
 
 ## Phase 6 — Remaining envelope mismatches `[api]`
 Commissions (array vs aggregate), LIC plans (`{meta, plans}` vs array), notes search (`search` vs `q`).
