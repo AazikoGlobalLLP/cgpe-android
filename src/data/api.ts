@@ -27,6 +27,9 @@
 import { Platform } from 'react-native';
 import { API_BASE_URL, FORCE_DEMO, MOCK_LATENCY, REQUEST_TIMEOUT } from '@/constants/config';
 import { expireSession, resetSessionGuard } from '@/lib/session';
+// PHASE 7: one string in this file is read off a screen by somebody standing in a car park.
+// `nbsp` is the house guarantee that a value never wraps between its number and its unit.
+import { nbsp } from '@/lib/format';
 import { reportFailure, reportSuccess } from './health';
 import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification } from './adapt';
 // Types only. The seed arrays these modules also export (`teamMembers`, `teamActivityFeed`,
@@ -1490,15 +1493,46 @@ export async function search(q: string) {
 
 /* ------------------------------------------------------- Office geofence */
 export type Geofence = { lat: number; lng: number; radius_m: number; label: string; enforce: boolean };
-// Fallback = the office pin (Surat), used if the backend geofence route isn't reachable yet.
-const FALLBACK_GEOFENCE: Geofence = { lat: 21.208780388697864, lng: 72.83928189060113, radius_m: 2000, label: 'CGPE Head Office', enforce: true };
 let _geoCache: Geofence | null = null;
 
-/** The office geofence (cached for the session). */
-export async function getGeofence(): Promise<Geofence> {
+/**
+ * The office fence — or `null`, meaning we could not learn it. PHASE 7.
+ *
+ * THERE IS NO LONGER A FALLBACK FENCE, AND THAT IS THE POINT.
+ * This used to fall back to a hardcoded Surat pin with a 2 km radius and `enforce: true`. The
+ * server's own default is **200 m** (`cgpe-backend-main/utils/geofence.js:27`), so the offline
+ * fence was not "strict" or "lenient" — it was *wrong in both directions*: ten times wider than
+ * the server at the office pin, and absolutely closed anywhere else, including at an office the
+ * master had legitimately moved the fence to. A coordinate compiled into the APK has to agree
+ * with a row in someone else's database forever, which is the drift `cgpe-api` filed against the
+ * admin panel as D13. An unknown fence is now represented as unknown.
+ *
+ * ONLY A SUCCESS IS CACHED. The old cache was assigned on the first call whatever happened, so a
+ * single failed fetch — including a 404 on an undeployed route, which `reportIfOutage`
+ * deliberately keeps off the health banner — decided the fence for the life of the JS context.
+ * Nothing cleared it, not even signing in as somebody else. A failure now leaves the cache empty
+ * so the next clock-in tap asks again; that costs at most one request per tap.
+ *
+ * A fence with no usable radius fails `validate` rather than being repaired with an invented
+ * number, so it reports as the contract fault it is and this returns null.
+ */
+export async function getGeofence(): Promise<Geofence | null> {
   if (_geoCache) return _geoCache;
-  const real = await tryReal<any>('/time-tracker/geofence', {}, (d) => d && Number.isFinite(d.lat));
-  _geoCache = real ? { lat: real.lat, lng: real.lng, radius_m: real.radius_m || 2000, label: real.label || 'Office', enforce: real.enforce !== false } : FALLBACK_GEOFENCE;
+  const real = await tryReal<any>(
+    '/time-tracker/geofence',
+    {},
+    (d) => d && Number.isFinite(d.lat) && Number.isFinite(d.lng) && Number(d.radius_m) > 0,
+  );
+  if (!real) return null;
+  _geoCache = {
+    lat: Number(real.lat),
+    lng: Number(real.lng),
+    radius_m: Number(real.radius_m),
+    label: String(real.label || 'Office'),
+    // Mirrors the server's own reading of the flag (`utils/geofence.js:62`): anything but an
+    // explicit false means the fence is on.
+    enforce: real.enforce !== false,
+  };
   return _geoCache;
 }
 
@@ -1511,19 +1545,80 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-/** Client-side geofence check (UX only — the server re-validates). */
-export async function checkGeofence(lat?: number, lng?: number, accuracy?: number): Promise<{ allowed: boolean; distance_m: number | null; radius_m: number; message: string }> {
+/**
+ * A distance a person standing in the street can act on. PHASE 7.
+ *
+ * Metres below a kilometre, rounded to 10 m — the fence is a 200 m fence, and
+ * `(200/1000).toFixed(1)` renders it as "0.2 km", which is the shape of the server's own stale
+ * refusal copy (`utils/geofence.js:101`, filed as INBOX D10). The floor of 10 m stops a
+ * near-miss reading as "0 m". Spaces are U+00A0 per `lib/format.ts`: a value must not wrap
+ * between its number and its unit.
+ */
+function distanceText(m: number): string {
+  if (m >= 1000) return nbsp(`${(m / 1000).toFixed(1)} km`);
+  return nbsp(`${Math.max(10, Math.round(m / 10) * 10)} m`);
+}
+
+export type GeofenceCheck = {
+  allowed: boolean;
+  /**
+   * Whether we actually know the fence. `allowed: true, known: false` is a DEFERRAL — "ask the
+   * server" — not a verdict, and a caller that cannot tell the two apart cannot write honest
+   * copy. `enforce: false` from the server is `allowed: true, known: true`: the fence is off,
+   * which is a fact rather than an absence of one.
+   */
+  known: boolean;
+  distance_m: number | null;
+  radius_m: number | null;
+  message: string;
+};
+
+/**
+ * Client-side clock-in pre-check. PHASE 7.
+ *
+ * THE RULE THIS FUNCTION NOW OBEYS: it may never refuse something the server would allow. Its
+ * only job is to save a round trip on a refusal that is certain; `POST /time-tracker/clock-in`
+ * re-validates every request and is the authority (`routes/timeTracker.js:317-318`), and
+ * `home.tsx` hard-returns on a refusal here, so anything this function gets wrong in the strict
+ * direction is a clock-in the server would have accepted and never hears about. Three
+ * consequences, each deliberate:
+ *
+ *  - an unknown fence ALLOWS. See `getGeofence`.
+ *  - the accuracy credit is coerced with `Number()`, matching `utils/geofence.js:88`. The old
+ *    `typeof accuracy === 'number'` test gave a numeric-STRING fix a tolerance of 0 where the
+ *    server gives it 100, so the app refused people the server would have let in.
+ *  - the credit is clamped at zero. `Math.min(-200, 100)` is -200, which turned a negative
+ *    accuracy into a stricter fence; the server has the same bug (`geofence.js:93`, no
+ *    `Math.max`) but matching a bug is not agreement, and clamping only ever allows more.
+ *
+ * NOT MIRRORED, ON PURPOSE: the server refuses any fix coarser than 300 m outright
+ * (`geofence.js:89`). Copying that threshold would duplicate a number that lives in someone
+ * else's file and can move, to buy one round trip — and it would make this function refuse.
+ * A weak fix now comes back as a 403 carrying the server's own, better sentence.
+ */
+export async function checkGeofence(lat?: number, lng?: number, accuracy?: number): Promise<GeofenceCheck> {
   const g = await getGeofence();
-  if (!g.enforce) return { allowed: true, distance_m: null, radius_m: g.radius_m, message: '' };
+  if (!g) return { allowed: true, known: false, distance_m: null, radius_m: null, message: '' };
+  if (!g.enforce) return { allowed: true, known: true, distance_m: null, radius_m: g.radius_m, message: '' };
   if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) {
-    return { allowed: false, distance_m: null, radius_m: g.radius_m, message: 'Enable location to clock in.' };
+    return { allowed: false, known: true, distance_m: null, radius_m: g.radius_m, message: 'Enable location to clock in.' };
   }
   const dist = distanceMeters(lat, lng, g.lat, g.lng);
-  const tol = typeof accuracy === 'number' && isFinite(accuracy) ? Math.min(accuracy, 100) : 0;
-  const allowed = dist - tol <= g.radius_m;
+  const acc = Number(accuracy);
+  const tol = Number.isFinite(acc) ? Math.max(0, Math.min(acc, 100)) : 0;
+  // How far past the fence this fix is, with the accuracy credit already spent. <= 0 is inside.
+  const over = dist - tol - g.radius_m;
+  if (over <= 0) {
+    return { allowed: true, known: true, distance_m: Math.round(dist), radius_m: g.radius_m, message: 'Within the office area' };
+  }
   return {
-    allowed, distance_m: Math.round(dist), radius_m: g.radius_m,
-    message: allowed ? 'Within the office area' : `You're ${(dist / 1000).toFixed(2)} km from the office. Clock-in is allowed within ${(g.radius_m / 1000).toFixed(1)} km.`,
+    allowed: false, known: true, distance_m: Math.round(dist), radius_m: g.radius_m,
+    // STATES NO FENCE SIZE — INBOX D10. Both numbers are measured rather than quoted, and the
+    // second already includes the accuracy credit, so neither can contradict the server the way
+    // "allowed within 0.2 km" does. The server's own refusal copy, which does quote a radius and
+    // understates it by the credit, is rendered verbatim when a 403 comes back: it is the
+    // producer's message, and it is awkward rather than jargon.
+    message: `You're ${distanceText(dist)} from the office. Move about ${distanceText(over)} closer to clock in.`,
   };
 }
 
@@ -1628,17 +1723,65 @@ export async function getAttendanceHistory(): Promise<any[]> {
 export type TrackPoint = { lat: number; lng: number; at?: string | number; accuracy?: number; speed?: number; heading?: number; battery?: number };
 export type TrackSession = { session_id: string; date: string; started_at: string; ended_at: string | null; point_count: number; distance_m: number };
 
-export async function startTrack(sessionId?: string): Promise<boolean> {
+/**
+ * What happened to a batch of GPS points. PHASE 7.
+ *
+ * `sent` — the server took them. `added` is its own count and CAN BE ZERO: it drops every point
+ *          whose accuracy is worse than 100 m (`routes/timeTracker.js:1350`) and still answers
+ *          200. The buffer is cleared either way, because re-sending is discarded identically.
+ * `refused` — a 4xx. The server understood and said no; retrying cannot change the answer, so
+ *          holding the points forever only grows a bag of somebody's coordinates on a handset.
+ * `retry` — a dead network, the 4.5 s abort, or a 5xx. Keep them for the next wake-up.
+ * `no-session` — we have no session id to attribute them to. See `postTrackPoints`.
+ *
+ * Same distinction Phase 1 drew between `invalid` and `network`, and Phase 5 between a 200 and a
+ * dispatch: the status code is not the outcome.
+ */
+export type TrackDelivery = 'sent' | 'refused' | 'retry' | 'no-session';
+export type TrackResult = { outcome: TrackDelivery; added: number };
+
+export async function startTrack(sessionId: string): Promise<boolean> {
+  if (!sessionId) return false;
   if (!sessionReal || FORCE_DEMO) return true;
   try { const { ok } = await req('/time-tracker/track/start', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }); return ok; }
   catch { return false; }
 }
-export async function postTrackPoints(points: TrackPoint[], sessionId?: string): Promise<boolean> {
-  if (!sessionReal || FORCE_DEMO || !points.length) return true;
-  try { const { ok } = await req('/time-tracker/track/points', { method: 'POST', body: JSON.stringify({ session_id: sessionId, points }) }); return ok; }
-  catch { return false; }
+
+/**
+ * Append GPS points to a shift's route.
+ *
+ * A SESSION ID IS REQUIRED, AND THAT IS THE PHASE 7 FIX. `JSON.stringify` omits a key whose value
+ * is `undefined`, so `{ session_id: undefined, points }` went out as `{ points }` — a body with no
+ * session at all. The server then falls back to `resolveActiveSession`
+ * (`routes/timeTracker.js:1339`), which is exactly the case INBOX **D5** describes: it works while
+ * the shift is running and answers `400 "No active session — clock in first."` afterwards, i.e.
+ * the buffered-points replay after clock-out.
+ *
+ * The 400 is the mild half. `resolveActiveSession` resolves the session from the **token**, so on
+ * a shared handset where one person's route service is still running after somebody else signs in,
+ * the first person's buffered points post with the second person's token and land on the second
+ * person's shift. `startTracking` already refuses to inherit another session's points for this
+ * reason; a session-less post is the hole that guard does not cover. Requiring the id makes the
+ * body impossible to construct rather than merely unlikely.
+ */
+export async function postTrackPoints(points: TrackPoint[], sessionId?: string): Promise<TrackResult> {
+  if (!points.length) return { outcome: 'sent', added: 0 };
+  if (!sessionId) return { outcome: 'no-session', added: 0 };
+  if (!sessionReal || FORCE_DEMO) return { outcome: 'sent', added: 0 };
+  try {
+    const { ok, status, json } = await req('/time-tracker/track/points', {
+      method: 'POST',
+      body: JSON.stringify({ session_id: sessionId, points }),
+    });
+    if (ok) return { outcome: 'sent', added: Number(json?.added) || 0 };
+    return { outcome: status >= 400 && status < 500 ? 'refused' : 'retry', added: 0 };
+  } catch {
+    return { outcome: 'retry', added: 0 };
+  }
 }
-export async function stopTrack(sessionId?: string): Promise<boolean> {
+
+export async function stopTrack(sessionId: string): Promise<boolean> {
+  if (!sessionId) return false;
   if (!sessionReal || FORCE_DEMO) return true;
   try { const { ok } = await req('/time-tracker/track/stop', { method: 'POST', body: JSON.stringify({ session_id: sessionId }) }); return ok; }
   catch { return false; }

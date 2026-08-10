@@ -144,14 +144,20 @@ function toPoints(pts: PointTuple[]): api.TrackPoint[] {
   }));
 }
 
-type Delivery = 'sent' | 'retry' | 'signed-out';
+type Delivery = 'sent' | 'refused' | 'retry' | 'signed-out' | 'unattributable';
 
 /**
- * Post a batch. `sent` means the caller may drop the points, `retry` means keep them for the
- * next wake-up, `signed-out` means there is no longer an account to post them to.
+ * Post a batch.
+ *
+ * `sent` — the server took them, drop them. `refused` — the server understood and said no, also
+ * drop them: a 4xx does not improve by being repeated, and before PHASE 7 both this and a dead
+ * network came back as the same `false`, so a permanently-refused batch was retried on every
+ * wake-up until the 240-point cap evicted it. `retry` — keep them. `signed-out` — there is no
+ * longer an account to post them to. `unattributable` — we have no session id, so nothing
+ * collected here can be tied to a shift; see `ingest`.
  *
  * The token rehydration is the important part. In a headless context `data/api` has no
- * token, and `postTrackPoints` short-circuits to `true` when the session is not real, so
+ * token, and `postTrackPoints` short-circuits to `sent` when the session is not real, so
  * without this the buffer would be cleared on every wake having sent absolutely nothing.
  */
 async function deliver(sid: string | undefined, pts: PointTuple[]): Promise<Delivery> {
@@ -164,8 +170,11 @@ async function deliver(sid: string | undefined, pts: PointTuple[]): Promise<Deli
     // forever on a device that is only being demoed.
     if (!api.isRealSession()) return 'sent';
   }
-  const ok = await api.postTrackPoints(toPoints(pts), sid).catch(() => false);
-  return ok ? 'sent' : 'retry';
+  // The session-id guard lives in `postTrackPoints`, not here, so there is exactly one place
+  // that decides what an un-attributable batch is — and a test can pin it on the wire.
+  const res = await api.postTrackPoints(toPoints(pts), sid).catch(() => null);
+  if (!res) return 'retry';
+  return res.outcome === 'no-session' ? 'unattributable' : res.outcome;
 }
 
 /**
@@ -252,12 +261,18 @@ async function ingest(locations: Location.LocationObject[]): Promise<void> {
   if (state.pts.length > MAX_POINTS) state.pts = state.pts.slice(-MAX_POINTS);
 
   const outcome = await deliver(state.sid, state.pts);
-  if (outcome === 'sent') state.pts = [];
+  // Two different facts, one buffer action: `sent` landed and `refused` was declined, and
+  // neither is improved by being sent again.
+  if (outcome === 'sent' || outcome === 'refused') state.pts = [];
 
-  if (outcome === 'signed-out') {
-    // The account was signed out while the service kept running. Leaving it up would burn
-    // battery, hold a notification the user cannot explain, and collect location for
-    // nobody. Drop everything.
+  if (outcome === 'signed-out' || outcome === 'unattributable') {
+    // `signed-out`: the account was signed out while the service kept running.
+    // `unattributable` (PHASE 7): the service is running with no session id, so every fix it
+    // collects belongs to no shift and cannot be posted — the server would otherwise resolve
+    // the owner from whichever token is on the handset, which is how one person's route lands
+    // on another person's day.
+    // Either way, leaving the service up would burn battery, hold a notification the user
+    // cannot explain, and collect location for nobody. Drop everything.
     await storage.remove(STATE_KEY);
     await stopUpdates();
     return;
@@ -341,9 +356,14 @@ export async function ensureBackgroundPermission(): Promise<{ granted: boolean; 
  * `ensureBackgroundPermission()`. Foreground permission alone is enough to keep recording
  * (Android via the foreground service, iOS via the background location indicator), so a user
  * who granted "while using" still gets a usable route rather than nothing at all.
+ *
+ * PHASE 7: `sid` IS REQUIRED. A shift whose session id we do not have records no route at all,
+ * because a route that cannot be attributed is worse than none — it burns battery, holds a
+ * notification, collects somebody's location all day, and then either 400s or lands on whoever
+ * happens to be signed in. The caller says so on screen; see `postTrackPoints`.
  */
-export async function startTracking(sid?: string): Promise<void> {
-  if (!isNative) return;
+export async function startTracking(sid: string): Promise<void> {
+  if (!isNative || !sid) return;
   await serial(async () => {
     try {
       const fg = await Location.getForegroundPermissionsAsync();

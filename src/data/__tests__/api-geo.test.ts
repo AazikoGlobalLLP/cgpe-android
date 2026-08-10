@@ -1,50 +1,79 @@
 /**
- * PHASE 2 — `distanceMeters`, `getGeofence` and `checkGeofence` pinned.
+ * PHASE 2, REWRITTEN BY PHASE 7 — `distanceMeters`, `getGeofence` and `checkGeofence`.
  *
  * This is the arithmetic that decides whether a field agent is allowed to start their shift.
- * The client check is UX-only (the server re-validates), but it is what the person actually
- * sees, and it currently fails CLOSED when the geofence route is unreachable.
+ * The client check is UX-only — `POST /time-tracker/clock-in` re-validates every request and is
+ * the authority (`cgpe-backend-main/routes/timeTracker.js:317-318`) — but it is what the person
+ * actually sees, and `home.tsx:788-796` hard-returns on a refusal, so anything this file gets
+ * wrong in the STRICT direction is a clock-in the server would have accepted and never hears
+ * about.
  *
- * NO fetch stub is installed here on purpose. `sessionReal` starts false (api.ts:46), so
- * `tryReal` short-circuits at api.ts:119 BEFORE any network call and `_geoCache` becomes the
- * real FALLBACK_GEOFENCE. Every case below therefore exercises genuine code with nothing
- * mocked — and the "fetch was never called" assertion is what proves the short-circuit.
+ * PHASE 7 CHANGED THE PREMISE OF HALF THIS FILE. There is no fallback fence any more. The old
+ * one was a Surat pin with a 2 km radius and `enforce: true`, against a server default of
+ * **200 m** (`cgpe-backend-main/utils/geofence.js:27`) — wrong in both directions at once — and
+ * it was cached on the FIRST call whatever happened, so one failed fetch fixed it for the life of
+ * the process. Two Phase-2 cases pinned exactly that and are flipped here on purpose, per
+ * `docs/PHASES.md`'s convention; the `pinned known bugs` block in this file is now empty and gone.
  *
- * scanRenewals lives in api-renewals.test.ts, NOT here: it needs a fetch stub, and a stub
- * installed in this file could silently satisfy a geofence request that should never happen.
+ * Every server-side number below is quoted from `cgpe-backend-main/utils/geofence.js`:
+ *   GET /api/time-tracker/geofence  →  { success, data: { lat, lng, radius_m, label, enforce } }
+ *   default radius 200 m (:27) · accuracy credited up to 100 m (:93) · `enforce !== false` (:62)
  *
- * src/data/api.ts holds module-level state with no reset path (`_geoCache` at api.ts:1037,
- * `sessionReal` at :46), and Vitest isolates per FILE, not per test — hence vi.resetModules()
- * and a fresh import in beforeEach. See docs/spec/PHASE-2.md row 7.
+ * FETCH IS STUBBED, not mocked-through: `api.ts` is the only file that calls `fetch`, so a stub at
+ * that boundary exercises the real `req` / `tryReal` / health path. `src/data/api.ts` holds
+ * module-level state with no reset export (`_geoCache`, `sessionReal`, `suppressed`) and Vitest
+ * isolates per FILE, so every test re-imports it. See docs/spec/PHASE-2.md row 7.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Api = typeof import('@/data/api');
+type Health = typeof import('@/data/health');
 let api: Api;
+let health: Health;
 let fetchSpy: ReturnType<typeof vi.fn>;
 
-/** The office pin baked into api.ts:1036, repeated here so a change to it breaks a test. */
-const OFFICE = { lat: 21.208780388697864, lng: 72.83928189060113 };
+const reply = (status: number, body: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
+
+/** The office pin the SERVER holds. Nothing in `src/` knows this any more — that is the fix. */
+const FENCE = { lat: 21.208780388697864, lng: 72.83928189060113, radius_m: 200, label: 'CGPE Head Office', enforce: true };
+
+const fenceReply = (over: Partial<typeof FENCE> = {}) =>
+  reply(200, { success: true, data: { ...FENCE, ...over } });
+
+/**
+ * Metres north, expressed in degrees of latitude. Along a meridian the haversine collapses to
+ * `R * Δφ` exactly, so this is a closed-form inverse of `distanceMeters` rather than a restatement
+ * of it — and it pins R = 6371000 from the outside.
+ */
+const M = (m: number) => (m / 6371000) * (180 / Math.PI);
+
+/** The single space inside a formatted value is U+00A0 (`lib/format.ts`), never U+0020. */
+const NB = ' ';
 
 beforeEach(async () => {
   vi.resetModules();
-  // Not a stub of behaviour — a tripwire. Any real network call in this file is a bug in the
-  // test, and it should fail loudly rather than hit the production backend.
-  fetchSpy = vi.fn(() => { throw new Error('no test in this file may perform a fetch'); });
+  fetchSpy = vi.fn();
   vi.stubGlobal('fetch', fetchSpy);
   api = await import('@/data/api');
+  health = await import('@/data/health');
 });
+
+/** Most cases want a live session and a fence the server has already answered with. */
+async function withFence(over: Partial<typeof FENCE> = {}) {
+  api.setAuthToken('test-token');
+  fetchSpy.mockResolvedValueOnce(fenceReply(over));
+}
 
 describe('distanceMeters', () => {
   it('returns exactly 0 for identical points', () => {
     expect(api.distanceMeters(0, 0, 0, 0)).toBe(0);
-    expect(api.distanceMeters(OFFICE.lat, OFFICE.lng, OFFICE.lat, OFFICE.lng)).toBe(0);
+    expect(api.distanceMeters(FENCE.lat, FENCE.lng, FENCE.lat, FENCE.lng)).toBe(0);
   });
 
   it('measures one degree of latitude at the equator', () => {
     // Closed form for a pure meridian arc: R * (1 degree in radians). Derived independently
-    // of the haversine expansion, so it pins R = 6371000 (api.ts:1049) and the degree
-    // conversion (:1050) rather than restating the implementation.
+    // of the haversine expansion, so it pins R = 6371000 and the degree conversion rather than
+    // restating the implementation.
     const oneDegree = 6371000 * (Math.PI / 180);
     expect(api.distanceMeters(0, 0, 1, 0)).toBeCloseTo(oneDegree, 6);
   });
@@ -58,142 +87,249 @@ describe('distanceMeters', () => {
   });
 
   it('scales linearly for a small offset from the office pin', () => {
-    const d = api.distanceMeters(OFFICE.lat, OFFICE.lng, OFFICE.lat + 0.01, OFFICE.lng);
-    expect(d).toBeCloseTo(6371000 * (Math.PI / 180) / 100, 3);
+    const d = api.distanceMeters(FENCE.lat, FENCE.lng, FENCE.lat + 0.01, FENCE.lng);
+    expect(d).toBeCloseTo((6371000 * (Math.PI / 180)) / 100, 3);
   });
 
   it('reaches half the circumference at antipodal points without producing NaN', () => {
-    // Documents the theoretical Math.sqrt(1 - a) hazard — there is no Math.max(0, ...) clamp
-    // at api.ts:1053 — WITHOUT asserting NaN, which at this pair would encode luck.
+    // Documents the theoretical Math.sqrt(1 - a) hazard — there is no Math.max(0, ...) clamp —
+    // WITHOUT asserting NaN, which at this pair would encode luck.
     expect(api.distanceMeters(0, 0, 0, 180)).toBeCloseTo(6371000 * Math.PI, 2);
   });
 
   it('propagates NaN, because it validates nothing', () => {
-    // The guard lives in the CALLER (checkGeofence, api.ts:1060-1062). This pins where the
-    // responsibility sits.
+    // The guard lives in the CALLER (checkGeofence). This pins where the responsibility sits.
     expect(Number.isNaN(api.distanceMeters(NaN, 0, 0, 0))).toBe(true);
     expect(Number.isNaN(api.distanceMeters(0, 0, undefined as unknown as number, 0))).toBe(true);
   });
+
+  it('agrees with the metres-to-degrees helper the rest of this file measures with', () => {
+    // If this drifts, every distance assertion below is measuring something else.
+    expect(api.distanceMeters(FENCE.lat, FENCE.lng, FENCE.lat + M(250), FENCE.lng)).toBeCloseTo(250, 6);
+  });
 });
 
-describe('getGeofence — offline fallback', () => {
-  it('returns the Surat office pin with NO network call', async () => {
-    // sessionReal is false, so tryReal never reaches fetch. The fetch assertion IS the proof.
-    await expect(api.getGeofence()).resolves.toEqual({
-      lat: 21.208780388697864,
-      lng: 72.83928189060113,
-      radius_m: 2000,
-      label: 'CGPE Head Office',
-      enforce: true,
-    });
+describe('getGeofence — an unknown fence is unknown, not a guess', () => {
+  it('FLIPPED FROM PHASE 2: returns null instead of a hardcoded 2 km Surat fence', async () => {
+    // The Phase-2 case asserted `{ lat: 21.2087…, radius_m: 2000, enforce: true }` came back
+    // with no network call. That object no longer exists in src/. A client that cannot learn the
+    // fence must not invent one — see docs/spec/PHASE-7.md D-2.
+    api.setAuthToken('test-token');
+    fetchSpy.mockRejectedValueOnce(new Error('offline'));
+    await expect(api.getGeofence()).resolves.toBeNull();
+  });
+
+  it('makes no request at all on a signed-out or demo session, and still answers null', async () => {
+    // `tryReal` short-circuits before fetch when the session is not real. The assertion that
+    // fetch was never called IS the proof of the short-circuit.
+    await expect(api.getGeofence()).resolves.toBeNull();
+    api.setAuthToken('demo-abc');
+    await expect(api.getGeofence()).resolves.toBeNull();
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('caches the fallback BY REFERENCE for the rest of the session', () => {
-    // api.ts:1043 assigns FALLBACK_GEOFENCE itself, not a copy — so a caller that mutates the
-    // returned object changes the fence for every later call. This is also why every test file
-    // touching the geofence must vi.resetModules().
-    return Promise.all([api.getGeofence(), api.getGeofence()]).then(([first, second]) => {
-      expect(second).toBe(first);
+  it('FLIPPED FROM PHASE 2: a failure is NOT cached, so the next attempt asks again', async () => {
+    // The Phase-2 case pinned the opposite — the fallback was cached BY REFERENCE on the first
+    // call, so one failed fetch decided the fence for the life of the JS context and not even
+    // signing in as somebody else cleared it.
+    api.setAuthToken('test-token');
+    fetchSpy.mockRejectedValueOnce(new Error('offline'));
+    expect(await api.getGeofence()).toBeNull();
+
+    fetchSpy.mockResolvedValueOnce(fenceReply());
+    expect(await api.getGeofence()).toEqual(FENCE);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('caches a SUCCESS, so a second reader costs no request', async () => {
+    await withFence();
+    const first = await api.getGeofence();
+    const second = await api.getGeofence();
+    expect(second).toBe(first);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('unwraps `data` and reads the five documented fields', async () => {
+    await withFence({ lat: 12.9, lng: 77.6, radius_m: 350, label: 'Bengaluru branch' });
+    expect(await api.getGeofence()).toEqual({
+      lat: 12.9, lng: 77.6, radius_m: 350, label: 'Bengaluru branch', enforce: true,
     });
+    const [url] = fetchSpy.mock.calls[0] as [string];
+    expect(url).toContain('/time-tracker/geofence');
+  });
+
+  it('reads `enforce` the way the server writes it — anything but an explicit false is on', async () => {
+    await withFence({ enforce: undefined as unknown as boolean });
+    expect((await api.getGeofence())?.enforce).toBe(true);
+  });
+
+  it('treats a fence with no usable radius as a contract fault, not a number to invent', async () => {
+    // The server always sends a positive radius_m (`utils/geofence.js:60`), so a body without one
+    // is a drift. Repairing it locally with a made-up 2000 is what Phase 7 deleted.
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValueOnce(reply(200, { success: true, data: { lat: 21.2, lng: 72.8 } }));
+    expect(await api.getGeofence()).toBeNull();
+    expect(health.getHealth().failures).toEqual(['/time-tracker/geofence']);
+  });
+
+  it('reports a 500 as an outage', async () => {
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValueOnce(reply(500, { success: false }));
+    expect(await api.getGeofence()).toBeNull();
+    expect(health.getHealth().degraded).toBe(true);
+  });
+
+  it('does NOT report a 404, so an undeployed route raises no banner — and still fails open', async () => {
+    // Phase 3's classification: 401/403/404/501 are answers, not faults. The user gets no
+    // outage banner AND no invented fence; the server decides at clock-in.
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValueOnce(reply(404, { success: false }));
+    expect(await api.getGeofence()).toBeNull();
+    expect(health.getHealth().degraded).toBe(false);
   });
 });
 
-describe('checkGeofence', () => {
-  it('fails CLOSED when the geofence config is unreachable', async () => {
-    // FALLBACK_GEOFENCE carries enforce:true, so a config outage BLOCKS clock-in rather than
-    // allowing it. docs/PHASES.md Phase 7 changes this to fail open; when it does, this test
-    // must be updated deliberately.
-    const res = await api.checkGeofence(0, 0); // Gulf of Guinea
-    expect(res.allowed).toBe(false);
-    expect(res.radius_m).toBe(2000);
-    expect(res.distance_m).toBeGreaterThan(8_000_000);
+describe('checkGeofence — the fence is unknown', () => {
+  it('FLIPPED FROM PHASE 2: fails OPEN, and says the verdict is a deferral', async () => {
+    // The Phase-2 case was named "fails CLOSED when the geofence config is unreachable" and
+    // asserted `allowed === false` with `radius_m === 2000`. docs/PHASES.md Phase 7 owns the flip.
+    api.setAuthToken('test-token');
+    fetchSpy.mockRejectedValueOnce(new Error('offline'));
+    const res = await api.checkGeofence(0, 0); // Gulf of Guinea, ~8000 km away
+    expect(res).toEqual({ allowed: true, known: false, distance_m: null, radius_m: null, message: '' });
   });
 
-  it('treats coordinates (0, 0) as a real fix, because the guard is loose equality', async () => {
-    // api.ts:1060 `lat == null` does NOT catch 0, so the null-island is a valid position and
-    // the user is told how far away they are rather than to enable location.
+  it('makes no distance or radius claim it cannot back', async () => {
+    // `known: false` is the whole point: `allowed` here means "ask the server", not "you are at
+    // the office", and a caller must be able to tell those apart before writing copy.
+    api.setAuthToken('test-token');
+    fetchSpy.mockRejectedValueOnce(new Error('offline'));
+    const res = await api.checkGeofence(FENCE.lat + M(50_000), FENCE.lng, 10);
+    expect(res.known).toBe(false);
+    expect(res.distance_m).toBeNull();
+    expect(res.radius_m).toBeNull();
+    expect(res.message).toBe('');
+  });
+
+  it('fails open on a signed-out session without touching the network', async () => {
     const res = await api.checkGeofence(0, 0);
-    expect(res.message).not.toBe('Enable location to clock in.');
+    expect(res.allowed).toBe(true);
+    expect(res.known).toBe(false);
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
+});
 
-  it('allows a point inside the fallback radius', async () => {
-    const res = await api.checkGeofence(OFFICE.lat + 0.017, OFFICE.lng);
-    expect(res).toEqual({
-      allowed: true,
-      distance_m: 1890,
-      radius_m: 2000,
-      message: 'Within the office area',
+describe('checkGeofence — the fence is known', () => {
+  it('allows a point inside the radius', async () => {
+    await withFence();
+    expect(await api.checkGeofence(FENCE.lat + M(100), FENCE.lng)).toEqual({
+      allowed: true, known: true, distance_m: 100, radius_m: 200, message: 'Within the office area',
     });
   });
 
-  it('denies a point just outside, and rounds distance_m independently of the message', async () => {
-    // api.ts:1067-1068: distance_m is Math.round(dist) = 2002 while the message formats the
-    // UNROUNDED value as '2.00'. The two disagree by design, and that mismatch is exactly what
-    // a naive tidy-up would collapse. Note the two different precisions: toFixed(2) for the
-    // distance, toFixed(1) for the radius.
-    const res = await api.checkGeofence(OFFICE.lat + 0.018, OFFICE.lng);
+  it('denies a point outside it, and says how much closer to move rather than quoting a fence', async () => {
+    // INBOX D10: any UI copy that states the fence size will disagree with the server, which
+    // credits up to 100 m of accuracy on top of the radius and whose own message understates
+    // itself as "within 0.2 km". Both numbers here are measured, and the second one already has
+    // the accuracy credit spent, so neither can contradict the server.
+    await withFence();
+    const res = await api.checkGeofence(FENCE.lat + M(250), FENCE.lng);
     expect(res.allowed).toBe(false);
-    expect(res.distance_m).toBe(2002);
-    expect(res.message).toContain('2.00 km from the office');
-    expect(res.message).toContain('within 2.0 km');
+    expect(res.known).toBe(true);
+    expect(res.distance_m).toBe(250);
+    expect(res.message).toBe(`You're 250${NB}m from the office. Move about 50${NB}m closer to clock in.`);
+    expect(res.message).not.toMatch(/km|0\.2|200 m/);
   });
 
-  it('caps the accuracy tolerance at 100 m, flipping the same point to allowed', async () => {
-    // tol = Math.min(500, 100) = 100, and 2001.5 - 100 <= 2000. So the real worst-case
-    // effective radius is 2100 m, not 2000. distance_m is unaffected — tolerance changes only
-    // the verdict.
-    const res = await api.checkGeofence(OFFICE.lat + 0.018, OFFICE.lng, 500);
+  it('renders kilometres only above 1 km, to one decimal', async () => {
+    await withFence();
+    const res = await api.checkGeofence(FENCE.lat + M(1890), FENCE.lng);
+    expect(res.message).toBe(`You're 1.9${NB}km from the office. Move about 1.7${NB}km closer to clock in.`);
+  });
+
+  it('never says "0 m closer" for a near miss', async () => {
+    await withFence();
+    const res = await api.checkGeofence(FENCE.lat + M(203), FENCE.lng);
+    expect(res.allowed).toBe(false);
+    expect(res.message).toContain(`Move about 10${NB}m closer`);
+  });
+
+  it('MAKES D10 EXECUTABLE: the effective fence is up to 300 m, not a flat 200', async () => {
+    // `utils/geofence.js:93-94` credits `Math.min(acc, 100)` before comparing to the radius.
+    await withFence();
+    expect((await api.checkGeofence(FENCE.lat + M(290), FENCE.lng, 100)).allowed).toBe(true);
+    expect((await api.checkGeofence(FENCE.lat + M(310), FENCE.lng, 100)).allowed).toBe(false);
+  });
+
+  it('caps the accuracy credit at 100 m, so a hopeless fix does not buy an unlimited fence', async () => {
+    await withFence();
+    expect((await api.checkGeofence(FENCE.lat + M(310), FENCE.lng, 5000)).allowed).toBe(false);
+  });
+
+  it('does NOT mirror the server\'s >300 m outright rejection, and that is deliberate', async () => {
+    // `utils/geofence.js:89` refuses any fix coarser than 300 m. Copying that threshold would
+    // duplicate a number from someone else's file to buy one round trip, AND would make this
+    // function refuse — which docs/spec/PHASE-7.md D-1 forbids. The server answers 403 with its
+    // own better sentence instead.
+    await withFence();
+    const res = await api.checkGeofence(FENCE.lat, FENCE.lng, 5000);
     expect(res.allowed).toBe(true);
-    expect(res.distance_m).toBe(2002);
     expect(res.message).toBe('Within the office area');
   });
 
-  it('ignores a numeric-STRING accuracy, so the same point is denied', async () => {
-    // api.ts:1064 requires `typeof accuracy === 'number'`. Together with the previous case
-    // this fences the type check.
-    const res = await api.checkGeofence(OFFICE.lat + 0.018, OFFICE.lng, '500' as unknown as number);
-    expect(res.allowed).toBe(false);
+  it('FLIPPED FROM PHASE 2: a negative accuracy no longer makes the fence stricter', async () => {
+    // Phase 2 pinned the bug: `Math.min(-200, 100)` is -200, so `dist - tol` became `dist + 200`
+    // and a point comfortably inside was denied. Clamping at zero only ever ALLOWS more, which is
+    // the one direction this function is permitted to differ from the server in.
+    await withFence();
+    const inside = await api.checkGeofence(FENCE.lat + M(100), FENCE.lng, -200);
+    expect(inside.allowed).toBe(true);
+    expect(inside.distance_m).toBe(100);
+  });
+
+  it('reads a numeric-STRING accuracy the way the server does, instead of refusing people', async () => {
+    // The server coerces with `Number(accuracy)` (`utils/geofence.js:88`). The old
+    // `typeof accuracy === 'number'` test gave the same fix a tolerance of 0, so the app denied a
+    // clock-in the server would have allowed — and `home.tsx` returns before ever asking it.
+    await withFence();
+    const res = await api.checkGeofence(FENCE.lat + M(250), FENCE.lng, '80' as unknown as number);
+    expect(res.allowed).toBe(true);
+  });
+
+  it('treats a missing accuracy as no credit, like the server', async () => {
+    await withFence();
+    expect((await api.checkGeofence(FENCE.lat + M(250), FENCE.lng)).allowed).toBe(false);
+    expect((await api.checkGeofence(FENCE.lat + M(250), FENCE.lng, undefined)).allowed).toBe(false);
+  });
+
+  it('allows everything when the server says the fence is off, and marks that as KNOWN', async () => {
+    // `enforce: false` is a fact about the fence; an unreachable config is the absence of one.
+    // They both allow, and they must not be confused.
+    await withFence({ enforce: false });
+    expect(await api.checkGeofence(0, 0)).toEqual({
+      allowed: true, known: true, distance_m: null, radius_m: 200, message: '',
+    });
   });
 
   it('denies a missing GPS fix with distance_m null, not 0', async () => {
+    await withFence();
     const expected = {
-      allowed: false, distance_m: null, radius_m: 2000,
+      allowed: false, known: true, distance_m: null, radius_m: 200,
       message: 'Enable location to clock in.',
     };
-    expect(await api.checkGeofence(undefined, OFFICE.lng)).toEqual(expected);
-    expect(await api.checkGeofence(OFFICE.lat, undefined)).toEqual(expected);
-    expect(await api.checkGeofence(null as unknown as number, OFFICE.lng)).toEqual(expected);
-    expect(await api.checkGeofence(NaN, OFFICE.lng)).toEqual(expected);
-    expect(await api.checkGeofence(Infinity, OFFICE.lng)).toEqual(expected);
+    expect(await api.checkGeofence(undefined, FENCE.lng)).toEqual(expected);
+    expect(await api.checkGeofence(FENCE.lat, undefined)).toEqual(expected);
+    expect(await api.checkGeofence(null as unknown as number, FENCE.lng)).toEqual(expected);
+    expect(await api.checkGeofence(NaN, FENCE.lng)).toEqual(expected);
+    expect(await api.checkGeofence(Infinity, FENCE.lng)).toEqual(expected);
   });
 
-  it('never performs a network call on any of these paths', () => {
-    expect(fetchSpy).not.toHaveBeenCalled();
-  });
-});
-
-describe('pinned known bugs — these must be updated deliberately when fixed', () => {
-  it('a NEGATIVE accuracy makes the check STRICTER instead of being clamped', async () => {
-    // Math.min(-200, 100) = -200, so `dist - tol` becomes dist + 200 and a point comfortably
-    // inside the radius is denied. There is no Math.max(0, ...) at api.ts:1064.
-    const inside = await api.checkGeofence(OFFICE.lat + 0.017, OFFICE.lng);
-    expect(inside.allowed).toBe(true);
-
-    const sameSpotWithNegativeAccuracy =
-      await api.checkGeofence(OFFICE.lat + 0.017, OFFICE.lng, -200);
-    expect(sameSpotWithNegativeAccuracy.allowed).toBe(false);
-    expect(sameSpotWithNegativeAccuracy.distance_m).toBe(1890);
-  });
-
-  it('states a 2.0 km fence, which contracts/INBOX.md D10 says the server does not enforce', () => {
-    // The server's effective fence is up to 300 m (it credits up to 100 m of GPS accuracy),
-    // per contracts/INBOX.md D10. The app's OFFLINE fallback is 2000 m with enforce:true, so
-    // an unreachable config both blocks legitimate clock-ins and quotes a radius the server
-    // never agreed to. docs/PHASES.md Phase 7 owns this.
-    return api.getGeofence().then((g) => {
-      expect(g.radius_m).toBe(2000);
-      expect(g.enforce).toBe(true);
-    });
+  it('treats coordinates (0, 0) as a real fix, because the guard is loose equality', async () => {
+    // `lat == null` does NOT catch 0, so the null-island is a valid position and the user is told
+    // how far away they are rather than to enable location.
+    await withFence();
+    const res = await api.checkGeofence(0, 0);
+    expect(res.message).not.toBe('Enable location to clock in.');
+    expect(res.allowed).toBe(false);
   });
 });

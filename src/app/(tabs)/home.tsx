@@ -854,9 +854,25 @@ export default function Home() {
         return;
       }
 
-      // Route recording belongs to the SHIFT, not to this screen, so it deliberately
-      // outlives the component. `stopTracking()` on clock-out is what ends it.
-      startTracking(res.sessionId).catch(() => {});
+      /* Route recording belongs to the SHIFT, not to this screen, so it deliberately
+       * outlives the component. `stopTracking()` on clock-out is what ends it.
+       *
+       * PHASE 7: NO SESSION ID, NO ROUTE — AND THE PERSON IS TOLD. The server returns the id at
+       * `data.sessionId` (`routes/timeTracker.js:429`), so this branch is a contract fault
+       * rather than a normal outcome. Recording anyway is the worse option: every batch would
+       * have to be attributed by the server from whichever token is on the handset, which is
+       * how one person's route lands on another person's day, and after clock-out it just 400s.
+       * The shift itself is unaffected — it is already recorded on the server — so this is a
+       * warning beside a real success, not a failure. */
+      if (res.sessionId) {
+        startTracking(res.sessionId).catch(() => {});
+      } else if (!webDemo) {
+        setNotice({
+          tone: 'warning',
+          title: 'Shift started, route not recorded',
+          message: 'Your clock-in was saved, but this phone could not start recording your field route. Tell your manager if the route matters today.',
+        });
+      }
 
       const next: ClockState = { in: true, time: new Date().toISOString(), place: fix?.city || 'On field' };
       setClock(next);
