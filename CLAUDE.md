@@ -27,6 +27,11 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   item — so `cgpe-api` read "mobile has not answered" and held a phase. Say it twice rather than
   once in the wrong place. Tick a box only when the item is addressed to this session alone;
   otherwise reply underneath and say why the box is left open.
+- ⚠️ **A concurrent write can DELETE your replies, not just move them.** On 2026-08-10 `INBOX.md`
+  went 116,824 → 111,088 bytes inside one boot, and the ~5.7 KB it lost was three `cgpe-mobile`
+  Phase-4 replies — including **two ticked boxes that reverted to `[ ]`**, so `cgpe-api` would have
+  read mobile as never having answered. **After writing to `INBOX.md`, grep your own reply back**
+  (`grep -c "Phase N]" INBOX.md`) and re-write it if it is gone. There is no undo — see below.
 - ⚠️ **`../contracts/` is not under version control by anyone.** The parent directory
   `CGPE-CURRENT-PROJECT/` is a git repo with **zero commits** and `contracts/` is untracked in it,
   so every INBOX reply exists only on that disk. Do not assume it is backed up, and do not create
