@@ -1,14 +1,41 @@
+/**
+ * Tier dashboards — the admin and master surfaces that render below the hero on Home.
+ *
+ * PHASE 8 MIGRATION NOTE. This file was the last screen-level module still importing the
+ * legacy `@/ui/kit` barrel and still writing raw `fontFamily` / `fontWeight` pairs by hand.
+ * Both are now gone. The raw-font issue was not cosmetic: on Android, React Native does not
+ * synthesise weights, so `fontFamily: 'Geist_700Bold'` together with `fontWeight: '700'`
+ * only works because the family name already carries the weight. Any place that set a
+ * `fontWeight` WITHOUT the matching family silently rendered regular. `type(weight, size)`
+ * from the theme is the single correct way to express a weight and is used throughout now.
+ *
+ * The tier gradient here is a deliberate, documented exception to the app's gradient
+ * rationing. `TIER_THEME[tier].grad` is an IDENTITY signal, not decoration: it is how a
+ * master instantly knows they are looking at the organisation-wide view rather than their
+ * own. It appears exactly once per dashboard, on the hero.
+ */
 import React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useTheme, spacing, radius, shadow } from '@/theme/theme';
-import { Card, Grad, Pill, SectionHeader, Avatar } from '@/ui/kit';
+import { radius, shadow, spacing, type, useTheme } from '@/theme/theme';
+import { Card, Grad, IconName, Metric, SectionHeader, Txt } from '@/ui/base';
+import { Pill } from '@/ui/data';
+import { Avatar } from '@/ui/identity';
+import { Appear } from '@/ui/motion';
 import { TIER_THEME, Tier } from '@/store/roles';
 import { inrShort, timeAgo } from '@/lib/format';
 import type { TeamMember } from '@/data/team';
 import type { Task } from '@/data/tasks';
 import type { OrgSnapshot } from '@/data/api';
+
+/**
+ * Placeholder for a figure the server has not returned yet.
+ *
+ * Deliberately NOT an em-dash. UI copy in this app contains zero em-dashes, and this string
+ * previously carried one. A regular hyphen reads identically at this size.
+ */
+const NO_VALUE = '-';
 
 /* ------------------------------------------------------------------ pieces */
 
@@ -23,13 +50,17 @@ export function TierHero({ tier, title, big, sub, right, children }: {
         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <View style={{ backgroundColor: th.accent + '26', borderWidth: 1, borderColor: th.accent + '55', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}>
-                <Text style={{ color: th.accent, fontSize: 10, fontWeight: '900', letterSpacing: 1 }}>{th.badge}</Text>
+              <View style={{
+                backgroundColor: th.accent + '26', borderWidth: 1, borderColor: th.accent + '55',
+                paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill,
+              }}>
+                <Txt style={{ ...type('900', 10), letterSpacing: 1 }} color={th.accent}>{th.badge}</Txt>
               </View>
-              <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12.5 }}>{title}</Text>
+              <Txt size={12.5} color="rgba(255,255,255,0.65)">{title}</Txt>
             </View>
-            <Text style={{ color: '#fff', fontSize: 34, fontWeight: '900', letterSpacing: -1, marginTop: 8 }}>{big}</Text>
-            {sub ? <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12.5, marginTop: 3 }}>{sub}</Text> : null}
+            {/* Metric carries tabular numerals so the figure does not jitter as it updates. */}
+            <Metric value={big} size={34} color="#ffffff" style={{ marginTop: 8 }} />
+            {sub ? <Txt size={12.5} color="rgba(255,255,255,0.6)" style={{ marginTop: 3 }}>{sub}</Txt> : null}
           </View>
           {right}
         </View>
@@ -39,36 +70,94 @@ export function TierHero({ tier, title, big, sub, right, children }: {
   );
 }
 
-export function KpiGrid({ items }: { items: { label: string; value: string; icon: any; tint: string; onPress?: () => void }[] }) {
+export function KpiGrid({ items }: {
+  items: { label: string; value: string; icon: IconName; tint: string; onPress?: () => void }[];
+}) {
   const c = useTheme();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-      {items.map((k) => (
-        <Card key={k.label} onPress={k.onPress} style={{ flexGrow: 1, minWidth: '30%', padding: spacing.md }}>
-          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: k.tint + '1f', alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name={k.icon} size={16} color={k.tint} />
-          </View>
-          <Text style={{ color: c.text, fontSize: 18, fontWeight: '900', marginTop: 9, letterSpacing: -0.4 }} numberOfLines={1}>{k.value}</Text>
-          <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }} numberOfLines={1}>{k.label}</Text>
-        </Card>
+      {items.map((k, i) => (
+        <Appear key={k.label} index={i} style={{ flexGrow: 1, minWidth: '30%' }}>
+          <Card onPress={k.onPress} style={{ padding: spacing.md }}>
+            <View style={{
+              width: 32, height: 32, borderRadius: radius.sm, backgroundColor: k.tint + '1f',
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Ionicons name={k.icon} size={16} color={k.tint} />
+            </View>
+            <Metric value={k.value} size={18} style={{ marginTop: 9 }} />
+            <Txt size={11} color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>{k.label}</Txt>
+          </Card>
+        </Appear>
       ))}
     </View>
   );
 }
 
-function QuickRow({ actions }: { actions: { icon: any; label: string; tint: string; onPress: () => void }[] }) {
+function QuickRow({ actions }: { actions: { icon: IconName; label: string; tint: string; onPress: () => void }[] }) {
   const c = useTheme();
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
       {actions.map((a) => (
-        <Pressable key={a.label} onPress={a.onPress} style={({ pressed }) => [{ alignItems: 'center', width: 74, opacity: pressed ? 0.7 : 1 }]}>
-          <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: a.tint + '1f', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: a.tint + '33' }}>
+        <Pressable
+          key={a.label}
+          onPress={a.onPress}
+          accessibilityRole="button"
+          accessibilityLabel={a.label}
+          style={({ pressed }) => [{ alignItems: 'center', width: 74, opacity: pressed ? 0.7 : 1 }]}
+        >
+          <View style={{
+            width: 56, height: 56, borderRadius: radius.lg, backgroundColor: a.tint + '1f',
+            alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: a.tint + '33',
+          }}>
             <Ionicons name={a.icon} size={23} color={a.tint} />
           </View>
-          <Text style={{ color: c.muted, fontSize: 11, fontWeight: '600', marginTop: 7, textAlign: 'center' }} numberOfLines={2}>{a.label}</Text>
+          <Txt weight="600" size={11} color={c.muted} numberOfLines={2} style={{ marginTop: 7, textAlign: 'center' }}>
+            {a.label}
+          </Txt>
         </Pressable>
       ))}
     </ScrollView>
+  );
+}
+
+/** One figure inside a tier hero, drawn on the gradient. */
+function Mini({ label, value, tint }: { label: string; value: string; tint: string }) {
+  return (
+    <View>
+      <Metric value={value} size={19} color={tint} />
+      <Txt size={11} color="rgba(255,255,255,0.6)" style={{ marginTop: 1 }}>{label}</Txt>
+    </View>
+  );
+}
+
+/** A team member row, shared by both dashboards. */
+function MemberRow({ member, onPress, showDuty, trailing }: {
+  member: TeamMember;
+  onPress: () => void;
+  showDuty?: boolean;
+  trailing?: React.ReactNode;
+}) {
+  const c = useTheme();
+  return (
+    <Card onPress={onPress} padded={false} style={{ padding: 12, flexDirection: 'row', alignItems: 'center' }}>
+      <View>
+        <Avatar name={member.name} size={42} />
+        {showDuty ? (
+          <View style={{
+            position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6,
+            backgroundColor: member.clockedIn ? c.success : c.faint, borderWidth: 2, borderColor: c.card,
+          }} />
+        ) : null}
+      </View>
+      <View style={{ flex: 1, marginLeft: 12 }}>
+        <Txt weight="700" size={14} numberOfLines={1}>{member.name}</Txt>
+        <Txt size={12} color={c.muted} numberOfLines={1} style={{ marginTop: 1 }}>
+          {member.role.replace('_', ' ')}{member.branch ? ` · ${member.branch}` : ''}
+        </Txt>
+      </View>
+      {trailing}
+    </Card>
   );
 }
 
@@ -94,9 +183,20 @@ export function AdminDashboard({ team, tasks, snapshot }: {
       <TierHero
         tier="admin" title="Team performance today"
         big={`${done}/${total}`} sub="tasks completed across your team"
-        right={<Pressable onPress={() => router.push('/team')} style={{ width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="people" size={20} color="#fff" />
-        </Pressable>}>
+        right={(
+          <Pressable
+            onPress={() => router.push('/team')}
+            accessibilityRole="button"
+            accessibilityLabel="Open team"
+            style={{
+              width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.14)',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="people" size={20} color="#fff" />
+          </Pressable>
+        )}
+      >
         <View style={{ height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.16)', overflow: 'hidden', marginTop: 16 }}>
           <View style={{ height: '100%', width: `${pct * 100}%`, backgroundColor: th.accent, borderRadius: 4 }} />
         </View>
@@ -110,7 +210,7 @@ export function AdminDashboard({ team, tasks, snapshot }: {
       <KpiGrid items={[
         { label: 'Client book', value: (snapshot?.total_clients ?? 0).toLocaleString('en-IN'), icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
         { label: 'Claims in process', value: String(snapshot?.claims.under_process ?? 0), icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'Open tickets', value: String(snapshot?.tickets ?? 0), icon: 'chatbox-ellipses', tint: c.info, onPress: () => router.push('/(tabs)/claims') },
+        { label: 'Open tickets', value: String(snapshot?.tickets ?? 0), icon: 'chatbox-ellipses', tint: c.info, onPress: () => router.push('/tickets') },
       ]} />
 
       <View>
@@ -127,18 +227,17 @@ export function AdminDashboard({ team, tasks, snapshot }: {
       <View>
         <SectionHeader title={`Team (${team.length})`} action="View all" onAction={() => router.push('/team')} />
         <View style={{ gap: 10 }}>
-          {team.slice(0, 4).map((m) => (
-            <Card key={m.id} onPress={() => router.push(`/team/${m.id}`)} padded={false} style={{ padding: 12, flexDirection: 'row', alignItems: 'center' }}>
-              <View>
-                <Avatar name={m.name} size={42} />
-                <View style={{ position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6, backgroundColor: m.clockedIn ? c.success : c.faint, borderWidth: 2, borderColor: c.card }} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ color: c.text, fontWeight: '700', fontSize: 14 }}>{m.name}</Text>
-                <Text style={{ color: c.muted, fontSize: 12, marginTop: 1 }}>{m.role.replace('_', ' ')}{m.branch ? ` · ${m.branch}` : ''}</Text>
-              </View>
-              {m.clockedIn ? <Pill label="On duty" tone="success" small /> : <Pill label="Off" tone="neutral" small />}
-            </Card>
+          {team.slice(0, 4).map((m, i) => (
+            <Appear key={m.id} index={i}>
+              <MemberRow
+                member={m}
+                showDuty
+                onPress={() => router.push(`/team/${m.id}`)}
+                trailing={m.clockedIn
+                  ? <Pill label="On duty" tone="success" small />
+                  : <Pill label="Off" tone="neutral" small />}
+              />
+            </Appear>
           ))}
         </View>
       </View>
@@ -164,11 +263,24 @@ export function MasterDashboard({ team, tasks, snapshot, notifications }: {
     <View style={{ gap: spacing.lg }}>
       <TierHero
         tier="master" title="Organisation book"
-        big={snapshot ? snapshot.total_clients.toLocaleString('en-IN') : '—'}
-        sub={snapshot ? `clients · ${snapshot.leads.toLocaleString('en-IN')} active leads · ${team.length} team` : 'loading…'}
-        right={<Pressable onPress={() => router.push('/analytics')} style={{ width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.14)', alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="stats-chart" size={20} color="#fff" />
-        </Pressable>}>
+        big={snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE}
+        sub={snapshot
+          ? `clients · ${snapshot.leads.toLocaleString('en-IN')} active leads · ${team.length} team`
+          : 'Loading the organisation book'}
+        right={(
+          <Pressable
+            onPress={() => router.push('/analytics')}
+            accessibilityRole="button"
+            accessibilityLabel="Open analytics"
+            style={{
+              width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.14)',
+              alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Ionicons name="stats-chart" size={20} color="#fff" />
+          </Pressable>
+        )}
+      >
         <View style={{ flexDirection: 'row', gap: 22, marginTop: 16 }}>
           <Mini label="Admins" value={String(admins.length)} tint={th.accent} />
           <Mini label="Agents" value={String(agents.length)} tint="#7cc7ff" />
@@ -190,9 +302,9 @@ export function MasterDashboard({ team, tasks, snapshot, notifications }: {
         <QuickRow actions={[
           { icon: 'people-circle', label: 'All teams', tint: th.accent, onPress: () => router.push('/team') },
           { icon: 'map', label: 'Agent map', tint: c.info, onPress: () => router.push('/agent-map') },
-          { icon: 'navigate', label: 'Movement', tint: '#6b62f5', onPress: () => router.push('/agent-track') },
+          { icon: 'navigate', label: 'Movement', tint: c.accent, onPress: () => router.push('/agent-track') },
           { icon: 'stats-chart', label: 'Analytics', tint: c.primary, onPress: () => router.push('/analytics') },
-          { icon: 'paper-plane', label: 'Campaigns', tint: c.warning, onPress: () => router.push('/premium') },
+          { icon: 'paper-plane', label: 'Campaigns', tint: c.warning, onPress: () => router.push('/campaigns') },
           { icon: 'person-add', label: 'Assign task', tint: c.success, onPress: () => router.push('/task-new') },
         ]} />
       </View>
@@ -200,15 +312,14 @@ export function MasterDashboard({ team, tasks, snapshot, notifications }: {
       <View>
         <SectionHeader title={`Admins (${admins.length})`} action="All teams" onAction={() => router.push('/team')} />
         <View style={{ gap: 10 }}>
-          {(admins.length ? admins : team).slice(0, 4).map((m) => (
-            <Card key={m.id} onPress={() => router.push(`/team/${m.id}`)} padded={false} style={{ padding: 12, flexDirection: 'row', alignItems: 'center' }}>
-              <Avatar name={m.name} size={42} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <Text style={{ color: c.text, fontWeight: '700', fontSize: 14 }}>{m.name}</Text>
-                <Text style={{ color: c.muted, fontSize: 12, marginTop: 1 }}>{m.role.replace('_', ' ')} · {m.stats.clients} clients</Text>
-              </View>
-              <Text style={{ color: th.accent, fontWeight: '800', fontSize: 13 }}>{inrShort(m.stats.premiumMtd)}</Text>
-            </Card>
+          {(admins.length ? admins : team).slice(0, 4).map((m, i) => (
+            <Appear key={m.id} index={i}>
+              <MemberRow
+                member={m}
+                onPress={() => router.push(`/team/${m.id}`)}
+                trailing={<Txt weight="800" size={13} color={th.accent} numeric>{inrShort(m.stats.premiumMtd)}</Txt>}
+              />
+            </Appear>
           ))}
         </View>
       </View>
@@ -218,26 +329,27 @@ export function MasterDashboard({ team, tasks, snapshot, notifications }: {
           <SectionHeader title="Live activity" action="All" onAction={() => router.push('/notifications')} />
           <Card padded={false} style={{ padding: 4 }}>
             {notifications.slice(0, 5).map((n, i) => (
-              <View key={n.id || i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11, borderBottomWidth: i === Math.min(4, notifications.length - 1) ? 0 : 1, borderBottomColor: c.hairline }}>
-                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: c.cardAlt, alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                key={n.id || i}
+                style={{
+                  flexDirection: 'row', alignItems: 'center', gap: 10, padding: 11,
+                  borderBottomWidth: i === Math.min(4, notifications.length - 1) ? 0 : 1,
+                  borderBottomColor: c.hairline,
+                }}
+              >
+                <View style={{
+                  width: 32, height: 32, borderRadius: radius.sm, backgroundColor: c.cardAlt,
+                  alignItems: 'center', justifyContent: 'center',
+                }}>
                   <Ionicons name="pulse" size={15} color={th.accent} />
                 </View>
-                <Text style={{ color: c.text, fontSize: 13, flex: 1 }} numberOfLines={1}>{n.title || n.body}</Text>
-                <Text style={{ color: c.faint, fontSize: 11 }}>{n.at ? timeAgo(n.at) : ''}</Text>
+                <Txt size={13} numberOfLines={1} style={{ flex: 1 }}>{n.title || n.body}</Txt>
+                <Txt size={11} color={c.faint} numeric>{n.at ? timeAgo(n.at) : ''}</Txt>
               </View>
             ))}
           </Card>
         </View>
       )}
-    </View>
-  );
-}
-
-function Mini({ label, value, tint }: { label: string; value: string; tint: string }) {
-  return (
-    <View>
-      <Text style={{ color: tint, fontSize: 19, fontWeight: '900' }}>{value}</Text>
-      <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, marginTop: 1 }}>{label}</Text>
     </View>
   );
 }

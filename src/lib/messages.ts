@@ -51,7 +51,7 @@ export function renewalMessage(c: Ctx): string {
   else msg += ` your policy ${c.policyNo || ''}`.replace(/\s+$/, '');
   msg += due ? ` is due on ${due}.` : ` is due for renewal soon.`;
   msg += sum ? ` Renewing on time keeps your ${sum} cover active.` : ` Renewing on time keeps your cover active.`;
-  return msg + ` Reply here and we'll help you pay in a minute. — Team CGPE`;
+  return msg + ` Reply here and we'll help you pay in a minute. Team CGPE`;
 }
 
 export function birthdayMessage(c: Ctx): string {
@@ -62,7 +62,7 @@ export function birthdayMessage(c: Ctx): string {
     const yrs = new Date().getFullYear() - c.since;
     msg += ` Thank you for trusting us with your family's financial security for ${yrs} wonderful year${yrs === 1 ? '' : 's'}.`;
   }
-  return msg + ` Warm wishes — Team CGPE 🙏`;
+  return msg + ` Warm wishes, Team CGPE 🙏`;
 }
 
 export function maturityMessage(c: Ctx): string {
@@ -72,7 +72,7 @@ export function maturityMessage(c: Ctx): string {
   msg += mat ? ` is set to mature on ${mat}` : ` is approaching maturity`;
   if (sum) msg += `, with a maturity value linked to a sum assured of ${sum}`;
   msg += `. Let's plan your payout or re-investment so your money keeps working for you.`;
-  return msg + ` Reply here to book a quick review. — Team CGPE 🎯`;
+  return msg + ` Reply here to book a quick review. Team CGPE 🎯`;
 }
 
 export function anniversaryMessage(c: Ctx): string {
@@ -80,7 +80,7 @@ export function anniversaryMessage(c: Ctx): string {
   const sum = c.sumAssured ? inr(c.sumAssured) : '';
   let msg = `Dear ${c.name}, 🎊 Today marks ${yrs} year${yrs === 1 ? '' : 's'} since you secured your future with CGPE${c.policyNo ? ` (Policy ${c.policyNo})` : ''}.`;
   if (sum) msg += ` Your family stays protected with a sum assured of ${sum}.`;
-  return msg + ` Thank you for your continued trust — here's to many more years together! — Team CGPE 🙏`;
+  return msg + ` Thank you for your continued trust, here's to many more years together! Team CGPE 🙏`;
 }
 
 export function greetingFor(kind: 'renewal' | 'birthday' | 'maturity' | 'anniversary' | string, c: Ctx): string {

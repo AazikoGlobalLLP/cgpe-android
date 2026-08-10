@@ -2,7 +2,7 @@
   "expo": {
     "name": "CGPE Connect",
     "slug": "ANDROID",
-    "version": "1.4.1",
+    "version": "1.8.0",
     "orientation": "portrait",
     "icon": "./assets/images/cgpe-logo.png",
     "scheme": "cgpe",
@@ -18,10 +18,14 @@
         "foregroundImage": "./assets/images/cgpe-logo.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.shivambhadoriya.ANDROID",
+      "softwareKeyboardLayoutMode": "resize",
+      "package": "com.cgpe.connect",
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
       ]
     },
     "web": {
@@ -31,6 +35,7 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-task-manager",
       [
         "expo-splash-screen",
         {
@@ -42,7 +47,11 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "CGPE Connect uses your location to confirm you are at the office when you clock in, and to record your field route while you are on duty."
+          "locationAlwaysAndWhenInUsePermission": "CGPE Connect records your field route while you are clocked in, so your shift and travel are logged accurately.",
+          "locationWhenInUsePermission": "CGPE Connect uses your location to confirm you are at the office when you clock in, and to record your field route while you are on duty.",
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "isIosBackgroundLocationEnabled": true
         }
       ],
       [
@@ -56,6 +65,19 @@
         "expo-local-authentication",
         {
           "faceIDPermission": "CGPE Connect uses Face ID to securely unlock the app."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "buildArchs": [
+              "arm64-v8a",
+              "armeabi-v7a"
+            ],
+            "enablePngCrunchInReleaseBuilds": true,
+            "enableBundleCompression": true
+          }
         }
       ]
     ],

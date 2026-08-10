@@ -1,0 +1,326 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://cgpe.in/schemas/ui_rbac_config.json",
+  "title": "CGPE Connect — Server-Driven Mobile UI Configuration",
+  "version": "1.0.0",
+
+  "_README": {
+    "purpose": "Contract between the web Admin Panel and the CGPE Connect mobile app. The Admin Panel writes one document per role into the `app_role_preferences` MongoDB collection; the mobile app reads its own role's document at sign-in and re-renders its dashboard, navigation and feature gates from it. Nothing in the app is hard-coded to a role any more.",
+    "collection": "app_role_preferences",
+    "primary_key": "role_key (unique). One document per role.",
+    "endpoints": {
+      "mobile_read": "GET /api/rbac/app-ui           -> resolves the CALLER's role and returns its config, merged over defaults",
+      "admin_read_all": "GET /api/rbac/app-ui/roles  -> every role's config, for the Admin Panel editor",
+      "admin_write": "PUT /api/rbac/app-ui/:roleKey -> upsert one role's config (admin/leader only)"
+    },
+    "merge_rule": "The server deep-merges the stored document over `defaults_by_role[role_key]`, and that over `global_defaults`. A missing key inherits; it never means 'hidden'. This makes a partially-filled Admin Panel form safe.",
+    "fail_open_rule": "If the app cannot fetch this config it falls back to its built-in defaults and shows the full menu. A config outage must never lock a field agent out of their own work. Real permission enforcement lives server-side in the API routes; this file controls PRESENTATION only.",
+    "no_feature_deletion_rule": "Setting a widget to hidden removes it from the DASHBOARD only. Every module remains reachable from the More tab unless `nav.hidden` explicitly lists it. This is a hard product rule: nothing is ever deleted, only re-prioritised."
+  },
+
+  "type": "object",
+  "required": ["role_key", "dashboard", "nav", "features"],
+  "additionalProperties": false,
+
+  "properties": {
+    "role_key": {
+      "type": "string",
+      "description": "Matches `role` on the staff_unified document, or a department key. This is the join key.",
+      "examples": ["sales", "operations", "advisor", "leader", "admin", "super_admin", "payroll_staff", "learn_advisor"]
+    },
+
+    "label": {
+      "type": "string",
+      "description": "Human name shown in the Admin Panel role picker.",
+      "examples": ["Sales Team", "Operations Team"]
+    },
+
+    "updated_at": { "type": "string", "format": "date-time" },
+    "updated_by": { "type": "string", "description": "user_id of the admin who last saved this role." },
+
+    "dashboard": {
+      "type": "object",
+      "description": "Controls the home screen. `widgets` is ORDERED: index 0 renders directly under the hero. Anything not listed, or listed with visible:false, is still reachable from the More tab.",
+      "required": ["widgets"],
+      "additionalProperties": false,
+      "properties": {
+        "hero": {
+          "type": "string",
+          "enum": ["clock_and_tasks", "tasks_only", "clock_only", "none"],
+          "default": "clock_and_tasks",
+          "description": "The pinned top card. Operations rarely leave the office, so 'tasks_only' suits them; field sales need the geofenced clock ring."
+        },
+        "widgets": {
+          "type": "array",
+          "description": "Ordered dashboard widgets. Order in this array IS render order.",
+          "items": {
+            "type": "object",
+            "required": ["key", "visible"],
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string",
+                "enum": [
+                  "my_tasks", "prospects", "leads_pipeline", "personal_notes",
+                  "claim_requests", "issue_logs", "tickets", "kpi_strip",
+                  "quick_actions", "day_spine", "follow_ups", "notice_board",
+                  "campaigns", "segments", "families", "knowledge_base",
+                  "commissions", "analytics", "attendance", "team_roster"
+                ]
+              },
+              "visible": { "type": "boolean", "default": true },
+              "title_override": { "type": ["string", "null"], "default": null },
+              "max_items": { "type": "integer", "minimum": 1, "maximum": 50, "default": 5 },
+              "mandatory": {
+                "type": "boolean",
+                "default": false,
+                "description": "When true the Admin Panel must not let this widget be hidden for this role. Encodes the product mandate that Sales always sees Tasks/Prospects/Leads/Notes and Operations always sees Tasks/Claims/Notes/Issues."
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "nav": {
+      "type": "object",
+      "description": "Bottom tab bar and More menu. Tabs are capped at five by platform convention; extras spill into More automatically.",
+      "additionalProperties": false,
+      "properties": {
+        "tabs": {
+          "type": "array",
+          "maxItems": 5,
+          "description": "Ordered bottom-tab routes. First entry is the landing screen after sign-in.",
+          "items": {
+            "type": "string",
+            "enum": ["home", "tasks", "clients", "leads", "claims", "prospects", "tickets", "more"]
+          },
+          "default": ["home", "tasks", "clients", "claims", "more"]
+        },
+        "more_sections": {
+          "type": "array",
+          "description": "Ordered groups inside the More tab.",
+          "items": {
+            "type": "object",
+            "required": ["title", "items"],
+            "additionalProperties": false,
+            "properties": {
+              "title": { "type": "string" },
+              "items": { "type": "array", "items": { "type": "string" } },
+              "collapsed_by_default": { "type": "boolean", "default": false }
+            }
+          }
+        },
+        "hidden": {
+          "type": "array",
+          "description": "Routes removed from navigation entirely for this role. USE SPARINGLY: this is the only setting that makes a module unreachable. Deep links to a hidden route still resolve, because the API is the real authority.",
+          "items": { "type": "string" },
+          "default": []
+        }
+      }
+    },
+
+    "features": {
+      "type": "object",
+      "description": "Capability toggles. These gate CONTROLS, not data. The server re-checks every one of these on the API side; a client that ignores them gets a 403.",
+      "additionalProperties": false,
+      "properties": {
+        "can_clock_in": { "type": "boolean", "default": true },
+        "can_create_task": { "type": "boolean", "default": true },
+        "can_assign_task_to_others": { "type": "boolean", "default": false },
+        "can_create_claim": { "type": "boolean", "default": true },
+        "can_advance_claim_status": { "type": "boolean", "default": false },
+        "can_claim_ticket": { "type": "boolean", "default": true },
+        "can_send_campaign": { "type": "boolean", "default": false },
+        "can_dispatch_notification": { "type": "boolean", "default": false },
+        "can_view_team_roster": { "type": "boolean", "default": false },
+        "can_view_agent_map": { "type": "boolean", "default": false },
+        "can_view_movement_paths": { "type": "boolean", "default": false },
+        "can_view_org_analytics": { "type": "boolean", "default": false },
+        "can_export_data": { "type": "boolean", "default": false },
+        "can_edit_client": { "type": "boolean", "default": false },
+        "global_search_scopes": {
+          "type": "array",
+          "description": "Which collections this role's global search may query.",
+          "items": { "type": "string", "enum": ["clients", "leads", "claims", "tasks", "tickets", "prospects", "families", "kb"] },
+          "default": ["clients", "leads", "claims", "tasks"]
+        }
+      }
+    },
+
+    "theme": {
+      "type": "object",
+      "description": "Optional per-role presentation. Omit to inherit the azure/teal system.",
+      "additionalProperties": false,
+      "properties": {
+        "accent": { "type": "string", "pattern": "^#[0-9a-fA-F]{6}$" },
+        "badge_label": { "type": "string", "maxLength": 12 },
+        "density": { "type": "string", "enum": ["comfortable", "compact"], "default": "comfortable" }
+      }
+    }
+  },
+
+  "global_defaults": {
+    "dashboard": { "hero": "clock_and_tasks", "widgets": [] },
+    "nav": { "tabs": ["home", "tasks", "clients", "claims", "more"], "hidden": [] },
+    "features": {
+      "can_clock_in": true,
+      "can_create_task": true,
+      "can_create_claim": true,
+      "can_claim_ticket": true,
+      "global_search_scopes": ["clients", "leads", "claims", "tasks"]
+    }
+  },
+
+  "defaults_by_role": {
+    "sales": {
+      "role_key": "sales",
+      "label": "Sales Team",
+      "dashboard": {
+        "hero": "clock_and_tasks",
+        "widgets": [
+          { "key": "my_tasks",       "visible": true, "mandatory": true, "max_items": 6 },
+          { "key": "prospects",      "visible": true, "mandatory": true, "max_items": 5 },
+          { "key": "leads_pipeline", "visible": true, "mandatory": true, "max_items": 5 },
+          { "key": "personal_notes", "visible": true, "mandatory": true, "max_items": 4 },
+          { "key": "kpi_strip",      "visible": true, "max_items": 4 },
+          { "key": "quick_actions",  "visible": true, "max_items": 6 }
+        ]
+      },
+      "nav": {
+        "tabs": ["home", "tasks", "leads", "clients", "more"],
+        "more_sections": [
+          { "title": "The book", "items": ["clients", "segments", "families", "premium", "lic-plans"] },
+          { "title": "Work",     "items": ["claims", "tickets", "reminders", "calendar", "commissions"] },
+          { "title": "Reference", "items": ["kb", "notice-board", "contests"] },
+          { "title": "You",      "items": ["profile", "attendance", "settings", "account"] }
+        ],
+        "hidden": []
+      },
+      "features": {
+        "can_clock_in": true,
+        "can_create_task": true,
+        "can_create_claim": true,
+        "can_claim_ticket": true,
+        "can_edit_client": true,
+        "global_search_scopes": ["clients", "leads", "claims", "tasks", "prospects", "families"]
+      }
+    },
+
+    "operations": {
+      "role_key": "operations",
+      "label": "Operations Team",
+      "dashboard": {
+        "hero": "tasks_only",
+        "widgets": [
+          { "key": "my_tasks",       "visible": true, "mandatory": true, "max_items": 6 },
+          { "key": "claim_requests", "visible": true, "mandatory": true, "max_items": 8 },
+          { "key": "personal_notes", "visible": true, "mandatory": true, "max_items": 4 },
+          { "key": "issue_logs",     "visible": true, "mandatory": true, "max_items": 6 },
+          { "key": "kpi_strip",      "visible": true, "max_items": 4 },
+          { "key": "quick_actions",  "visible": true, "max_items": 6 }
+        ]
+      },
+      "nav": {
+        "tabs": ["home", "tasks", "claims", "tickets", "more"],
+        "more_sections": [
+          { "title": "Work",      "items": ["leads", "clients", "reminders", "calendar"] },
+          { "title": "Reference", "items": ["kb", "notice-board", "lic-plans", "families", "segments"] },
+          { "title": "You",       "items": ["profile", "attendance", "settings", "account"] }
+        ],
+        "hidden": []
+      },
+      "features": {
+        "can_clock_in": true,
+        "can_create_task": true,
+        "can_create_claim": true,
+        "can_advance_claim_status": true,
+        "can_claim_ticket": true,
+        "global_search_scopes": ["clients", "leads", "claims", "tasks", "tickets"]
+      }
+    },
+
+    "admin": {
+      "role_key": "admin",
+      "label": "Admin",
+      "dashboard": {
+        "hero": "clock_and_tasks",
+        "widgets": [
+          { "key": "my_tasks",     "visible": true, "mandatory": true, "max_items": 6 },
+          { "key": "kpi_strip",    "visible": true, "max_items": 6 },
+          { "key": "team_roster",  "visible": true, "max_items": 4 },
+          { "key": "claim_requests", "visible": true, "max_items": 5 },
+          { "key": "quick_actions", "visible": true, "max_items": 6 }
+        ]
+      },
+      "nav": { "tabs": ["home", "tasks", "clients", "claims", "more"], "hidden": [] },
+      "features": {
+        "can_assign_task_to_others": true,
+        "can_advance_claim_status": true,
+        "can_send_campaign": true,
+        "can_dispatch_notification": true,
+        "can_view_team_roster": true,
+        "can_view_agent_map": true,
+        "can_view_org_analytics": true,
+        "can_export_data": true,
+        "can_edit_client": true,
+        "global_search_scopes": ["clients", "leads", "claims", "tasks", "tickets", "prospects", "families", "kb"]
+      }
+    },
+
+    "super_admin": {
+      "role_key": "super_admin",
+      "label": "Master",
+      "dashboard": {
+        "hero": "clock_and_tasks",
+        "widgets": [
+          { "key": "kpi_strip",   "visible": true, "max_items": 6 },
+          { "key": "my_tasks",    "visible": true, "mandatory": true, "max_items": 5 },
+          { "key": "team_roster", "visible": true, "max_items": 5 },
+          { "key": "analytics",   "visible": true },
+          { "key": "quick_actions", "visible": true, "max_items": 6 }
+        ]
+      },
+      "nav": { "tabs": ["home", "tasks", "clients", "claims", "more"], "hidden": [] },
+      "features": {
+        "can_assign_task_to_others": true,
+        "can_advance_claim_status": true,
+        "can_send_campaign": true,
+        "can_dispatch_notification": true,
+        "can_view_team_roster": true,
+        "can_view_agent_map": true,
+        "can_view_movement_paths": true,
+        "can_view_org_analytics": true,
+        "can_export_data": true,
+        "can_edit_client": true,
+        "global_search_scopes": ["clients", "leads", "claims", "tasks", "tickets", "prospects", "families", "kb"]
+      }
+    }
+  },
+
+  "_MONGO_INDEXES": [
+    { "collection": "app_role_preferences", "index": { "role_key": 1 }, "options": { "unique": true } },
+    { "collection": "app_role_preferences", "index": { "updated_at": -1 } }
+  ],
+
+  "_ADMIN_PANEL_NOTES_FOR_WEB_DEV": [
+    "Render one editor per role_key. Load every role from GET /api/rbac/app-ui/roles.",
+    "Widgets are a drag-to-reorder list. Array order is render order; do not add a separate `order` integer, it will drift out of sync with the array.",
+    "A widget with mandatory:true must render its visibility switch disabled and ON. That encodes the product rule; do not enforce it only in the mobile client.",
+    "The `hidden` array is the ONLY control that makes a module unreachable. Surface it behind a confirm, worded as 'remove from this role's navigation entirely'.",
+    "Everything else that is switched off simply moves to the More tab. Say so in the UI, or admins will assume they have deleted a feature.",
+    "Saving writes the WHOLE document for that role via PUT. The server deep-merges over defaults, so an omitted key inherits rather than disabling.",
+    "Show `updated_by` and `updated_at` on the editor. Two admins editing one role is the likeliest source of confusion.",
+    "PREVIEW ENGINE: dock a live phone mockup beside these controls. Full spec in ADMIN_PANEL_SYNC.md section 3. It must render the SANITISED config (unknown keys dropped, mandatory re-asserted, max_items clamped, duplicates removed) and not the raw form state, so that pressing Save never moves the preview.",
+    "PREVIEW ENGINE: an EMPTY widgets array means 'never configured' and the app substitutes its full built-in default dashboard. A preview that shows an empty phone for an empty array is the most misleading thing it could do.",
+    "PREVIEW ENGINE: never fetch or display real client/lead/claim/staff records in the mockup. Use fixed synthetic placeholders. It is a layout tool, not a data surface."
+  ],
+
+  "_KNOWN_GAP": {
+    "fields": ["nav.tabs", "nav.hidden", "nav.more_sections"],
+    "status": "Stored, validated and served correctly. NOT consumed by the mobile v1.8.0 build.",
+    "detail": "ANDROID/src/app/(tabs)/_layout.tsx does not read useAppUi(); the bottom bar is hard-coded to home/tasks/clients/claims/more by the module-level TAB_META and ORDER constants. The only consumer of useAppUi() in the mobile src tree is (tabs)/home.tsx.",
+    "consequence": "Reordering tabs, adding a sixth, or hiding a module changes nothing on device today. The Admin Panel should keep accepting these settings and label them 'stored, not yet live on device'.",
+    "fix_owner": "mobile — wire _layout.tsx to config.nav.tabs (spilling entries beyond five into More) and filter the More screen on config.nav.hidden. No backend or panel change needed when it ships."
+  }
+}

@@ -1,91 +1,201 @@
 import React from 'react';
-import { View, Text, ScrollView } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme, spacing, radius } from '@/theme/theme';
-import { Avatar, Button, Card, IconBtn, Pill, SectionHeader } from '@/ui/kit';
+
+import { radius, spacing, useTheme } from '@/theme/theme';
+import { Card, Header, Row, Screen } from '@/ui/base';
+import { IconBtn } from '@/ui/controls';
+import { EmptyState, Skeleton } from '@/ui/feedback';
+import { DataRow, ListSection, Pill } from '@/ui/data';
+import { PersonRow } from '@/ui/identity';
+import { Appear } from '@/ui/motion';
+import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
 import { call, email } from '@/lib/actions';
 
+/* ------------------------------------------------------------------ *
+ * My profile — who the app thinks you are.
+ *
+ * THE AZURE HERO BAND IS GONE. A full-bleed coloured header with white text on it is the
+ * house style of every template CRM, and it forced a second set of colours (white-on-
+ * primary pills, a white-on-primary back button) that exist nowhere else in the app. The
+ * identity now sits in a normal `Card` on the normal surface: `PersonRow` for the avatar
+ * and name, `Pill`s for the facts that are badges rather than fields.
+ *
+ * THE DETAIL ROWS ARE COPYABLE. An agent code, a branch phone and a work email are things
+ * people retype into other apps by hand, one digit wrong. `DataRow`'s copy affordance is
+ * the entire reason this screen is worth opening twice.
+ *
+ * NO FIGURES ARE INVENTED HERE. There is no premium total, no policy count and no rank on
+ * this screen, because `useAuth().user` does not carry them and a profile is exactly the
+ * kind of page where a plausible-looking fabricated number would go unquestioned.
+ * ------------------------------------------------------------------ */
+
 export default function Profile() {
-  const c = useTheme();
-  const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
-  if (!user) return null;
+  const { user, ready } = useAuth();
+
+  if (!ready) {
+    return (
+      <Screen>
+        <Header title="My profile" back />
+        <View style={{ padding: spacing.lg, gap: spacing.xl }}>
+          <Card>
+            <Row>
+              <Skeleton width={64} height={64} radius={25} />
+              <View style={{ flex: 1, gap: spacing.sm }}>
+                <Skeleton width="62%" height={15} />
+                <Skeleton width="44%" height={12} />
+              </View>
+            </Row>
+            <Row style={{ marginTop: spacing.lg }}>
+              <Skeleton width={92} height={22} radius={radius.pill} />
+              <Skeleton width={72} height={22} radius={radius.pill} />
+            </Row>
+          </Card>
+          <DetailSkeleton rows={3} />
+          <DetailSkeleton rows={3} />
+        </View>
+      </Screen>
+    );
+  }
+
+  if (!user) {
+    return (
+      <Screen>
+        <Header title="My profile" back />
+        <EmptyState
+          icon="person-circle-outline"
+          title="You are signed out"
+          subtitle="Sign in again to see your agent code, branch and contact details."
+          action={{ label: 'Go to sign in', onPress: () => router.replace('/(auth)/login') }}
+        />
+      </Screen>
+    );
+  }
+
+  const hasPhone = !!user.phone;
+  const hasEmail = !!user.email;
+
+  const dial = () => { haptics.tap(); call(user.phone); };
+  const compose = () => { haptics.tap(); email(user.email); };
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={{ backgroundColor: c.primary, paddingTop: insets.top + 8, paddingBottom: 44, paddingHorizontal: spacing.lg, alignItems: 'center', borderBottomLeftRadius: 26, borderBottomRightRadius: 26 }}>
-          <View style={{ flexDirection: 'row', alignSelf: 'stretch', marginBottom: 8 }}>
-            <IconBtn icon="chevron-back" onPress={() => router.back()} bg="rgba(255,255,255,0.18)" color="#fff" size={38} />
-          </View>
-          <Avatar name={user.name} size={88} color="rgba(255,255,255,0.22)" />
-          <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', marginTop: 12 }}>{user.name}</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.9)', fontSize: 13.5, marginTop: 3 }}>{user.designation}</Text>
-          <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              <Ionicons name="star" size={13} color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12.5 }}>{user.tier} Club</Text>
-            </View>
-            <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 999 }}>
-              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12.5 }}>{user.agentCode}</Text>
-            </View>
-          </View>
-        </View>
+    <Screen>
+      <Header
+        title="My profile"
+        back
+        right={
+          <IconBtn
+            icon="settings-outline"
+            onPress={() => router.push('/settings')}
+            accessibilityLabel="Open settings"
+          />
+        }
+      />
 
-        <View style={{ padding: spacing.lg, gap: spacing.lg }}>
-          {/* Contact */}
-          <View>
-            <SectionHeader title="Contact" />
-            <Card padded={false} style={{ padding: 4 }}>
-              <Info icon="call" label="Mobile" value={user.phone} onPress={() => call(user.phone)} />
-              <Info icon="mail" label="Email" value={user.email} onPress={() => email(user.email)} />
-              <Info icon="business" label="Branch" value={user.branch} last />
-            </Card>
-          </View>
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.xl }}
+        showsVerticalScrollIndicator={false}
+      >
+        <Appear>
+          <Card>
+            <PersonRow
+              name={user.name}
+              subtitle={user.designation}
+              photo={user.photo}
+              size={64}
+            />
+            <Row style={{ marginTop: spacing.md, flexWrap: 'wrap', gap: spacing.sm }}>
+              <Pill label={`${user.tier} Club`} tone="warning" icon="star" small />
+              {user.agentCode ? <Pill label={user.agentCode} tone="neutral" icon="id-card" small numeric /> : null}
+              {user.branch ? <Pill label={user.branch} tone="info" icon="business" small /> : null}
+            </Row>
+          </Card>
+        </Appear>
 
-          {/* Role */}
-          <View>
-            <SectionHeader title="Role" />
-            <Card padded={false} style={{ padding: 4 }}>
-              <Info icon="shield-checkmark" label="Access level" value={user.role.replace('_', ' ')} />
-              {!!user.agentCode && <Info icon="id-card" label="Agent code" value={user.agentCode} />}
-              <Info icon="ribbon" label="Tier" value={user.tier} last />
-            </Card>
-          </View>
-        </View>
+        <ListSection
+          title="Contact"
+          footer="Tap a row to open your dialler or mail app. Tap the copy icon to put the value on the clipboard."
+        >
+          <Appear index={0}>
+            <DataRow
+              icon="call-outline"
+              label="Mobile"
+              value={hasPhone ? user.phone : 'Not on file'}
+              tone={hasPhone ? 'neutral' : 'warning'}
+              copyable={hasPhone}
+              onPress={hasPhone ? dial : undefined}
+            />
+          </Appear>
+          <Appear index={1}>
+            <DataRow
+              icon="mail-outline"
+              label="Email"
+              value={hasEmail ? user.email : 'Not on file'}
+              tone={hasEmail ? 'neutral' : 'warning'}
+              copyable={hasEmail}
+              onPress={hasEmail ? compose : undefined}
+            />
+          </Appear>
+          <Appear index={2}>
+            <DataRow icon="business-outline" label="Branch" value={user.branch || 'Not on file'} />
+          </Appear>
+        </ListSection>
+
+        <ListSection
+          title="Role"
+          footer="Access level is set by your administrator. Ask them if something here looks wrong."
+        >
+          <Appear index={0}>
+            <DataRow
+              icon="shield-checkmark-outline"
+              label="Access level"
+              value={user.role.replace(/_/g, ' ')}
+            />
+          </Appear>
+          {user.agentCode ? (
+            <Appear index={1}>
+              <DataRow icon="id-card-outline" label="Agent code" value={user.agentCode} copyable numeric />
+            </Appear>
+          ) : null}
+          <Appear index={2}>
+            <DataRow icon="ribbon-outline" label="Club tier" value={user.tier} />
+          </Appear>
+        </ListSection>
       </ScrollView>
-    </View>
+    </Screen>
   );
 }
 
-function Info({ icon, label, value, onPress, last }: { icon: any; label: string; value: string; onPress?: () => void; last?: boolean }) {
+/* Mirrors ListSection's geometry so the page does not resettle when the session lands. */
+function DetailSkeleton({ rows }: { rows: number }) {
   const c = useTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, borderBottomWidth: last ? 0 : 1, borderBottomColor: c.hairline }}>
-      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: c.cardAlt, alignItems: 'center', justifyContent: 'center' }}>
-        <Ionicons name={icon} size={17} color={c.primary} />
-      </View>
-      <View style={{ flex: 1, marginLeft: 12 }}>
-        <Text style={{ color: c.faint, fontSize: 11 }}>{label}</Text>
-        <Text style={{ color: c.text, fontSize: 14, fontWeight: '600', marginTop: 1 }}>{value}</Text>
-      </View>
-      {onPress && <Ionicons name="open-outline" size={17} color={c.faint} />}
+    <View style={{ gap: spacing.sm }}>
+      <Skeleton width={64} height={10} style={{ marginLeft: spacing.xs }} />
+      <Card padded={false}>
+        <View style={{ borderRadius: radius.lg, overflow: 'hidden' }}>
+          {Array.from({ length: rows }, (_, i) => (
+            <View key={i}>
+              {i > 0 ? (
+                <View style={{
+                  height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: spacing.lg,
+                }} />
+              ) : null}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 48,
+                paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+              }}>
+                <Skeleton width={16} height={16} radius={5} />
+                <Skeleton width="34%" height={12} />
+                <View style={{ flex: 1 }} />
+                <Skeleton width="38%" height={12} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </Card>
     </View>
-  );
-}
-
-function Snap({ label, value, icon, tint }: { label: string; value: string; icon: any; tint: string }) {
-  const c = useTheme();
-  return (
-    <Card style={{ flex: 1, padding: spacing.md, alignItems: 'flex-start' }}>
-      <Ionicons name={icon} size={18} color={tint} />
-      <Text style={{ color: c.text, fontSize: 18, fontWeight: '800', marginTop: 8 }}>{value}</Text>
-      <Text style={{ color: c.muted, fontSize: 11, marginTop: 2 }}>{label}</Text>
-    </Card>
   );
 }

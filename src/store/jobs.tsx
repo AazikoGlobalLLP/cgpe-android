@@ -70,7 +70,7 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
       patch(id, (j) => ({
         ...j, status: res.ok ? 'done' : (res.needsRole ? 'done' : 'failed'), sent: res.count || 0, finishedAt: Date.now(),
         message: res.needsRole
-          ? `${total} renewals found. This account can't bulk-send (needs an admin role) — open the list to send individually.`
+          ? `${total} renewals found. This account can't bulk-send (needs an admin role). Open the list to send individually.`
           : (res.message || `Dispatched to ${total} client(s).`),
         log: [...j.log, { at: Date.now(), text: res.needsRole ? 'Bulk send blocked for this role.' : (res.message || 'Dispatched.'), state: res.ok ? 'info' : 'error' }],
       }));
@@ -81,7 +81,7 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
     const audience = await api.getCampaignAudience(type as any);
     total = audience?.count ?? 0;
     names = (audience?.sample || []).map((s) => s.name);
-    patch(id, (j) => ({ ...j, total, log: [...j.log, { at: Date.now(), text: `Audience ready — ${total} recipient(s) with personalised messages.`, state: 'info' }] }));
+    patch(id, (j) => ({ ...j, total, log: [...j.log, { at: Date.now(), text: `Audience ready, ${total} recipient(s) with personalised messages.`, state: 'info' }] }));
 
     if (total === 0) {
       patch(id, (j) => ({ ...j, status: 'done', finishedAt: Date.now(), message: 'No matching clients right now.' }));

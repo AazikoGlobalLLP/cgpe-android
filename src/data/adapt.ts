@@ -83,7 +83,7 @@ export function adaptClient(raw: any): Client {
   const policy: Policy = {
     id: policyNo || String(raw._id || raw.id || Math.random()),
     plan,
-    number: policyNo || '—',
+    number: policyNo || '-',
     sumAssured,
     premium,
     frequency: (mode as any) || 'Yearly',
@@ -112,7 +112,7 @@ export function adaptClient(raw: any): Client {
     totalCover: sumAssured,
     policies: [policy],
     segment: Array.from(new Set(segment)) as Client['segment'],
-    since: commencement ? String(commencement.getFullYear()) : '—',
+    since: commencement ? String(commencement.getFullYear()) : '-',
   };
 }
 

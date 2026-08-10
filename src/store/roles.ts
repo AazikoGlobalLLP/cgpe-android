@@ -55,9 +55,16 @@ export function capabilitiesOf(user: User | null, viewAs?: Tier | null): Capabil
   return { tier, label: 'Team', seeEverything: false, manageTeam: false, assignTasks: false, runCampaigns: false, seeAgentMap: false, orgAnalytics: false, overseeAdmins: false };
 }
 
-/** Accent identity per tier so the three sides feel visibly different. */
+/**
+ * Accent identity per tier so the three sides feel visibly different.
+ *
+ * Retinted onto the panel's azure-teal identity: admin takes the brand azure, team takes
+ * the brand teal, and master keeps gold — gold reads as seniority and is the one hue that
+ * stays legible against both. The previous violet/emerald pair predated the brand port and
+ * clashed with the new palette.
+ */
 export const TIER_THEME: Record<Tier, { accent: string; accent2: string; grad: [string, string, ...string[]]; badge: string }> = {
   master: { accent: '#f5b74a', accent2: '#ffd98a', grad: ['#3a2d10', '#241c0c', '#12100a'], badge: 'MASTER' },
-  admin: { accent: '#8b83ff', accent2: '#b9a7ff', grad: ['#312a63', '#1e1a3e', '#12101f'], badge: 'ADMIN' },
-  team: { accent: '#2ee6a6', accent2: '#7cf0c8', grad: ['#0f3b34', '#0d2a28', '#0b1a1c'], badge: 'TEAM' },
+  admin: { accent: '#3182ed', accent2: '#8cc2ff', grad: ['#12314f', '#0b1c30', '#060d17'], badge: 'ADMIN' },
+  team: { accent: '#1dd7bf', accent2: '#6ff5e4', grad: ['#0b3b36', '#0a2a28', '#08191c'], badge: 'TEAM' },
 };

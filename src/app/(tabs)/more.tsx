@@ -1,138 +1,411 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useTheme, spacing, radius } from '@/theme/theme';
-import { Avatar, Card, Header, Pill } from '@/ui/kit';
+import type { Href } from 'expo-router';
+
+import { radius, spacing, useTheme } from '@/theme/theme';
+import { Card, Eyebrow, Header, Row, Screen } from '@/ui/base';
+import type { IconName } from '@/ui/base';
+import { Button } from '@/ui/controls';
+import { Skeleton, useToast } from '@/ui/feedback';
+import { ActionTile, DataRow, ListSection, Pill } from '@/ui/data';
+import type { Tone } from '@/ui/data';
+import { PersonRow } from '@/ui/identity';
+import { Sheet } from '@/ui/sheet';
+import { Appear } from '@/ui/motion';
 import { useConfirm } from '@/ui/Confirm';
+import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf, TIER_THEME } from '@/store/roles';
+import type { Tier } from '@/store/roles';
 import { APP } from '@/constants/config';
 import * as api from '@/data/api';
 
-type Ion = React.ComponentProps<typeof Ionicons>['name'];
-type Item = { icon: Ion; label: string; sub?: string; href?: string; tint?: string; onPress?: () => void };
+/* ------------------------------------------------------------------ *
+ * More — the app's directory.
+ *
+ * WHY THIS IS A GROUPED LIST AND NOT A GRID OF CARDS. Twenty-odd destinations laid out as
+ * twenty floating cards is twenty objects the eye has to acquire separately. Grouped
+ * `ListSection` rows sit on one continuous surface with hairlines between them, so the
+ * page is read as six short lists rather than as a wall. The colour budget is spent at
+ * the top instead, on four `ActionTile`s for the things reached every single day.
+ *
+ * GROUPING IS BY THE QUESTION BEING ASKED, not by which backend serves it:
+ *   Admin        who is doing what, and what is it adding up to
+ *   Book         who the clients are and how they cluster
+ *   Day to day   what is on me today
+ *   Board        what the firm said, and what I told myself
+ *   Reference    what is the answer to this product question
+ *   Account      who am I to this app
+ * Phase 9's nine new surfaces slot into that scheme rather than being appended as a
+ * "New" pile, which is how a directory turns back into a wall.
+ *
+ * ROLE GATING IS UNCHANGED. `capabilitiesOf(user, viewAs)` still decides whether the
+ * admin/master group renders at all, `caps.tier === 'master'` still gates Movement paths,
+ * and the "view as" entry still requires the user's REAL capabilities (`realCaps`) so a
+ * previewing admin cannot use the preview to climb back up. Campaigns stays inside the
+ * admin group exactly as before; only its destination changed, from the premium screen it
+ * was standing in for to the real `/campaigns` route.
+ *
+ * THE ONLY LIVE FIGURE ON THIS SCREEN IS THE OPEN-TICKET COUNT, and it is stated only
+ * when it is greater than zero. A failed fetch resolves to an empty page, so rendering
+ * "0 open" would be claiming a fact the app does not have. Below one, the row falls back
+ * to its static hint and says nothing about counts at all.
+ * ------------------------------------------------------------------ */
+
+type Entry = {
+  icon: IconName;
+  label: string;
+  /** Right-hand hint. Short by construction: this column is scanned, not read. */
+  value: string;
+  href?: Href;
+  onPress?: () => void;
+  right?: React.ReactNode;
+  tone?: Tone;
+  copyable?: boolean;
+  numeric?: boolean;
+};
+
+const TIER_TONE: Record<Tier, Tone> = { master: 'warning', admin: 'primary', team: 'accent' };
+const TIER_RANK: Record<Tier, number> = { team: 0, admin: 1, master: 2 };
+
+const VIEW_OPTIONS: { tier: Tier; label: string; hint: string; icon: IconName }[] = [
+  { tier: 'master', label: 'Master', hint: 'Full oversight', icon: 'shield-checkmark' },
+  { tier: 'admin', label: 'Admin', hint: 'Runs a team', icon: 'people-circle' },
+  { tier: 'team', label: 'Team member', hint: 'Own work only', icon: 'person' },
+];
 
 export default function More() {
   const c = useTheme();
   const router = useRouter();
-  const { user, logout, viewAs, setViewAs } = useAuth();
-  const { confirm, choose, toast } = useConfirm();
+  const { user, ready, logout, viewAs, setViewAs } = useAuth();
+  const { confirm } = useConfirm();
+  const toast = useToast();
   const t = useT();
-
-  const pickView = async () => {
-    const picked = await choose<'master' | 'admin' | 'team'>('Preview another side', [
-      { label: 'Master (Shivam) — full oversight', value: 'master', icon: 'shield-checkmark' },
-      { label: 'Admin — runs a team', value: 'admin', icon: 'people-circle' },
-      { label: 'Team member — does the work', value: 'team', icon: 'person' },
-    ]);
-    if (picked) { setViewAs(picked); toast(`Now viewing the ${picked} side`); }
-  };
-
-  const doLogout = async () => {
-    const ok = await confirm({ title: t('signout.title'), message: t('signout.msg'), confirmText: t('common.signOut'), destructive: true, icon: 'log-out-outline' });
-    if (ok) { await logout(); router.replace('/(auth)/login'); }
-  };
+  const [viewSheet, setViewSheet] = useState(false);
+  const [openTickets, setOpenTickets] = useState(0);
 
   const caps = capabilitiesOf(user, viewAs);
   const realCaps = capabilitiesOf(user);
   const isAdmin = caps.manageTeam;
+  const liveSession = api.isRealSession();
 
-  const groups: { title: string; items: Item[] }[] = [
+  /* One live count, cancellable. `limit: 1` because only the meta block is wanted; the
+     ticket rows themselves belong to /tickets, not to a directory page. */
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    if (!userId) return;
+    let alive = true;
+    (async () => {
+      const page = await api.getTickets({ state: 'active', limit: 1 });
+      if (!alive) return;
+      const n = page.meta.stateCounts.active;
+      setOpenTickets(Number.isFinite(n) ? n : 0);
+    })();
+    return () => { alive = false; };
+  }, [userId]);
+
+  const applyView = (tier: Tier | null) => {
+    // Moving between discrete options: a selection tick, not a commit thud.
+    haptics.select();
+    setViewAs(tier);
+    setViewSheet(false);
+    const picked = VIEW_OPTIONS.find((o) => o.tier === tier);
+    toast(picked ? `Now previewing the ${picked.label} side` : 'Back to your own view', 'info');
+  };
+
+  const doLogout = async () => {
+    haptics.warn();
+    const ok = await confirm({
+      title: t('signout.title'),
+      message: t('signout.msg'),
+      confirmText: t('common.signOut'),
+      destructive: true,
+      icon: 'log-out-outline',
+    });
+    if (!ok) return;
+    await logout();
+    router.replace('/(auth)/login');
+  };
+
+  /* The tab layout already redirects when there is no session, so this branch is short
+     lived. It still has to hold the real shape: a bare spinner here would make the whole
+     page jump the moment the restored session lands. */
+  if (!ready || !user) {
+    return (
+      <Screen>
+        <Header title="More" />
+        <ScrollView
+          contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.xl }}
+          showsVerticalScrollIndicator={false}
+        >
+          <Card>
+            <Row>
+              <Skeleton width={52} height={52} radius={20} />
+              <View style={{ flex: 1, gap: spacing.sm }}>
+                <Skeleton width="58%" height={14} />
+                <Skeleton width="38%" height={11} />
+              </View>
+            </Row>
+          </Card>
+          <GroupSkeleton rows={5} />
+          <GroupSkeleton rows={5} />
+          <GroupSkeleton rows={5} />
+          <GroupSkeleton rows={3} />
+        </ScrollView>
+      </Screen>
+    );
+  }
+
+  const groups: { title: string; items: Entry[] }[] = [
     ...(isAdmin ? [{
       title: caps.tier === 'master' ? 'Master control' : 'Admin',
       items: [
-        { icon: 'people-circle' as const, label: caps.overseeAdmins ? 'All teams & admins' : 'Team members', sub: 'Roster, activity & performance', href: '/team', tint: c.primary },
-        { icon: 'map' as const, label: 'Agent locations', sub: 'Live clock-in / clock-out points', href: '/agent-map', tint: c.info },
-        ...(caps.tier === 'master' ? [{ icon: 'navigate' as const, label: 'Movement paths', sub: 'Replay any agent’s field route', href: '/agent-track', tint: '#6b62f5' }] : []),
-        { icon: 'stats-chart' as const, label: 'Portfolio analytics', sub: 'Org-wide premium & renewals', href: '/analytics', tint: c.gold },
-        { icon: 'paper-plane' as const, label: 'Campaigns', sub: 'Bulk renewal & birthday sends', href: '/premium', tint: c.warning },
-      ],
+        {
+          icon: 'people-circle' as IconName,
+          label: caps.overseeAdmins ? 'All teams and admins' : 'Team members',
+          value: 'Roster',
+          href: '/team' as Href,
+        },
+        { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href },
+        ...(caps.tier === 'master'
+          ? [{ icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href }]
+          : []),
+        { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href },
+        { icon: 'paper-plane' as IconName, label: 'Campaigns', value: 'Bulk sends', href: '/campaigns' as Href },
+        { icon: 'megaphone' as IconName, label: 'Notify team', value: 'Send alert', href: '/notify' as Href },
+      ] as Entry[],
     }] : []),
     {
-      title: 'Business',
+      title: 'The book',
       items: [
-        { icon: 'funnel', label: 'Leads & pipeline', sub: 'Prospects, stages, conversions', href: '/(tabs)/leads', tint: c.primary },
-        { icon: 'gift', label: 'Premium & greetings', sub: 'One-tap renewal & birthday sends', href: '/premium', tint: c.gold },
-        { icon: 'notifications', label: 'Reminders & follow-ups', sub: 'Birthdays, renewals, maturity', href: '/reminders', tint: c.accent },
-        { icon: 'time', label: 'My attendance', sub: 'GPS clock-in history', href: '/attendance', tint: c.info },
-        { icon: 'calendar', label: 'Calendar', sub: 'Meetings & events', href: '/calendar', tint: c.primary },
-        { icon: 'logo-whatsapp', label: 'WhatsApp Hub', sub: 'Client conversations', href: '/whatsapp', tint: c.whatsapp },
+        { icon: 'funnel', label: 'Leads and pipeline', value: 'Stages', href: '/(tabs)/leads' },
+        { icon: 'pie-chart', label: 'Segments', value: 'Smart lists', href: '/segments' },
+        { icon: 'home', label: 'Families', value: 'Households', href: '/families' },
+        { icon: 'gift', label: 'Premium and greetings', value: 'Renewals', href: '/premium' },
+        { icon: 'person-add', label: 'Prospects', value: 'Recruitment', href: '/prospects' },
       ],
     },
     {
-      title: 'Tools',
+      title: 'Day to day',
       items: [
-        { icon: 'calculator', label: 'LIC plans', sub: 'Product library & benefit estimator', href: '/lic-plans', tint: c.info },
-        { icon: 'search', label: 'Global search', sub: 'Find clients, leads, claims, tasks', href: '/search', tint: c.primary },
+        {
+          icon: 'ticket',
+          label: 'Tickets',
+          // Silence rather than a fabricated zero when the count did not come back.
+          value: openTickets > 0 ? `${openTickets} open` : 'Requests',
+          tone: openTickets > 0 ? 'primary' : undefined,
+          numeric: openTickets > 0,
+          href: '/tickets',
+        },
+        { icon: 'notifications', label: 'Reminders and follow-ups', value: 'Due dates', href: '/reminders' },
+        { icon: 'calendar', label: 'Calendar', value: 'Meetings', href: '/calendar' },
+        { icon: 'time', label: 'My attendance', value: 'GPS log', href: '/attendance' },
+        { icon: 'logo-whatsapp', label: 'WhatsApp Hub', value: 'Chats', href: '/whatsapp' },
+      ],
+    },
+    {
+      title: 'Board',
+      items: [
+        { icon: 'megaphone', label: 'Notice Board', value: 'From the firm', href: '/notice-board' },
+        { icon: 'journal', label: 'Notes', value: 'Private', href: '/notes' },
+      ],
+    },
+    {
+      title: 'Reference',
+      items: [
+        { icon: 'library', label: 'Knowledge Base', value: 'Field guide', href: '/kb' },
+        { icon: 'calculator', label: 'LIC plans', value: 'Products', href: '/lic-plans' },
+        { icon: 'search', label: 'Global search', value: 'Everything', href: '/search' },
       ],
     },
     {
       title: 'Account',
       items: [
-        ...(realCaps.manageTeam ? [{ icon: 'swap-horizontal' as const, label: 'View as…', sub: `Currently: ${caps.label}${viewAs ? ' (preview)' : ''}`, tint: c.gold, onPress: pickView }] : []),
-        { icon: 'person-circle', label: 'My profile', href: '/profile' },
-        { icon: 'settings', label: 'Settings', sub: 'Notifications, security, theme', href: '/settings' },
-        { icon: 'shield-checkmark', label: 'Account & privacy', sub: 'Data & account deletion', href: '/account' },
+        ...(realCaps.manageTeam ? [{
+          icon: 'swap-horizontal' as IconName,
+          label: 'Viewing as',
+          value: caps.label,
+          onPress: () => setViewSheet(true),
+          right: viewAs ? <Pill label="Preview" tone="warning" small /> : undefined,
+        }] : []),
+        { icon: 'person-circle', label: 'My profile', value: user.name, href: '/profile' },
+        { icon: 'settings', label: 'Settings', value: 'Security, language', href: '/settings' },
+        { icon: 'shield-checkmark', label: 'Account and privacy', value: 'Data and deletion', href: '/account' },
       ],
     },
   ];
 
-  return (
-    <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <Header title="More" />
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, paddingBottom: 40, gap: spacing.lg }} showsVerticalScrollIndicator={false}>
+  const about: Entry[] = [
+    { icon: 'cube-outline', label: 'Version', value: APP.version, numeric: true },
+    {
+      icon: liveSession ? 'cloud-done-outline' : 'cloud-offline-outline',
+      label: 'Data',
+      value: liveSession ? 'Live' : 'Not verified',
+      tone: liveSession ? 'success' : 'warning',
+    },
+    { icon: 'mail-outline', label: 'Signed in as', value: user.email, copyable: true },
+  ];
 
-        <Card onPress={() => router.push('/profile')} style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Avatar name={user?.name ?? 'A'} size={54} />
-          <View style={{ flex: 1, marginLeft: 14 }}>
-            <Text style={{ color: c.text, fontWeight: '800', fontSize: 17 }}>{user?.name}</Text>
-            <Text style={{ color: c.muted, fontSize: 12.5, marginTop: 2 }}>{user?.designation}</Text>
-            <View style={{ flexDirection: 'row', gap: 6, marginTop: 7, flexWrap: 'wrap' }}>
-              <View style={{ backgroundColor: TIER_THEME[caps.tier].accent + '22', borderWidth: 1, borderColor: TIER_THEME[caps.tier].accent + '55', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999 }}>
-                <Text style={{ color: TIER_THEME[caps.tier].accent, fontSize: 10, fontWeight: '900', letterSpacing: 1 }}>{TIER_THEME[caps.tier].badge}</Text>
-              </View>
-              {!!user?.agentCode && <Pill label={user.agentCode} tone="neutral" small />}
-            </View>
-          </View>
-          <Ionicons name="chevron-forward" size={20} color={c.faint} />
-        </Card>
+  const renderRow = (it: Entry, i: number) => {
+    const href = it.href;
+    return (
+      <Appear key={`${it.label}-${i}`} index={i}>
+        <DataRow
+          icon={it.icon}
+          label={it.label}
+          value={it.value}
+          tone={it.tone}
+          right={it.right}
+          copyable={it.copyable}
+          numeric={it.numeric}
+          // Plain navigation gets no haptic. The budget is spent on writes and refusals.
+          onPress={href ? () => router.push(href) : it.onPress}
+        />
+      </Appear>
+    );
+  };
+
+  return (
+    <Screen>
+      <Header title="More" subtitle={`${caps.label} access`} />
+
+      <ScrollView
+        contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.xl }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Identity. One tap to the full profile; the tier badge is the only place the
+            role is stated in the app's own vocabulary rather than the server's. */}
+        <Appear>
+          <Card onPress={() => router.push('/profile')}>
+            <PersonRow
+              name={user.name}
+              subtitle={user.designation}
+              photo={user.photo}
+              size={52}
+              chevron
+            />
+            <Row style={{ marginTop: spacing.md, flexWrap: 'wrap', gap: spacing.sm }}>
+              <Pill label={TIER_THEME[caps.tier].badge} tone={TIER_TONE[caps.tier]} small />
+              {user.agentCode ? <Pill label={user.agentCode} tone="neutral" small numeric /> : null}
+              {viewAs ? <Pill label="Preview mode" tone="warning" icon="eye" small /> : null}
+            </Row>
+          </Card>
+        </Appear>
+
+        {/* The four destinations opened every day, in colour, above the fold. */}
+        <View style={{ gap: spacing.md }}>
+          <Eyebrow style={{ marginLeft: spacing.xs }}>Quick actions</Eyebrow>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <Appear index={0}>
+              <ActionTile icon="search" label="Search" tileIndex={0} onPress={() => router.push('/search')} />
+            </Appear>
+            <Appear index={1}>
+              <ActionTile icon="logo-whatsapp" label="WhatsApp" tileIndex={3} onPress={() => router.push('/whatsapp')} />
+            </Appear>
+            <Appear index={2}>
+              <ActionTile
+                icon="ticket"
+                label="Tickets"
+                tileIndex={2}
+                badge={openTickets}
+                onPress={() => router.push('/tickets')}
+              />
+            </Appear>
+            <Appear index={3}>
+              <ActionTile icon="notifications" label="Reminders" tileIndex={1} onPress={() => router.push('/reminders')} />
+            </Appear>
+          </Row>
+        </View>
 
         {groups.map((g) => (
-          <View key={g.title} style={{ gap: 8 }}>
-            <Text style={{ color: c.muted, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.4, marginLeft: 4 }}>{g.title}</Text>
-            <Card padded={false}>
-              {g.items.map((it, i) => (
-                <Pressable key={it.label} onPress={() => (it.href ? router.push(it.href as any) : it.onPress?.())}
-                  style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', padding: 14, opacity: pressed ? 0.7 : 1, borderTopWidth: i === 0 ? 0 : 1, borderTopColor: c.hairline }]}>
-                  <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: (it.tint ?? c.muted) + '20', alignItems: 'center', justifyContent: 'center' }}>
-                    <Ionicons name={it.icon} size={19} color={it.tint ?? c.muted} />
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ color: c.text, fontWeight: '600', fontSize: 14.5 }}>{it.label}</Text>
-                    {it.sub ? <Text style={{ color: c.muted, fontSize: 12, marginTop: 1 }}>{it.sub}</Text> : null}
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={c.faint} />
-                </Pressable>
-              ))}
-            </Card>
-          </View>
+          <ListSection key={g.title} title={g.title}>
+            {g.items.map(renderRow)}
+          </ListSection>
         ))}
 
-        <Pressable onPress={doLogout} style={({ pressed }) => [{
-          flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-          backgroundColor: c.dangerSoft, borderRadius: radius.md, height: 50, opacity: pressed ? 0.8 : 1,
-        }]}>
-          <Ionicons name="log-out-outline" size={20} color={c.danger} />
-          <Text style={{ color: c.danger, fontWeight: '700', fontSize: 15 }}>{t('common.signOut')}</Text>
-        </Pressable>
+        <ListSection title="About" footer={`${APP.name} for ${APP.org}. ${APP.since}.`}>
+          {about.map(renderRow)}
+        </ListSection>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: api.isRealSession() ? c.success : c.warning }} />
-          <Text style={{ color: c.faint, fontSize: 11.5 }}>CGPE Connect · v{APP.version} · {api.isRealSession() ? 'Live data' : 'Sample data'}</Text>
-        </View>
+        <Button
+          label={t('common.signOut')}
+          icon="log-out-outline"
+          variant="danger"
+          full
+          onPress={doLogout}
+        />
       </ScrollView>
+
+      <Sheet
+        visible={viewSheet}
+        onClose={() => setViewSheet(false)}
+        title="Preview another side"
+        subtitle="Changes what this app shows you. It does not change anyone's permissions."
+      >
+        <ListSection footer="A preview only affects your own screen, and it ends when you switch back.">
+          {VIEW_OPTIONS
+            .filter((o) => TIER_RANK[o.tier] <= TIER_RANK[realCaps.tier])
+            .map((o, i) => (
+              <Appear key={o.tier} index={i}>
+                <DataRow
+                  icon={o.icon}
+                  label={o.label}
+                  value={o.hint}
+                  onPress={() => applyView(o.tier)}
+                  right={caps.tier === o.tier
+                    ? <Pill label="Current" tone={TIER_TONE[o.tier]} small />
+                    : undefined}
+                />
+              </Appear>
+            ))}
+          {viewAs ? (
+            <Appear index={3}>
+              <DataRow
+                icon="arrow-undo"
+                label="My own view"
+                value="Stop previewing"
+                tone="primary"
+                onPress={() => applyView(null)}
+              />
+            </Appear>
+          ) : null}
+        </ListSection>
+      </Sheet>
+    </Screen>
+  );
+}
+
+/* Holds the grouped-list shape while the session restores, so nothing reflows when the
+ * real rows arrive. Mirrors ListSection's own geometry deliberately. */
+function GroupSkeleton({ rows }: { rows: number }) {
+  const c = useTheme();
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <Skeleton width={86} height={10} style={{ marginLeft: spacing.xs }} />
+      <Card padded={false}>
+        <View style={{ borderRadius: radius.lg, overflow: 'hidden' }}>
+          {Array.from({ length: rows }, (_, i) => (
+            <View key={i}>
+              {i > 0 ? (
+                <View style={{
+                  height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: spacing.lg,
+                }} />
+              ) : null}
+              <View style={{
+                flexDirection: 'row', alignItems: 'center', gap: spacing.md, minHeight: 48,
+                paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+              }}>
+                <Skeleton width={16} height={16} radius={5} />
+                <Skeleton width="44%" height={12} />
+                <View style={{ flex: 1 }} />
+                <Skeleton width={52} height={12} />
+              </View>
+            </View>
+          ))}
+        </View>
+      </Card>
     </View>
   );
 }

@@ -1,99 +1,1031 @@
-import React, { useMemo } from 'react';
-import { View, Text, Platform } from 'react-native';
-import { WebView } from 'react-native-webview';
-import { useTheme, radius } from '@/theme/theme';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
+import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { font, radius, spacing, useTheme, type Palette } from '@/theme/theme';
 import type { AgentPin } from '@/data/api';
+import { fmtDay, fmtTime } from '@/lib/format';
+import { haptics } from '@/lib/haptics';
+import { Txt } from './base';
+import { IconBtn } from './controls';
+import { Banner, EmptyState, Skeleton } from './feedback';
+import { useDataHealth } from './health-banner';
+import { useReducedMotion } from './motion';
 
-/**
- * OpenStreetMap + Leaflet inside a WebView — no API key, no native module,
- * works in Expo Go and the APK. Green pin = clocked in, grey = clocked out.
- */
+/* ------------------------------------------------------------------ *
+ * LeafletMap — OpenStreetMap tiles + Leaflet inside a WebView.
+ *
+ * No API key, no native module, no new dependency: react-native-webview was already
+ * installed and Leaflet is fetched from a CDN, so the 59MB APK does not grow.
+ *
+ * WHAT CHANGED AND WHY
+ *
+ * 1. GESTURES ARE NATIVE. The +/- buttons are gone (`zoomControl: false`) and Leaflet's
+ *    own touch handling does the work: drag, pinch, double-tap and inertia. The page
+ *    itself cannot scroll (`scrollEnabled={false}`, `touch-action: none` on #map) so the
+ *    document never competes with the map for a finger.
+ *
+ *    THE PARENT SCROLLVIEW IS THE REAL FIGHT, not the page. A map living inside a vertical
+ *    ScrollView loses every upward drag to the scroller, on both platforms. The wrapper
+ *    claims the touch synchronously in the capture phase and reports it through
+ *    `onInteracting`, which both call sites use to freeze their ScrollView for the length
+ *    of the gesture. The page also reports touchstart/touchend, so the release is driven by
+ *    the finger actually lifting rather than by a guess, and a hard 8s ceiling means a
+ *    swallowed touchend can never leave the screen unscrollable.
+ *
+ * 2. THE ROUTE IS A ROUTE. Recorded points are sorted chronologically and drawn as a
+ *    polyline over a contrasting casing, in bands whose opacity climbs from oldest to
+ *    newest, with arrow markers spaced along it in screen space. Start and end carry
+ *    distinct pins AND permanent tooltips, so "the 9:00 AM position to the 11:00 AM
+ *    position" is legible without a single tap.
+ *
+ * 3. EVERY MARKER TALKS. Tap opens a popup with the person's name and the exact time.
+ *    Hover does not exist on a phone, so nothing depends on it. The injected JS cannot
+ *    import `fmtTime`/`fmtDay`, so every string is formatted HERE and passed in already
+ *    rendered, which also keeps one date convention across the app.
+ *
+ * 4. CLUSTERING IS OURS. leaflet.markercluster is NOT loaded — it is a second CDN payload
+ *    and a second thing to fail offline. Instead markers are projected to pixels at the
+ *    current zoom, bucketed through a spatial hash and merged inside a 34px radius. Tap a
+ *    badge and it flies to that group's bounds; when the points are genuinely stacked (or
+ *    we are already at max zoom) it lists them instead of pretending a zoom would help.
+ *
+ * 5. DATA IS PUSHED, NOT RE-RENDERED. The HTML depends only on the palette. New pins and
+ *    new paths arrive over `injectJavaScript` and are ignored when their signature is
+ *    unchanged, so refetching does not tear down the Leaflet instance, flash the tiles, or
+ *    throw away the pan and zoom the user just performed.
+ *
+ * REAL DATA ONLY. Nothing here invents a coordinate. The single hard-coded pair is the
+ * Surat operating centre used as the pre-data viewport for the fraction of a second before
+ * the first payload lands (and it sits behind the loading overlay). It is never a marker.
+ * ------------------------------------------------------------------ */
+
 export type TrackPathPoint = { lat: number; lng: number; at?: string | number };
 
-export function LeafletMap({ pins, path, height = 320 }: { pins: AgentPin[]; path?: TrackPathPoint[]; height?: number }) {
+export type LeafletMapProps = {
+  pins: AgentPin[];
+  path?: TrackPathPoint[];
+  height?: number;
+  /**
+   * Whose route this is. Shown on the trajectory's popups, which otherwise could only say
+   * "a route" — and an unattributed route on a shared screen is worse than no label.
+   */
+  pathName?: string;
+  /** Merge markers that collide on screen. Off gives one marker per record, always. */
+  cluster?: boolean;
+  /** The caller is still fetching. Shows the skeleton without unmounting the map. */
+  loading?: boolean;
+  /**
+   * True while a finger is on the map. A parent ScrollView must set `scrollEnabled` to the
+   * inverse of this, or every upward drag on the map scrolls the page instead.
+   */
+  onInteracting?: (active: boolean) => void;
+};
+
+/* ================================================================== *
+ * Colour helpers
+ * ================================================================== */
+
+/** Alpha-suffix a palette hex. Non-hex tokens pass through untouched. */
+function rgba(hex: string, a: number): string {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return hex;
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  if (!Number.isFinite(r) || !Number.isFinite(g) || !Number.isFinite(b)) return hex;
+  return `rgba(${r},${g},${b},${Math.max(0, Math.min(1, a))})`;
+}
+
+/**
+ * Readable ink for a glyph sitting on `hex`.
+ *
+ * Not cosmetic: the route start is `c.accent` (#1dd7bf), and white on that fails contrast
+ * badly while dark ink passes comfortably. Picking per-colour rather than hard-coding white
+ * keeps the letters legible in both schemes without a table of exceptions.
+ */
+function ink(hex: string): string {
+  const h = hex.replace('#', '');
+  if (h.length !== 6) return '#ffffff';
+  const chan = (i: number) => {
+    const v = parseInt(h.slice(i, i + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+  };
+  const l = 0.2126 * chan(0) + 0.7152 * chan(2) + 0.0722 * chan(4);
+  return l > 0.42 ? '#0b1220' : '#ffffff';
+}
+
+/* ================================================================== *
+ * Data shaping — every string the WebView renders is built here
+ * ================================================================== */
+
+type MapMarker = {
+  id: string;
+  lat: number;
+  lng: number;
+  /** Fill. */
+  bg: string;
+  /** Glyph colour, derived from the fill. */
+  fg: string;
+  size: number;
+  glyph: string;
+  name: string;
+  line1: string;
+  line2: string;
+  /** Route endpoints never collapse into a cluster: they are the point of the drawing. */
+  solo?: 1;
+  /** A live ring on the newest position. */
+  pulse?: 1;
+  /** Always-visible label, used for the two route endpoints. */
+  tip?: string;
+  tipDir?: 'top' | 'bottom';
+};
+
+type MapPayload = {
+  sig: string;
+  cluster: boolean;
+  reduced: boolean;
+  markers: MapMarker[];
+  route: [number, number][];
+  routeInfo: { title: string; line1: string; line2: string } | null;
+};
+
+/** A path longer than this is drawn thinned. Beyond it the extra points are sub-pixel. */
+const MAX_ROUTE_POINTS = 900;
+/** Tappable time-stamped dots placed along the route, between start and end. */
+const MAX_WAYPOINTS = 12;
+
+const isCoord = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+
+/**
+ * (0, 0) is dropped on purpose. It is the classic "GPS had no fix" record, it is 2,000km
+ * off the coast of Ghana, and one of them stretches the map bounds across the Atlantic.
+ */
+const usable = (lat?: number, lng?: number): boolean =>
+  isCoord(lat) && isCoord(lng)
+  && Math.abs(lat) <= 90 && Math.abs(lng) <= 180
+  && !(lat === 0 && lng === 0);
+
+/**
+ * Milliseconds for ordering, or null.
+ *
+ * The seconds-vs-milliseconds correction is not a guess: an epoch in [1e9, 1e11) is a date
+ * between 2001 and the year 5138 only if read as SECONDS, and 1970 if read as milliseconds.
+ * Backends emit both; a 1970 timestamp on a field route is always the wrong reading.
+ */
+function ms(v?: string | number | null): number | null {
+  if (v == null || v === '') return null;
+  let t = typeof v === 'number' ? v : Date.parse(v);
+  if (!Number.isFinite(t)) return null;
+  if (typeof v === 'number' && t > 1e9 && t < 1e11) t *= 1000;
+  return t;
+}
+
+const asDate = (v?: string | number | null): string | Date | null =>
+  v == null || v === '' ? null : typeof v === 'number' ? new Date(ms(v) ?? v) : v;
+
+/** fmtTime returns '-' for anything unparseable; an empty string composes better here. */
+const clock = (v?: string | number | null): string => {
+  const t = fmtTime(asDate(v));
+  return t === '-' ? '' : t;
+};
+const dayOf = (v?: string | number | null): string => {
+  const d = fmtDay(asDate(v));
+  return d === '-' ? '' : d;
+};
+
+/**
+ * HTML-escape. Names come from the database and land inside `innerHTML`, so this is a
+ * correctness fix as much as a safety one: an advisor recorded as "Shah & Sons" rendered
+ * fine, but one recorded with an angle bracket silently ate the rest of the popup.
+ */
+function esc(s: string): string {
+  return String(s ?? '').replace(/[&<>"']/g, (ch) =>
+    ch === '&' ? '&amp;' : ch === '<' ? '&lt;' : ch === '>' ? '&gt;' : ch === '"' ? '&quot;' : '&#39;');
+}
+
+/** djb2. Only used to decide whether a payload is worth re-rendering. */
+function hash(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+
+const join = (parts: (string | undefined)[], sep = ' · ') => parts.filter(Boolean).join(sep);
+
+function buildPayload(
+  pins: AgentPin[],
+  path: TrackPathPoint[] | undefined,
+  pathName: string,
+  c: Palette,
+  cluster: boolean,
+  reduced: boolean,
+): MapPayload {
+  const markers: MapMarker[] = [];
+
+  /* ---- Clock-in / clock-out pins ---- */
+  for (const p of pins) {
+    const name = esc(p.name || 'Agent');
+    const city = p.city ? esc(p.city) : '';
+    if (usable(p.inLat, p.inLng)) {
+      const t = clock(p.inTime);
+      const bg = p.onDuty ? c.success : c.primary;
+      markers.push({
+        id: `in:${p.id}`,
+        lat: p.inLat as number,
+        lng: p.inLng as number,
+        bg,
+        fg: ink(bg),
+        size: 18,
+        glyph: '',
+        name,
+        line1: esc(t ? `Clocked in at ${t}` : 'Clocked in, time not recorded'),
+        line2: esc(join([city, dayOf(p.inTime)])),
+      });
+    }
+    if (usable(p.outLat, p.outLng)) {
+      const t = clock(p.outTime);
+      markers.push({
+        id: `out:${p.id}`,
+        lat: p.outLat as number,
+        lng: p.outLng as number,
+        bg: c.faint,
+        fg: ink(c.faint),
+        size: 18,
+        glyph: '',
+        name,
+        line1: esc(t ? `Clocked out at ${t}` : 'Clocked out, time not recorded'),
+        line2: esc(join([city, dayOf(p.outTime)])),
+      });
+    }
+  }
+
+  /* ---- Trajectory ---- */
+  const raw = (path || []).filter((p) => usable(p.lat, p.lng));
+
+  // Chronological or nothing. Only reorder when EVERY point carries a readable stamp,
+  // because a half-sorted route draws a zigzag that never happened. Index breaks ties so
+  // points sharing a second keep the order the backend recorded them in.
+  const stamped = raw.map((p, i) => ({ p, i, t: ms(p.at) }));
+  if (stamped.length > 1 && stamped.every((s) => s.t != null)) {
+    stamped.sort((a, b) => (a.t as number) - (b.t as number) || a.i - b.i);
+  }
+  let ordered = stamped.map((s) => s.p);
+
+  // Thin very long paths. Every kept point is a real recording; nothing is interpolated.
+  if (ordered.length > MAX_ROUTE_POINTS) {
+    const stride = Math.ceil(ordered.length / MAX_ROUTE_POINTS);
+    const thin = ordered.filter((_, i) => i % stride === 0);
+    const last = ordered[ordered.length - 1];
+    if (thin[thin.length - 1] !== last) thin.push(last);
+    ordered = thin;
+  }
+
+  const route: [number, number][] = ordered.map((p) => [p.lat, p.lng]);
+  const n = ordered.length;
+  const who = esc(pathName || 'Recorded route');
+
+  let routeInfo: MapPayload['routeInfo'] = null;
+
+  if (n > 0) {
+    const first = ordered[0];
+    const last = ordered[n - 1];
+    const tFrom = clock(first.at);
+    const tTo = clock(last.at);
+
+    markers.push({
+      id: 'route:start',
+      lat: first.lat,
+      lng: first.lng,
+      bg: c.accent,
+      fg: ink(c.accent),
+      size: 26,
+      glyph: 'A',
+      name: who,
+      line1: esc(tFrom ? `Route start, ${tFrom}` : 'Route start, time not recorded'),
+      line2: esc(dayOf(first.at)),
+      solo: 1,
+      tip: esc(tFrom || 'Start'),
+      tipDir: 'top',
+    });
+
+    if (n > 1) {
+      markers.push({
+        id: 'route:end',
+        lat: last.lat,
+        lng: last.lng,
+        bg: c.danger,
+        fg: ink(c.danger),
+        size: 26,
+        glyph: 'B',
+        name: who,
+        line1: esc(tTo ? `Latest recorded position, ${tTo}` : 'Latest recorded position, time not recorded'),
+        line2: esc(dayOf(last.at)),
+        solo: 1,
+        pulse: 1,
+        tip: esc(tTo || 'Latest'),
+        tipDir: 'bottom',
+      });
+
+      // Evenly spaced tappable stops. Without these the middle of a two-hour route is a
+      // silent line: you can see WHERE somebody went but never WHEN they were there.
+      const want = Math.min(MAX_WAYPOINTS, Math.max(0, n - 2));
+      const seen = new Set<number>();
+      for (let k = 1; k <= want; k++) {
+        const i = Math.round((k * (n - 1)) / (want + 1));
+        if (i <= 0 || i >= n - 1 || seen.has(i)) continue;
+        seen.add(i);
+        const p = ordered[i];
+        const t = clock(p.at);
+        markers.push({
+          id: `way:${i}`,
+          lat: p.lat,
+          lng: p.lng,
+          bg: c.primary,
+          fg: ink(c.primary),
+          size: 11,
+          glyph: '',
+          name: who,
+          line1: esc(t || 'Time not recorded'),
+          line2: esc(join([dayOf(p.at), 'Recorded position'])),
+        });
+      }
+
+      routeInfo = {
+        title: who,
+        line1: esc(tFrom && tTo ? `${tFrom} to ${tTo}` : 'Times not recorded'),
+        line2: esc(join([dayOf(first.at), `${n} recorded points`])),
+      };
+    }
+  }
+
+  const sig = hash(
+    markers.map((m) => `${m.id}${m.lat.toFixed(5)},${m.lng.toFixed(5)}${m.line1}`).join('|')
+    + `#${route.length}#${cluster ? 1 : 0}#${reduced ? 1 : 0}`,
+  );
+
+  return { sig, cluster, reduced, markers, route, routeInfo };
+}
+
+/* ================================================================== *
+ * The page
+ * ================================================================== */
+
+/**
+ * U+2028 / U+2029 are legal inside a JSON string but were illegal inside a JS string
+ * literal before ES2019, and `injectJavaScript` evaluates its argument as source. Escaping
+ * them costs nothing and removes a class of "the map stopped updating on one device" bug.
+ */
+const LINE_SEP = String.fromCharCode(0x2028);
+const PARA_SEP = String.fromCharCode(0x2029);
+const safeJson = (v: unknown): string =>
+  JSON.stringify(v).split(LINE_SEP).join('\\u2028').split(PARA_SEP).join('\\u2029');
+
+/** The app's Surat operating centre. A VIEWPORT, never a data point. */
+const HOME: [number, number] = [21.2088, 72.8393];
+
+/** Pixel radius inside which two markers are considered the same place. */
+const CLUSTER_PX = 34;
+
+function buildHtml(c: Palette): string {
+  const dark = c.scheme === 'dark';
+
+  const cfg = safeJson({
+    tiles: dark
+      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    home: HOME,
+    route: c.primary,
+    // A halo that separates the line from the tiles: light ground wants a white casing,
+    // dark ground wants an inked one. Same job, opposite colour.
+    casing: dark ? 'rgba(3,10,20,0.78)' : 'rgba(255,255,255,0.92)',
+    cluster: c.primary,
+    clusterHalo: rgba(c.primary, 0.32),
+    clusterInk: ink(c.primary),
+    radius: CLUSTER_PX,
+  });
+
+  const css = [
+    `html,body{margin:0;padding:0;height:100%;width:100%;background:${c.bg};overflow:hidden;`,
+    `overscroll-behavior:none;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}`,
+    `#map{height:100%;width:100%;background:${c.bg};touch-action:none;outline:none}`,
+    `.leaflet-container{background:${c.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif}`,
+    `.pin{position:relative;box-sizing:border-box;border-radius:50%;border:2.5px solid ${dark ? '#0b1420' : '#ffffff'};`,
+    `box-shadow:0 2px 8px rgba(0,0,0,.38);display:flex;align-items:center;justify-content:center;`,
+    `font-size:12px;font-weight:800;line-height:1;letter-spacing:-.2px}`,
+    `.pin.live:after{content:'';position:absolute;left:0;top:0;right:0;bottom:0;border-radius:50%;`,
+    `box-shadow:0 0 0 0 ${rgba(c.danger, 0.5)};animation:cgpePulse 1900ms ease-out infinite}`,
+    `body.reduced .pin.live:after{animation:none;box-shadow:0 0 0 5px ${rgba(c.danger, 0.28)}}`,
+    `@keyframes cgpePulse{0%{box-shadow:0 0 0 0 ${rgba(c.danger, 0.5)}}70%{box-shadow:0 0 0 15px rgba(0,0,0,0)}100%{box-shadow:0 0 0 0 rgba(0,0,0,0)}}`,
+    `.cl{display:flex;align-items:center;justify-content:center;border-radius:50%;box-shadow:0 3px 12px rgba(0,0,0,.3)}`,
+    `.cl b{display:flex;align-items:center;justify-content:center;width:72%;height:72%;border-radius:50%;`,
+    `font-size:12.5px;font-weight:800;letter-spacing:-.3px}`,
+    `.arw{width:16px;height:16px;display:flex;align-items:center;justify-content:center}`,
+    `.arw i{display:block;width:0;height:0;border-left:4.5px solid transparent;border-right:4.5px solid transparent;`,
+    `border-bottom:8px solid ${c.onPrimary};filter:drop-shadow(0 0 1.5px rgba(0,0,0,.4))}`,
+    `.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:${c.card};color:${c.text};box-shadow:0 10px 28px rgba(0,0,0,.3)}`,
+    `.leaflet-popup-content-wrapper{border-radius:14px;border:1px solid ${c.border}}`,
+    `.leaflet-popup-content{margin:11px 14px;line-height:1.34}`,
+    `.leaflet-popup-close-button{width:30px!important;height:30px!important;font:600 19px/26px sans-serif!important;`,
+    `color:${c.muted}!important;padding:2px 0 0 0!important;right:2px!important;top:2px!important}`,
+    `.leaflet-tooltip{background:${c.card};color:${c.text};border:1px solid ${c.border};border-radius:9px;`,
+    `box-shadow:0 4px 14px rgba(0,0,0,.24);font-weight:700;font-size:11.5px;padding:3px 8px;white-space:nowrap}`,
+    `.leaflet-tooltip-top:before{border-top-color:${c.border}}`,
+    `.leaflet-tooltip-bottom:before{border-bottom-color:${c.border}}`,
+    `.leaflet-tooltip-left:before{border-left-color:${c.border}}`,
+    `.leaflet-tooltip-right:before{border-right-color:${c.border}}`,
+    `.pop{max-width:230px}`,
+    `.pop .pt{font-weight:800;font-size:13px;letter-spacing:-.1px}`,
+    `.pop .pm{font-weight:600;font-size:12px;color:${c.muted};margin-top:3px}`,
+    `.pop .ps{font-weight:500;font-size:11.5px;color:${c.faint};margin-top:2px}`,
+    `.pop .pr{display:flex;align-items:center;gap:7px;margin-top:7px}`,
+    `.pop .pr .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}`,
+    `.pop .pr .pn{font-weight:700;font-size:12px;flex:0 0 auto}`,
+    `.pop .pr .pm{margin:0;font-size:11.5px}`,
+    `.pop .more{margin-top:8px}`,
+  ].join('');
+
+  // NOTE for future edits: the script below is written with string concatenation and
+  // single quotes only. It lives inside a TS template literal, so a backtick or a ${ in
+  // here would be interpolated by TypeScript instead of shipped to the page.
+  const script = [
+    "(function(){",
+    "var post = window.__cgpePost || function(){};",
+    "if (typeof L === 'undefined') { post({type:'error', message:'leaflet'}); return; }",
+    "var CFG = __CFG__;",
+    "var map = L.map('map', {",
+    "  zoomControl: false, attributionControl: false,",
+    // Everything a finger expects. dragging/touchZoom/doubleClickZoom are Leaflet defaults
+    // but are named explicitly so a future edit cannot switch one off by accident.
+    "  dragging: true, touchZoom: true, doubleClickZoom: true, scrollWheelZoom: true,",
+    "  boxZoom: false, keyboard: true, inertia: true, inertiaDeceleration: 2400,",
+    "  tapTolerance: 18, zoomSnap: 0.25, zoomDelta: 0.5, bounceAtZoomLimits: false,",
+    "  zoomAnimation: true, markerZoomAnimation: true, fadeAnimation: true",
+    "}).setView(CFG.home, 11);",
+    "map.createPane('cgpeRoute').style.zIndex = 405;",
+    "var ap = map.createPane('cgpeArrow'); ap.style.zIndex = 610; ap.style.pointerEvents = 'none';",
+    "var tileOk = 0, tileBad = 0, tileSent = null;",
+    // PER-TILE events, not the layer's 'load'. Leaflet counts an errored tile as "ready",
+    // so 'load' fires even in a total outage and would clear the warning it just raised.
+    "function tileReport(){",
+    "  var state = tileOk > 0 ? true : (tileBad >= 3 ? false : null);",
+    "  if (state !== null && state !== tileSent) { tileSent = state; post({type:'tiles', ok: state}); }",
+    "}",
+    "var tiles = L.tileLayer(CFG.tiles, { maxZoom: 19, minZoom: 3, keepBuffer: 2, updateWhenIdle: false });",
+    "tiles.on('tileload', function(){ tileOk++; tileReport(); });",
+    "tiles.on('tileerror', function(){ tileBad++; tileReport(); });",
+    "tiles.addTo(map);",
+    "var routeLayer = L.layerGroup().addTo(map);",
+    "var arrowLayer = L.layerGroup().addTo(map);",
+    "var markerLayer = L.layerGroup().addTo(map);",
+    "var DATA = null, SIG = null, BOUNDS = null, drawn = false;",
+
+    /* ---------- popups ---------- */
+    "function body(title, l1, l2){",
+    "  return '<div class=\"pop\"><div class=\"pt\">' + title + '</div>'",
+    "    + (l1 ? '<div class=\"pm\">' + l1 + '</div>' : '')",
+    "    + (l2 ? '<div class=\"ps\">' + l2 + '</div>' : '') + '</div>';",
+    "}",
+    "var POP = { closeButton:true, autoPan:true, autoPanPadding:[26,26], maxWidth:240, offset:[0,-2], className:'cgpe' };",
+
+    /* ---------- markers ---------- */
+    "function addPin(m){",
+    "  var s = m.size;",
+    "  var glyph = m.glyph || '';",
+    "  var html = '<div class=\"pin' + (m.pulse ? ' live' : '') + '\" style=\"width:' + s + 'px;height:' + s + 'px;background:'",
+    "    + m.bg + ';color:' + m.fg + '\">' + glyph + '</div>';",
+    "  var mk = L.marker([m.lat, m.lng], {",
+    "    icon: L.divIcon({ className:'', iconSize:[s,s], iconAnchor:[s/2,s/2], html: html }),",
+    "    title: m.name, alt: m.name, keyboard: true, riseOnHover: true,",
+    "    zIndexOffset: m.solo ? 1200 : 0",
+    "  }).addTo(markerLayer);",
+    // Popup, not tooltip, for the tap: Leaflet binds BOTH to click, and two overlays
+    // opening on the same anchor is the mess it sounds like. Tooltips are reserved for the
+    // permanent endpoint labels below, which open on add and never on click.
+    "  mk.bindPopup(body(m.name, m.line1, m.line2), POP);",
+    "  if (m.tip) mk.bindTooltip(m.tip, { permanent:true, direction: m.tipDir || 'top', offset: m.tipDir === 'bottom' ? [0, s/2 + 2] : [0, -(s/2) - 2], opacity:1 });",
+    "  return mk;",
+    "}",
+
+    "function addCluster(g){",
+    "  var n = g.length, lat = 0, lng = 0, i;",
+    "  for (i = 0; i < n; i++) { lat += g[i].m.lat; lng += g[i].m.lng; }",
+    "  var s = n < 10 ? 36 : n < 50 ? 42 : 48;",
+    "  var label = n + ' points grouped here. Activate to open.';",
+    "  var html = '<div class=\"cl\" role=\"button\" tabindex=\"0\" aria-label=\"' + label + '\" style=\"width:' + s + 'px;height:' + s",
+    "    + 'px;background:' + CFG.clusterHalo + '\"><b style=\"background:' + CFG.cluster + ';color:' + CFG.clusterInk + '\">' + n + '</b></div>';",
+    "  var mk = L.marker([lat/n, lng/n], {",
+    "    icon: L.divIcon({ className:'', iconSize:[s,s], iconAnchor:[s/2,s/2], html: html }),",
+    "    title: label, alt: label, keyboard: true, riseOnHover: true",
+    "  }).addTo(markerLayer);",
+    "  var pts = [], spread = 0, dx, dy, d, j;",
+    "  for (i = 0; i < n; i++) pts.push([g[i].m.lat, g[i].m.lng]);",
+    "  for (i = 0; i < n; i++) for (j = i + 1; j < n; j++) {",
+    "    dx = g[i].p.x - g[j].p.x; dy = g[i].p.y - g[j].p.y; d = dx*dx + dy*dy; if (d > spread) spread = d;",
+    "  }",
+    "  spread = Math.sqrt(spread);",
+    "  var list = '<div class=\"pop\"><div class=\"pt\">' + n + ' points here</div>';",
+    "  var shown = Math.min(n, 8);",
+    "  for (i = 0; i < shown; i++) {",
+    "    list += '<div class=\"pr\"><span class=\"dot\" style=\"background:' + g[i].m.bg + '\"></span>'",
+    "      + '<span class=\"pn\">' + g[i].m.name + '</span><span class=\"pm\">' + g[i].m.line1 + '</span></div>';",
+    "  }",
+    "  if (n > shown) list += '<div class=\"pm more\">and ' + (n - shown) + ' more</div>';",
+    "  list += '</div>';",
+    // Zooming only helps when the points are actually apart. Stacked records, or a map
+    // already at the tile ceiling, get the list instead of a zoom that changes nothing.
+    "  mk.on('click', function(){",
+    "    if (spread < 2 || map.getZoom() >= 18) { mk.bindPopup(list, POP).openPopup(); return; }",
+    "    var b = L.latLngBounds(pts);",
+    "    map.flyToBounds(b, { padding:[52,52], maxZoom: Math.min(19, map.getZoom() + 3), duration: 0.45 });",
+    "  });",
+    "}",
+
+    /* ---------- clustering ---------- */
+    "function rebuild(){",
+    "  markerLayer.clearLayers();",
+    "  var ms = (DATA && DATA.markers) || [];",
+    "  if (!ms.length) return;",
+    "  var z = map.getZoom(), i, j, items = [];",
+    "  for (i = 0; i < ms.length; i++) items.push({ m: ms[i], p: map.project(L.latLng(ms[i].lat, ms[i].lng), z) });",
+    "  if (!DATA.cluster) { for (i = 0; i < items.length; i++) addPin(items[i].m); return; }",
+    // Spatial hash: only the nine cells around a marker can hold a neighbour within the
+    // radius, so this stays linear instead of comparing every pair.
+    "  var R = CFG.radius, cells = {}, key, used = {};",
+    "  for (i = 0; i < items.length; i++) {",
+    "    if (items[i].m.solo) continue;",
+    "    key = Math.floor(items[i].p.x / R) + ':' + Math.floor(items[i].p.y / R);",
+    "    (cells[key] || (cells[key] = [])).push(i);",
+    "  }",
+    "  for (i = 0; i < items.length; i++) {",
+    "    if (items[i].m.solo) { addPin(items[i].m); continue; }",
+    "    if (used[i]) continue;",
+    "    used[i] = 1;",
+    "    var g = [items[i]];",
+    "    var cx = Math.floor(items[i].p.x / R), cy = Math.floor(items[i].p.y / R), ox, oy, bucket, q, dx, dy;",
+    "    for (ox = -1; ox <= 1; ox++) for (oy = -1; oy <= 1; oy++) {",
+    "      bucket = cells[(cx + ox) + ':' + (cy + oy)];",
+    "      if (!bucket) continue;",
+    "      for (q = 0; q < bucket.length; q++) {",
+    "        j = bucket[q];",
+    "        if (used[j]) continue;",
+    "        dx = items[i].p.x - items[j].p.x; dy = items[i].p.y - items[j].p.y;",
+    "        if (dx*dx + dy*dy <= R*R) { used[j] = 1; g.push(items[j]); }",
+    "      }",
+    "    }",
+    "    if (g.length === 1) addPin(g[0].m); else addCluster(g);",
+    "  }",
+    "}",
+
+    /* ---------- trajectory ---------- */
+    "function drawRoute(){",
+    "  routeLayer.clearLayers();",
+    "  var r = (DATA && DATA.route) || [];",
+    "  if (r.length < 2) return;",
+    "  L.polyline(r, { pane:'cgpeRoute', color: CFG.casing, weight: 9, opacity: 1,",
+    "    lineCap:'round', lineJoin:'round', interactive: false }).addTo(routeLayer);",
+    "  var n = r.length - 1, segs = Math.min(18, n), info = DATA.routeInfo, s, a, b, slice, op, pl;",
+    // Opacity climbs oldest to newest, so the direction of travel reads before the arrows
+    // are even noticed. It never starts below 0.34 or the oldest leg vanishes on dark tiles.
+    "  for (s = 0; s < segs; s++) {",
+    "    a = Math.round(s * n / segs); b = Math.round((s + 1) * n / segs);",
+    "    if (b <= a) continue;",
+    "    slice = r.slice(a, b + 1);",
+    "    op = 0.34 + 0.66 * ((s + 1) / segs);",
+    "    pl = L.polyline(slice, { pane:'cgpeRoute', color: CFG.route, weight: 4.5, opacity: op,",
+    "      lineCap:'round', lineJoin:'round' }).addTo(routeLayer);",
+    "    if (info) pl.bindPopup(body(info.title, info.line1, info.line2), POP);",
+    "  }",
+    "}",
+
+    "function drawArrows(){",
+    "  arrowLayer.clearLayers();",
+    "  var r = (DATA && DATA.route) || [];",
+    "  if (r.length < 2) return;",
+    "  var z = map.getZoom(), pts = [], i;",
+    "  for (i = 0; i < r.length; i++) pts.push(map.project(L.latLng(r[i][0], r[i][1]), z));",
+    // Spacing is measured in SCREEN pixels, not in metres, so the arrows stay evenly
+    // spread whether you are looking at a whole city or one street.
+    "  var dist = 0, target = 78, placed = 0, ax, ay, dx, dy, len, t, px, py, deg;",
+    "  for (i = 1; i < pts.length && placed < 40; i++) {",
+    "    ax = pts[i-1].x; ay = pts[i-1].y;",
+    "    dx = pts[i].x - ax; dy = pts[i].y - ay;",
+    "    len = Math.sqrt(dx*dx + dy*dy);",
+    "    if (len <= 0.01) continue;",
+    "    while (dist + len >= target && placed < 40) {",
+    "      t = (target - dist) / len;",
+    "      px = ax + dx * t; py = ay + dy * t;",
+    "      deg = Math.atan2(dx, -dy) * 180 / Math.PI;",
+    "      L.marker(map.unproject(L.point(px, py), z), {",
+    "        pane:'cgpeArrow', interactive: false, keyboard: false,",
+    "        icon: L.divIcon({ className:'', iconSize:[16,16], iconAnchor:[8,8],",
+    "          html: '<div class=\"arw\" style=\"transform:rotate(' + deg.toFixed(1) + 'deg)\"><i></i></div>' })",
+    "      }).addTo(arrowLayer);",
+    "      placed++; target += 92;",
+    "    }",
+    "    dist += len;",
+    "  }",
+    "}",
+
+    /* ---------- viewport ---------- */
+    "function measure(){",
+    "  var pts = [], i;",
+    "  var ms = (DATA && DATA.markers) || [], r = (DATA && DATA.route) || [];",
+    "  for (i = 0; i < ms.length; i++) pts.push([ms[i].lat, ms[i].lng]);",
+    "  for (i = 0; i < r.length; i++) pts.push(r[i]);",
+    "  if (!pts.length) return null;",
+    "  var b = L.latLngBounds(pts);",
+    "  var sw = b.getSouthWest(), ne = b.getNorthEast();",
+    "  var single = Math.abs(sw.lat - ne.lat) < 1e-6 && Math.abs(sw.lng - ne.lng) < 1e-6;",
+    "  return { b: b, single: single, center: [sw.lat, sw.lng] };",
+    "}",
+    "function fit(animate){",
+    "  if (!BOUNDS) { map.setView(CFG.home, 11, { animate: false }); return; }",
+    "  if (BOUNDS.single) {",
+    "    if (animate) map.flyTo(BOUNDS.center, 16, { duration: 0.5 }); else map.setView(BOUNDS.center, 16, { animate: false });",
+    "    return;",
+    "  }",
+    "  var o = { padding: [44, 44], maxZoom: 17 };",
+    "  if (animate) { o.duration = 0.5; map.flyToBounds(BOUNDS.b, o); } else { o.animate = false; map.fitBounds(BOUNDS.b, o); }",
+    "}",
+
+    /* ---------- RN bridge ---------- */
+    "window.__cgpeSet = function(p){",
+    "  if (!p) return;",
+    "  document.body.className = p.reduced ? 'reduced' : '';",
+    "  if (p.sig === SIG) { DATA = p; return; }",
+    "  SIG = p.sig; DATA = p;",
+    // Frame FIRST, draw second. Clusters and arrow spacing are both computed in screen
+    // pixels, so building them before the fit sizes them for a viewport we are about to
+    // leave. Leaflet only re-fires zoomend when the zoom actually moved, so doing it in
+    // this order is the difference between correct-by-construction and correct-by-luck.
+    "  BOUNDS = measure();",
+    "  fit(false);",
+    "  drawRoute(); rebuild(); drawArrows();",
+    "  if (!drawn) { drawn = true; post({ type: 'drawn' }); }",
+    "};",
+    "window.__cgpeFit = function(){ fit(true); };",
+    "window.__cgpeResize = function(){ map.invalidateSize({ animate: false }); };",
+    "map.on('zoomend', function(){ rebuild(); drawArrows(); });",
+    "window.addEventListener('resize', function(){ map.invalidateSize({ animate: false }); });",
+    "window.addEventListener('orientationchange', function(){ setTimeout(function(){ map.invalidateSize({ animate: false }); }, 220); });",
+    "setTimeout(function(){ map.invalidateSize({ animate: false }); }, 120);",
+    "post({ type: 'ready' });",
+    "})();",
+    // A function replacement, not a string one: `String.replace` reads $& / $1 out of a
+    // literal replacement, and the config JSON is not something to trust with that.
+  ].join('\n').replace('__CFG__', () => cfg);
+
+  // The touch relay is registered BEFORE Leaflet loads: if the CDN never answers, the
+  // parent ScrollView must still be released when the finger lifts.
+  const relay = [
+    "(function(){",
+    "function post(o){ try { window.ReactNativeWebView && window.ReactNativeWebView.postMessage(JSON.stringify(o)); } catch (e) {} }",
+    "window.__cgpePost = post;",
+    "document.addEventListener('touchstart', function(){ post({type:'gesture', active:true}); }, {passive:true});",
+    "var up = function(){ post({type:'gesture', active:false}); };",
+    "document.addEventListener('touchend', up, {passive:true});",
+    "document.addEventListener('touchcancel', up, {passive:true});",
+    "window.addEventListener('error', function(e){ post({type:'error', message: String((e && e.message) || 'script')}); });",
+    "})();",
+  ].join('\n');
+
+  return `<!doctype html><html><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>${css}</style>
+</head><body>
+<div id="map"></div>
+<script>${relay}</script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" onerror="window.__cgpePost&&window.__cgpePost({type:'error',message:'leaflet'})"></script>
+<script>${script}</script>
+</body></html>`;
+}
+
+/* ================================================================== *
+ * Component
+ * ================================================================== */
+
+/** No first paint within this window means the CDN or the render process is gone. */
+const READY_TIMEOUT_MS = 9000;
+/** A finger is never down this long. Backstop against a swallowed touchend. */
+const GESTURE_MAX_MS = 8000;
+
+/** Shared frame, so every state of this component occupies exactly the same space. */
+const frame = (c: Palette, height: number): ViewStyle => ({
+  height,
+  borderRadius: radius.lg,
+  overflow: 'hidden',
+  backgroundColor: c.cardAlt,
+  borderWidth: StyleSheet.hairlineWidth,
+  borderColor: c.border,
+});
+
+type CanvasProps = {
+  html: string;
+  payloadJson: string;
+  height: number;
+  loading: boolean;
+  onInteracting?: (active: boolean) => void;
+  onRetry: () => void;
+};
+
+/**
+ * The live WebView, and everything whose lifetime is tied to ONE loaded page.
+ *
+ * It is deliberately its own component so the caller can key it: a theme flip or a retry
+ * reloads the page, and every piece of state here (the handshake, tile health, the failure
+ * timer) belongs to that page rather than to the map as a concept. Remounting resets them
+ * correctly and for free, where an effect resetting them by hand is always one render
+ * behind and flashes the previous page's state first.
+ */
+function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry }: CanvasProps) {
   const c = useTheme();
 
-  const html = useMemo(() => {
-    const line = (path || []).filter((p) => typeof p.lat === 'number' && typeof p.lng === 'number').map((p) => [p.lat, p.lng]);
-    const markers = pins.flatMap((p) => {
-      const out: any[] = [];
-      if (p.inLat != null && p.inLng != null) {
-        out.push({ lat: p.inLat, lng: p.inLng, kind: 'in', name: p.name, city: p.city || '', time: p.inTime ? new Date(p.inTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '', onDuty: p.onDuty });
-      }
-      if (p.outLat != null && p.outLng != null) {
-        out.push({ lat: p.outLat, lng: p.outLng, kind: 'out', name: p.name, city: p.city || '', time: p.outTime ? new Date(p.outTime).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' }) : '', onDuty: false });
-      }
-      return out;
-    });
-    const data = JSON.stringify(markers);
-    const lineData = JSON.stringify(line);
-    const dark = c.scheme === 'dark';
-    const tiles = dark
-      ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-      : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+  const webRef = useRef<WebView>(null);
+  const readyRef = useRef(false);
+  const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const interactRef = useRef<CanvasProps['onInteracting']>(onInteracting);
+  const payloadRef = useRef(payloadJson);
 
-    return `<!doctype html><html><head>
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<style>html,body,#map{margin:0;padding:0;height:100%;width:100%;background:${dark ? '#0a0b12' : '#eef1f8'}}
-.pin{border-radius:50%;border:3px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4)}
-.lbl{font:600 12px -apple-system,Segoe UI,Roboto,sans-serif}</style>
-</head><body><div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-var pts = ${data};
-var route = ${lineData};
-var map = L.map('map', { zoomControl: true, attributionControl: false });
-L.tileLayer('${tiles}', { maxZoom: 19 }).addTo(map);
-var group = [];
-// Draw the movement path first (so pins sit on top).
-if (route && route.length > 1) {
-  var poly = L.polyline(route, { color: '#6b62f5', weight: 4, opacity: 0.9, lineJoin: 'round' }).addTo(map);
-  route.forEach(function(pt){ group.push(pt); });
-  var start = route[0], end = route[route.length-1];
-  L.marker(start, { icon: L.divIcon({ className:'', html:'<div class="pin" style="width:16px;height:16px;background:#2ee6a6"></div>', iconSize:[16,16], iconAnchor:[8,8] }) }).addTo(map).bindPopup('<div class="lbl"><b>Start</b></div>');
-  L.marker(end, { icon: L.divIcon({ className:'', html:'<div class="pin" style="width:16px;height:16px;background:#f2555a"></div>', iconSize:[16,16], iconAnchor:[8,8] }) }).addTo(map).bindPopup('<div class="lbl"><b>Latest</b></div>');
+  // Latest-ref, written after the commit rather than during render. `setLock` and the
+  // ready handshake both fire from outside React and must see the newest values.
+  useEffect(() => {
+    interactRef.current = onInteracting;
+    payloadRef.current = payloadJson;
+  });
+
+  const [phase, setPhase] = useState<'loading' | 'live' | 'failed'>('loading');
+  const [tilesDown, setTilesDown] = useState(false);
+
+  const push = useCallback((json: string) => {
+    webRef.current?.injectJavaScript(`window.__cgpeSet && window.__cgpeSet(${json});true;`);
+  }, []);
+
+  /** Freeze/release the parent scroller. Idempotent, and never left stuck on. */
+  const setLock = useCallback((on: boolean) => {
+    if (holdRef.current) { clearTimeout(holdRef.current); holdRef.current = null; }
+    interactRef.current?.(on);
+    if (on) {
+      holdRef.current = setTimeout(() => {
+        holdRef.current = null;
+        interactRef.current?.(false);
+      }, GESTURE_MAX_MS);
+    }
+  }, []);
+
+  // One shot, on mount: if the page has not painted by now, it is not going to.
+  useEffect(() => {
+    const t = setTimeout(() => setPhase((p) => (p === 'loading' ? 'failed' : p)), READY_TIMEOUT_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!readyRef.current) return;   // the ready handshake pushes the first payload itself
+    push(payloadJson);
+  }, [payloadJson, push]);
+
+  // Unmounting mid-gesture must not leave the caller's ScrollView disabled forever. This
+  // is reachable: both screens swap the map out while the screen itself stays mounted.
+  useEffect(() => () => {
+    if (holdRef.current) { clearTimeout(holdRef.current); holdRef.current = null; }
+    interactRef.current?.(false);
+  }, []);
+
+  const onFail = useCallback(() => {
+    readyRef.current = false;
+    // Release the scroller in the same commit that removes the map. The page is gone, so
+    // its touchend is never coming, and without this the caller waits out GESTURE_MAX_MS.
+    setLock(false);
+    setPhase('failed');
+  }, [setLock]);
+
+  const onMessage = useCallback((e: WebViewMessageEvent) => {
+    let msg: { type?: string; active?: boolean; ok?: boolean } | null = null;
+    try {
+      msg = JSON.parse(e.nativeEvent.data);
+    } catch {
+      return;   // a foreign postMessage must never take the screen down
+    }
+    if (!msg || typeof msg.type !== 'string') return;
+    switch (msg.type) {
+      case 'gesture':
+        setLock(!!msg.active);
+        break;
+      case 'ready':
+        readyRef.current = true;
+        push(payloadRef.current);
+        break;
+      case 'drawn':
+        setPhase('live');
+        break;
+      case 'tiles':
+        setTilesDown(!msg.ok);
+        break;
+      case 'error':
+        // After first paint the map is usable; a late script error is not worth a teardown.
+        if (!readyRef.current) onFail();
+        break;
+      default:
+        break;
+    }
+  }, [push, setLock, onFail]);
+
+  const recenter = useCallback(() => {
+    haptics.select();
+    webRef.current?.injectJavaScript('window.__cgpeFit && window.__cgpeFit();true;');
+  }, []);
+
+  // Rotation, or any container resize: Leaflet caches the viewport size and keeps drawing
+  // into a stale one until it is told. Same RN layout event on both platforms.
+  const onLayout = useCallback(() => {
+    webRef.current?.injectJavaScript('window.__cgpeResize && window.__cgpeResize();true;');
+  }, []);
+
+  if (phase === 'failed') {
+    return (
+      <View style={[frame(c, height), { alignItems: 'center', justifyContent: 'center' }]}>
+        <EmptyState
+          icon="cloud-offline-outline"
+          title="The map could not open"
+          subtitle="The map library and its tiles come over the network. Check the connection and try again. The points themselves are listed below."
+          action={{ label: 'Try again', onPress: onRetry }}
+          style={{ paddingVertical: spacing.lg }}
+        />
+      </View>
+    );
+  }
+
+  const busy = loading || phase === 'loading';
+
+  return (
+    <View style={frame(c, height)} onLayout={onLayout}>
+      {/**
+        * THE SCROLLVIEW HANDSHAKE, and it wraps ONLY the WebView.
+        *
+        * Returning false means "not my touch, carry on", so the WebView still receives the
+        * gesture; the side effect runs in the CAPTURE phase, before the parent scroller has
+        * decided the drag belongs to it. Identical on iOS and Android, because the responder
+        * system is JS rather than native.
+        *
+        * The overlay controls below are SIBLINGS of this view, not children, so tapping the
+        * fit button never arms the lock. It would otherwise arm it for a touch the page
+        * never sees, and the release would have to wait out the safety timer. The `busy`
+        * guard is the same reasoning for the same reason: while the skeleton is up there is
+        * no map to protect, and the page may not have listeners attached yet to release it.
+        */}
+      <View
+        style={{ flex: 1 }}
+        onStartShouldSetResponderCapture={() => { if (!busy) setLock(true); return false; }}
+      >
+        <WebView
+          ref={webRef}
+          originWhitelist={['*']}
+          source={{ html }}
+          style={{ flex: 1, backgroundColor: 'transparent' }}
+          javaScriptEnabled
+          domStorageEnabled
+          cacheEnabled
+          // The document must never move. Every gesture inside this box belongs to Leaflet.
+          scrollEnabled={false}
+          bounces={false}
+          overScrollMode="never"
+          nestedScrollEnabled={false}
+          automaticallyAdjustContentInsets={false}
+          contentInsetAdjustmentBehavior="never"
+          showsHorizontalScrollIndicator={false}
+          showsVerticalScrollIndicator={false}
+          // Android's built-in pinch would fight Leaflet's; iOS is already held off by
+          // user-scalable=no in the viewport tag, so both platforms end in the same state.
+          setBuiltInZoomControls={false}
+          setDisplayZoomControls={false}
+          androidLayerType="hardware"
+          onMessage={onMessage}
+          onError={onFail}
+          onHttpError={onFail}
+          // Two names for one failure: Android kills the render process, iOS terminates the
+          // content process. Handling only one leaves a permanently blank map on the other.
+          onRenderProcessGone={onFail}
+          onContentProcessDidTerminate={onFail}
+        />
+      </View>
+
+      {busy ? (
+        // absoluteFill, not absoluteFillObject: RN 0.86 dropped the latter from the public
+        // types (ui/Splash.tsx carries the same note).
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: c.cardAlt }]} pointerEvents="none">
+          <Skeleton width="100%" height={height} radius={0} />
+          <View style={{ position: 'absolute', left: 0, right: 0, bottom: spacing.lg, alignItems: 'center' }}>
+            <Txt size={font.cap} color={c.faint}>Loading map</Txt>
+          </View>
+        </View>
+      ) : (
+        <View style={{ position: 'absolute', top: spacing.sm, right: spacing.sm }}>
+          <IconBtn
+            icon="scan-outline"
+            size={40}
+            bg={c.card}
+            color={c.primary}
+            onPress={recenter}
+            accessibilityLabel="Fit every point on screen"
+          />
+        </View>
+      )}
+
+      {/* Banner wraps itself in an entrance-animated view, so the positioning belongs on a
+          wrapper here rather than on the Banner's own style prop. */}
+      {tilesDown && !busy ? (
+        <View style={{ position: 'absolute', left: spacing.sm, right: spacing.sm, bottom: spacing.sm }}>
+          <Banner
+            tone="warning"
+            title="Map tiles could not load"
+            message="The pins and the route are real. Only the background imagery needs a connection."
+          />
+        </View>
+      ) : null}
+    </View>
+  );
 }
-pts.forEach(function(p){
-  var color = p.kind === 'in' ? (p.onDuty ? '#2ee6a6' : '#8b83ff') : '#94a3b8';
-  var icon = L.divIcon({ className:'', html:'<div class="pin" style="width:16px;height:16px;background:'+color+'"></div>', iconSize:[16,16], iconAnchor:[8,8] });
-  var m = L.marker([p.lat, p.lng], { icon: icon }).addTo(map);
-  m.bindPopup('<div class="lbl"><b>'+p.name+'</b><br>'+(p.kind==='in'?'Clocked in':'Clocked out')+(p.time?' · '+p.time:'')+(p.city?'<br>'+p.city:'')+'</div>');
-  group.push([p.lat, p.lng]);
-});
-if (group.length === 1) map.setView(group[0], 15);
-else if (group.length > 1) map.fitBounds(group, { padding:[36,36], maxZoom: 16 });
-else map.setView([21.2088, 72.8393], 12);
-</script></body></html>`;
-  }, [pins, path, c.scheme]);
 
-  // react-native-web can't host a WebView (and raw DOM nodes break the RNW tree),
-  // so the browser preview shows a summary card instead — the APK shows the map.
+export function LeafletMap({
+  pins,
+  path,
+  height = 320,
+  pathName = '',
+  cluster = true,
+  loading = false,
+  onInteracting,
+}: LeafletMapProps) {
+  const c = useTheme();
+  const reduced = useReducedMotion();
+  const health = useDataHealth();
+
+  const [attempt, setAttempt] = useState(0);
+
+  const html = useMemo(() => buildHtml(c), [c]);
+  const payload = useMemo(
+    () => buildPayload(pins, path, pathName, c, cluster, reduced),
+    [pins, path, pathName, c, cluster, reduced],
+  );
+  // Memoised down to a STRING: `pins={[]}` at a call site builds a new array on every
+  // render, and an equal string is what stops that from firing an injection each time.
+  const payloadJson = useMemo(() => safeJson(payload), [payload]);
+
+  const hasData = payload.markers.length > 0 || payload.route.length > 1;
+
+  const retry = useCallback(() => {
+    haptics.tap();
+    setAttempt((n) => n + 1);
+  }, []);
+
+  /* ---- react-native-web cannot host a WebView, so the browser preview summarises ---- */
   if (Platform.OS === 'web') {
     const onDuty = pins.filter((p) => p.onDuty).length;
+    const routed = payload.route.length;
     return (
-      <View style={{ height, borderRadius: radius.lg, backgroundColor: c.cardAlt, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        <Text style={{ color: c.text, fontSize: 30, fontWeight: '900' }}>{pins.length}</Text>
-        <Text style={{ color: c.muted, fontSize: 13, marginTop: 4, textAlign: 'center' }}>
-          agent pins ({onDuty} on duty)
-        </Text>
-        <Text style={{ color: c.faint, fontSize: 11.5, marginTop: 10, textAlign: 'center', lineHeight: 16 }}>
-          The live map renders in the Android app.{'\n'}Pins are listed below.
-        </Text>
+      <View style={[frame(c, height), { alignItems: 'center', justifyContent: 'center', padding: spacing.xl }]}>
+        <Txt size={30} weight="900" numeric>{routed > 1 ? routed : pins.length}</Txt>
+        <Txt size={font.sub} color={c.muted} style={{ marginTop: 4, textAlign: 'center' }}>
+          {routed > 1
+            ? `recorded points on this route${pathName ? `, ${pathName}` : ''}`
+            : `agent pins (${onDuty} on duty)`}
+        </Txt>
+        <Txt size={11.5} color={c.faint} style={{ marginTop: 10, textAlign: 'center', lineHeight: 16 }}>
+          The interactive map renders in the mobile app.{'\n'}The same records are listed below.
+        </Txt>
+      </View>
+    );
+  }
+
+  /* ---- Nothing to draw and nothing on the way. An empty map cannot say which. ---- */
+  if (!hasData && !loading) {
+    return (
+      <View style={[frame(c, height), { alignItems: 'center', justifyContent: 'center' }]}>
+        <EmptyState
+          icon={health.degraded ? 'cloud-offline-outline' : 'map-outline'}
+          title={health.degraded ? 'The map could not load its points' : 'No location points yet'}
+          subtitle={health.degraded
+            ? 'The server did not answer, so an empty map here is unconfirmed rather than quiet.'
+            : 'Points appear as soon as somebody clocks in from the app with location turned on.'}
+          style={{ paddingVertical: spacing.lg }}
+        />
       </View>
     );
   }
 
   return (
-    <View style={{ height, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: c.cardAlt }}>
-      <WebView
-        originWhitelist={['*']}
-        source={{ html }}
-        style={{ flex: 1, backgroundColor: 'transparent' }}
-        javaScriptEnabled
-        domStorageEnabled
-        scrollEnabled={false}
-      />
-    </View>
+    <MapCanvas
+      // A palette change rebuilds the page and a retry reloads it. Either way this is a new
+      // page, and every handshake belongs to the new one rather than to the old.
+      key={`${c.scheme}:${attempt}`}
+      html={html}
+      payloadJson={payloadJson}
+      height={height}
+      loading={loading}
+      onInteracting={onInteracting}
+      onRetry={retry}
+    />
   );
 }
+
+export default LeafletMap;

@@ -1,0 +1,17 @@
+# Files excluded from the EAS Build upload archive.
+#
+# EAS_NO_VCS=1 archives the WORKING DIRECTORY (so uncommitted work ships without a commit),
+# which means anything sitting in the project root gets uploaded unless it is listed here.
+# `.agents/skills` is ~10MB of agent tooling that Metro never bundles; it took the upload
+# from 2.1MB to 12.1MB and contributes nothing to the APK.
+.agents/
+graphify-out/
+
+# Build outputs and scratch
+dist/
+dist-*/
+.expo/
+
+# Docs and reference material
+*.md
+!README.md

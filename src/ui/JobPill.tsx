@@ -22,20 +22,20 @@ export function JobPill() {
       onPress={() => router.push(`/job/${activeJob.id}`)}
       style={({ pressed }) => [{
         position: 'absolute', left: 16, right: 16, bottom: insets.bottom + 86,
-        borderRadius: radius.pill, backgroundColor: c.scheme === 'dark' ? '#1b2540' : '#12141d',
+        borderRadius: radius.pill, backgroundColor: c.gradientHero[c.scheme === 'dark' ? 0 : 1],
         paddingVertical: 11, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 10,
         opacity: pressed ? 0.9 : 1, ...shadow(c, 2),
       }]}>
       <ActivityIndicator size="small" color="#7cc242" />
       <View style={{ flex: 1 }}>
-        <Text style={{ color: '#fff', fontSize: 13, fontWeight: '800' }} numberOfLines={1}>
+        <Text style={{ color: '#fff', fontSize: 13, fontFamily: 'Geist_800ExtraBold', fontWeight: '800' }} numberOfLines={1}>
           {activeJob.label} · {activeJob.processed}/{activeJob.total}
         </Text>
         <View style={{ height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', marginTop: 5, overflow: 'hidden' }}>
-          <View style={{ height: '100%', width: `${pct * 100}%`, backgroundColor: '#7cc242', borderRadius: 2 }} />
+          <View style={{ height: '100%', width: `${pct * 100}%`, backgroundColor: c.accent, borderRadius: 2 }} />
         </View>
       </View>
-      <Text style={{ color: '#9fb0cc', fontSize: 11.5, fontWeight: '700' }}>Monitor</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 11.5, fontFamily: 'Geist_700Bold', fontWeight: '700' }}>Monitor</Text>
       <Ionicons name="chevron-forward" size={15} color="#9fb0cc" />
     </Pressable>
   );

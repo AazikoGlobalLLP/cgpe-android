@@ -1,16 +1,39 @@
 /**
- * Data layer — REAL-BACKEND-FIRST with graceful fallback.
- * A real advisor session (successful login or restored real token) calls the live
- * CGPE REST API; raw docs are mapped through src/data/adapt.ts. If a call is
- * unreachable it falls back to sample data for that call so the UI never breaks.
- * Set FORCE_DEMO=true to always use sample data.
+ * Data layer — REAL BACKEND ONLY.
+ *
+ * PHASE 8 CHANGED THE CONTRACT OF THIS FILE. It used to be "real-backend-first with
+ * graceful fallback": any failing call silently returned sample records so a screen was
+ * never empty. Three things were wrong with that, and all three are fixed here.
+ *
+ * 1. FABRICATED BUSINESS DATA. A failed `/clients` call rendered invented people with
+ *    invented premium amounts, pixel-identical to live data. An agent could read a made-up
+ *    figure to a real policyholder. Sample records no longer exist at runtime: a failed
+ *    call resolves EMPTY and reports to `data/health`, which raises a banner on screen.
+ *
+ * 2. AUTHENTICATION BYPASS. `login()` used to hand out a `demo-token` session whenever the
+ *    backend was unreachable, and `verifyOtp()` accepted ANY four digits in that state.
+ *    Airplane mode plus four taps therefore got you inside the app on a shared handset.
+ *    Both paths are deleted. Unreachable now throws, and the login screen says so.
+ *
+ * 3. INVISIBLE DEAD SESSIONS. A revoked or expired JWT produced 401s that each screen
+ *    swallowed into its fallback, so the user kept browsing as though signed in. Every
+ *    authenticated response now passes through `reportAuth`, and a 401 expires the session
+ *    exactly once via `lib/session`.
+ *
+ * Raw documents are still mapped through `src/data/adapt.ts`. `FORCE_DEMO` is retained as a
+ * build-time escape hatch for UI work against a dead backend; it must never ship enabled,
+ * and it no longer synthesises records — it only short-circuits the network.
  */
 import { Platform } from 'react-native';
 import { API_BASE_URL, FORCE_DEMO, MOCK_LATENCY, REQUEST_TIMEOUT } from '@/constants/config';
-import * as mock from './mock';
+import { expireSession, resetSessionGuard } from '@/lib/session';
+import { reportFailure, reportSuccess } from './health';
 import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification } from './adapt';
-import { teamMembers, teamActivityFeed, TeamMember, TeamActivity } from './team';
-import { tasks as mockTasks, Task, TaskStatus } from './tasks';
+// Types only. The seed arrays these modules also export (`teamMembers`, `teamActivityFeed`,
+// `tasks`) are deliberately NOT imported any more: importing them is what kept sample records
+// inside the shipped bundle and one `??` away from reaching a screen.
+import type { TeamMember, TeamActivity } from './team';
+import { Task, TaskStatus } from './tasks';
 import type {
   Claim, Client, Commission, Contest, Lead, LeadStage, LicPlan,
   Reminder, User, WaThread, AppNotification,
@@ -33,6 +56,21 @@ export function setCurrentUser(id: string | null, name?: string | null) {
 }
 export function isRealSession() { return sessionReal; }
 
+/**
+ * Why a write did not land. PHASE 1.
+ *
+ * Several writes in this file used to resolve `{ ok: true }` on a timeout, an offline device
+ * or a 500, because the failure was swallowed by a bare `catch`. The screens above them then
+ * fired a success haptic, persisted local state and navigated away, so the user was told their
+ * shift had started, their task was done, or their account was deleted — none of which had
+ * reached the server. Each of those screens already had a correctly-worded failure branch; the
+ * branches were simply unreachable.
+ *
+ * A write now reports what actually happened. `unsupported` is its own case because it is not
+ * a transient fault: the endpoint is not there, and retrying will never help.
+ */
+export type WriteFailure = 'network' | 'server' | 'forbidden' | 'unsupported';
+
 async function req(path: string, opts: RequestInit = {}, timeout = REQUEST_TIMEOUT): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
@@ -47,10 +85,33 @@ async function req(path: string, opts: RequestInit = {}, timeout = REQUEST_TIMEO
       },
     });
     const json = await res.json().catch(() => null);
+    reportAuth(res.status, !!authToken);
     return { ok: res.ok, status: res.status, json };
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Single choke point for credential rejection.
+ *
+ * Called on EVERY response. When we sent a token and the server answered 401, that token is
+ * no longer valid — expired, revoked, or the staff account was disabled — and the only
+ * correct response is to end the session rather than let the user keep browsing a screen
+ * full of empty lists wondering why nothing loads. `expireSession` is idempotent, so a
+ * dashboard firing six parallel requests logs out once.
+ *
+ * 403 is deliberately NOT treated as session death. On this backend 403 means "your role
+ * cannot do this particular thing" (for example a non-leader trying to send a campaign),
+ * which is a per-action permission result, not a broken session. Logging the user out for
+ * it would be both wrong and infuriating.
+ */
+function reportAuth(status: number, sentToken: boolean): void {
+  if (sentToken && status === 401) {
+    expireSession('expired');
+    return;
+  }
+  if (status >= 200 && status < 400) reportSuccess();
 }
 
 /** Try the real API; null on any failure/validation miss so the caller can fall back. */
@@ -66,20 +127,39 @@ async function tryReal<T>(path: string, opts: RequestInit, validate: (d: any) =>
   }
 }
 
+/**
+ * Zeroed commission shell for a failed `/commissions` fetch. Every figure is 0 so the
+ * screen renders honest blanks under the outage banner rather than a fabricated payout.
+ */
+const EMPTY_COMMISSION: Commission = {
+  total: 0, paid: 0, pending: 0, thisMonth: 0, lastMonth: 0, policies: 0, entries: [],
+} as unknown as Commission;
+
 const isArr = (d: any) => Array.isArray(d);
 const isObj = (d: any) => d && typeof d === 'object' && !Array.isArray(d);
 
+/**
+ * Local record buffer — NOT sample data.
+ *
+ * Every collection starts EMPTY. This object exists for one honest purpose: when the user
+ * creates a task, lead, or claim and the write cannot reach the server, the record they just
+ * typed is held here so it stays visible in the list instead of vanishing under their thumb.
+ * Those are the user's OWN records, entered seconds ago, not invented ones.
+ *
+ * It is deliberately kept as the same shape the fallbacks used to read from, so a failed
+ * fetch resolves to `[]` / `undefined` through the exact same expressions. Nothing seeds it.
+ */
 const state = {
-  leads: clone(mock.leads),
-  clients: clone(mock.clients),
-  claims: clone(mock.claims),
-  reminders: clone(mock.reminders),
-  waThreads: clone(mock.waThreads),
-  notifications: clone(mock.notifications),
-  commission: clone(mock.commission),
-  contests: clone(mock.contests),
-  licPlans: clone(mock.licPlans),
-  tasks: clone(mockTasks),
+  leads: [] as Lead[],
+  clients: [] as Client[],
+  claims: [] as Claim[],
+  reminders: [] as Reminder[],
+  waThreads: [] as WaThread[],
+  notifications: [] as AppNotification[],
+  commission: null as Commission | null,
+  contests: [] as Contest[],
+  licPlans: [] as LicPlan[],
+  tasks: [] as Task[],
 };
 
 /* ------------------------------------------------------------------- Tasks */
@@ -154,7 +234,7 @@ export async function getTasks(ownOnly = false): Promise<Task[]> {
     return members.flatMap((m) => (m.tasks || []).map((t) => adaptTeamTask(t, m.name)));
   }
   const real = await tryReal<any[]>('/tasks?limit=500', {}, isArr);
-  return real ? real.map(adaptTask) : demo(state.tasks);
+  return real ? real.map(adaptTask) : unavailable('/tasks', state.tasks);
 }
 
 /** Live org dashboard counters (claims, tickets, tasks) — un-scoped. */
@@ -181,23 +261,11 @@ export type OrgSnapshot = {
   tasks: { members: number; total: number; open: number; done: number; overdue: number };
 };
 export async function getOrgSnapshot(): Promise<OrgSnapshot | null> {
-  if (!sessionReal || FORCE_DEMO) {
-    // Demo preview: derive a populated snapshot from sample data so no screen is empty.
-    const settled = state.claims.filter((c) => c.status === 'settled');
-    const openTasks = state.tasks.filter((t) => t.status !== 'done');
-    return {
-      total_clients: state.clients.length,
-      claims: {
-        total: state.claims.length,
-        under_process: state.claims.filter((c) => c.status !== 'settled' && c.status !== 'rejected').length,
-        passed: settled.length,
-        paid_amount: settled.reduce((s, c) => s + (c.amount || 0), 0),
-      },
-      tickets: state.notifications.length,
-      leads: state.leads.length,
-      tasks: { members: teamMembers.length, total: state.tasks.length, open: openTasks.length, done: state.tasks.length - openTasks.length, overdue: 0 },
-    };
-  }
+  // No live session means no numbers. This used to synthesise a populated snapshot from
+  // sample data "so no screen is empty" — which put invented client counts and invented
+  // settled-claim rupee totals on the master dashboard, the single most trusted surface in
+  // the app. Null is the honest answer; the dashboard renders its empty state.
+  if (!sessionReal || FORCE_DEMO) return null;
   const [dov, stats, ov, leads] = await Promise.all([
     getDashboardOverview(),
     getClientStats(),
@@ -236,24 +304,38 @@ export async function getTask(id: string): Promise<Task | undefined> {
       if (hit) return adaptTeamTask(hit, m.name);
     }
   }
-  return demo(state.tasks.find((t) => t.id === id));
+  return unavailable('/tasks/:id', state.tasks.find((t) => t.id === id));
 }
 
 /** Map the app's status back to the backend's team_tasks vocabulary. */
 const toServerStatus = (s: TaskStatus) => (s === 'done' ? 'done' : s === 'in_progress' ? 'in_progress' : s === 'blocked' ? 'blocked' : 'open');
 
-export async function updateTaskStatus(id: string, status: TaskStatus): Promise<{ ok: boolean; forbidden?: boolean }> {
-  if (sessionReal && !FORCE_DEMO) {
-    try {
-      const { ok, status: code } = await req(`/team/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: toServerStatus(status) }) });
-      if (code === 403) return { ok: false, forbidden: true };
-      if (ok) return { ok: true };
-    } catch { /* fall through to local */ }
+/**
+ * PHASE 1: this used to return `{ ok: true }` for every outcome except a 403 — a 500, a 404,
+ * a timeout and an offline device all fell through to a local mutation against the permanently
+ * empty `state.tasks` buffer and then reported success. `task/[id].tsx` trusts that verdict
+ * completely: it toasts "Task completed." and navigates away. So a member marking work done on
+ * a flaky connection was told it saved, was moved off the screen, and the task stayed open.
+ * Its rollback branch was already written and correct — it just only ran for a 403.
+ */
+export async function updateTaskStatus(id: string, status: TaskStatus): Promise<{ ok: boolean; forbidden?: boolean; reason?: WriteFailure }> {
+  if (FORCE_DEMO) {
+    const t = state.tasks.find((x) => x.id === id);
+    if (t) { t.status = status; if (status === 'done') { t.completedAt = new Date().toISOString(); t.steps.forEach((s) => (s.done = true)); } }
+    await wait(120);
+    return { ok: true };
   }
-  const t = state.tasks.find((x) => x.id === id);
-  if (t) { t.status = status; if (status === 'done') { t.completedAt = new Date().toISOString(); t.steps.forEach((s) => (s.done = true)); } }
-  await wait(120);
-  return { ok: true };
+  if (!sessionReal) return { ok: false, reason: 'network' };
+  try {
+    const { ok, status: code } = await req(`/team/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ status: toServerStatus(status) }) });
+    if (code === 403) return { ok: false, forbidden: true, reason: 'forbidden' };
+    if (!ok) return { ok: false, reason: 'server' };
+    const t = state.tasks.find((x) => x.id === id);
+    if (t) { t.status = status; if (status === 'done') { t.completedAt = new Date().toISOString(); t.steps.forEach((s) => (s.done = true)); } }
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
 }
 
 /** Reassign a task to another member (admin/leader only). */
@@ -262,17 +344,15 @@ export async function reassignTask(id: string, assigneeName: string): Promise<bo
   try { const { ok } = await req(`/team/tasks/${id}`, { method: 'PATCH', body: JSON.stringify({ assigneeName }) }); return ok; }
   catch { return false; }
 }
-export async function toggleTaskStep(taskId: string, stepId: string): Promise<void> {
-  const t = state.tasks.find((x) => x.id === taskId);
-  const step = t?.steps.find((s) => s.id === stepId);
-  if (step && t) {
-    step.done = !step.done;
-    const allDone = t.steps.every((s) => s.done);
-    if (allDone) { t.status = 'done'; t.completedAt = new Date().toISOString(); }
-    else if (t.status === 'done' || t.status === 'todo') t.status = 'in_progress';
-  }
-  await wait(120);
-}
+/* `toggleTaskStep` was REMOVED in Phase 1, deliberately — do not re-add it here.
+ *
+ * It made no network call. It mutated `state.tasks`, which is the write buffer declared above
+ * and is never populated for tasks: `getTasks`/`getTask` build their result from
+ * `/team/task-overview` and return it directly. So the whole body was dead, the tick reverted
+ * on the next focus refetch, and `task/[id].tsx` fired a success haptic over it.
+ *
+ * There is no backend endpoint for a task step. Wiring one is Phase 9 (`docs/PHASES.md`), and
+ * it needs `cgpe-api` to build it first. Until then the checklist renders read-only. */
 const PRIORITY2P: Record<string, string> = { high: 'P1', medium: 'P2', low: 'P3' };
 
 /** Create a REAL team task (admin/leader only on the backend). */
@@ -305,73 +385,149 @@ export async function addTask(data: Partial<Task> & { assigneeName?: string }): 
   state.tasks.unshift(local); await wait(200); return clone(local);
 }
 
-async function demo<T>(value: T): Promise<T> { await wait(); return clone(value); }
+/**
+ * Resolve a request that could not be served.
+ *
+ * Named for what it now does. It used to be `demo()` and returned sample records; it returns
+ * whatever the empty local buffer holds (`[]` for a collection, `undefined` for a lookup) and
+ * tells `data/health` which endpoint failed so the screen can raise a banner and offer Retry.
+ *
+ * The short wait is retained so a spinner does not flash for a single frame before the empty
+ * state lands, which reads as a glitch rather than a considered "nothing here".
+ */
+async function unavailable<T>(endpoint: string, value: T): Promise<T> {
+  reportFailure(endpoint);
+  await wait();
+  return clone(value);
+}
 
-/* -------------------------------------------------------------------- Auth */
+/* -------------------------------------------------------------------- Auth
+ *
+ * THE ONLY WAY INTO THIS APP IS A TOKEN THE SERVER ISSUED.
+ *
+ * Every offline shortcut that used to exist here has been removed. Previously an
+ * unreachable backend produced a `demo-token` session, and `verifyOtp` accepted any
+ * four digits in that state. On a shared handset that is a complete authentication
+ * bypass: enable airplane mode, type 1234, and you are inside someone's client book.
+ * There is now no code path that mints a session locally. If the server cannot be
+ * reached, sign-in FAILS and says so, which is the only safe behaviour.
+ *
+ * `NetworkError` is distinguished from a credential rejection so the login screen can
+ * word the two differently. Both block entry; only the message differs.
+ * ------------------------------------------------------------------------- */
+
+/** Thrown when the backend could not be reached at all, as opposed to rejecting us. */
+export class NetworkError extends Error {
+  constructor(message = 'Could not reach the CGPE server. Check your connection and try again.') {
+    super(message);
+    this.name = 'NetworkError';
+  }
+}
+
+const isUnreachable = (e: any) =>
+  e?.name === 'AbortError' ||
+  (typeof e?.message === 'string' && /fetch|network|Failed to fetch|Load failed|timeout/i.test(e.message));
+
 export async function login(id: string, pw: string): Promise<{ user: User; token: string }> {
-  if (!FORCE_DEMO) {
-    let reachable = true;
-    try {
-      const { ok, status, json } = await req('/auth/login', { method: 'POST', body: JSON.stringify({ email_or_phone: id, password: pw }) });
-      const data = ok ? (json?.data ?? json) : null;
-      if (data?.token && data?.user) {
-        sessionReal = true;
-        return { user: adaptUser(data.user), token: data.token };
-      }
-      // The backend answered but REJECTED the credentials — surface the real error
-      // instead of silently signing the user into sample data.
-      if (status >= 400 && status < 500) {
-        throw new Error(json?.error || json?.message || 'Invalid credentials. Please check and try again.');
-      }
-    } catch (e: any) {
-      if (e?.name !== 'AbortError' && e?.message && !/fetch|network|Failed to fetch|Load failed/i.test(e.message)) {
-        throw e; // real auth failure — propagate
-      }
-      reachable = false; // unreachable -> demo fallback below
+  try {
+    const { ok, status, json } = await req('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email_or_phone: id, password: pw }),
+    });
+    const data = ok ? (json?.data ?? json) : null;
+    if (data?.token && data?.user) {
+      sessionReal = true;
+      resetSessionGuard();
+      reportSuccess();
+      return { user: adaptUser(data.user), token: data.token };
     }
-    if (!reachable) { /* fall through */ }
+    // The server answered and refused. Surface its own wording where it gave one.
+    throw new Error(json?.error || json?.message || 'Invalid credentials. Please check and try again.');
+  } catch (e: any) {
+    if (isUnreachable(e)) throw new NetworkError();
+    throw e;
   }
-  await wait(400);
-  sessionReal = false;
-  return { user: clone(mock.currentUser), token: 'demo-token-' + Date.now() };
-}
-/** Send a login OTP to a mobile number (tries the real backend, else simulates). */
-export async function sendOtp(phone: string): Promise<{ ok: boolean; message: string }> {
-  if (!FORCE_DEMO) {
-    try {
-      // Staff login OTP lives at /auth/request-otp (body: { email_or_phone }).
-      const { ok, json } = await req('/auth/request-otp', { method: 'POST', body: JSON.stringify({ email_or_phone: phone, phone }) });
-      if (ok && json?.success !== false) return { ok: true, message: json?.message || 'OTP sent to your mobile number.' };
-    } catch { /* fall through */ }
-  }
-  await wait(500);
-  return { ok: true, message: 'OTP sent to your mobile number.' };
-}
-/** Verify a login OTP -> session (real backend, else demo when a code is entered). */
-export async function verifyOtp(phone: string, code: string): Promise<{ user: User; token: string } | null> {
-  if (!FORCE_DEMO) {
-    try {
-      const { ok, json } = await req('/auth/verify-otp', { method: 'POST', body: JSON.stringify({ phone, email_or_phone: phone, code, otp: code }) });
-      const data = ok ? (json?.data ?? json) : null;
-      if (data?.token && data?.user) { sessionReal = true; return { user: adaptUser(data.user), token: data.token }; }
-    } catch { /* fall through */ }
-  }
-  if (code && code.replace(/\D/g, '').length >= 4) {
-    await wait(400); sessionReal = false;
-    return { user: clone(mock.currentUser), token: 'demo-token-' + Date.now() };
-  }
-  return null;
 }
 
-export async function me(): Promise<User> {
+/**
+ * Request a login OTP. The backend sends a real 5-minute WhatsApp code via its waService.
+ * A failure is reported truthfully: telling the user "OTP sent" when nothing was sent
+ * strands them on a code-entry screen waiting for a message that will never arrive.
+ */
+export async function sendOtp(phone: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const { ok, json } = await req('/auth/request-otp', {
+      method: 'POST',
+      body: JSON.stringify({ email_or_phone: phone, phone }),
+    });
+    if (ok && json?.success !== false) {
+      return { ok: true, message: json?.message || 'Code sent to your WhatsApp number.' };
+    }
+    return { ok: false, message: json?.error || json?.message || 'Could not send the code. Please try again.' };
+  } catch (e: any) {
+    if (isUnreachable(e)) throw new NetworkError();
+    return { ok: false, message: 'Could not send the code. Please try again.' };
+  }
+}
+
+/**
+ * Verify a login OTP. Only the server can decide whether a code is valid; this function
+ * has no local opinion about it. Returns null when the code is wrong or expired.
+ */
+export async function verifyOtp(phone: string, code: string): Promise<{ user: User; token: string } | null> {
+  try {
+    const { ok, json } = await req('/auth/verify-otp', {
+      method: 'POST',
+      body: JSON.stringify({ phone, email_or_phone: phone, code, otp: code }),
+    });
+    const data = ok ? (json?.data ?? json) : null;
+    if (data?.token && data?.user) {
+      sessionReal = true;
+      resetSessionGuard();
+      reportSuccess();
+      return { user: adaptUser(data.user), token: data.token };
+    }
+    return null;
+  } catch (e: any) {
+    if (isUnreachable(e)) throw new NetworkError();
+    return null;
+  }
+}
+
+/**
+ * The signed-in user, straight from the server. Returns null when the profile cannot be
+ * fetched. Callers keep the profile they already restored from the keychain rather than
+ * being handed a stand-in identity, which previously meant a failed refresh could show a
+ * different person's name and role in the header.
+ */
+export async function me(): Promise<User | null> {
   const real = await tryReal<any>('/auth/me', {}, isObj);
   const u = real?.user ?? real; // /auth/me nests under data.user
-  return u && (u.user_id || u.full_name || u.email) ? adaptUser(u) : demo(mock.currentUser);
+  return u && (u.user_id || u.full_name || u.email) ? adaptUser(u) : null;
 }
-export async function deleteAccount(): Promise<{ ok: true }> {
-  if (sessionReal && !FORCE_DEMO) await tryReal('/auth/me', { method: 'DELETE' }, () => true);
-  else await wait(500);
-  return { ok: true };
+/**
+ * Erase this account on the server.
+ *
+ * THE BACKEND HAS NO SUCH ROUTE. `routes/auth.js` declares no `router.delete` at all, so this
+ * request reaches the catch-all 404. It previously discarded that and returned a hardcoded
+ * `{ ok: true }`, which signed the user out, fired a success haptic and left every record in
+ * place — after a two-step confirm promising the opposite in writing. That is a data-deletion
+ * claim the server cannot honour, so it now reports `unsupported` and the caller keeps the
+ * session. See `../contracts/INBOX.md` — `DELETE /api/auth/me` is filed with `cgpe-api`.
+ */
+export async function deleteAccount(): Promise<{ ok: boolean; reason?: WriteFailure }> {
+  if (FORCE_DEMO) { await wait(500); return { ok: true }; }
+  if (!sessionReal) return { ok: false, reason: 'network' };
+  try {
+    const { ok, status } = await req('/auth/me', { method: 'DELETE' });
+    if (ok) return { ok: true };
+    if (status === 403) return { ok: false, reason: 'forbidden' };
+    // 404/405/501 = the route does not exist. Today that is every call.
+    if (status === 404 || status === 405 || status === 501) return { ok: false, reason: 'unsupported' };
+    return { ok: false, reason: 'server' };
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
 }
 
 /* ------------------------------------------------------------------ Leads */
@@ -384,11 +540,11 @@ export async function getLeads(): Promise<Lead[]> {
       if (ok && arr) return arr.map(adaptLead);
     } catch { /* fall through */ }
   }
-  return demo(state.leads);
+  return unavailable('/leads', state.leads);
 }
 export async function getLead(id: string): Promise<Lead | undefined> {
   const real = await tryReal<any>(`/leads/${id}?scope=all`, {}, (d) => d && (d.name || d._id || d.leadId));
-  return real ? adaptLead(real) : demo(state.leads.find((l) => l.id === id));
+  return real ? adaptLead(real) : unavailable('/leads/:id', state.leads.find((l) => l.id === id));
 }
 export async function setLeadStage(id: string, stage: LeadStage): Promise<void> {
   const real = await tryReal(`/leads/${id}`, { method: 'PUT', body: JSON.stringify({ stage }) }, () => true);
@@ -528,7 +684,7 @@ export async function getClient(id: string): Promise<Client | undefined> {
   if (clientCache.has(id)) return clone(clientCache.get(id)!);
   const real = await tryReal<any>(`/clients/${id}?scope=all`, {}, (d) => d && (d.name || d._id));
   if (real) return adaptClient(real);
-  return demo(state.clients.find((c) => c.id === id));
+  return unavailable('/clients/:id', state.clients.find((c) => c.id === id));
 }
 
 /* ----------------------------------------------------------------- Claims */
@@ -547,13 +703,13 @@ export async function getClaims(): Promise<Claim[]> {
       }
     } catch { /* fall through */ }
   }
-  return demo(state.claims);
+  return unavailable('/claims', state.claims);
 }
 export async function getClaim(id: string): Promise<Claim | undefined> {
   if (claimCache.has(id)) return clone(claimCache.get(id)!);
   const real = await tryReal<any>(`/claims/${id}?scope=all`, {}, (d) => d && (d.id || d._id || d.claim_number));
   if (real) return adaptClaim(real);
-  return demo(state.claims.find((c) => c.id === id));
+  return unavailable('/claims/:id', state.claims.find((c) => c.id === id));
 }
 // App claim type → backend register enum (health|life|motor|property|travel|other).
 const CLAIM_TYPE_TO_SERVER: Record<Claim['type'], string> = {
@@ -616,7 +772,7 @@ export async function getReminders(): Promise<Reminder[]> {
       if (ok && arr) return arr.map(adaptReminder);
     } catch { /* fall through */ }
   }
-  return demo(state.reminders);
+  return unavailable('/reminders', state.reminders);
 }
 export async function toggleReminder(id: string): Promise<void> {
   const r = state.reminders.find((x) => x.id === id);
@@ -626,7 +782,7 @@ export async function toggleReminder(id: string): Promise<void> {
 
 /* ------------------------------------------------------------------- Misc */
 export async function getCommission(): Promise<Commission> {
-  return (await tryReal<Commission>('/commissions', {}, isObj)) ?? demo(state.commission);
+  return (await tryReal<Commission>('/commissions', {}, isObj)) ?? unavailable('/commissions', EMPTY_COMMISSION);
 }
 const waThreadCache = new Map<string, WaThread>();
 /** Real WhatsApp hub threads — `?scope=all` unlocks the whole inbox; adaptWaThread
@@ -643,7 +799,7 @@ export async function getWaThreads(): Promise<WaThread[]> {
       }
     } catch { /* fall through */ }
   }
-  return demo(state.waThreads);
+  return unavailable('/whatsapp/hub/threads', state.waThreads);
 }
 /** One conversation — thread meta from the cached list + messages from
  *  /whatsapp/hub/messages?threadRef= (merged inbound + outbound, chronological). */
@@ -660,7 +816,7 @@ export async function getWaThread(id: string): Promise<WaThread | undefined> {
       }
     } catch { /* fall through */ }
   }
-  return demo(state.waThreads.find((t) => t.id === id));
+  return unavailable('/whatsapp/hub/messages', state.waThreads.find((t) => t.id === id));
 }
 export async function sendWaMessage(threadId: string, text: string): Promise<void> {
   if (sessionReal && !FORCE_DEMO) {
@@ -682,17 +838,94 @@ export async function getNotifications(): Promise<AppNotification[]> {
       if (ok && arr) return arr.map(adaptNotification);
     } catch { /* fall through */ }
   }
-  return demo(state.notifications);
+  return unavailable('/notifications', state.notifications);
 }
-export async function markAllNotificationsRead(): Promise<void> {
-  if (sessionReal && !FORCE_DEMO) await tryReal('/notifications/read-all', { method: 'POST' }, () => true);
-  state.notifications.forEach((n) => (n.read = true));
-  await wait(100);
+/**
+ * Mark every notification read.
+ *
+ * THE BUG THIS FIXES. This used to call `POST /notifications/read-all`. The backend route is
+ * `PUT /notifications/mark-all-read` — both the verb and the path were wrong, so the request
+ * 404'd on every single invocation. `tryReal` swallows a non-2xx into `null`, so the failure
+ * was silent: the local array was flipped to read, the badge cleared, and then the next fetch
+ * pulled the server's still-unread rows straight back. That is the "not everything could be
+ * marked as read" desync, and no amount of retrying could have fixed it.
+ *
+ * Now returns whether the SERVER accepted it, so the screen can refuse to clear its badge on
+ * a failure instead of lying about it.
+ */
+export async function markAllNotificationsRead(): Promise<boolean> {
+  if (!sessionReal || FORCE_DEMO) return false;
+  try {
+    const { ok, json } = await req('/notifications/mark-all-read', { method: 'PUT' });
+    if (!ok || json?.success === false) {
+      reportFailure('/notifications/mark-all-read');
+      return false;
+    }
+    return true;
+  } catch {
+    reportFailure('/notifications/mark-all-read');
+    return false;
+  }
+}
+
+/**
+ * Dispatch a custom notification to the team. Admin/leader only.
+ *
+ * `audience: 'all'` fans out to every active staff member; `'selected'` targets the given
+ * user_ids. Returns the number the server actually created, so the composer can report a
+ * real figure rather than assuming success.
+ *
+ * REQUIRES BACKEND DEPLOY: this calls `POST /api/notifications/dispatch`, which is new in
+ * this pass. Against a backend that predates it the call 404s and this returns
+ * `{ ok: false, created: 0, needsDeploy: true }`, which the UI states plainly.
+ */
+export async function dispatchNotification(input: {
+  title: string;
+  message: string;
+  priority?: 'low' | 'medium' | 'high';
+  audience: 'all' | 'selected';
+  user_ids?: string[];
+}): Promise<{ ok: boolean; created: number; message: string; needsRole?: boolean; needsDeploy?: boolean }> {
+  if (!sessionReal || FORCE_DEMO) {
+    return { ok: false, created: 0, message: 'Not signed in. Sign in to send notifications.' };
+  }
+  try {
+    const { ok, status, json } = await req('/notifications/dispatch', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: input.title,
+        message: input.message,
+        priority: input.priority || 'medium',
+        audience: input.audience,
+        user_ids: input.audience === 'selected' ? (input.user_ids || []) : undefined,
+      }),
+    });
+    if (status === 403) {
+      return { ok: false, created: 0, needsRole: true, message: 'Your role cannot send team notifications.' };
+    }
+    if (status === 404) {
+      return {
+        ok: false, created: 0, needsDeploy: true,
+        message: 'The server does not support team notifications yet. It needs the latest backend deploy.',
+      };
+    }
+    if (!ok || json?.success === false) {
+      return { ok: false, created: 0, message: json?.message || json?.error || 'Could not send the notification.' };
+    }
+    const created = Number(json?.data?.created ?? json?.created ?? 0);
+    return { ok: true, created, message: json?.message || `Sent to ${created} ${created === 1 ? 'person' : 'people'}.` };
+  } catch (e: any) {
+    if (isUnreachable(e)) return { ok: false, created: 0, message: 'Could not reach the server. Check your connection.' };
+    return { ok: false, created: 0, message: 'Could not send the notification.' };
+  }
 }
 export async function getContests(): Promise<Contest[]> {
-  return (await tryReal<Contest[]>('/contests', {}, isArr)) ?? demo(state.contests);
+  return (await tryReal<Contest[]>('/contests', {}, isArr)) ?? unavailable('/contests', state.contests);
 }
-export async function getLicPlans(): Promise<LicPlan[]> { return demo(state.licPlans); }
+export async function getLicPlans(): Promise<LicPlan[]> {
+  const real = await tryReal<any[]>('/lic-plans', {}, isArr);
+  return real ? (real as LicPlan[]) : unavailable('/lic-plans', state.licPlans);
+}
 
 /* --------------------------------------------------------- Team (admin) */
 function adaptMember(raw: any): TeamMember {
@@ -752,21 +985,28 @@ export async function getTeam(): Promise<TeamMember[]> {
     })) as TeamMember[];
   }
   const real = await tryReal<any[]>('/profiles?limit=500', {}, isArr);
-  return real ? real.map(adaptMember) : demo(teamMembers);
+  return real ? real.map(adaptMember) : unavailable('/profiles', [] as TeamMember[]);
 }
-/** Roster with REAL user_ids (from /profiles) — for the master track viewer's picker. */
+/**
+ * Roster with REAL user_ids (from /profiles) — for the master track viewer's picker.
+ *
+ * This was the last sample-data leak in the app. It used to fall back to the seed roster in
+ * `data/team.ts`, which meant a master whose /profiles call failed was offered a picker full
+ * of invented colleagues, and selecting one queried movement tracks for a user id that does
+ * not exist. Empty is the correct answer: the picker then shows its empty state.
+ */
 export async function getTrackableMembers(): Promise<{ id: string; name: string; role: string }[]> {
   const real = await tryReal<any[]>('/profiles?limit=100', {}, isArr);
   if (real) return real.filter((p) => p.user_id).map((p) => ({ id: String(p.user_id), name: p.full_name || p.name || 'Member', role: p.role || 'advisor' }));
-  return teamMembers.map((m) => ({ id: m.id, name: m.name, role: m.role }));
+  return unavailable('/profiles', [] as { id: string; name: string; role: string }[]);
 }
 
 export async function getTeamMember(id: string): Promise<TeamMember | undefined> {
   const real = await tryReal<any>(`/profiles/${id}`, {}, isObj);
-  return real ? adaptMember(real) : demo(teamMembers.find((m) => m.id === id));
+  return real ? adaptMember(real) : unavailable('/profiles/:id', undefined as TeamMember | undefined);
 }
 export async function getTeamActivity(): Promise<TeamActivity[]> {
-  return demo(teamActivityFeed());
+  return unavailable('/activity', [] as TeamActivity[]);
 }
 
 /** Global search across the REAL book — clients server-side, plus live leads/claims/tasks. */
@@ -831,31 +1071,87 @@ export async function checkGeofence(lat?: number, lng?: number, accuracy?: numbe
 
 /** Attendance clock-in with GPS -> POST /api/time-tracker/clock-in. Returns the
  *  server geofence verdict (403 → blocked with distance) and the session id. */
-export async function clockIn(coords: { lat?: number; lng?: number; accuracy?: number; city?: string }): Promise<{ ok: boolean; message?: string; blocked?: boolean; distance_m?: number; sessionId?: string }> {
-  if (sessionReal && !FORCE_DEMO) {
-    try {
-      const { ok, status, json } = await req('/time-tracker/clock-in', {
-        method: 'POST',
-        body: JSON.stringify({ ...coords, source: 'mobile' }),
-      });
-      if (status === 403) return { ok: false, blocked: true, message: json?.message, distance_m: json?.distance_m };
-      const sessionId = json?.data?.session?._id || json?.data?.sessionId || json?.sessionId;
-      return { ok, message: json?.message, sessionId: sessionId ? String(sessionId) : undefined };
-    } catch { return { ok: true }; }
+export async function clockIn(coords: { lat?: number; lng?: number; accuracy?: number; city?: string }): Promise<{ ok: boolean; message?: string; blocked?: boolean; distance_m?: number; sessionId?: string; reason?: WriteFailure }> {
+  if (FORCE_DEMO) { await wait(300); return { ok: true }; }
+  if (!sessionReal) return { ok: false, reason: 'network' };
+  try {
+    const { ok, status, json } = await req('/time-tracker/clock-in', {
+      method: 'POST',
+      body: JSON.stringify({ ...coords, source: 'mobile' }),
+    });
+    if (status === 403) return { ok: false, blocked: true, message: json?.message, distance_m: json?.distance_m };
+    if (!ok) return { ok: false, reason: 'server', message: json?.message };
+    const sessionId = json?.data?.session?._id || json?.data?.sessionId || json?.sessionId;
+    return { ok: true, message: json?.message, sessionId: sessionId ? String(sessionId) : undefined };
+  } catch {
+    // PHASE 1: this used to return { ok: true }. A timeout or an offline handset therefore
+    // started a local shift the server knew nothing about, with `sessionId` undefined — so the
+    // whole day's GPS route attached to no session — and fired the app's one heavy haptic to
+    // confirm it. Attendance feeds payroll; a silent loss here costs someone a day's pay.
+    return { ok: false, reason: 'network' };
   }
-  await wait(300);
-  return { ok: true };
 }
-export async function clockOut(coords: { lat?: number; lng?: number; accuracy?: number; city?: string } = {}): Promise<{ ok: boolean; blocked?: boolean; message?: string; distance_m?: number }> {
-  if (sessionReal && !FORCE_DEMO) {
-    try {
-      const { ok, status, json } = await req('/time-tracker/clock-out', { method: 'POST', body: JSON.stringify({ ...coords, source: 'mobile' }) });
-      if (status === 403) return { ok: false, blocked: true, message: json?.message, distance_m: json?.distance_m };
-      return { ok };
-    } catch { return { ok: true }; }
+export async function clockOut(coords: { lat?: number; lng?: number; accuracy?: number; city?: string } = {}): Promise<{ ok: boolean; blocked?: boolean; message?: string; distance_m?: number; reason?: WriteFailure }> {
+  if (FORCE_DEMO) { await wait(200); return { ok: true }; }
+  if (!sessionReal) return { ok: false, reason: 'network' };
+  try {
+    const { ok, status, json } = await req('/time-tracker/clock-out', { method: 'POST', body: JSON.stringify({ ...coords, source: 'mobile' }) });
+    if (status === 403) return { ok: false, blocked: true, message: json?.message, distance_m: json?.distance_m };
+    if (!ok) return { ok: false, reason: 'server', message: json?.message };
+    return { ok: true };
+  } catch {
+    // Mirror of clock-in: a shift genuinely open on the server must stay visibly open on the
+    // device, or the next clock-in silently overlaps a session that was never closed.
+    return { ok: false, reason: 'network' };
   }
-  await wait(200); return { ok: true };
 }
+/**
+ * The signed-in user's CURRENT clock state, straight from the server.
+ *
+ * WHY THIS EXISTS. Clock state used to live only in AsyncStorage under a device-scoped key
+ * (`clock.<date>`), which made it a property of the HANDSET rather than of the person. On a
+ * shared device that is straightforwardly wrong: user X clocks in, hands the phone to user Y,
+ * and Y sees X's running shift and can clock X out. It also meant a user who logged in on a
+ * second device saw "not clocked in" while the server had them on duty.
+ *
+ * `GET /time-tracker/current` resolves the DayLog from the JWT, so it is per-user by
+ * construction and cannot be spoofed by local cache. This is now the source of truth; local
+ * storage is only a paint-before-network cache, and it is keyed per user.
+ *
+ * Returns null when the state could not be read, so the caller can keep showing its cached
+ * value rather than flipping the button to "Clock in" on a transient network blip.
+ */
+export type ClockSnapshot = {
+  isClockedIn: boolean;
+  isOnBreak: boolean;
+  /** Seconds worked in the currently running session, breaks already deducted. */
+  currentSessionTime: number;
+  /** ISO timestamp the running session began, when the server reports one. */
+  since?: string;
+};
+
+export async function getClockState(): Promise<ClockSnapshot | null> {
+  const env = await tryEnvelope<any>('/time-tracker/current', (j) => j && j.data);
+  if (!env) return null;
+  const d = env.data || {};
+  const day = d.dayLog || {};
+  // The active session carries the clock-in stamp; fall back to deriving it from the
+  // elapsed seconds the server already computed so the timer is right either way.
+  let since: string | undefined;
+  const sessions = Array.isArray(day.sessions) ? day.sessions : [];
+  const active = sessions.find((x: any) => String(x?._id || x?.id) === String(day.activeSessionId));
+  if (active?.clockIn) since = new Date(active.clockIn).toISOString();
+  else if (d.isClockedIn && Number.isFinite(d.currentSessionTime)) {
+    since = new Date(Date.now() - Number(d.currentSessionTime) * 1000).toISOString();
+  }
+  return {
+    isClockedIn: !!d.isClockedIn,
+    isOnBreak: !!d.isOnBreak,
+    currentSessionTime: Number(d.currentSessionTime) || 0,
+    since,
+  };
+}
+
 export async function getAttendanceHistory(): Promise<any[]> {
   // History accrues in DayLog sessions via /time-tracker/history; fall back to the
   // per-user attendance endpoint used by the map so the screen is never empty.
@@ -923,13 +1219,12 @@ const toPin = (row: any, p: any): AgentPin | null => {
 };
 
 export async function getAgentLocations(): Promise<AgentPin[]> {
-  if (!sessionReal || FORCE_DEMO) {
-    return [
-      { id: 'd1', name: 'Rahul Patel', city: 'Anand', inLat: 22.5645, inLng: 72.9289, inTime: new Date().toISOString(), onDuty: true },
-      { id: 'd2', name: 'Sneha Trivedi', city: 'Nadiad', inLat: 22.6916, inLng: 72.8634, inTime: new Date().toISOString(), onDuty: true },
-      { id: 'd3', name: 'Amit Chauhan', city: 'Borsad', inLat: 22.406, inLng: 72.897, inTime: new Date().toISOString(), outLat: 22.41, outLng: 72.9, outTime: new Date().toISOString(), onDuty: false },
-    ];
-  }
+  // PHASE 10. This used to return three invented agents pinned at real Gujarat coordinates
+  // (Anand, Nadiad, Borsad) with `onDuty: true` and a live timestamp. On the master's agent
+  // map that is indistinguishable from genuine field telemetry: a manager could believe three
+  // named people were out working when nobody was. Of every sample-data path in this app it
+  // was the most misleading, because the map carries no other cue that it might be fake.
+  if (!sessionReal || FORCE_DEMO) return unavailable('/attendance', [] as AgentPin[]);
   const profiles = (await tryReal<any[]>('/profiles?limit=60', {}, isArr)) || [];
   const people = profiles.filter((p) => p.user_id).slice(0, 20);
   const today = new Date().toISOString().slice(0, 10);
@@ -1022,16 +1317,483 @@ export async function sendCampaign(type: 'renewal' | 'birthday' | 'anniversary' 
       return { ok: false, count: 0, message: e?.message || 'Send failed' };
     }
   }
-  // demo: count matching clients locally
-  await wait(600);
-  const clients = state.clients;
-  const now = new Date();
-  const match = clients.filter((c) => {
-    const fup = c.policies[0]?.nextRenewal;
-    if (type === 'renewal') return fup && new Date(fup).getMonth() === now.getMonth();
-    if (type === 'birthday') return c.dob && new Date(c.dob).getMonth() === now.getMonth();
-    return true;
-  });
-  const count = opts.limit ? Math.min(opts.limit, match.length) : match.length;
-  return { ok: true, count, message: `Queued ${count} WhatsApp message(s) (demo).` };
+  // No live session. Reporting a fake "queued N messages" here would be the worst possible
+  // lie in this app: the user would believe renewal reminders went out to real policyholders
+  // when nothing was dispatched at all.
+  reportFailure('/campaigns/send');
+  return { ok: false, count: 0, message: 'Not signed in. Sign in to send campaigns.' };
 }
+
+/* ==================================================================== *
+ * PHASE 9 — FEATURE PARITY LAYER
+ *
+ * Every function below is wired to an endpoint verified live on BOTH the production host
+ * and the local backend (401 when unauthenticated, which proves the route is mounted).
+ *
+ * SHAPES COME FROM THE BACKEND ROUTE SOURCE, NOT FROM GUESSWORK. These collections have
+ * hand-rolled transforms whose wire field names do not match their Mongo documents.
+ * `transformTicket` in routes/tickets.js is the clearest case: the document carries
+ * `aiUnderstanding` and `assignedTo`, the wire format carries `reason` and `owner.name`.
+ * Guessing here yields a screen that renders blank rows against a perfectly healthy server,
+ * which is indistinguishable from an outage and impossible to debug from the UI.
+ *
+ * ONE KNOWN GAP IS FLAGGED, NOT HIDDEN. `/api/lic-plans` returns 404 in production while
+ * existing locally, so that screen legitimately comes back empty in a shipped build until
+ * the backend is redeployed. It surfaces through `data/health` like any other outage.
+ * ==================================================================== */
+
+/**
+ * Envelope-aware fetch. `tryReal` unwraps to `json.data`, which throws away `total`,
+ * `meta` and `facets` — precisely the fields these list screens need for their counts and
+ * filter chips. This keeps the whole envelope.
+ */
+async function tryEnvelope<T>(path: string, validate: (d: any) => boolean, opts: RequestInit = {}): Promise<T | null> {
+  if (FORCE_DEMO || !sessionReal) return null;
+  try {
+    const { ok, json } = await req(path, opts);
+    if (!ok || !json) return null;
+    return validate(json) ? (json as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+const qs = (params: Record<string, string | number | undefined>) =>
+  Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== '' && v !== null)
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+    .join('&');
+
+/* ----------------------------------------------------------- Tickets */
+
+export type Ticket = {
+  id: string;
+  ticket_ref: string | null;
+  type: string;
+  type_label: string;
+  category?: string;
+  status: string;
+  status_label: string;
+  is_closed: boolean;
+  priority?: string;          // P1 | P2 | P3
+  zone?: string;              // RAG: red | amber | green
+  client: { name: string; phone: string };
+  client_id?: string;
+  reason?: string;            // the AI's understanding of what was asked
+  task?: string;              // what actually needs doing
+  request_text?: string;
+  policy_no?: string;
+  source?: string;
+  channel?: string;
+  owner: { name: string; phone?: string; team?: string; status?: string } | null;
+  timeline?: { status: string; at: string | null; actor: string | null }[];
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type TicketPage = {
+  data: Ticket[];
+  total: number;
+  page: number;
+  totalPages: number;
+  meta: {
+    typeCounts: Record<string, number>;
+    stateCounts: { all: number; active: number; closed: number };
+  };
+};
+
+const EMPTY_TICKET_PAGE: TicketPage = {
+  data: [], total: 0, page: 1, totalPages: 1,
+  meta: { typeCounts: {}, stateCounts: { all: 0, active: 0, closed: 0 } },
+};
+
+export async function getTickets(opts: {
+  state?: string; type?: string; search?: string; page?: number; limit?: number;
+} = {}): Promise<TicketPage> {
+  const path = `/tickets?${qs({
+    state: opts.state && opts.state !== 'all' ? opts.state : undefined,
+    type: opts.type && opts.type !== 'all' ? opts.type : undefined,
+    search: opts.search,
+    page: opts.page ?? 1,
+    limit: opts.limit ?? 25,
+  })}`;
+  const env = await tryEnvelope<any>(path, (j) => Array.isArray(j?.data));
+  if (!env) return unavailable('/tickets', EMPTY_TICKET_PAGE);
+  return {
+    data: env.data as Ticket[],
+    total: env.total ?? env.data.length,
+    page: env.page ?? 1,
+    totalPages: env.totalPages ?? 1,
+    meta: {
+      typeCounts: env.meta?.typeCounts ?? {},
+      stateCounts: env.meta?.stateCounts ?? { all: env.total ?? 0, active: 0, closed: 0 },
+    },
+  };
+}
+
+export async function getTicket(id: string): Promise<Ticket | undefined> {
+  const real = await tryReal<Ticket>(`/tickets/${encodeURIComponent(id)}`, {}, isObj);
+  return real ?? unavailable('/tickets/:id', undefined as Ticket | undefined);
+}
+
+/**
+ * Update a ticket. This is the "I am handling it" action: `assignedTo` claims ownership,
+ * `state` advances it, `note` appends a comment. The backend writes an audit entry for
+ * every field that actually changed, so the detail screen timeline stays truthful.
+ *
+ * Returns null when the write was refused, so the caller shows a real error rather than
+ * optimistically painting a state the server never accepted.
+ */
+export async function updateTicket(id: string, patch: {
+  state?: string; assignedTo?: string; assignedTeam?: string; priority?: string;
+  note?: string; task?: string;
+}): Promise<Ticket | null> {
+  if (!sessionReal || FORCE_DEMO) return null;
+  try {
+    const { ok, json } = await req(`/tickets/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    });
+    if (!ok || !json?.success) return null;
+    return (json.data as Ticket) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/* ------------------------------------------------- Notes (private board) */
+
+export type BoardNote = {
+  id: string;
+  noticeId: string | null;
+  text: string;
+  transcript: string;       // the original dictation, often Gujarati
+  sourceType: 'text' | 'voice';
+  category: string;
+  tags: string[];
+  pinned: boolean;
+  status: string;
+  ownerName: string;
+  ownerRole: string;
+  createdAt: string | null;
+  updatedAt: string | null;
+};
+
+export type NotesPage = {
+  data: BoardNote[];
+  total: number;
+  totalPages: number;
+  facets: {
+    categories: { label: string; value: number }[];
+    tags: { label: string; value: number }[];
+    statuses: { label: string; value: number }[];
+  };
+  owner: { name: string; phoneLast10: string };
+};
+
+const EMPTY_NOTES: NotesPage = {
+  data: [], total: 0, totalPages: 1,
+  facets: { categories: [], tags: [], statuses: [] },
+  owner: { name: '', phoneLast10: '' },
+};
+
+/**
+ * The private board is owned by PHONE, not by user id: notes arrive as WhatsApp voice
+ * memos keyed to the sender's last ten digits. An account with no phone on its profile
+ * legitimately has no board, and the backend fails closed rather than leaking someone
+ * else's notes. An empty result can therefore mean "no phone on file", which the screen
+ * should say plainly instead of implying the user has written nothing.
+ */
+export async function getNotes(opts: { search?: string; category?: string; page?: number; limit?: number } = {}): Promise<NotesPage> {
+  const path = `/notice-board?${qs({
+    search: opts.search,
+    category: opts.category && opts.category !== 'all' ? opts.category : undefined,
+    page: opts.page ?? 1,
+    limit: opts.limit ?? 30,
+  })}`;
+  const env = await tryEnvelope<any>(path, (j) => Array.isArray(j?.data));
+  if (!env) return unavailable('/notice-board', EMPTY_NOTES);
+  return {
+    data: env.data as BoardNote[],
+    total: env.total ?? env.data.length,
+    totalPages: env.totalPages ?? 1,
+    facets: env.facets ?? EMPTY_NOTES.facets,
+    owner: env.owner ?? EMPTY_NOTES.owner,
+  };
+}
+
+export async function addNote(text: string, category = 'note', tags: string[] = []): Promise<BoardNote | null> {
+  if (!sessionReal || FORCE_DEMO) return null;
+  try {
+    const { ok, json } = await req('/notice-board', { method: 'POST', body: JSON.stringify({ text, category, tags }) });
+    return ok && json?.success ? (json.data as BoardNote) : null;
+  } catch { return null; }
+}
+
+export async function updateNote(
+  id: string,
+  patch: Partial<Pick<BoardNote, 'text' | 'category' | 'tags' | 'pinned' | 'status'>>,
+): Promise<BoardNote | null> {
+  if (!sessionReal || FORCE_DEMO) return null;
+  try {
+    const { ok, json } = await req(`/notice-board/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(patch) });
+    return ok && json?.success ? (json.data as BoardNote) : null;
+  } catch { return null; }
+}
+
+export async function deleteNote(id: string): Promise<boolean> {
+  if (!sessionReal || FORCE_DEMO) return false;
+  try {
+    const { ok, json } = await req(`/notice-board/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return !!(ok && json?.success);
+  } catch { return false; }
+}
+
+/* ------------------------------------------ Notice Board (official notices) */
+
+export type CompanyNotice = {
+  _id?: string;
+  id?: string;
+  title?: string;
+  message?: string;
+  content?: string;
+  category?: string;
+  priority?: string;
+  createdAt?: string;
+  created_at?: string;
+  author?: string;
+  pinned?: boolean;
+};
+
+export async function getCompanyNotices(): Promise<{ data: CompanyNotice[]; categories: string[] }> {
+  const env = await tryEnvelope<any>('/notices?limit=60', (j) => Array.isArray(j?.data));
+  if (!env) return unavailable('/notices', { data: [] as CompanyNotice[], categories: [] as string[] });
+  return { data: env.data as CompanyNotice[], categories: env.categories ?? [] };
+}
+
+export async function markNoticeRead(id: string): Promise<boolean> {
+  if (!sessionReal || FORCE_DEMO) return false;
+  try {
+    const { ok } = await req(`/notices/${encodeURIComponent(id)}/read`, { method: 'POST' });
+    return ok;
+  } catch { return false; }
+}
+
+/* --------------------------------------------------------- Prospects */
+
+export type Prospect = {
+  _id?: string;
+  id?: string;
+  name?: string;
+  firm?: string;
+  phone?: string;
+  stage?: string;
+  city?: string;
+  notes?: string;
+  updatedAt?: string;
+  createdAt?: string;
+  [k: string]: unknown;
+};
+
+export type ProspectPage = { data: Prospect[]; total: number; page: number; totalPages: number };
+
+export async function getProspects(opts: { search?: string; stage?: string; page?: number; limit?: number } = {}): Promise<ProspectPage> {
+  const path = `/prospects?${qs({
+    search: opts.search,
+    stage: opts.stage && opts.stage !== 'all' ? opts.stage : undefined,
+    page: opts.page ?? 1,
+    limit: opts.limit ?? 25,
+  })}`;
+  const env = await tryEnvelope<any>(path, (j) => Array.isArray(j?.data));
+  if (!env) return unavailable('/prospects', { data: [] as Prospect[], total: 0, page: 1, totalPages: 1 });
+  return { data: env.data as Prospect[], total: env.total ?? 0, page: env.page ?? 1, totalPages: env.totalPages ?? 1 };
+}
+
+/** Stage buckets and their counts, for the pipeline header. */
+export async function getProspectSegments(): Promise<any | null> {
+  return await tryEnvelope<any>('/prospects/segments', (j) => !!j?.success);
+}
+
+/** Record an action against a prospect. The backend advances the stage and logs activity. */
+export async function actOnProspect(id: string, action: string, note?: string): Promise<boolean> {
+  if (!sessionReal || FORCE_DEMO) return false;
+  try {
+    const { ok, json } = await req(`/prospects/${encodeURIComponent(id)}/action`, {
+      method: 'POST', body: JSON.stringify({ action, note }),
+    });
+    return !!(ok && json?.success);
+  } catch { return false; }
+}
+
+/* --------------------------------------------------- Client segments */
+
+export type SegmentRow = Record<string, unknown> & { name?: string; phone?: string; flags?: string[] };
+export type SegmentsResult = {
+  rows: SegmentRow[];
+  total?: number;
+  segment?: string;
+  counts?: Record<string, number>;
+  [k: string]: unknown;
+};
+
+/**
+ * Smart segmentation over the whole client book. `flags` is a comma-joined list
+ * (hot-lead, birthday-soon, renewal-due and so on) and `match` decides whether a row must
+ * satisfy all of them or any one.
+ *
+ * PERFORMANCE NOTE FOR CALLERS: the backend scans roughly 9,000 documents in memory per
+ * call and caches per visibility scope. Debounce the search field; do not fire this on
+ * every keystroke.
+ */
+export async function getClientSegments(opts: {
+  segment?: 'individual' | 'family';
+  flags?: string[];
+  match?: 'all' | 'any';
+  search?: string;
+  sort?: string;
+  page?: number;
+  limit?: number;
+} = {}): Promise<SegmentsResult> {
+  const path = `/clients/segments?${qs({
+    segment: opts.segment ?? 'individual',
+    flags: opts.flags && opts.flags.length ? opts.flags.join(',') : undefined,
+    match: opts.match ?? 'all',
+    search: opts.search,
+    sort: opts.sort ?? 'priority',
+    page: opts.page ?? 1,
+    limit: opts.limit ?? 25,
+  })}`;
+  const real = await tryReal<SegmentsResult>(path, {}, (d) => d && Array.isArray(d.rows));
+  return real ?? unavailable('/clients/segments', { rows: [] as SegmentRow[], total: 0 } as SegmentsResult);
+}
+
+/* ---------------------------------------------------------- Families */
+
+export type Family = {
+  family_id?: string;
+  id?: string;
+  head_name?: string;
+  member_count?: number;
+  members?: { name?: string; phone?: string; relation?: string }[];
+  total_premium?: number;
+  total_cover?: number;
+  [k: string]: unknown;
+};
+
+export type FamilyStats = {
+  families: number;
+  multi_person_families: number;
+  persons: number;
+  units: number;
+  review: number;
+  largest: number;
+};
+
+export async function getFamilies(opts: { search?: string; page?: number; limit?: number } = {}): Promise<{ data: Family[]; total: number; totalPages: number }> {
+  const path = `/families?${qs({ search: opts.search, page: opts.page ?? 1, limit: opts.limit ?? 25 })}`;
+  const env = await tryEnvelope<any>(path, (j) => Array.isArray(j?.data));
+  if (!env) return unavailable('/families', { data: [] as Family[], total: 0, totalPages: 1 });
+  return { data: env.data as Family[], total: env.total ?? 0, totalPages: env.totalPages ?? 1 };
+}
+
+export async function getFamilyStats(): Promise<FamilyStats | null> {
+  return await tryReal<FamilyStats>('/families/stats', {}, isObj);
+}
+
+export async function getFamily(id: string): Promise<Family | undefined> {
+  const real = await tryReal<Family>(`/families/${encodeURIComponent(id)}`, {}, isObj);
+  return real ?? unavailable('/families/:id', undefined as Family | undefined);
+}
+
+/* ------------------------------------------------------ Insurance KB */
+
+export type KbArticle = {
+  _id?: string;
+  id?: string;
+  title?: string;
+  content?: string;
+  topic?: string;
+  domain?: string;
+  category?: string;
+  tags?: string[];
+  query_examples?: string[];
+  [k: string]: unknown;
+};
+
+export type KbPage = {
+  data: KbArticle[];
+  total: number;
+  pages: number;
+  facets: { domains: string[]; categories: string[] };
+};
+
+const EMPTY_KB: KbPage = { data: [], total: 0, pages: 1, facets: { domains: [], categories: [] } };
+
+/** The advisor field reference. Search covers title, content, topic, tags and examples. */
+export async function getKbArticles(opts: {
+  search?: string; domain?: string; category?: string; page?: number; limit?: number;
+} = {}): Promise<KbPage> {
+  const path = `/insurance-kb?${qs({
+    search: opts.search,
+    domain: opts.domain && opts.domain !== 'all' ? opts.domain : undefined,
+    category: opts.category && opts.category !== 'all' ? opts.category : undefined,
+    page: opts.page ?? 1,
+    limit: opts.limit ?? 24,
+  })}`;
+  const env = await tryEnvelope<any>(path, (j) => Array.isArray(j?.data));
+  if (!env) return unavailable('/insurance-kb', EMPTY_KB);
+  return {
+    data: env.data as KbArticle[],
+    total: env.total ?? env.data.length,
+    pages: env.pages ?? 1,
+    facets: env.facets ?? EMPTY_KB.facets,
+  };
+}
+
+export async function getKbArticle(id: string): Promise<KbArticle | undefined> {
+  const real = await tryReal<KbArticle>(`/insurance-kb/${encodeURIComponent(id)}`, {}, isObj);
+  return real ?? unavailable('/insurance-kb/:id', undefined as KbArticle | undefined);
+}
+
+/* ------------------------------------------- Server-driven UI (RBAC layout) */
+
+export type UiWidget = {
+  key: string;
+  visible: boolean;
+  title_override?: string | null;
+  max_items: number;
+  mandatory: boolean;
+};
+
+export type AppUiConfig = {
+  role_key: string;
+  label?: string;
+  dashboard: { hero: 'clock_and_tasks' | 'tasks_only' | 'clock_only' | 'none'; widgets: UiWidget[] };
+  nav: {
+    tabs: string[];
+    /** `collapsed_by_default` is part of the ui_rbac_config.json contract; it was missing
+     *  here, so the config provider was silently dropping it during normalisation. */
+    more_sections?: { title: string; items: string[]; collapsed_by_default?: boolean }[];
+    hidden: string[];
+  };
+  features: Record<string, boolean | string[]>;
+  theme?: { accent?: string; badge_label?: string; density?: 'comfortable' | 'compact' };
+};
+
+/**
+ * The signed-in user's mobile UI layout, resolved server-side from their role.
+ *
+ * The contract is documented in `ANDROID/ui_rbac_config.json`, which is also what the web
+ * Admin Panel builds its editor against. The server deep-merges the stored document over
+ * role defaults, so a half-filled admin form can never blank someone's dashboard.
+ *
+ * RETURNS NULL ON ANY FAILURE, AND THAT IS LOAD-BEARING. The caller falls back to the app's
+ * built-in layout and shows the FULL menu. A layout-config outage must never be able to hide
+ * a field agent's own work from them. Authorisation is enforced by the API routes; this only
+ * decides presentation.
+ */
+export async function getAppUiConfig(): Promise<AppUiConfig | null> {
+  const env = await tryEnvelope<any>('/rbac/app-ui', (j) => j && j.data && j.data.dashboard);
+  return env ? (env.data as AppUiConfig) : null;
+}
+

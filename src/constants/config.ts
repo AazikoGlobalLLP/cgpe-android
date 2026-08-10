@@ -26,7 +26,7 @@ export const APP = {
   tagline: 'Khushiyo Ka Financial Planner',
   org: 'C.G.P.E LLP',
   since: 'Since 1989',
-  version: '1.4.1',
+  version: '1.8.0',
 };
 
 /** true = always sample data; false = real-backend-first with graceful fallback. */
