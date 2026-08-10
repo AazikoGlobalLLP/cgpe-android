@@ -40,7 +40,17 @@ import type {
 } from './types';
 
 const wait = (ms = MOCK_LATENCY) => new Promise((r) => setTimeout(r, ms));
-const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+/**
+ * PHASE 3: undefined-safe. `JSON.stringify(undefined)` returns the VALUE `undefined`, not a
+ * string, so `JSON.parse` then received the literal text "undefined" and threw a SyntaxError.
+ *
+ * That mattered because `unavailable()` ends in `clone(value)`, and every single-record
+ * lookup passes `undefined` as its empty value — `getClient`, `getLead`, `getTeamMember`,
+ * `getTicket`, `getFamily`, `getKbArticle`. So a failed lookup REJECTED instead of resolving
+ * empty, which means the carefully-worded "This client could not load" empty states on those
+ * six detail screens have never once rendered; the screens saw an unhandled rejection.
+ */
+const clone = <T,>(x: T): T => (x === undefined ? x : JSON.parse(JSON.stringify(x)));
 
 let authToken: string | null = null;
 let sessionReal = false;
@@ -50,6 +60,9 @@ let currentUserName: string | null = null;
 export function setAuthToken(t: string | null) {
   authToken = t;
   sessionReal = !!t && !t.startsWith('demo-');
+  // A different account has different permissions, so no 403-was-expected note survives the
+  // switch. `store/auth.tsx` calls `resetHealth()` alongside this on both sign-in and out.
+  suppressed.clear();
 }
 export function setCurrentUser(id: string | null, name?: string | null) {
   currentUserId = id; currentUserName = name || null;
@@ -71,7 +84,73 @@ export function isRealSession() { return sessionReal; }
  */
 export type WriteFailure = 'network' | 'server' | 'forbidden' | 'unsupported';
 
-async function req(path: string, opts: RequestInit = {}, timeout = REQUEST_TIMEOUT): Promise<any> {
+/**
+ * A request path reduced to the stable key the health channel reports under. PHASE 3.
+ *
+ * Two things have to agree on one string or the banner double-counts: the helper that
+ * discovers a failure (`tryReal`) and the caller that resolves it (`unavailable`). The
+ * helper only knows the URL it fetched — `/clients/68f1…c0d1?scope=all` — while the caller
+ * writes the human key, `/clients/:id`. Normalising the first into the second makes one
+ * failure produce one entry.
+ *
+ * ONLY id-SHAPED SEGMENTS COLLAPSE, and that restraint is the whole point: a blanket
+ * "replace the last segment" rule would fold `/clients/segments` and `/clients/stats/overview`
+ * into `/clients/:id`, so three unrelated endpoints would share one banner row and one
+ * endpoint's recovery would silently clear another's failure.
+ */
+const ID_SEGMENT =
+  /\/(?:[0-9a-f]{24}|\d+|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})(?=\/|$)/gi;
+const healthKey = (path: string) => path.split('?')[0].replace(ID_SEGMENT, '/:id');
+
+/**
+ * Report a non-2xx — unless it is a status that is an ANSWER rather than a fault. PHASE 3.
+ *
+ * The banner exists to say "we could not load this". Three statuses mean something else
+ * entirely, and reporting them would replace one lie with a louder one:
+ *
+ *   401 — `reportAuth` has already ended the session. A banner on the way out is noise.
+ *   403 — a permission result, not an outage. `GET /profiles` is admin-only
+ *         (`contracts/api.md:211`) and `getAgentLocations` calls it unconditionally, so
+ *         reporting 403 would pin an outage banner open for EVERY ADVISOR against a
+ *         perfectly healthy backend — failing this phase's own acceptance criterion.
+ *   404 / 501 — the endpoint is not deployed. Phase 1 already named this case `unsupported`
+ *         (see `WriteFailure` above): "not a transient fault: the endpoint is not there, and
+ *         retrying will never help." `/lic-plans` is documented as exactly this in
+ *         production, and reporting it would hold the banner open for the whole session.
+ *
+ * Everything else — 4xx that indicates a malformed request, and every 5xx — is reported.
+ */
+function reportIfOutage(status: number, key: string): void {
+  if (status === 401 || status === 403 || status === 404 || status === 501) {
+    suppressed.add(key);
+    return;
+  }
+  suppressed.delete(key);
+  reportFailure(key);
+}
+
+/**
+ * Endpoints whose most recent failure was an ANSWER (401/403/404/501) rather than a fault.
+ *
+ * This set exists because the suppression in `reportIfOutage` would otherwise be undone one
+ * line later. Most callers respond to `tryReal`'s `null` with `?? unavailable(…)`, and
+ * `unavailable` reports unconditionally — so a 403 on `/profiles` would be classified as
+ * "not an outage", return `null`, and then have the caller raise the banner anyway. That is
+ * precisely the advisor-sees-a-permanent-outage case this phase must not ship.
+ *
+ * Keyed by health key, so the producer (`tryReal`, which knows the URL) and the consumer
+ * (`unavailable`, which knows the human key) meet on the same string — that is what
+ * `healthKey` is for. Consumed exactly once on read, so the NEXT attempt reports normally if
+ * it fails for a real reason.
+ */
+const suppressed = new Set<string>();
+
+async function req(
+  path: string,
+  opts: RequestInit = {},
+  timeout = REQUEST_TIMEOUT,
+  key: string = healthKey(path),
+): Promise<any> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {
@@ -85,7 +164,7 @@ async function req(path: string, opts: RequestInit = {}, timeout = REQUEST_TIMEO
       },
     });
     const json = await res.json().catch(() => null);
-    reportAuth(res.status, !!authToken);
+    reportAuth(res.status, !!authToken, key);
     return { ok: res.ok, status: res.status, json };
   } finally {
     clearTimeout(timer);
@@ -106,23 +185,55 @@ async function req(path: string, opts: RequestInit = {}, timeout = REQUEST_TIMEO
  * which is a per-action permission result, not a broken session. Logging the user out for
  * it would be both wrong and infuriating.
  */
-function reportAuth(status: number, sentToken: boolean): void {
+function reportAuth(status: number, sentToken: boolean, key: string): void {
   if (sentToken && status === 401) {
     expireSession('expired');
     return;
   }
-  if (status >= 200 && status < 400) reportSuccess();
+  // PHASE 3: clears THIS endpoint only. It used to wipe every recorded failure, which made
+  // the banner order-dependent inside a `Promise.all` fan-out. See `data/health.ts`.
+  if (status >= 200 && status < 400) {
+    suppressed.delete(key);   // a working endpoint has no pending "this was an answer" note
+    reportSuccess(key);
+  }
 }
 
-/** Try the real API; null on any failure/validation miss so the caller can fall back. */
-async function tryReal<T>(path: string, opts: RequestInit, validate: (d: any) => boolean): Promise<T | null> {
-  if (FORCE_DEMO || !sessionReal) return null;
+/**
+ * Try the real API; null on any failure or validation miss so the caller can fall back.
+ *
+ * PHASE 3 GAVE THIS FUNCTION A VOICE. It used to return `null` three different ways and say
+ * nothing about any of them, so 18 of its 32 call sites failed in total silence — the client
+ * book, the org snapshot, the claims summary and ten more resolved empty while
+ * `data/health` stayed clean and every screen rendered its "you have none" copy.
+ *
+ * The three exits are NOT equivalent, and only two of them are outages:
+ *   - a non-2xx is reported through `reportIfOutage`, which filters the statuses that are
+ *     answers rather than faults (401/403/404/501 — see there);
+ *   - a throw is always reported: that is a dead network or the 4.5 s abort;
+ *   - a 200 whose body fails `validate` is ALSO reported, deliberately. The server answered,
+ *     so it is a contract fault rather than an outage — but the caller's next move is to
+ *     render a zeroed shell, and an unlabelled zero is the exact lie this channel exists to
+ *     prevent. `contracts/CHANGELOG.md` lists 15 confirmed drifts, so this is not theoretical.
+ *
+ * `key` defaults to the normalised path and is overridable for the handful of callers whose
+ * `unavailable()` key cannot be derived from the URL (a slug id, say).
+ */
+async function tryReal<T>(
+  path: string,
+  opts: RequestInit,
+  validate: (d: any) => boolean,
+  key: string = healthKey(path),
+): Promise<T | null> {
+  if (FORCE_DEMO || !sessionReal) return null;   // no request attempted; nothing to report
   try {
-    const { ok, json } = await req(path, opts);
-    if (!ok) return null;
+    const { ok, status, json } = await req(path, opts, REQUEST_TIMEOUT, key);
+    if (!ok) { reportIfOutage(status, key); return null; }
     const data = json?.data ?? json;
-    return validate(data) ? (data as T) : null;
+    if (validate(data)) return data as T;
+    reportFailure(key);
+    return null;
   } catch {
+    reportFailure(key);
     return null;
   }
 }
@@ -396,7 +507,10 @@ export async function addTask(data: Partial<Task> & { assigneeName?: string }): 
  * state lands, which reads as a glitch rather than a considered "nothing here".
  */
 async function unavailable<T>(endpoint: string, value: T): Promise<T> {
-  reportFailure(endpoint);
+  // PHASE 3: do not contradict a classification already made upstream. If `tryReal` decided
+  // this endpoint's failure was an answer (403 "you may not", 404 "not deployed") rather than
+  // an outage, it left a note in `suppressed` and this must stay quiet. Read-once.
+  if (!suppressed.delete(endpoint)) reportFailure(endpoint);
   await wait();
   return clone(value);
 }
@@ -438,7 +552,9 @@ export async function login(id: string, pw: string): Promise<{ user: User; token
     if (data?.token && data?.user) {
       sessionReal = true;
       resetSessionGuard();
-      reportSuccess();
+      // No health call here. `reportSuccess` is per-endpoint since Phase 3 and would only
+      // clear `/auth/login`; the whole-list clear a fresh session wants is `resetHealth()`,
+      // which `store/auth.tsx:124` already runs on the sign-in path.
       return { user: adaptUser(data.user), token: data.token };
     }
     // The server answered and refused. Surface its own wording where it gave one.
@@ -484,7 +600,7 @@ export async function verifyOtp(phone: string, code: string): Promise<{ user: Us
     if (data?.token && data?.user) {
       sessionReal = true;
       resetSessionGuard();
-      reportSuccess();
+      // See `login()` — the fresh-session clear is `resetHealth()` in `store/auth.tsx:124`.
       return { user: adaptUser(data.user), token: data.token };
     }
     return null;
@@ -588,8 +704,17 @@ let clientTotal = 0;
 export async function getClientsPage(page = 1, search = ''): Promise<{ items: Client[]; hasMore: boolean; total: number }> {
   const q = `/clients?limit=${CLIENT_PAGE}&page=${page}&scope=all${search ? `&search=${encodeURIComponent(search)}` : ''}`;
   if (sessionReal && !FORCE_DEMO) {
+    /**
+     * PHASE 3: THIS PATH USED TO FAIL IN COMPLETE SILENCE, and it is the busiest read in
+     * the app. A throw, a non-2xx, or a `data` that is not an array all fell through to the
+     * permanently-empty `state.clients` buffer below and returned `{ items: [], total: 0 }`
+     * with the health channel untouched. `src/app/(tabs)/clients.tsx:169-181` branches on
+     * `health.degraded`, which stayed false — so a field agent with a 9,000-client book was
+     * told "No clients in your book yet. Clients appear here as soon as records are assigned
+     * to you." The correct copy was already written on the line beside it and never ran.
+     */
     try {
-      const { ok, json } = await req(q);
+      const { ok, status, json } = await req(q, {}, REQUEST_TIMEOUT, '/clients');
       if (ok && Array.isArray(json?.data)) {
         const items = json.data.map(adaptClient);
         items.forEach((cl: Client) => clientCache.set(cl.id, cl));
@@ -597,7 +722,10 @@ export async function getClientsPage(page = 1, search = ''): Promise<{ items: Cl
         if (!search) clientTotal = totalPages * CLIENT_PAGE; // approximate; exact total via getClientStats
         return { items, hasMore: page < totalPages, total: totalPages };
       }
-    } catch { /* fall through to demo */ }
+      // A 2xx whose `data` is not an array is as unusable as a 500, and must not read as empty.
+      if (ok) reportFailure('/clients');
+      else reportIfOutage(status, '/clients');
+    } catch { reportFailure('/clients'); }
   }
   const all = search
     ? state.clients.filter((c) => c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search))
@@ -610,12 +738,28 @@ export async function getClientsPage(page = 1, search = ''): Promise<{ items: Cl
 export async function getClientStats(): Promise<{ total_clients: number; total_premium: number; total_sum_assured: number; birthdays_this_month: number } | null> {
   if (!sessionReal || FORCE_DEMO) return null;
   let total = 0;
+  let countOk = false;
   try {
-    const { ok, json } = await req('/clients?limit=1&page=1&scope=all');
-    if (ok) total = Number(json?.totalPages) || 0; // limit=1 -> totalPages == exact doc count
-  } catch { /* ignore */ }
+    const { ok, status, json } = await req('/clients?limit=1&page=1&scope=all', {}, REQUEST_TIMEOUT, '/clients');
+    if (ok) { total = Number(json?.totalPages) || 0; countOk = true; } // limit=1 -> totalPages == exact doc count
+    else reportIfOutage(status, '/clients');
+  } catch { reportFailure('/clients'); }
   // The aggregation endpoint is scope-buggy for super_admin; use it only if it returns real numbers.
   const agg = await tryReal<any>('/clients/stats/overview?scope=all', {}, isObj);
+  /**
+   * PHASE 3: NULL WHEN NOTHING ANSWERED. This is the defect the phase's DONE-WHEN names.
+   *
+   * Both requests used to be swallowed and the function returned an object literal on every
+   * path — `total` defaulting to 0 through the `catch`, every other field `agg?.x ?? 0`. So
+   * `stats` was ALWAYS truthy for a signed-in user, which made `if (!dov && !stats && !ov)`
+   * in `getOrgSnapshot` unreachable dead code, which in turn made the Master dashboard render
+   * "0 clients · ₹0 claims paid" as fact on a completely dead backend, and made the honest
+   * empty state already written at `src/app/(tabs)/home.tsx:1918-1935` unreachable too.
+   *
+   * A zero here is only trustworthy if something actually answered. If neither leg did, the
+   * caller gets `null` and renders "could not load" instead of a confident empty organisation.
+   */
+  if (!countOk && !agg) return null;
   return {
     total_clients: total || (agg?.total_clients ?? 0),
     total_premium: agg?.total_premium ?? 0,
@@ -652,7 +796,13 @@ export async function scanRenewals(
   let page = 1, totalPages = 1, scanned = 0;
   do {
     let json: any = null;
-    try { const r = await req(`/clients?limit=${CLIENT_PAGE}&page=${page}&scope=all`); if (r.ok) json = r.json; } catch { /* skip page */ }
+    // PHASE 3: a skipped page is reported. A renewal audience shrunk by an outage used to be
+    // indistinguishable from "nobody is due" — and this list decides who gets contacted about
+    // a lapsing policy, so a silently short one costs real renewals.
+    try {
+      const r = await req(`/clients?limit=${CLIENT_PAGE}&page=${page}&scope=all`, {}, REQUEST_TIMEOUT, '/clients');
+      if (r.ok) json = r.json; else reportIfOutage(r.status, '/clients');
+    } catch { reportFailure('/clients'); }
     const rows: any[] = json?.data || [];
     totalPages = Number(json?.totalPages) || totalPages;
     for (const raw of rows) {
@@ -1005,8 +1155,27 @@ export async function getTeamMember(id: string): Promise<TeamMember | undefined>
   const real = await tryReal<any>(`/profiles/${id}`, {}, isObj);
   return real ? adaptMember(real) : unavailable('/profiles/:id', undefined as TeamMember | undefined);
 }
+/**
+ * The team activity feed — currently unwired, and honest about it. PHASE 3.
+ *
+ * THIS USED TO FABRICATE AN OUTAGE. The body was `return unavailable('/activity', [])`, and
+ * `unavailable` reports to `data/health` synchronously before its `await`. So every single
+ * mount of the Team screen raised the global outage banner at t≈0 — against a perfectly
+ * healthy backend — for a path the backend has NEVER had. `'/activity'` appears nowhere in
+ * `contracts/api.md`, which lists all 61 mounted routers.
+ *
+ * Returning `[]` and reporting NOTHING is the truthful answer: no request failed, there is
+ * simply nothing wired yet. The screen's response to `[]` is to render no section at all
+ * (`src/app/team/index.tsx:146`), so no claim is made to the user either way.
+ *
+ * WIRING IT UP IS BLOCKED ON THE BACKEND, not on us. The real feed is
+ * `GET /api/dashboard/activity` (`contracts/api.md:1272`), but its writer sets `actor.id`
+ * while its reader filters `actor.user_id` (`contracts/models.md:1881`, `:2149`), so it
+ * returns `[]` for every role including admin. Filed to `cgpe-api` in `contracts/INBOX.md`.
+ * When that lands, use `tryEnvelope` — the response carries `total`, which `tryReal` discards.
+ */
 export async function getTeamActivity(): Promise<TeamActivity[]> {
-  return unavailable('/activity', [] as TeamActivity[]);
+  return [];
 }
 
 /** Global search across the REAL book — clients server-side, plus live leads/claims/tasks. */
@@ -1155,9 +1324,15 @@ export async function getClockState(): Promise<ClockSnapshot | null> {
 export async function getAttendanceHistory(): Promise<any[]> {
   // History accrues in DayLog sessions via /time-tracker/history; fall back to the
   // per-user attendance endpoint used by the map so the screen is never empty.
-  const real = await tryReal<any[]>('/time-tracker/history?limit=30', {}, isArr);
+  //
+  // PHASE 3: BOTH LEGS REPORT UNDER ONE KEY, deliberately. This is a fallback CHAIN, not two
+  // independent reads — the first leg missing is a normal, expected step on the way to the
+  // second. Letting it report under its own key would raise an outage banner on a screen that
+  // then loaded its data perfectly from the fallback. Only the pair failing is an outage, and
+  // the shared key means exactly that: the second leg's success clears the first leg's entry.
+  const real = await tryReal<any[]>('/time-tracker/history?limit=30', {}, isArr, '/attendance/history');
   if (real) return real;
-  return (await tryReal<any[]>('/attendance/history?limit=30', {}, isArr)) ?? [];
+  return (await tryReal<any[]>('/attendance/history?limit=30', {}, isArr, '/attendance/history')) ?? [];
 }
 
 /* --------------------------------------------------- Movement tracking */
@@ -1347,13 +1522,21 @@ export async function sendCampaign(type: 'renewal' | 'birthday' | 'anniversary' 
  * `meta` and `facets` — precisely the fields these list screens need for their counts and
  * filter chips. This keeps the whole envelope.
  */
-async function tryEnvelope<T>(path: string, validate: (d: any) => boolean, opts: RequestInit = {}): Promise<T | null> {
+async function tryEnvelope<T>(
+  path: string,
+  validate: (d: any) => boolean,
+  opts: RequestInit = {},
+  key: string = healthKey(path),
+): Promise<T | null> {
   if (FORCE_DEMO || !sessionReal) return null;
   try {
-    const { ok, json } = await req(path, opts);
-    if (!ok || !json) return null;
-    return validate(json) ? (json as T) : null;
+    const { ok, status, json } = await req(path, opts, REQUEST_TIMEOUT, key);
+    if (!ok) { reportIfOutage(status, key); return null; }
+    // A 2xx with no parseable body at all is not a usable answer either.
+    if (!json || !validate(json)) { reportFailure(key); return null; }
+    return json as T;
   } catch {
+    reportFailure(key);
     return null;
   }
 }

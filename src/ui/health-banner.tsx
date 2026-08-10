@@ -42,8 +42,21 @@ export function HealthBanner() {
   const health = useDataHealth();
   const [dismissed, setDismissed] = useState(false);
 
-  // A new outage after a dismissal must speak again — the user dismissed the OLD one.
-  useEffect(() => { if (health.degraded) setDismissed(false); }, [health.at, health.degraded]);
+  /**
+   * A NEW outage after a dismissal must speak again — but a retry of one the user has
+   * already dismissed must not.
+   *
+   * This used to key on `health.at`, which `reportFailure` re-stamps on EVERY failure
+   * including a repeat of an endpoint already in the list. That was survivable while few
+   * endpoints reported; since Phase 3 taught `tryReal` to report, a screen that retries a
+   * dead endpoint on focus would re-open the banner every few seconds and the close button
+   * would appear broken. Keying on the failure SET instead means the banner returns when
+   * something new breaks and stays shut when the same thing breaks again.
+   *
+   * `at` deliberately keeps its every-failure semantics for `src/app/search.tsx:489`.
+   */
+  const failureKey = health.failures.join('|');
+  useEffect(() => { if (health.degraded) setDismissed(false); }, [failureKey, health.degraded]);
 
   if (!health.degraded || dismissed) return null;
 
@@ -52,7 +65,7 @@ export function HealthBanner() {
   return (
     <View
       accessibilityRole="alert"
-      accessibilityLabel={`${count} request${count === 1 ? '' : 's'} could not reach the server. Blank values are unconfirmed.`}
+      accessibilityLabel={`${count} request${count === 1 ? '' : 's'} could not be completed. Blank values are unconfirmed.`}
       style={{
         position: 'absolute',
         left: spacing.lg,
@@ -73,10 +86,14 @@ export function HealthBanner() {
       <Ionicons name="cloud-offline-outline" size={19} color={c.warning} />
       <View style={{ flex: 1 }}>
         <Txt weight="700" size={13}>Some data could not load</Txt>
+        {/* "could not be completed", not "did not reach the server": since Phase 3 this
+            banner also covers a request the server DID answer, with a body the app cannot
+            use. Telling someone to check their connection over a contract mismatch sends
+            them chasing a network problem they do not have. */}
         <Txt size={11.5} color={c.muted} style={{ marginTop: 1 }} numberOfLines={2}>
           {count === 1
-            ? 'One request did not reach the server. Blank values here are unconfirmed.'
-            : `${count} requests did not reach the server. Blank values here are unconfirmed.`}
+            ? 'One request could not be completed. Blank values here are unconfirmed.'
+            : `${count} requests could not be completed. Blank values here are unconfirmed.`}
         </Txt>
       </View>
       <Pressable

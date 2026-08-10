@@ -23,11 +23,26 @@
  */
 
 export type HealthState = {
-  /** True when the most recent request could not reach the server or returned unusable data. */
+  /**
+   * True while at least one endpoint is known-failed. PHASE 3 made this DERIVED — it is
+   * always exactly `failures.length > 0` and is never assigned on its own. It used to be set
+   * and cleared independently of the list, which is how the banner ended up rendering a count
+   * of zero failures and how two identical refreshes could disagree about whether the app was
+   * degraded (whichever of report-success / report-failure happened to land last won).
+   */
   degraded: boolean;
-  /** Endpoints that failed since the last reset, for the retry affordance and support triage. */
+  /** Endpoints currently known-failed. An endpoint leaves this list when IT succeeds. */
   failures: string[];
-  /** ms timestamp of the most recent failure. */
+  /**
+   * ms timestamp of the most recent reported failure. Stamped by EVERY `reportFailure`,
+   * including a repeat of an endpoint already in the list, and never moved by a success.
+   *
+   * That precision is load-bearing, not incidental: `src/app/search.tsx:489` snapshots this
+   * value before its fan-out and compares it at `:508` to decide whether THIS search lost a
+   * collection, rather than whether the app has failed at any point since launch. If a repeat
+   * failure stopped stamping it, a second identical failure would be invisible to that check
+   * and a genuine outage would render as "nothing matched".
+   */
   at: number | null;
 };
 
@@ -66,14 +81,42 @@ export function reportFailure(endpoint: string): void {
   const failures = state.failures.includes(endpoint)
     ? state.failures
     : [...state.failures, endpoint].slice(-12);
+  // `at` is re-stamped even when the endpoint is already listed. See the field's doc comment:
+  // `search.tsx` reads this clock to scope an outage to one query.
   state = { degraded: true, failures, at: Date.now() };
   emit();
 }
 
-/** Record that a request succeeded. Clears the degraded flag once anything works again. */
-export function reportSuccess(): void {
-  if (!state.degraded) return;
-  state = { degraded: false, failures: [], at: state.at };
+/**
+ * Record that ONE endpoint served a request, and clear only that endpoint.
+ *
+ * WHAT THIS USED TO DO, AND WHY IT WAS WRONG. It took no argument and assigned
+ * `{ degraded: false, failures: [] }` — any success anywhere wiped every recorded failure.
+ * Three things followed from that, all of them user-visible:
+ *
+ *   1. The banner was ORDER-DEPENDENT. A dashboard fanning out six parallel calls resolved
+ *      them in network order, so whichever of success/failure landed last decided whether the
+ *      user saw a banner at all. Two identical refreshes against the same half-broken backend
+ *      could disagree.
+ *   2. The banner UNDERCOUNTED. `failures` only ever held what had failed since the last 2xx,
+ *      so a refresh where six endpoints died usually rendered "One request did not reach the
+ *      server."
+ *   3. A 200 carrying an unusable body cleared the whole list and then re-added only itself,
+ *      destroying unrelated failures on its way past.
+ *
+ * Clearing per endpoint costs one thing, accepted deliberately (`docs/spec/PHASE-3.md` L8):
+ * `degraded` is now sticky until the failed endpoint itself recovers. Screens gate their
+ * outage copy on `degraded && list.length === 0`, so the residual imprecision is a genuinely
+ * empty screen reading "could not load" while a DIFFERENT endpoint is broken — strictly
+ * narrower than the failure it replaces, which was a real outage reading "you have none".
+ *
+ * `at` is deliberately left where it is; a success is not a failure and must not move the
+ * clock `search.tsx` measures against.
+ */
+export function reportSuccess(endpoint: string): void {
+  if (!state.failures.includes(endpoint)) return;
+  const failures = state.failures.filter((e) => e !== endpoint);
+  state = { degraded: failures.length > 0, failures, at: state.at };
   emit();
 }
 

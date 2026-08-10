@@ -43,11 +43,14 @@ export default function Team() {
   useEffect(() => {
     let alive = true;
     (async () => {
-      // The activity feed catches its own failure: the roster is the screen, and an
-      // unwired /activity endpoint must not take the whole page down with it.
+      // The activity feed is not wired to any endpoint yet, so it resolves `[]` and reports
+      // nothing. The `.catch()` that used to sit on it was dead code twice over: the old
+      // implementation could not reject (it resolved through `unavailable()`), and it never
+      // made a request in the first place — it just raised a false outage banner on every
+      // mount of this screen. See `getTeamActivity` in `src/data/api.ts`.
       const [roster, feed] = await Promise.all([
         api.getTeam(),
-        api.getTeamActivity().catch(() => [] as TeamActivity[]),
+        api.getTeamActivity(),
       ]);
       if (!alive) return;
       setTeam(roster);

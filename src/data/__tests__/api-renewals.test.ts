@@ -174,17 +174,23 @@ describe('scanRenewals — pinned known behaviour worth arguing about', () => {
     expect((await api.scanRenewals(30))[0].premium).toBe(4500);
   });
 
-  it('returns [] on a failed first page and raises NO health banner', async () => {
-    // THE HEALTH ASSERTION IS THE FINDING. scanRenewals never calls unavailable() or
-    // reportFailure(), so an empty renewal audience caused by an outage is indistinguishable
-    // from "nobody is due" — the one path in api.ts that breaks the project's convention 4.
-    // docs/PHASES.md Phase 3 owns the read-path health channel.
+  it('returns [] on a failed first page and DOES raise the health banner', async () => {
+    // UPDATED DELIBERATELY BY PHASE 3 — this assertion was `toBe(false)` and was written to
+    // go red exactly here. It pinned the finding that scanRenewals swallowed a failed page,
+    // so an outage-shortened renewal audience read as "nobody is due". Since this list is
+    // what decides who gets contacted about a lapsing policy, a silently short one costs
+    // real renewals. api.ts now reports the skipped page under the `/clients` key.
+    //
+    // Note the key: scanRenewals pages `/clients?limit=…`, and `unavailable('/clients', …)`
+    // and getClientsPage use the same `/clients` key, so one broken client book produces ONE
+    // banner entry rather than three.
     health.resetHealth();
     fetchSpy.mockRejectedValue(new Error('network down'));
 
     expect(await api.scanRenewals(30)).toEqual([]);
     expect(fetchSpy).toHaveBeenCalledTimes(1);   // totalPages stays 1, so the loop ends
-    expect(health.getHealth().degraded).toBe(false);
+    expect(health.getHealth().degraded).toBe(true);
+    expect(health.getHealth().failures).toEqual(['/clients']);
   });
 });
 
