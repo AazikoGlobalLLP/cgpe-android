@@ -858,7 +858,7 @@ export default function Home() {
        * outlives the component. `stopTracking()` on clock-out is what ends it.
        *
        * PHASE 7: NO SESSION ID, NO ROUTE — AND THE PERSON IS TOLD. The server returns the id at
-       * `data.sessionId` (`routes/timeTracker.js:429`), so this branch is a contract fault
+       * `data.sessionId` (`routes/timeTracker.js:431`), so this branch is a contract fault
        * rather than a normal outcome. Recording anyway is the worse option: every batch would
        * have to be attributed by the server from whichever token is on the handset, which is
        * how one person's route lands on another person's day, and after clock-out it just 400s.

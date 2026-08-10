@@ -172,6 +172,10 @@ async function deliver(sid: string | undefined, pts: PointTuple[]): Promise<Deli
   }
   // The session-id guard lives in `postTrackPoints`, not here, so there is exactly one place
   // that decides what an un-attributable batch is — and a test can pin it on the wire.
+  //
+  // `signed-out` comes back for a 401 as well as for an absent token: in a headless context
+  // nothing is subscribed to `expireSession`, so the dead token stays in storage and the check
+  // above cannot see it. Both mean the same thing here — this service can no longer upload.
   const res = await api.postTrackPoints(toPoints(pts), sid).catch(() => null);
   if (!res) return 'retry';
   return res.outcome === 'no-session' ? 'unattributable' : res.outcome;

@@ -1493,7 +1493,6 @@ export async function search(q: string) {
 
 /* ------------------------------------------------------- Office geofence */
 export type Geofence = { lat: number; lng: number; radius_m: number; label: string; enforce: boolean };
-let _geoCache: Geofence | null = null;
 
 /**
  * The office fence — or `null`, meaning we could not learn it. PHASE 7.
@@ -1507,24 +1506,31 @@ let _geoCache: Geofence | null = null;
  * with a row in someone else's database forever, which is the drift `cgpe-api` filed against the
  * admin panel as D13. An unknown fence is now represented as unknown.
  *
- * ONLY A SUCCESS IS CACHED. The old cache was assigned on the first call whatever happened, so a
- * single failed fetch — including a 404 on an undeployed route, which `reportIfOutage`
- * deliberately keeps off the health banner — decided the fence for the life of the JS context.
- * Nothing cleared it, not even signing in as somebody else. A failure now leaves the cache empty
- * so the next clock-in tap asks again; that costs at most one request per tap.
+ * THERE IS NO CACHE EITHER, WHICH IS A DELIBERATE STEP BACKWARDS IN CLEVERNESS.
+ * The old `_geoCache` was assigned on the first call *whatever happened*, so one failed fetch —
+ * including a 404 on an undeployed route, which `reportIfOutage` deliberately keeps off the
+ * health banner — fixed the fence for the life of the JS context, and nothing cleared it, not
+ * even signing in as somebody else. Caching only successes fixed half of that and left the other
+ * half: the master can move the office pin (`PUT /time-tracker/geofence`, which busts the
+ * server's own 60 s cache at `routes/timeTracker.js:1293`) and a phone that has not been killed
+ * since morning would keep the old fence all day.
+ *
+ * The whole cache bought one thing: skipping a request on a second reader. There is no second
+ * reader — `checkGeofence` is the only caller and it runs once per clock-in tap, which happens
+ * about twice a day. Deleting it makes a stale fence structurally impossible rather than
+ * carefully handled.
  *
  * A fence with no usable radius fails `validate` rather than being repaired with an invented
  * number, so it reports as the contract fault it is and this returns null.
  */
 export async function getGeofence(): Promise<Geofence | null> {
-  if (_geoCache) return _geoCache;
   const real = await tryReal<any>(
     '/time-tracker/geofence',
     {},
     (d) => d && Number.isFinite(d.lat) && Number.isFinite(d.lng) && Number(d.radius_m) > 0,
   );
   if (!real) return null;
-  _geoCache = {
+  return {
     lat: Number(real.lat),
     lng: Number(real.lng),
     radius_m: Number(real.radius_m),
@@ -1533,7 +1539,6 @@ export async function getGeofence(): Promise<Geofence | null> {
     // explicit false means the fence is on.
     enforce: real.enforce !== false,
   };
-  return _geoCache;
 }
 
 /** Haversine distance in metres (client-side pre-check, mirrors the server). */
@@ -1555,8 +1560,11 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
  * between its number and its unit.
  */
 function distanceText(m: number): string {
-  if (m >= 1000) return nbsp(`${(m / 1000).toFixed(1)} km`);
-  return nbsp(`${Math.max(10, Math.round(m / 10) * 10)} m`);
+  // Round FIRST, then pick the unit. Testing the raw value would render 995 m as "1000 m" — the
+  // one string the metres branch exists to avoid.
+  const rounded = Math.max(10, Math.round(m / 10) * 10);
+  if (rounded >= 1000) return nbsp(`${(m / 1000).toFixed(1)} km`);
+  return nbsp(`${rounded} m`);
 }
 
 export type GeofenceCheck = {
@@ -1607,18 +1615,23 @@ export async function checkGeofence(lat?: number, lng?: number, accuracy?: numbe
   const acc = Number(accuracy);
   const tol = Number.isFinite(acc) ? Math.max(0, Math.min(acc, 100)) : 0;
   // How far past the fence this fix is, with the accuracy credit already spent. <= 0 is inside.
-  const over = dist - tol - g.radius_m;
-  if (over <= 0) {
+  if (dist - tol - g.radius_m <= 0) {
     return { allowed: true, known: true, distance_m: Math.round(dist), radius_m: g.radius_m, message: 'Within the office area' };
   }
   return {
     allowed: false, known: true, distance_m: Math.round(dist), radius_m: g.radius_m,
-    // STATES NO FENCE SIZE — INBOX D10. Both numbers are measured rather than quoted, and the
-    // second already includes the accuracy credit, so neither can contradict the server the way
-    // "allowed within 0.2 km" does. The server's own refusal copy, which does quote a radius and
-    // understates it by the credit, is rendered verbatim when a 403 comes back: it is the
-    // producer's message, and it is awkward rather than jargon.
-    message: `You're ${distanceText(dist)} from the office. Move about ${distanceText(over)} closer to clock in.`,
+    // STATES NO FENCE SIZE — INBOX D10. Both numbers are measured rather than quoted, so neither
+    // can contradict the server the way "allowed within 0.2 km" does. The server's own refusal
+    // copy, which does quote a radius and understates it by the accuracy credit, is rendered
+    // verbatim when a 403 comes back: it is the producer's message, awkward rather than jargon.
+    //
+    // THE ADVICE DELIBERATELY SPENDS NO ACCURACY CREDIT, unlike the verdict one line above.
+    // `dist - tol - radius` is the least that could possibly work, and only for THIS fix — walk
+    // exactly that far, get a cleaner fix on arrival, and the credit shrinks and the refusal
+    // repeats. `dist - radius` is sufficient whatever the next fix looks like. Advice has to
+    // still be true after somebody follows it, so it is the conservative number that ships; the
+    // cost is asking for up to 100 m more walking than strictly needed.
+    message: `You're ${distanceText(dist)} from the office. Move about ${distanceText(dist - g.radius_m)} closer to clock in.`,
   };
 }
 
@@ -1729,15 +1742,27 @@ export type TrackSession = { session_id: string; date: string; started_at: strin
  * `sent` — the server took them. `added` is its own count and CAN BE ZERO: it drops every point
  *          whose accuracy is worse than 100 m (`routes/timeTracker.js:1350`) and still answers
  *          200. The buffer is cleared either way, because re-sending is discarded identically.
- * `refused` — a 4xx. The server understood and said no; retrying cannot change the answer, so
- *          holding the points forever only grows a bag of somebody's coordinates on a handset.
- * `retry` — a dead network, the 4.5 s abort, or a 5xx. Keep them for the next wake-up.
+ * `refused` — the server understood these points and said no. Retrying cannot change the answer,
+ *          so holding them only grows a bag of somebody's coordinates on a handset.
+ * `retry` — a dead network, the 4.5 s abort, a 5xx, or a 429. Keep them for the next wake-up.
+ * `signed-out` — 401. The credential is dead, so nothing this service records can ever be
+ *          uploaded; the caller stops recording rather than filling a buffer with a person's
+ *          movements that has nowhere to go.
  * `no-session` — we have no session id to attribute them to. See `postTrackPoints`.
+ *
+ * THE BANDS ARE NOT "4xx VERSUS 5xx", AND THAT DISTINCTION IS LOAD-BEARING. A 401 is routine —
+ * tokens are signed with a 24 h expiry (`routes/auth.js:62-64`) so one lapses mid-shift as a
+ * matter of course — and a 429 is the production rate limiter (`app.js:190-207`), which is
+ * transient by construction. Filing either under `refused` would delete a whole afternoon's
+ * buffered route, silently, in a headless context where nothing can say so: `expireSession` has
+ * no subscriber when `AuthProvider` never mounted, so the token is never cleared from storage,
+ * `deliver` rehydrates it on the next wake, and the loop repeats for the rest of the shift while
+ * the notification still reads "Recording your field route".
  *
  * Same distinction Phase 1 drew between `invalid` and `network`, and Phase 5 between a 200 and a
  * dispatch: the status code is not the outcome.
  */
-export type TrackDelivery = 'sent' | 'refused' | 'retry' | 'no-session';
+export type TrackDelivery = 'sent' | 'refused' | 'retry' | 'signed-out' | 'no-session';
 export type TrackResult = { outcome: TrackDelivery; added: number };
 
 export async function startTrack(sessionId: string): Promise<boolean> {
@@ -1774,6 +1799,8 @@ export async function postTrackPoints(points: TrackPoint[], sessionId?: string):
       body: JSON.stringify({ session_id: sessionId, points }),
     });
     if (ok) return { outcome: 'sent', added: Number(json?.added) || 0 };
+    if (status === 401) return { outcome: 'signed-out', added: 0 };
+    if (status === 429) return { outcome: 'retry', added: 0 };
     return { outcome: status >= 400 && status < 500 ? 'refused' : 'retry', added: 0 };
   } catch {
     return { outcome: 'retry', added: 0 };

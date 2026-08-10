@@ -58,10 +58,13 @@ beforeEach(async () => {
   health = await import('@/data/health');
 });
 
-/** Most cases want a live session and a fence the server has already answered with. */
+/**
+ * Most cases want a live session and a fence the server has already answered with. The reply is
+ * persistent, not `…Once`, because `getGeofence` no longer caches — every `checkGeofence` asks.
+ */
 async function withFence(over: Partial<typeof FENCE> = {}) {
   api.setAuthToken('test-token');
-  fetchSpy.mockResolvedValueOnce(fenceReply(over));
+  fetchSpy.mockResolvedValue(fenceReply(over));
 }
 
 describe('distanceMeters', () => {
@@ -141,12 +144,28 @@ describe('getGeofence — an unknown fence is unknown, not a guess', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
-  it('caches a SUCCESS, so a second reader costs no request', async () => {
+  it('does not cache a SUCCESS either, so a fence the master moves reaches a phone that stays open', async () => {
+    // The review's own finding: caching only successes fixed half the staleness and left the
+    // other half. `PUT /time-tracker/geofence` busts the server's 60 s cache
+    // (`routes/timeTracker.js:1293`), so the app must not out-cache the server. There is one
+    // caller and it runs on a button press twice a day, so the cache bought nothing.
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValueOnce(fenceReply());
+    expect((await api.getGeofence())?.radius_m).toBe(200);
+
+    fetchSpy.mockResolvedValueOnce(fenceReply({ radius_m: 350, lat: 12.9, lng: 77.6 }));
+    expect((await api.getGeofence())?.radius_m).toBe(350);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns a fresh object each time, so no caller can mutate the fence for everybody', async () => {
+    // The Phase-2 case pinned `expect(second).toBe(first)` — the fallback was handed out BY
+    // REFERENCE, so one caller mutating the result changed the fence for every later call.
     await withFence();
     const first = await api.getGeofence();
     const second = await api.getGeofence();
-    expect(second).toBe(first);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(second).toEqual(first);
+    expect(second).not.toBe(first);
   });
 
   it('unwraps `data` and reads the five documented fields', async () => {
@@ -230,8 +249,7 @@ describe('checkGeofence — the fence is known', () => {
   it('denies a point outside it, and says how much closer to move rather than quoting a fence', async () => {
     // INBOX D10: any UI copy that states the fence size will disagree with the server, which
     // credits up to 100 m of accuracy on top of the radius and whose own message understates
-    // itself as "within 0.2 km". Both numbers here are measured, and the second one already has
-    // the accuracy credit spent, so neither can contradict the server.
+    // itself as "within 0.2 km". Both numbers here are measured, so neither can contradict it.
     await withFence();
     const res = await api.checkGeofence(FENCE.lat + M(250), FENCE.lng);
     expect(res.allowed).toBe(false);
@@ -241,10 +259,29 @@ describe('checkGeofence — the fence is known', () => {
     expect(res.message).not.toMatch(/km|0\.2|200 m/);
   });
 
+  it('gives advice that is still true after you follow it, spending no accuracy credit', async () => {
+    // The advice is `dist - radius`, NOT `dist - tol - radius`. At 250 m with a 40 m fix the
+    // credited shortfall is 10 m — walk 10 m, get a 5 m fix on arrival, and the credit shrinks
+    // and the refusal repeats. 50 m works whatever the next fix looks like. The VERDICT still
+    // spends the credit, because that half has to match the server.
+    await withFence();
+    const res = await api.checkGeofence(FENCE.lat + M(250), FENCE.lng, 40);
+    expect(res.allowed).toBe(false);
+    expect(res.message).toContain(`Move about 50${NB}m closer`);
+  });
+
   it('renders kilometres only above 1 km, to one decimal', async () => {
     await withFence();
     const res = await api.checkGeofence(FENCE.lat + M(1890), FENCE.lng);
     expect(res.message).toBe(`You're 1.9${NB}km from the office. Move about 1.7${NB}km closer to clock in.`);
+  });
+
+  it('never renders "1000 m" — the unit switches on the ROUNDED value', async () => {
+    // 995 rounds to 1000, which is the one string the metres branch exists to avoid.
+    await withFence();
+    const res = await api.checkGeofence(FENCE.lat + M(995), FENCE.lng);
+    expect(res.message).toContain(`You're 1.0${NB}km from the office`);
+    expect(res.message).not.toContain('1000');
   });
 
   it('never says "0 m closer" for a near miss', async () => {

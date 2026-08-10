@@ -90,8 +90,12 @@ describe('postTrackPoints — the body D5 warns about is now impossible to const
 
   it('forwards each fix with only the fields the handler reads, and omits the ones it has not got', async () => {
     // `timeTracker.js:1343-1350` maps lat/lng/at/accuracy/speed/heading/battery. A key the app
-    // does not hold must be ABSENT rather than null — `Number.isFinite(Number(null))` is true,
-    // so a null accuracy would be stored as 0 and pass a filter it should not.
+    // does not hold must be ABSENT rather than null, and the reason is what gets STORED, not
+    // whether the point survives: `:1346` is `Number.isFinite(Number(p.accuracy)) ? … : null`
+    // and `Number(null)` is 0, so an explicit null is recorded as a PERFECT 0 m fix. An absent
+    // key becomes NaN, fails `isFinite`, and is stored as the honest null. Both survive the
+    // `accuracy <= 100` filter at `:1350` — the difference is that the fabricated 0 is handed
+    // back per point by `GET /track/:sessionId` (`:1427`) to whoever replays the route.
     fetchSpy.mockResolvedValueOnce(reply(200, { success: true, added: 2 }));
     await api.postTrackPoints([point(), { lat: 21.3, lng: 72.9 }], SID);
 
@@ -163,6 +167,23 @@ describe('postTrackPoints — the outcome is the body\'s verdict, not the status
     expect((await api.postTrackPoints([point()], SID)).outcome).toBe('refused');
     fetchSpy.mockResolvedValueOnce(reply(404, { success: false }));
     expect((await api.postTrackPoints([point()], SID)).outcome).toBe('refused');
+  });
+
+  it('does NOT lump a 401 in with the refusals — it means stop, not discard-and-carry-on', async () => {
+    // Raised by the Phase 7 review and it was right: an over-broad "any 4xx is refused" band
+    // deleted a whole afternoon's buffered route on a routine token expiry (24 h, `auth.js:62`).
+    // In a headless wake nothing is subscribed to `expireSession`, so the dead token stays in
+    // storage, `deliver` rehydrates it next time, and the loop repeats all shift while the
+    // notification still says "Recording your field route".
+    fetchSpy.mockResolvedValueOnce(reply(401, { success: false, message: 'Not authorized, no token' }));
+    expect(await api.postTrackPoints([point()], SID)).toEqual({ outcome: 'signed-out', added: 0 });
+  });
+
+  it('calls a 429 RETRY — the rate limiter is transient by construction', async () => {
+    // `app.js:190-207` installs express-rate-limit in production. Points refused for arriving
+    // too fast are perfectly good points.
+    fetchSpy.mockResolvedValueOnce(reply(429, { success: false, message: 'Too many requests' }));
+    expect(await api.postTrackPoints([point()], SID)).toEqual({ outcome: 'retry', added: 0 });
   });
 
   it('calls a 500 RETRY — the server broke, the points are still good', async () => {

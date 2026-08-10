@@ -129,8 +129,13 @@ that exact hazard against the panel as **D13** ("two copies of an unversioned de
 repos is still one drift away from a preview that lies"). An unknown fence is now represented as
 **unknown** — `getGeofence()` returns `Geofence | null` — rather than as a guess.
 
-**D-3. Only a successful fetch is cached.** A failure leaves `_geoCache` null so the next clock-in
-tap retries. At most one extra request per tap, and the poisoned-for-the-session state disappears.
+**D-3. The fence is not cached at all.** ~~Only a successful fetch is cached.~~ **Revised by the
+review — see §6.** Caching successes fixed the poisoned-failure half and left the other half: the
+master can move the office pin with `PUT /time-tracker/geofence`, which busts the *server's* own
+60 s cache (`timeTracker.js:1293`), and a handset that has not been killed since morning would keep
+the old fence all day. The cache bought exactly one thing — skipping a request for a second reader —
+and there is no second reader: `checkGeofence` is the only caller, on a button press, twice a day.
+Deleting it makes a stale fence structurally impossible instead of carefully handled.
 
 **D-4. `enforce:false` and "fence unknown" stay distinguishable in the return type.**
 `checkGeofence` gains `known: boolean`. Both allow, but only one of them means the server has told
@@ -138,10 +143,16 @@ us the fence is off. A caller that cannot tell them apart cannot write honest co
 
 **D-5. The refusal copy states no fence size.** It states the measured distance and how much closer
 to move: *"You're 480 m from the office. Move about 280 m closer to clock in."* Both numbers are
-computed from values we actually hold, the second one already includes the accuracy credit, and
-neither can disagree with the server the way a quoted radius does. This is what closes D10's *"any
-UI copy that states 200 m will disagree with the server"* — **without duplicating the server's own
-stale wording**, which still renders "within 0.2 km" (`geofence.js:101`) and is `cgpe-api`'s to fix.
+computed from values we actually hold, and neither can disagree with the server the way a quoted
+radius does. This is what closes D10's *"any UI copy that states 200 m will disagree with the
+server"* — **without duplicating the server's own stale wording**, which still renders "within
+0.2 km" (`geofence.js:101`) and is `cgpe-api`'s to fix.
+
+**The advice number spends no accuracy credit, unlike the verdict.** `dist - tol - radius` is the
+least that could possibly work, and only for *this* fix: walk exactly that far, get a cleaner fix on
+arrival, watch the credit shrink and the refusal repeat. `dist - radius` is sufficient whatever the
+next fix looks like. Advice has to still be true after somebody follows it; the cost is asking for
+up to 100 m more walking than strictly necessary, on a 200 m fence.
 
 **D-6. Distances under a kilometre render in metres**, rounded to 10 m, with a non-breaking space
 (`lib/format.ts`'s rule: every space inside a value is U+00A0). `(200/1000).toFixed(1)` = "0.2 km"
@@ -176,9 +187,16 @@ this" and raises the global outage banner. The clock-in *worked*; the body was u
 thing it was for. Raising an outage would be a second lie in the opposite direction, which is the
 mistake Phase 3 spent a whole phase not making (401/403/404 are answers, not faults).
 
-**D-11. Delivery has four outcomes, not two.** `postTrackPoints` returns
-`'sent' | 'refused' | 'retry' | 'no-session'`. `refused` (any 4xx — the server understood and said
-no) drops the buffer, because retrying cannot help; `retry` (network, timeout, 5xx) keeps it.
+**D-11. Delivery has five outcomes, not two.** `postTrackPoints` returns
+`'sent' | 'refused' | 'retry' | 'signed-out' | 'no-session'`. `refused` (the server understood these
+points and said no) drops the buffer, because retrying cannot help; `retry` (network, timeout, 5xx,
+**429**) keeps it; `signed-out` (**401**) stops the service outright.
+
+**The bands are deliberately not "4xx versus 5xx" — the review caught that, see §6.** A 401 is
+routine, since tokens carry a 24 h expiry (`routes/auth.js:62-64`), and a 429 is the production
+rate limiter (`app.js:190-207`). Filing either under `refused` deletes an afternoon of buffered
+route, silently and repeatedly, in the one context that cannot report it.
+
 Same distinction Phase 1 drew with `WriteFailure`'s `invalid` and `unsupported`, and Phase 5 drew
 with the `delivery` union: **the status code is not the outcome, the body's verdict is.**
 
@@ -213,7 +231,8 @@ Phase 5, held here.
 
 1. `GET /time-tracker/geofence` unreachable (network error, 500, 404 or a 200 with a junk body) →
    `checkGeofence` returns `allowed: true`, `known: false`, and clock-in proceeds to the server.
-2. That failure is **not** cached: a second call re-requests, and a later success is cached.
+2. Nothing is cached in either direction: every call re-requests, so a failure heals and a fence
+   the master moved reaches a phone that has been open all day.
 3. `enforce: false` from the server → `allowed: true`, `known: true`.
 4. A refusal message contains no fence size, renders metres under 1 km with U+00A0, and names how
    much closer to move.
@@ -222,8 +241,9 @@ Phase 5, held here.
 6. `postTrackPoints` with no session id performs **no fetch** and returns `no-session`.
 7. With a session id, the request body is exactly `{ session_id, points }` with `session_id`
    snake_case, and each point carries only `lat`/`lng`/`at`/`accuracy`/`speed`/`heading`.
-8. A 400 from `/track/points` returns `refused` and the tracker drops the buffer; a network throw
-   returns `retry` and the tracker keeps it.
+8. A 400 from `/track/points` returns `refused` and the tracker drops the buffer; a network throw,
+   a 5xx and a **429** return `retry` and the tracker keeps it; a **401** returns `signed-out` and
+   the tracker stops the service.
 9. A 200 `{ success: true, added: 0 }` returns `sent` with `added: 0`.
 10. **Device:** clock in at the office, walk out of range, clock out — the route appears under the
     master's shift replay with a non-zero point count.
@@ -249,3 +269,45 @@ Phase 5, held here.
 - **`services/attendanceWatchdog.js` re-implements the fence with no accuracy tolerance and never
   reads `enforce`**, so turning the fence off still generates out-of-bounds WhatsApp nudges.
   Backend-side; filed.
+
+---
+
+## 6. What the adversarial review found
+
+D-14's rule, run against the first commit (`3e092ad`): four lenses raised **26 findings**, each put
+to two independent skeptics briefed to refute it. **Four non-refutations across 52 verdicts**, and
+they clustered on two real defects. Both are fixed; the rest were arithmetic that was true but
+harmless, or citations off by a line or two, and are recorded here rather than acted on.
+
+**1. The success half of the cache was still a staleness bug (two of the four non-refutations).**
+The phase congratulated itself on not caching failures and left successes cached for the life of
+the process. Both skeptics who declined to refute pointed at the same absence: no TTL, no reset,
+`setAuthToken` clears `suppressed` but not this. The fix was not a TTL — it was noticing the cache
+had one caller on a twice-a-day button press and buying nothing. **D-3 is rewritten above.** The
+general lesson is the phase's own: a carefully-handled hazard is worse than a structurally
+impossible one.
+
+**2. `any 4xx → refused` was a regression this phase introduced.** Before the change a 401 mapped
+to `retry` and the buffer survived; after it, a routine mid-shift token expiry deleted the whole
+buffered route. And in the headless context it repeats: `expireSession` has no subscriber when
+`AuthProvider` never mounted, so the dead token is never cleared from storage, `deliver` rehydrates
+it on the next wake, and every batch for the rest of the shift is collected, refused and deleted —
+while the foreground notification still reads "Recording your field route". 429 had the same
+problem for a different reason. **D-11 is rewritten above**, and both statuses now have a test.
+
+**3. Two smaller things fixed on my own reading, which no skeptic had to argue for.** The advice
+number spent the current fix's accuracy credit, so complying with it could leave you still refused
+(D-5); and `distanceText` tested the raw value before rounding, so 995 m rendered as "1000 m" —
+the one string the metres branch exists to avoid.
+
+**4. One false sentence in a test comment.** `api-track.test.ts` claimed a `null` accuracy "would
+pass a filter it should not". It would, but so does an absent key — `:1350` has an explicit
+`p.accuracy == null` arm. The real reason to omit rather than send null is what gets **stored**:
+`Number(null)` is 0, so an explicit null is recorded as a *perfect* 0 m fix and handed back per
+point by the route replay. Corrected in place.
+
+**Recorded, not acted on.** A 200 whose body is not ours is read as `sent` (unreachable: the base
+URL is fixed and any HTML body still yields `added: 0`, which clears a buffer that a 400 would have
+cleared anyway). `distanceText` on a negative or NaN input (no caller can produce one). Two spec
+citations off by a line. The 200 m default being conditional on the live `org_settings` row, which
+none of us can read from here — the spec says "the server's default", which is what the code says.
