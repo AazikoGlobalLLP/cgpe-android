@@ -14,6 +14,12 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 7 — done.** Built 2026-08-10, commits `3e092ad` (code + spec + tests) and `fc09934` (the
+review fixes). `npm test` runs **258** tests across 9 files and exits 0; `npx tsc --noEmit` exits 0;
+`npm run lint` is byte-identical to the 46-error baseline. **INBOX D5 and D10 are both closed on
+this side.** The app no longer carries its own copy of the office fence, and no longer posts GPS
+points it cannot attribute to a shift. **Acceptance criteria 10–11 need a handset** — see the spec.
+
 **Phase 5 — done.** Built 2026-08-10, commit `95f1ccb` plus the review fixes. `npm test` runs
 **219** tests across 8 files and exits 0; `npx tsc --noEmit` exits 0; `npm run lint` is
 byte-identical to the 46-error baseline. Every WhatsApp message this app had ever "sent" was
@@ -39,9 +45,9 @@ exercise.
 
 ## Next 3
 
-1. **Phase 7** — geofence + tracking (INBOX D5 `session_id`, D10 the fence is up to 300 m). Both
-   INBOX boxes are still open against this session and Phase 7 is what closes them.
-2. **Phase 8** — the last fabricated-data path (`generateReport`'s ₹42,00,000) and the stale docs.
+1. **Phase 8** — the last fabricated-data path (`generateReport`'s ₹42,00,000) and the stale docs.
+2. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
+   string-matching a personal email address compiled into every APK.
 3. **Phase 6** — the remaining envelope mismatches, if `cgpe-api` has un-shadowed
    `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract row, read the
    handler, then assert the envelope in a test that fails if the shape moves.
@@ -63,7 +69,7 @@ exercise.
 | 4 | Leads contract | **Done** 2026-08-10 — 188 tests green (`5c08872`…`edc373c`); device checks outstanding |
 | 5 | WhatsApp send | **Done** 2026-08-10 — 219 tests green (`95f1ccb`); device checks outstanding |
 | 6 | Remaining envelope mismatches `[api]` | Blocked on `cgpe-api` |
-| 7 | Geofence + tracking (INBOX D5, D10) | Not started |
+| 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
 | 8 | Last fabricated-data path + stale docs | Not started |
 | 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
 | 10 | Server-driven navigation (§9 gap) | Not started |
@@ -198,12 +204,47 @@ Commissions (array vs aggregate), LIC plans (`{meta, plans}` vs array), notes se
 **Done when:** all three screens show real data against production. Needs `cgpe-api` to un-shadow
 `GET /api/commissions/team-summary` (declared after `/:id`, so it is dead code today).
 
-## Phase 7 — Geofence and tracking correctness
+## Phase 7 — Geofence and tracking correctness ✅ DONE 2026-08-10 (`3e092ad`, `fc09934`)
 Adopt `contracts/INBOX.md` **D5** (`session_id`, not `sessionId`) and **D10** (effective fence is up
 to 300 m, not a flat 200 m). Make the geofence fallback fail **open**, not closed.
-**Files:** `src/lib/tracker.ts`, `src/data/api.ts`, `src/app/(tabs)/home.tsx`
+**Files:** `src/lib/tracker.ts`, `src/data/api.ts`, `src/app/(tabs)/home.tsx` — plus the rewritten
+`__tests__/api-geo.test.ts` and a new `__tests__/api-track.test.ts`.
 **Done when:** a buffer replayed after clock-out uploads successfully; with `/geofence` unreachable,
 clock-in is allowed rather than blocked by hardcoded Surat coordinates; no UI copy says "200 m".
+
+**Result.** 39 new tests. Four things turned out to be true that the phase text did not say:
+
+1. **The phase text's own justification was wrong, and the real one is better.** "An unreachable
+   `/geofence` locks a whole branch office out" cannot happen: there is exactly **one** global
+   fence (`org_settings._id:'office_geofence'`), and `clock-in` re-validates against it on every
+   request, so a branch office beyond it is refused by the *server* whether or not the app fails
+   open. Failing open moves the refusal one round trip later. The defensible rule — and the one
+   every decision in the spec follows from — is that **the client pre-check may never refuse what
+   the server would allow**, because `home.tsx` returns before the write and the server never
+   hears about it.
+2. **The offline fence was not "fail closed", it was wrong in both directions.** The app's
+   fallback was 2000 m against a server default of **200 m**: ten times wider at the office pin
+   and absolutely closed anywhere else. Two more cases had the client *stricter* than the server —
+   a numeric-string accuracy, and a negative one, which made the fence tighter instead of being
+   clamped. Both were people refused a clock-in the server would have accepted.
+3. **D5 was right about the backend and spent on this app — but the hole survived by another
+   route.** We already send `session_id`. `JSON.stringify` omits a key whose value is `undefined`,
+   so a shift with no session id produced exactly the body D5 warns about. And the 400 is the
+   mild half: `resolveActiveSession` resolves the owner from the **token**, so on a shared handset
+   a session-less batch lands on whoever is signed in now.
+4. **The review found a regression the phase itself introduced.** Classifying any 4xx as `refused`
+   deleted a whole afternoon's buffered route on a routine 24 h token expiry — and in a headless
+   wake it repeats all shift, because `expireSession` has no subscriber when `AuthProvider` never
+   mounted. 401 now stops the service; 429 retries. See the spec's §6.
+
+Full spec, the fourteen locked decisions, what the review found and what was deliberately left
+out: `docs/spec/PHASE-7.md`.
+
+> **Two more Phase-2 pins were flipped deliberately**, and `api-geo.test.ts`'s
+> `pinned known bugs` block is now **empty and deleted** — the negative-accuracy case and the
+> "states a 2.0 km fence" case both assert correct behaviour now. Same convention as
+> `api-renewals.test.ts:187` in Phase 3 and the two `adapt.test.ts` pins in Phase 4. The only
+> pinned-bug block left in the suite is `adapt.test.ts`'s `mapClaimStatus` pins.
 
 ## Phase 8 — Delete the last fabricated-data path, and the stale docs
 `generateReport` returns `null` on failure instead of inventing ₹42,00,000 of cover.
@@ -296,14 +337,20 @@ that can run in parallel.
 
 ## Open INBOX items addressed to this session
 
-From `../contracts/INBOX.md`, re-read 2026-08-10 at the close of Phase 5. **Two boxes are still
-open against this session and both are Phase 7's to close:**
+From `../contracts/INBOX.md`, re-read 2026-08-10 at the close of Phase 7. **Nothing is open against
+this session.** Both remaining boxes were closed by Phase 7:
 
-- **D5** `POST /time-tracker/track/points` reads `session_id`, not `sessionId`. A body sending
-  `sessionId` is silently ignored and falls through to `resolveActiveSession` — which works while
-  clocked in and 400s otherwise, i.e. exactly the persisted-buffer replay case. → Phase 7.
+- **D5** `POST /time-tracker/track/points` reads `session_id`, not `sessionId`. ✅ **Closed** —
+  answered with the finding that the app already sent snake_case and the hole survived through
+  `JSON.stringify` dropping an `undefined` key, plus the shared-handset consequence D5 did not
+  name. Ticked; the item was addressed to this session alone.
 - **D10** the clock-in fence is up to 300 m, not a flat 200 m (`utils/geofence.js:93-94` credits up
-  to 100 m of GPS accuracy). `cgpe-admin` has closed its half; ours is open. → Phase 7.
+  to 100 m of GPS accuracy). ✅ **Answered** — the app now states no fence size at all. Box left
+  unticked because the item is addressed to `cgpe-admin` as well, per the protocol.
+
+Filed **to** `cgpe-api` in the same pass: the 100 m accuracy floor on `/track/points` versus the
+app's `Accuracy.Balanced` recording; `/track/points` having no ownership check; and their own
+rejection copy still rendering "within 0.2 km".
 
 Closed this session, and worth knowing they were closed **twice**: the `/auth` registration item
 and the blocking "does the app call any of these 31 endpoints" item were both answered and ticked

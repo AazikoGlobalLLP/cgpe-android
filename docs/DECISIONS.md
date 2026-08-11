@@ -404,6 +404,49 @@ the effective server radius is up to 300 m once GPS accuracy credit is applied.
 
 ---
 
+## 2026-08-10 — Correcting the fail-open decision above, after building it (Phase 7)
+
+**What the earlier entry got wrong.** It justified failing open with "failing closed costs a day's
+attendance for a whole branch office". That cannot happen. There is exactly **one** global fence —
+a single `org_settings` document — and `POST /time-tracker/clock-in` re-validates against it on
+every request (`routes/timeTracker.js:319-329`, whose own comment says the server is the authority).
+A branch office beyond the fence is refused by the server whether the app fails open or not.
+Failing open moves the refusal one round trip later and changes the wording.
+
+**The real reason, which is a better one.** The client pre-check exists to save a round trip, not to
+be a second authority, and `home.tsx` returns before the write — so anything the client gets wrong
+in the *strict* direction is a clock-in the server would have accepted and never hears about.
+**Rule: the client pre-check may never refuse what the server would allow.** Every Phase 7 decision
+follows from it: an unknown fence allows; the accuracy credit is coerced and clamped, because both
+moves only ever allow more; and the server's `accuracy > 300` rejection is deliberately *not*
+mirrored, because copying it would duplicate someone else's constant AND make the client refuse.
+
+**Also wrong: "fails closed".** The app's fallback was 2000 m against a server default of 200 m. It
+was ten times *wider* than the server at the office pin and absolutely closed everywhere else — not
+strict, not lenient, wrong in both directions. That is what a compiled-in copy of somebody else's
+database row becomes.
+
+**Consequence.** No fallback fence and no cache at all. A carefully-handled staleness hazard was
+replaced by a structurally impossible one, at a cost of one request per clock-in tap.
+
+---
+
+## 2026-08-10 — A phase's own diff is reviewed by skeptics briefed to refute it (Phase 7)
+
+**Context.** Phase 4 introduced the adversarial review; Phase 5 held it. Phase 7 ran it as four
+lenses over the committed diff, each finding put to two independent verifiers told to default to
+"refuted". 26 findings, 52 verdicts, **four non-refutations**.
+
+**Decision.** Unanimity is the bar for "survives", but a **split vote is a signal, not a dismissal**.
+Both real defects this phase shipped a fix for came from findings where one skeptic refuted and one
+did not — and the strict rule alone would have discarded both. Read the split votes by hand.
+
+**Consequence.** The review caught a regression the phase itself introduced (any 4xx deleting a
+buffered route on a routine token expiry) and a half-fix the phase had congratulated itself on
+(caching successes forever). Recorded in `docs/spec/PHASE-7.md` §6 rather than quietly fixed.
+
+---
+
 ## 2026-08-10 — Sample data stays deleted
 
 **Context.** An earlier phase deleted the fabricated corpus; `src/data/mock.ts` is `export {}` with a
