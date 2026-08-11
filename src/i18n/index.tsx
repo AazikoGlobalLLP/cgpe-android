@@ -192,7 +192,13 @@ const guEn: Dict = {
   'settings.language': 'App ni bhasha', 'settings.title': 'Settings',
 };
 
-const DICT: Record<Lang, Dict> = { en, gu, hi, 'hi-en': hiEn, 'gu-en': guEn };
+/**
+ * Exported for the Phase 19 dictionary-parity test (`__tests__/dictionaries.test.ts`), which
+ * asserts every language carries the exact same key set with no empty / key-identical values —
+ * the value checks `Dict = Record<TKey, string>` cannot make at compile time. Nothing under
+ * `src/app` imports this: screens read strings through `t()`, never the raw table.
+ */
+export const DICT: Record<Lang, Dict> = { en, gu, hi, 'hi-en': hiEn, 'gu-en': guEn };
 
 /* ------------------------------------------------------------------ *
  * Persistence — per user, on a handset that is shared.
