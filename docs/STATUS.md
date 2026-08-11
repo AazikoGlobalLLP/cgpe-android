@@ -1,38 +1,19 @@
 # Status — CGPE Connect (Android)
-
 **Updated:** 2026-08-11
-
-**Working on right now:** Small trust and safety fixes to the attendance and reporting features,
-one at a time, each one tested before moving to the next.
+**Working on right now:** Making the app's maps work when the phone has a weak signal or none at all.
 
 **Done this week:**
-- **Someone clocking out away from the office now gets a plain warning telling them how far away
-  they were.** Clocking out still works exactly the same either way — nobody is blocked or
-  delayed — this just makes an unusual clock-out visible instead of silent.
-- **Location tracking and the office clock-in boundary were fixed.** Staff members were being
-  wrongly refused clock-in in some cases because the app was checking against the wrong
-  boundary; that is fixed, and the app no longer guesses at a boundary it does not actually know.
-- **A fake insurance report figure is gone.** If the report system could not be reached, the app
-  used to quietly show a made-up ₹42,00,000 cover figure instead of the real one. It now says the
-  report could not be generated, and shows nothing invented.
-- **Two help documents were corrected.** They still described an old offline/demo mode and
-  sample login details that do not exist in the app any more, which would have confused anyone
-  following them to test the app.
-- The automatic safety-check suite is unchanged at 258 checks, all passing, plus the usual
-  compile and code-quality checks.
+- The map screens that show where field staff are, and the route they travelled during a shift, now
+  open even when the phone has no internet. Before this, the map showed only an error message
+  whenever the connection dropped — a real problem for staff who are out on the road all day. The
+  map's background scenery still needs a connection to appear, but the staff markers and travel
+  lines now show up regardless. (One final check on a real phone is still to be done to confirm it.)
+- The app also stopped relying on an outside website to load part of the map each time, which is
+  both faster on mobile data and safer.
 
-**Blocked on:** Three things, all needing a person rather than more work.
-1. **Nothing has been saved to the company's central code storage for ten rounds of work now.**
-   The account being used does not have permission to write to this project. All the work is
-   safe on this machine, but it exists in exactly one place. Someone with access to the GitHub
-   account needs to grant permission or replace the saved credential.
-2. **The shared folder the three teams (this app, the backend, the admin panel) use to pass
-   information to each other is still not backed up anywhere.** Fixing it properly means deciding
-   how the three projects should be stored together, which is a decision for whoever owns that
-   layout, not something to do unilaterally.
-3. **Hands-on checking on a real handset is now owed for several rounds of work** — attendance,
-   location tracking, and this week's away-from-office warning. None of these can be checked on a
-   computer, because they involve flight mode, GPS and the phone's own vibration.
+**Blocked on:** The finished code still can't be uploaded to the shared code server — the account
+being used doesn't have permission to write to it. Someone with access needs to grant that
+permission or update the saved login. This has been holding back several updates for a while now,
+so the work is saved safely on this machine but not yet shared.
 
-**Next:** Remove a hardcoded personal email address that currently grants the highest access
-level in the app, and have the server decide that instead.
+**Next:** Clear out old, unused parts of the app so it stays lean and easier to maintain.
