@@ -637,3 +637,36 @@ one file that looks orphaned but is NOT dead, `src/ui/vendor/leaflet-1.9.4.ts`, 
 imported by `LeafletMap.tsx` and only appears unreferenced because eslint ignores it. Lint dropped
 46→45 errors (the deleted files carried one), which is the measurable evidence the removed code was
 real, not phantom.
+
+---
+
+## 2026-08-11 — Lint to green: fix the one real error, disable three React-Compiler rules with a reason (Phase 15)
+
+**Context.** The clean tree carried 45 lint errors, all from four rules that `eslint-plugin-react-hooks`
+v7 promotes to errors *because the React Compiler is enabled* (`app.json` `experiments.reactCompiler:true`,
+`babel-plugin-react-compiler@1.0.0` installed): `set-state-in-effect` ×24, `refs` ×11, `immutability`
+×9, `purity` ×1. So these are the compiler's own static analysis, not lint noise — but the compiler
+**bails out of optimising** a component it can't prove safe rather than miscompiling it, so every
+flagged component still runs correctly; it merely forgoes auto-memoisation. Phase 15's DONE-WHEN
+allows either `npm run lint` exits 0 **or** every remaining rule is explicitly disabled with a reason.
+
+**Decision.** Split by judgment rather than silence everything. (1) The single `react-hooks/purity`
+hit was a genuine minor bug — `useState(Date.now())` in `home.tsx` evaluates the impure `Date.now()`
+in the render body on every pass — so it is **fixed at source** with the lazy-initialiser idiom
+`useState(() => Date.now())` (identical value, deferred to mount), and the `purity` rule is kept
+**on** to catch the next one. (2) The other three fire on patterns that are correct for this codebase
+and that the prior handoff explicitly said to disable-with-a-reason rather than rewrite: Reanimated
+`sv.value=` writes in worklets/handlers (`immutability`), the RN Animated
+`useRef(new Animated.Value()).current` idiom and the latest-value ref pattern (`refs`), and the app's
+one documented data-fetch convention — effect → memoised loader → setState (`set-state-in-effect`,
+`CLAUDE.md` §Conventions 3). They are turned **off** in `eslint.config.js` in a single override block
+whose comment names each rule, its count, and the pattern.
+
+**Consequence.** `npm run lint` exits 0 (0 errors, 12 pre-existing warnings); `tsc` and the 271-test
+suite are unchanged; the only source edit in the whole phase is the one-line `home.tsx` initialiser.
+The cost is real and named: the three disabled rules no longer guard new code, so a genuinely unsafe
+Reanimated/effect pattern added later won't be caught — accepted because they were 44/45 false
+positives on this tree and a permanently-red gate is worse. Do not re-enable the three without
+rewriting the flagged call sites (a structural change, not a lint pass), and do not silence `purity`
+— fix its hits at source. `CLAUDE.md`'s lint line was updated to record all of this so the next
+session does not re-diagnose why the rules are off.

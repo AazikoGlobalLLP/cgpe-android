@@ -59,9 +59,17 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   Timers are faked, so a call that reaches `unavailable()` **must not be awaited directly** — hold
   the promise, `await vi.advanceTimersByTimeAsync(400)`, then await it, or the test times out on
   `wait()`.
-- `npm run lint` — 46 errors on a clean tree. Rule is **no new errors**, not zero.
-  **Takes longer than 120 s**, so it exceeds the default tool timeout — run it in the background or
-  raise the timeout, and read the count off the `✖ N problems (46 errors, 15 warnings)` line.
+- `npm run lint` — **green as of Phase 15 (2026-08-11): 0 errors, 12 warnings.** Rule is still
+  **no new errors**. **Takes longer than 120 s**, so it exceeds the default tool timeout — run it in
+  the background or raise the timeout, and read the count off the `✖ N problems (…errors, …warnings)`
+  line. The React Compiler is enabled (`app.json` `experiments.reactCompiler:true`), so
+  `eslint-plugin-react-hooks` v7 promotes its compiler rules to **errors**; three of them —
+  `react-hooks/{immutability,refs,set-state-in-effect}` — are **disabled with a documented reason**
+  in `eslint.config.js` because they fire on working Reanimated/Animated code and the app's
+  effect→loader→setState data-fetch convention (a rewrite, not a bug). Do **not** re-enable those
+  three without rewriting the flagged call sites, and do **not** silence `react-hooks/purity` (kept
+  on) — fix its hits at source, as Phase 15 did for the one `Date.now()`-in-render case in `home.tsx`
+  (`useState(() => Date.now())`).
 - `eas build -p android --profile preview` — the installable APK (`production` emits an AAB).
 - `npm run reset-project` — **NEVER RUN.** Deletes `src/` and `scripts/`.
 
