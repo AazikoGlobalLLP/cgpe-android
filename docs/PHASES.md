@@ -14,6 +14,19 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 15 — done.** Built 2026-08-11, commit `292610b`. `npm run lint` now **exits 0**, down from
+45 errors on a clean tree; `npx tsc --noEmit` exits 0; `npm test` still **271** across 10 files.
+All 45 errors were React-Compiler rules (`eslint-plugin-react-hooks` v7, promoted to errors because
+`app.json` sets `experiments.reactCompiler:true`). The one `react-hooks/purity` hit — `Date.now()`
+in the render body via `useState(Date.now())` in `home.tsx` — was a real minor impurity, fixed at
+source with a lazy initialiser (`useState(() => Date.now())`), and that rule stays **on**. The other
+three (`immutability` ×9 on Reanimated `sv.value=` writes; `refs` ×11 on the RN Animated
+`useRef(new Animated.Value()).current` idiom; `set-state-in-effect` ×24 on the app's effect→loader→
+setState data-fetch convention) are disabled with a documented rationale block in `eslint.config.js`
+— the disable-with-a-reason escape hatch this phase's DONE-WHEN allows, and the call the handoff
+directed. 12 warnings remain (all pre-existing; none new). No source logic changed beyond the
+one-line `home.tsx` initialiser.
+
 **Phase 14 — done.** Built 2026-08-11, commit `1a37144`. `npm test` still runs **271** tests across
 10 files and exits 0 (no new pure logic to pin — this only removes code); `npx tsc --noEmit` exits 0;
 `npm run lint` is now **45 errors / 12 warnings**, *down* from the 46/15 baseline (the deleted files
@@ -92,12 +105,15 @@ exercise.
 
 ## Next 3
 
-1. **Phase 15** — lint to green. Pure app-side; **45 errors** on a clean tree today (was 46 before
-   Phase 14 removed one with the dead files).
-2. **Phase 12** — `/profiles` role gate `[api]`, if `cgpe-api` has shipped it; otherwise **Phase 6**
+1. **Phase 12** — `/profiles` role gate `[api]`, if `cgpe-api` has shipped it; otherwise **Phase 6**
    (remaining envelope mismatches) — note backend Phase 13 has now un-shadowed
    `GET /api/commissions/team-summary`, but Phase 6 is the *base* `/commissions` envelope, so
    re-read the `api.md` row before assuming it's unblocked.
+2. **Device-verification backlog** — with Phase 15 done, every remaining *coding* phase for this
+   session (6, 9, 12, 16) is blocked on `cgpe-api`. The outstanding non-code work is the handset-only
+   acceptance criteria carried from Phases 1, 4, 5, 7, 10, 13 (haptics, the AsyncStorage clock key,
+   background GPS, the master route replay, airplane-mode behaviour, the offline map render). Needs a
+   device, not an editor.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -128,7 +144,7 @@ exercise.
 | 12 | `/profiles` role gate `[api]` | Blocked on `cgpe-api` |
 | 13 | Vendor Leaflet | **Done** 2026-08-11 — 271 tests green; device check outstanding |
 | 14 | Dead-code sweep | **Done** 2026-08-11 — 271 tests green (`1a37144`); lint 46→45 |
-| 15 | Lint to green | Not started |
+| 15 | Lint to green | **Done** 2026-08-11 — `npm run lint` exits 0 (was 45 errors); 271 tests green (`292610b`) |
 | 16 | "My earnings" salary section `[api]` | **Blocked** — awaiting the salary formula *and* a backend pay field |
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
 
@@ -441,9 +457,33 @@ Remove `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`, `hooks/use-color
    all types and live label maps / `taskProgress` stayed. `src/ui/vendor/leaflet-1.9.4.ts` was left
    alone — it is imported by `LeafletMap.tsx` and only looks orphaned because eslint ignores it.
 
-## Phase 15 — Lint to green
-46 errors on a clean tree, mostly React-Compiler rules firing on Reanimated shared values.
+## Phase 15 — Lint to green ✅ DONE 2026-08-11 (`292610b`)
+45 errors on a clean tree (46 before Phase 14 removed one with the dead files), all from four
+React-Compiler rules that `eslint-plugin-react-hooks` v7 promotes to errors because `app.json` sets
+`experiments.reactCompiler:true`.
 **Done when:** `npm run lint` exits 0, or every remaining rule is explicitly disabled with a reason.
+
+**Result.** No new tests — a lint-config change plus a one-line initialiser, no new pure logic to
+pin. `npm run lint` exits 0 (0 errors, 12 warnings — all pre-existing); `npx tsc --noEmit` exits 0;
+`npm test` still 271 across 10 files. Three things worth recording:
+
+1. **The React Compiler is genuinely on, so these rules are not noise to be silenced blindly.**
+   `app.json` `experiments.reactCompiler:true` means `babel-plugin-react-compiler@1.0.0` runs at
+   build; the v7 hooks plugin ships the compiler's static rules as errors. The compiler **bails out
+   of optimising** a component it can't prove safe rather than miscompiling it — so a flagged
+   component still runs correctly, it just forgoes auto-memoisation. That is why disabling the rules
+   is safe *and* why it is a real (if modest) cost: those components opt out of compiler wins.
+2. **One error was a genuine bug and is fixed at source, not disabled.** `react-hooks/purity` fired
+   once — `useState(Date.now())` in `home.tsx` evaluates the impure `Date.now()` in the render body
+   on every pass. The lazy-initialiser form `useState(() => Date.now())` defers it to mount with an
+   identical value. The `purity` rule stays **on** to catch the next real one.
+3. **The other three were disabled with a documented rationale, per the handoff's explicit call.**
+   `immutability` (×9, Reanimated `sv.value=` writes in worklets/handlers), `refs` (×11, the RN
+   Animated `useRef(new Animated.Value()).current` idiom and the latest-value ref pattern), and
+   `set-state-in-effect` (×24, the app's single data-fetch convention — CLAUDE.md §Conventions 3)
+   all fire on patterns that are correct for this codebase. Rewriting 20+ screens (incl. the
+   1915-line `home.tsx`) with zero test coverage was out of scope; the disable block in
+   `eslint.config.js` names each rule, its count, and why.
 
 ## Phase 16 — "My earnings": attendance-derived salary `[api]` — NEW, requested 2026-08-10
 A new section showing the signed-in person **their own** present-day count and the salary amount that
