@@ -24,6 +24,16 @@ import { storage } from '@/lib/storage';
  *
  * t(key) falls back to English and then to the key itself, so an untranslated string can
  * never render as blank space.
+ *
+ * t(key, params) adds two things, and ONLY these two — see `translate` at the foot of the
+ * file. (1) Named interpolation: `t('x', { name: 'Asha' })` fills every `{name}` in the
+ * resolved string. A placeholder with no matching param is left verbatim (`{name}`), so a
+ * missing value is visible in testing rather than silently dropped. (2) Count-aware plurals:
+ * when `params.count` is a number, `t('x', { count })` prefers `x_one` / `x_other`, chosen by
+ * the CLDR cardinal rule for the ACTIVE language (English: only 1 is `one`; Hindi & Gujarati:
+ * 0 and 1 are both `one`), and falls back to the base key `x` when neither variant exists.
+ * There is NO string concatenation anywhere — Hindi/Gujarati word order differs from English,
+ * so a dynamic string is one template with placeholders, never glued-together fragments.
  * ------------------------------------------------------------------ */
 
 export type Lang = 'en' | 'gu' | 'hi' | 'hi-en' | 'gu-en';
@@ -295,7 +305,81 @@ function pick(table: Dict, key: string): string | undefined {
   return v ? v : undefined;
 }
 
-type I18n = { lang: Lang; setLang: (l: Lang) => void; t: (key: string) => string };
+/* ------------------------------------------------------------------ *
+ * t(key, params) — interpolation and plurals. Three small PURE pieces so each is pinnable
+ * on its own (`__tests__/format.test.ts`): the CLDR plural rule, the placeholder fill, and
+ * the composed resolver. None of them touch React, storage or the network.
+ * ------------------------------------------------------------------ */
+
+/** Values a template can carry. `count` is special-cased for plural selection; everything
+ *  else is substituted by name. Numbers are stringified at the point of substitution. */
+export type TParams = Record<string, string | number>;
+
+/** The shape every `t` in the app satisfies. Exported so a screen can type a `t` it receives. */
+export type TFn = (key: string, params?: TParams) => string;
+
+/**
+ * CLDR cardinal plural category, restricted to the two forms the dictionaries carry
+ * (`one` / `other`). English marks only exactly 1 as `one`; Hindi and Gujarati — and so
+ * their romanized pair — mark BOTH 0 and 1 as `one` ("0 kaam" takes the singular form).
+ * Counts are integers here, so the integer-part subtleties of the full rule do not arise.
+ */
+export function pluralCategory(lang: Lang, count: number): 'one' | 'other' {
+  const n = Math.abs(count);
+  switch (lang) {
+    case 'hi':
+    case 'hi-en':
+    case 'gu':
+    case 'gu-en':
+      return n === 0 || n === 1 ? 'one' : 'other';
+    case 'en':
+    default:
+      return n === 1 ? 'one' : 'other';
+  }
+}
+
+/**
+ * Fill `{name}` placeholders from `params`. A placeholder with no matching (non-null) value
+ * is left exactly as written — a visible `{name}` is a bug you can see, not a silent blank.
+ * Only `{word}` tokens are touched, so a stray brace in copy is never mangled.
+ */
+export function interpolate(template: string, params: TParams): string {
+  return template.replace(/\{(\w+)\}/g, (whole, name: string) => {
+    const v = params[name];
+    return v == null ? whole : String(v);
+  });
+}
+
+/** Raw lookup for one key: the active language, then English, else undefined. */
+function resolve(lang: Lang, key: string): string | undefined {
+  return pick(DICT[lang], key) ?? pick(en, key);
+}
+
+/**
+ * The composed resolver behind `t`. Order: pick the plural variant when `params.count` is a
+ * number AND that variant exists (else the base key); resolve through language → English →
+ * the key itself (the never-blank contract, unchanged from the old `t`); then interpolate.
+ *
+ * `lookup` is injected only so the plural + interpolation paths can be pinned against a
+ * controlled dictionary without adding real keys (which would bump the parity gate). Every
+ * app caller uses the default, which reads the shipped dictionaries.
+ */
+export function translate(
+  lang: Lang,
+  key: string,
+  params?: TParams,
+  lookup: (k: string) => string | undefined = (k) => resolve(lang, k),
+): string {
+  let lookupKey = key;
+  if (params && typeof params.count === 'number') {
+    const variant = `${key}_${pluralCategory(lang, params.count)}`;
+    if (lookup(variant) != null) lookupKey = variant;
+  }
+  const raw = lookup(lookupKey) ?? key;
+  return params ? interpolate(raw, params) : raw;
+}
+
+type I18n = { lang: Lang; setLang: (l: Lang) => void; t: TFn };
 const I18nContext = createContext<I18n>({ lang: DEFAULT_LANG, setLang: () => {}, t: (k) => k });
 
 export function I18nProvider({ children }: { children: React.ReactNode }) {
@@ -348,10 +432,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const t = useCallback(
-    (key: string) => pick(DICT[lang], key) ?? pick(en, key) ?? key,
-    [lang],
-  );
+  const t = useCallback<TFn>((key, params) => translate(lang, key, params), [lang]);
 
   const value = useMemo<I18n>(() => ({ lang, setLang, t }), [lang, setLang, t]);
   return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>;
