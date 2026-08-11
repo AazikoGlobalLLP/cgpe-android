@@ -10,6 +10,7 @@ backlog; it does not replace it.
 |---|---|
 | Haptics | `lib/haptics.ts` is a no-op on web — no vibration to assert. |
 | AsyncStorage `clock.<date>` key + cold-start persistence | Attendance/clock persistence across a real app kill needs a device; the browser reload is not the same lifecycle. |
+| Language key `cgpe.lang.<userId>` across a real cold start | `50-languages` proves the toggle persists across a web `page.reload()` (a fresh boot from the same localStorage), but not across the OS killing and relaunching the process on a SecureStore-backed handset. Phase 19 DONE-3's cold-start clause is carried. |
 | SecureStore biometric seal (`biometricIdentity.ts`) + `AppLock` | `expo-secure-store` / `expo-local-authentication` have no web implementation; the app-lock is a no-op on web. |
 | Background GPS / route recording (`lib/tracker.ts`) | `expo-task-manager` / `expo-location` background tasks + the foreground service exist only on the device; headless wake-ups can't be simulated in a browser. |
 | Biometric unlock prompt | No `LocalAuthentication` on web. |

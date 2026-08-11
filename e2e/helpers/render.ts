@@ -23,16 +23,32 @@ export async function bannerVisible(page: Page): Promise<boolean> {
   return page.getByText(BANNER_TEXT).isVisible().catch(() => false);
 }
 
+/** The animated Splash's own tagline (ui/Splash.tsx:55) — a brand string, not i18n, so it is the
+ *  same in every language and a reliable "the overlay is still up" sentinel. It self-dismisses at
+ *  ~1900ms and then UNMOUNTS (_layout.tsx:75 drops it once ready+fonts+splashDone), so waiting for
+ *  it to detach means the real screen is revealed underneath. */
+const SPLASH_TAG = 'Khushiyo Ka Financial Planner';
+
 /**
  * Wait for a route to actually paint, then assert it rendered rather than white-screened or
  * dropped into an error boundary, and capture a still. Returns the visible text so a caller can
  * make route-specific checks. Never throws for a "slow" screen — only for a broken one.
+ *
+ * `settleSplash` (opt-in, default off so existing specs are unchanged): also wait for the animated
+ * Splash overlay to dismiss BEFORE reading the body and taking the shot. Every `page.goto()` is a
+ * fresh app boot that re-shows the Splash for ~1900ms, so without this the still — and the returned
+ * body text a caller scans — can be the logo, not the screen. The language walk needs the real
+ * content both for legible per-language screenshots and so its key-leak scan sees the actual screen.
  */
-export async function assertRenders(page: Page, name: string): Promise<string> {
+export async function assertRenders(page: Page, name: string, opts: { settleSplash?: boolean } = {}): Promise<string> {
   // The animated Splash overlays until fonts + auth are ready; wait for real content underneath.
   await page
     .waitForFunction(() => document.body.innerText.replace(/\s+/g, ' ').trim().length > 30, null, { timeout: 25_000 })
     .catch(() => {});
+  if (opts.settleSplash) {
+    // Best-effort and bounded: a render is never failed over the overlay lingering.
+    await page.getByText(SPLASH_TAG).waitFor({ state: 'hidden', timeout: 8_000 }).catch(() => {});
+  }
   await page.waitForTimeout(500); // let list/skeleton transitions settle for a clean shot
 
   const body = (await page.locator('body').innerText()).toLowerCase();

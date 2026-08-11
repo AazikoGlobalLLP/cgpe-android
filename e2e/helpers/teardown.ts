@@ -27,6 +27,10 @@ Open these:
     - \`normal/*\`  — the A-to-Z normal-state walk (healthy backend)
     - \`worst/*\`   — each screen under an injected fault (500 / 503 / malformed / empty / timeout / oversized)
     - \`forms/*\`   — login bad-input + hostile-input on search / task-new / claim-new
+    - \`languages/<code>/*\` — every screen in each of the 5 languages (en, gu, hi, hi-en, gu-en),
+      for the Phase 19 naturalness (Hinglish/Gujlish read right?) + layout review. Compare the same
+      screen across folders side by side. \`languages/_toggle/*\` are the before/after-reload stills
+      that prove the toggle applied and persisted.
 - **test-results/**/video.webm** — the full film of each spec (watch the walk back).
 - **test-results/**/trace.zip** — Playwright trace; open with \`npx playwright show-trace <file>\`.
 - **WHAT-WEB-CANNOT-REACH.md** — the native-only surfaces this web run does NOT verify. A green
