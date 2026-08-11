@@ -14,15 +14,19 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 12 — specced, NOT built.** 2026-08-11. Verification found its **`[api]` tag is wrong — the
-fix is fully app-side.** A leader's "0 on duty" is caused by `getAgentLocations()` reading the roster
-through admin-only `GET /api/profiles` (403s for a leader); the correct source `GET /api/team/task-overview`
-is readable by any staff, already trusted by `getTeam()`, and the `/attendance/user/:id` fan-out it
-feeds has no role check (`api.md:544`). A ~4-line swap in one function; `getTeam`/`team/index.tsx`/
-`agent-map.tsx` need no change. Spec: `docs/spec/PHASE-12.md`. **Not built** — stopped at the approval
-gate. First build step: verify the `?scope=all` leader-clamp in `../cgpe-backend-main/routes/team.js`
-(spec D-2), then edit `api.ts:1855` + add `api-agents.test.ts`. No source changed this session; no
-commit until the handoff docs.
+**Phase 12 — done.** Built 2026-08-11, commit `4507d6e`. `npm test` runs **281** tests across 11 files
+and exits 0 (10 new in `api-agents.test.ts`); `npx tsc --noEmit` exits 0; `npm run lint` stays at the
+Phase-15 baseline (0 errors / 12 warnings). Its **`[api]` tag was wrong — the fix is fully app-side**
+(D-1). A leader's "0 on duty" was caused by `getAgentLocations()` reading the roster through admin-only
+`GET /api/profiles` (403s for a leader); it now reads `GET /api/team/task-overview?scope=all`, readable
+by any staff and already trusted by `getTeam()`. The `?scope=all` leader-clamp (spec D-2) was **verified
+in the producer's code before the diff**: `../cgpe-backend-main/utils/scope.js` `visibilityScope` gates
+the `view==='all'` → `mode:'all'` branch on `isSuperAdmin || role==='admin'`, so a leader's `?scope=all`
+is ignored and clamped to `{mode:'team', userIds:[self,...team]}`; the param preserves admin/master
+org-wide breadth (the bare endpoint would default them to `mode:'own'`) without widening a leader. A
+~4-line swap in one function; `getTeam`/`team/index.tsx`/`agent-map.tsx` needed no change — the fix is
+upstream of them (D-4). **The leader on-duty count itself needs a handset + live backend to confirm**
+(criterion 6) — carried, like Phases 1/4/5/7/10/13. Spec: `docs/spec/PHASE-12.md`.
 
 **Phase 15 — done.** Built 2026-08-11, commit `292610b`. `npm run lint` now **exits 0**, down from
 45 errors on a clean tree; `npx tsc --noEmit` exits 0; `npm test` still **271** across 10 files.
@@ -115,17 +119,17 @@ exercise.
 
 ## Next 3
 
-1. **Phase 12 — BUILD IT** (specced 2026-08-11, `docs/spec/PHASE-12.md`, verified app-side, not
-   `[api]`-blocked). First: verify the `?scope=all` leader-clamp in `../cgpe-backend-main/routes/team.js`
-   (spec D-2); then the `getAgentLocations` roster-source swap in `api.ts` + `api-agents.test.ts` +
-   gates. Only genuinely unblocked coding phase this session found.
-2. **Phase 6 (partial)** — notes (`search`→`q`) and LIC (`{meta,plans}` unwrap + field adapter) are
+1. **Phase 6 (partial)** — notes (`search`→`q`) and LIC (`{meta,plans}` unwrap + field adapter) are
    app-side and buildable; commissions is **backend-blocked** (needs a pending server aggregate
    endpoint — product owner confirmed). LIC also needs the `api.ts:1966`-vs-`api.md:1192`
    404-in-production-vs-live disagreement settled first. See DECISIONS 2026-08-11 (Phase 6).
-3. **Device-verification backlog** — handset-only acceptance criteria carried from Phases 1, 4, 5, 7,
-   10, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
-   airplane-mode behaviour, the offline map render). Needs a device, not an editor.
+2. **Device-verification backlog** — handset-only acceptance criteria carried from Phases 1, 4, 5, 7,
+   10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
+   airplane-mode behaviour, **a leader's true "On duty now" count**, the offline map render). Needs a
+   device, not an editor.
+3. **The `dashboards.tsx:292-297` partial-outage tile** carried out of Phase 3 (below) — a *partial*
+   outage still renders "0 clients · ₹0 claims paid" as fact on the Master KPI tiles; the hero above
+   already uses `NO_VALUE`. Small and specified.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -153,7 +157,7 @@ exercise.
 | 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
 | 10 | Server-driven navigation (§9 gap) | **Done** 2026-08-11 — 266 tests green |
 | 11 | Server-derived tier | **Done** 2026-08-11 — 258 tests green |
-| 12 | `/profiles` role gate ~~`[api]`~~ | **Specced, NOT built** 2026-08-11 — verified **app-side** (tag was wrong); `docs/spec/PHASE-12.md` |
+| 12 | `/profiles` role gate ~~`[api]`~~ | **Done** 2026-08-11 — 281 tests green (`4507d6e`); verified **app-side** (tag was wrong); device check outstanding |
 | 13 | Vendor Leaflet | **Done** 2026-08-11 — 271 tests green; device check outstanding |
 | 14 | Dead-code sweep | **Done** 2026-08-11 — 271 tests green (`1a37144`); lint 46→45 |
 | 15 | Lint to green | **Done** 2026-08-11 — `npm run lint` exits 0 (was 45 errors); 271 tests green (`292610b`) |
@@ -415,11 +419,33 @@ change is a one-line predicate swap, same class as Phase 17. One thing worth rec
 
 Full spec and the four locked decisions: `docs/spec/PHASE-11.md`.
 
-## Phase 12 — `/profiles` role gate `[api]`
+## Phase 12 — `/profiles` role gate ✅ DONE 2026-08-11 (`4507d6e`) — the `[api]` tag was wrong
 `GET /profiles` is admin-only, but `getTeam()` calls `getAgentLocations()` on its success path purely
-to compute `clockedIn` — so advisors and leaders see "0 on duty" and an empty agent map.
-**Files:** `src/data/api.ts`, `src/app/team/index.tsx`, `src/app/agent-map.tsx`
+to compute `clockedIn` — so advisors and leaders saw "0 on duty" and an empty agent map.
+**Files:** `src/data/api.ts` (`getAgentLocations` only), `src/data/__tests__/api-agents.test.ts` (new)
+— **not** `team/index.tsx` / `agent-map.tsx`, which the phase text predicted and which needed nothing
+(the fix is upstream of them, D-4). Same "predicted list shrank" shape as Phases 5 and 11.
 **Done when:** a leader account sees the correct on-duty count.
+
+**Result.** 10 new tests. Three things worth recording:
+
+1. **The break was one wrong door, not a missing endpoint — so no `cgpe-api` change (D-1).** The roster
+   source moved `GET /profiles?limit=60` → `GET /team/task-overview?scope=all`; the `/attendance/user/:id`
+   fan-out it feeds already works for a leader (no role check, `api.md:544`), and `task-overview` members
+   carry the `user_id`+`name` `toPin` reads. The `[api]` marker on the board is struck through.
+2. **`?scope=all` was verified against the producer's code, not trusted from the contract prose (D-2).**
+   `../cgpe-backend-main/utils/scope.js` `visibilityScope` gates the `all` → org-wide branch on
+   `isSuperAdmin || role==='admin'`, so a leader's `?scope=all` is silently ignored and clamped to their
+   team. The param is needed to keep admin/master org-wide (the bare endpoint defaults them to `mode:'own'`,
+   showing only themselves on the map) — the opposite of what "drop the param" would have done. A test pins
+   the request carries `?scope=all` so a later edit can't quietly drop it.
+3. **The outage reports under the existing `/attendance` health key (D-3), not a competing
+   `/team/task-overview` row** — `getTaskOverview` owns that one, and the demo path + agent-map degraded
+   copy already key on `/attendance`. Presentation only; it does not affect the count.
+
+The leader on-duty count against production is the DONE-WHEN proper and **needs a handset + live backend +
+a leader token + someone actually clocked in** (spec criterion 6) — carried, not editor-verifiable.
+Full spec, the five locked decisions and what was left out: `docs/spec/PHASE-12.md`.
 
 ## Phase 13 — Vendor Leaflet ✅ DONE 2026-08-11
 `LeafletMap.tsx` pulled Leaflet 1.9.4 from unpkg and tiles from a CDN at runtime, with no SRI and no
