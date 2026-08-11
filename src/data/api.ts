@@ -1559,7 +1559,7 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
  * near-miss reading as "0 m". Spaces are U+00A0 per `lib/format.ts`: a value must not wrap
  * between its number and its unit.
  */
-function distanceText(m: number): string {
+export function distanceText(m: number): string {
   // Round FIRST, then pick the unit. Testing the raw value would render 995 m as "1000 m" — the
   // one string the metres branch exists to avoid.
   const rounded = Math.max(10, Math.round(m / 10) * 10);

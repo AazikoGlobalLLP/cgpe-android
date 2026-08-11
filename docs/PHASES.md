@@ -14,6 +14,12 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 17 — done.** Built 2026-08-11. `npm test` runs **258** tests across 9 files and exits 0
+(no new pure logic to pin — the change is entirely in the imperative `toggleClock` handler);
+`npx tsc --noEmit` exits 0; `npm run lint` stays at the 46-error baseline. Clocking out from
+outside the office fence still succeeds exactly as before and now shows a warning naming the
+measured distance; clocking out from inside the fence is unchanged.
+
 **Phase 8 — done.** Built 2026-08-11, commits `e5b57ef` (code + spec + docs) and `4e12688` (the
 review fix). `npm test` runs **258** tests across 9 files and exits 0; `npx tsc --noEmit` exits 0;
 `npm run lint` is byte-identical to the 46-error baseline. `generateReport` no longer invents a
@@ -52,12 +58,12 @@ exercise.
 
 ## Next 3
 
-1. **Phase 17** — warn on an out-of-bounds clock-out. Small, pure app-side, no `cgpe-api` change
-   needed — see below. Requested 2026-08-11, after Phase 8 closed.
-2. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
+1. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
    string-matching a personal email address compiled into every APK.
-3. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
+2. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
    change needed, since the panel's nav controls already exist and just aren't read yet.
+3. **Phase 13** — vendor Leaflet. Pure app-side; the map currently pulls from a CDN at runtime
+   with no offline fallback.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -90,7 +96,7 @@ exercise.
 | 14 | Dead-code sweep | Not started |
 | 15 | Lint to green | Not started |
 | 16 | "My earnings" salary section `[api]` | **Blocked** — awaiting the salary formula *and* a backend pay field |
-| 17 | Warn on out-of-bounds clock-out | **NEW, requested 2026-08-11** — not started |
+| 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green |
 
 ---
 
@@ -352,7 +358,7 @@ Full spec + the exact inputs still needed from the product owner: `docs/spec/PHA
 
 ---
 
-## Phase 17 — Warn on an out-of-bounds clock-out — NEW, requested 2026-08-11
+## Phase 17 — Warn on an out-of-bounds clock-out ✅ DONE 2026-08-11
 Show a non-blocking warning when someone clocks out outside the office fence. Requested directly
 (Hinglish: *"agar clock-out ke waqt woh location ke andar na ho toh warning dijiye"*).
 
@@ -389,6 +395,23 @@ clocking out from inside the fence shows no warning, unchanged from today.
 second `checkGeofence` call. That would be the more architecturally clean fix and is worth filing
 to `cgpe-api` regardless (the field is computed and thrown away every single clock-out), but it is
 not this phase's blocker — see the "does not need a `cgpe-api` change" note above.
+
+**Result.** No new tests — this phase adds no new pure logic to pin; the change is entirely inside
+`toggleClock`'s imperative write path, which has zero test coverage on either side of this diff
+(same class as `generateReport` before Phase 8). Two things worth recording:
+
+1. **One caller, widened, not duplicated.** The existing `if (fix && !webDemo && !clock.in)`
+   geofence pre-check became `if (fix && !webDemo)`, with the blocking branch still nested under
+   `!clock.in`. The clock-out arm captures the verdict in `clockOutFence` and reads it only after
+   `api.clockOut()` has already returned a non-blocked, `ok` result — so the warning is strictly
+   beside a real success, never ahead of or instead of one.
+2. **`geo.message` was not reusable.** It is composed for the clock-in refusal specifically
+   ("Move about X closer to clock in"), which reads as nonsense after a clock-out has already
+   completed. `distanceText()` — the private formatter `geo.message` itself is built from — is now
+   exported from `api.ts` (`src/data/api.ts`, one word) so the clock-out warning can build its own
+   sentence from `distance_m` without duplicating the km/m rounding rule.
+
+Full spec and the five locked decisions: `docs/spec/PHASE-17.md`.
 
 ---
 

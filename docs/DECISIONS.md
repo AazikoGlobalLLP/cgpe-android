@@ -6,6 +6,26 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — `distanceText` exported rather than reimplemented (Phase 17, built)
+
+**Context.** Built the plan below exactly as scoped. One thing the planning entry did not
+anticipate: `checkGeofence()`'s `message` field, which the clock-in refusal renders verbatim, is
+composed specifically for clock-in ("Move about X closer to clock in") and reads as nonsense after
+a clock-out has already completed. The clock-out warning needed its own sentence built from
+`distance_m` directly.
+
+**Decision.** Export `api.ts`'s private `distanceText()` helper (the same nbsp/km-rounding
+function `geo.message` is itself built from) rather than writing a second copy of the same
+rounding rule in `home.tsx`. One word changed (`function` → `export function`); no behaviour in
+`api.ts` moves. This is why the phase's file list grew from one file to two.
+
+**Consequence.** Distance formatting for both the clock-in refusal and the clock-out warning now
+has exactly one implementation. `src/data/api.ts` and `src/app/(tabs)/home.tsx` are the only files
+this phase touched; no test file references `generateReport`-shaped fabrication or any new pure
+logic, so `npm test` stays at 258 unchanged.
+
+---
+
 ## 2026-08-11 — A clock-out fence warning is re-derived client-side, not read from the server (Phase 17, planning)
 
 **Context.** Requested: warn when someone clocks out outside the office fence. Phase 7 deliberately

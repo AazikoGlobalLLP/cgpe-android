@@ -775,24 +775,33 @@ export default function Home() {
         }
       }
 
-      // Geofence pre-check, so a refusal costs a round trip and not a rejected write.
+      // Geofence check, so a clock-in refusal costs a round trip and not a rejected write.
       // The server re-validates either way.
       //
       // CLOCK-OUT IS NO LONGER FENCED. Agents finish the day at a client's home, and making
       // them return to the office to end a shift means clocking out the next morning instead,
       // so the record stops being true. The backend records the clock-out coordinates and
       // flags out-of-bounds rather than refusing the write.
-      if (fix && !webDemo && !clock.in) {
+      //
+      // PHASE 17: the same check now also runs on the clock-out path, purely so a successful
+      // clock-out can carry a warning naming the measured distance. It never gates the write —
+      // `clockOutFence` is only read after `api.clockOut` has already succeeded, below.
+      let clockOutFence: api.GeofenceCheck | null = null;
+      if (fix && !webDemo) {
         const geo = await api.checkGeofence(fix.lat, fix.lng, fix.accuracy);
         if (!mounted.current) return;
-        if (!geo.allowed) {
-          haptics.warn();
-          setNotice({
-            tone: 'warning',
-            title: 'Too far to clock in',
-            message: geo.message,
-          });
-          return;
+        if (!clock.in) {
+          if (!geo.allowed) {
+            haptics.warn();
+            setNotice({
+              tone: 'warning',
+              title: 'Too far to clock in',
+              message: geo.message,
+            });
+            return;
+          }
+        } else {
+          clockOutFence = geo;
         }
       }
 
@@ -826,6 +835,16 @@ export default function Home() {
         // has already accepted.
         AsyncStorage.setItem(clockKey, JSON.stringify(next)).catch(() => {});
         haptics.success();
+        // PHASE 17: a warning beside a real success, never instead of one — the clock-out above
+        // has already succeeded. States the measured distance, never a quoted radius, same
+        // convention as the clock-in refusal (INBOX D5/D6).
+        if (clockOutFence?.known && !clockOutFence.allowed && clockOutFence.distance_m != null) {
+          setNotice({
+            tone: 'warning',
+            title: 'Clocked out away from the office',
+            message: `You were ${api.distanceText(clockOutFence.distance_m)} from the office when you clocked out.`,
+          });
+        }
         return;
       }
 
