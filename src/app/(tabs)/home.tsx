@@ -531,7 +531,9 @@ export default function Home() {
   const [tickets, setTickets] = useState<api.Ticket[]>([]);
   const [clock, setClock] = useState<ClockState>({ in: false });
   const [clocking, setClocking] = useState(false);
-  const [nowTick, setNowTick] = useState(Date.now());
+  // Lazy initialiser: Date.now() is impure, so it must not run in the render body on every
+  // pass (react-hooks/purity). Passing the thunk defers it to mount; the value is identical.
+  const [nowTick, setNowTick] = useState(() => Date.now());
   /** Screen-specific refusals and failures. The app-wide HealthBanner covers outages. */
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message?: string } | null>(null);
   /** The fail-open escape hatch: true once we have waited long enough for the config. */
