@@ -6,6 +6,28 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Master tier ships without a live DB check that the role field is actually set (Phase 11, built)
+
+**Context.** `tierOf()` used to grant Master by matching `user.email` against a compiled-in
+`shivam@cgpe.in`. `contracts/enums.md` §1.1 documents `Profile.role`'s `super_admin` as the
+server's own top rank — passes every `authorize()` gate unconditionally — which is the correct
+server-derived replacement. But this repo has no way to query the production database, so there
+was no way to confirm from here whether the master account's `Profile.role` is currently set to
+`super_admin`. Asked the user directly rather than assuming either way, since getting it wrong
+either overclaims (inventing a value that isn't actually stored) or underdelivers (shipping code
+that regresses the real Master's experience on next login with no visible cause).
+
+**Decision.** Ship the `role === 'super_admin'` check now. The user chose to confirm/set the
+database field themselves rather than have this session file an INBOX item to `cgpe-api` first.
+
+**Consequence.** If the account's `Profile.role` is not `super_admin` at rollout, `tierOf()` falls
+through to whatever the role actually is (most plausibly `admin`) — a visible but non-destructive
+regression, not a lockout, and self-evident on first login after this ships. A future session
+reading "Master tier disappeared" should check this entry before re-diagnosing it as a code bug —
+the code is doing exactly what `docs/spec/PHASE-11.md` D-4 says it does.
+
+---
+
 ## 2026-08-11 — `distanceText` exported rather than reimplemented (Phase 17, built)
 
 **Context.** Built the plan below exactly as scoped. One thing the planning entry did not

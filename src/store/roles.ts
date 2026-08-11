@@ -1,8 +1,8 @@
 /**
  * CGPE access model — three completely separate experiences.
  *
- *  MASTER  (Shivam only)  — shivam@cgpe.in. Sees EVERYTHING: every admin, every team
- *                           member, org-wide analytics, all activity, all data.
+ *  MASTER  (role: super_admin) — sees EVERYTHING: every admin, every team member,
+ *                           org-wide analytics, all activity, all data.
  *  ADMIN   (role: admin | leader) — runs a branch/team: assigns work, monitors their
  *                           team, runs campaigns, sees the whole client book.
  *  TEAM    (advisor | learn_advisor | payroll_staff) — does the work: only their own
@@ -11,9 +11,6 @@
 import type { User } from '@/data/types';
 
 export type Tier = 'master' | 'admin' | 'team';
-
-/** The single master account. */
-export const MASTER_EMAIL = 'shivam@cgpe.in';
 
 export type Capabilities = {
   tier: Tier;
@@ -34,9 +31,15 @@ export type Capabilities = {
   overseeAdmins: boolean;
 };
 
+/**
+ * `super_admin` is `Profile.role`'s own top rank — "passes every `authorize()` gate
+ * unconditionally" (`contracts/enums.md` §1.1) — so it is the server's own opinion of who
+ * is Master, not a client-side guess. Whoever holds that account, this survives it changing
+ * hands or changing address; the previous version compiled one person's email into every APK.
+ */
 export function tierOf(user: User | null): Tier {
   if (!user) return 'team';
-  if ((user.email || '').trim().toLowerCase() === MASTER_EMAIL) return 'master';
+  if (user.role === 'super_admin') return 'master';
   if (user.role === 'admin' || user.role === 'leader') return 'admin';
   return 'team';
 }

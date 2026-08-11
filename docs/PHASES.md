@@ -14,6 +14,12 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 11 — done.** Built 2026-08-11. `npm test` runs **258** tests across 9 files and exits 0
+(no new pure logic to pin — a single predicate swap in an already-untested function);
+`npx tsc --noEmit` exits 0; `npm run lint` stays at the 46-error baseline. `tierOf()` grants
+Master by `Profile.role === 'super_admin'` — the server's own top rank — instead of matching
+`shivam@cgpe.in`. No email address literal remains in `src/`.
+
 **Phase 17 — done.** Built 2026-08-11, commit `140d020`. `npm test` runs **258** tests across 9
 files and exits 0 (no new pure logic to pin — the change is entirely in the imperative
 `toggleClock` handler); `npx tsc --noEmit` exits 0; `npm run lint` stays at the 46-error baseline.
@@ -58,12 +64,11 @@ exercise.
 
 ## Next 3
 
-1. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
-   string-matching a personal email address compiled into every APK.
-2. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
+1. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
    change needed, since the panel's nav controls already exist and just aren't read yet.
-3. **Phase 13** — vendor Leaflet. Pure app-side; the map currently pulls from a CDN at runtime
+2. **Phase 13** — vendor Leaflet. Pure app-side; the map currently pulls from a CDN at runtime
    with no offline fallback.
+3. **Phase 14** — dead-code sweep. Pure app-side; six known-dead files plus orphaned helpers.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -90,7 +95,7 @@ exercise.
 | 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
 | 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
 | 10 | Server-driven navigation (§9 gap) | Not started |
-| 11 | Server-derived tier | Not started |
+| 11 | Server-derived tier | **Done** 2026-08-11 — 258 tests green |
 | 12 | `/profiles` role gate `[api]` | Blocked on `cgpe-api` |
 | 13 | Vendor Leaflet | Not started |
 | 14 | Dead-code sweep | Not started |
@@ -307,12 +312,30 @@ into More; `more.tsx` filters on `nav.hidden` and groups by `nav.more_sections`.
 **Done when:** saving a tab order in the admin panel changes the bar on the next cold start, and a
 module in `nav.hidden` is unreachable.
 
-## Phase 11 — Server-derived tier
+## Phase 11 — Server-derived tier ✅ DONE 2026-08-11
 `store/roles.ts` grants the top privilege tier by string-matching a hardcoded personal email address
 compiled into every APK. Derive the tier from the server's own role/claims instead.
 **Files:** `src/store/roles.ts`, `src/store/auth.tsx`, `src/data/api.ts`, `src/app/(tabs)/more.tsx`
 **Done when:** no email address literal remains in `src/`, and the master experience survives that
 person changing address.
+
+**Result.** No new tests — `tierOf()` had zero coverage before this phase and still does; the
+change is a one-line predicate swap, same class as Phase 17. One thing worth recording:
+
+1. **The predicted file list shrank to one file (plus the type it depends on).** `contracts/enums.md`
+   §1.1 already documents `Profile.role`'s top rank, `super_admin`, as passing "every `authorize()`
+   gate unconditionally" — the server's own opinion of who is Master, already returned unfiltered on
+   login and `/auth/me`. `auth.tsx`, `api.ts` and `more.tsx` needed no change: role already flowed
+   through `adaptUser()`, and every tier consumer already went through `capabilitiesOf()`, not the
+   email. `data/types.ts`'s `Role` union gained `'super_admin'` — required for the comparison to
+   type-check under TS strict, not optional polish.
+2. **This ships without a live-database check that any specific account currently holds
+   `role: 'super_admin'`** — that's production data, unreachable from this repo. Asked rather than
+   assumed; the answer was to proceed and confirm/set it separately. Not a lockout risk if it's not
+   set yet — `tierOf()` falls through to whatever the account's actual role implies. See
+   `docs/spec/PHASE-11.md` D-4 if Master unexpectedly reads as Admin after this ships.
+
+Full spec and the four locked decisions: `docs/spec/PHASE-11.md`.
 
 ## Phase 12 — `/profiles` role gate `[api]`
 `GET /profiles` is admin-only, but `getTeam()` calls `getAgentLocations()` on its success path purely

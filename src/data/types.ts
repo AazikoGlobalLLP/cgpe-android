@@ -1,6 +1,6 @@
 /** Domain types — mirror the CGPE backend shapes the mobile app consumes. */
 
-export type Role = 'advisor' | 'learn_advisor' | 'leader' | 'admin' | 'payroll_staff';
+export type Role = 'advisor' | 'learn_advisor' | 'leader' | 'admin' | 'payroll_staff' | 'super_admin';
 
 export interface User {
   id: string;
