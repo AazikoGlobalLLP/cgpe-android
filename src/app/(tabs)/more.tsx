@@ -178,6 +178,12 @@ export default function More() {
           ? [{ icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' }]
           : []),
         { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href, navKey: 'analytics' },
+        // Payroll reads the admin-only salary endpoint (`authorize('admin')`), which 403s a
+        // leader — but mobile's tier folds leader into "admin", so gate on the REAL role, not
+        // `isAdmin`/caps. No navKey: it is a local feature, not part of the server nav schema.
+        ...((user.role === 'admin' || user.role === 'super_admin')
+          ? [{ icon: 'cash' as IconName, label: 'Payroll', value: 'Salary roster', href: '/payroll' as Href }]
+          : []),
         { icon: 'paper-plane' as IconName, label: 'Campaigns', value: 'Bulk sends', href: '/campaigns' as Href, navKey: 'campaigns' },
         { icon: 'megaphone' as IconName, label: 'Notify team', value: 'Send alert', href: '/notify' as Href, navKey: 'notify' },
       ] as Entry[],

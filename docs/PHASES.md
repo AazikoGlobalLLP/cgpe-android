@@ -14,6 +14,27 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 20 — Admin payroll roster (in-app). BUILT 2026-08-11.** Owner-directed scope change from
+Phase 16. Re-verified against `cgpe-api`'s **real code** (not tags — wrong 5×) that the Phase 16
+self-view is *still* blocked: the whole payroll router is admin-only (`routes/payroll.js:22-23` =
+`authorize('admin')`; `middleware/auth.js:73` 403s any non-admin), and a whole-tree grep finds only
+the 8 admin routes — the self-scoped read mobile needs was never built. So at the owner's explicit
+direction, built a **different** screen against the endpoint that *does* exist: a mobile slice of the
+payroll roster the `cgpe-admin` panel owns, admin/super_admin only. New route `src/app/payroll.tsx`
+consumes `GET /api/payroll/compute?year=&month=` (a 12-month strip, current first); shows total
+payable + per-member name/segment/present-days/**server-computed** payable. **No PII on the phone** —
+`/compute` omits Aadhaar/PAN/bank (`routes/payroll.js:306`); those live only on `/profiles`+`/export`.
+**The app never multiplies** — every `payable` is the server's; the one sum (roster total) is an
+aggregate of computed figures, pinned by a test. **Gated on the REAL role, not the tier** — mobile's
+`tierOf` folds `leader` into "admin" but the backend 403s a leader, so the More row and the screen both
+gate on `user.role === 'admin'|'super_admin'`; a leader never reaches the fetch, and a stale-role
+deep-link degrades honestly (403 → `tryReal` null → "admin-only"/"could not load", never a false ₹0).
+4 files (`api.ts` +`getPayrollRoster`/types, `payroll.tsx`, `more.tsx` +1 gated row, new
+`api-payroll.test.ts`). Gates green: `tsc` 0, `npm test` **330/330** (+7), `lint` 0 errors/12 warnings
+(baseline). Push still 403s (commit local). The **Phase 16 self-view stays blocked** and its UI lock is
+untouched; the narrowed self-read ask stays filed. Full path: `docs/spec/PHASE-20.md`; DECISIONS
+2026-08-11 (top); HANDOFF. Device check (renders on a real handset, light/dark) carried.
+
 **Phase 16 re-evaluation (no build) — 2026-08-11.** A boot found the backend's **Phase 25 payroll
 cluster** had landed (25a profiles / 25b compute / 25c export) — the endpoints Phase 16 ("My earnings")
 was blocked on. Re-verified against `cgpe-api`'s **real code** (not the payroll INBOX notices, which are
@@ -277,8 +298,15 @@ exercise.
 
 ## Next 3
 
-1. **Phase 16 salary + Phase 6 commissions — still backend-blocked, but Phase 16's blocker SHRANK
-   (2026-08-11).** Backend Phase 25 payroll cluster landed: the pay field (`payroll_profiles.salary_amount`)
+1. **Phase 16 self-view salary — still backend-blocked; the admin slice shipped as Phase 20
+   (2026-08-11).** At the owner's direction, an **admin-only** payroll roster now exists in the app
+   (`src/app/payroll.tsx` on `GET /payroll/compute`, Phase 20) — but the Phase 16 goal, every advisor
+   seeing *their own* pay, is a **different** screen and stays blocked: `routes/payroll.js:22-23` gates
+   the whole surface `authorize('admin')` (a leader/advisor gets 403), and the self-scoped read
+   (`GET /api/payroll/my-earnings`) was never built (`grep -i earnings` over the backend = 0). Its UI
+   lock is untouched; the narrowed self-read ask stays filed with `cgpe-api`. Commissions (Phase 6)
+   unchanged. **Phase 16 salary + Phase 6 commissions — original context below.** Backend Phase 25
+   payroll cluster landed: the pay field (`payroll_profiles.salary_amount`)
    and the server-side formula (`services/payrollEngine.js` `computeRangeSalary` → a `payable` number)
    now **exist** — the two things Phase 16 asked to be built. But `routes/payroll.js:22-23` gates the
    whole router `authorize('admin')` (`middleware/auth.js:73` 403s non-admin/super_admin), so an advisor
@@ -343,6 +371,7 @@ exercise.
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
 | 18 | Watchable A–Z + worst-case E2E test | **Built** 2026-08-11 — Playwright/Expo-web harness, 33 tests green (42 screens render + 21 worst-case + 9 bad-input); web boots with no guard; gates green |
 | 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Built** 2026-08-11 — parity Vitest (323/323, +18) + per-language E2E walk (42/42 render, 0 key leaks × 5 langs); dictionaries already complete; naturalness review outstanding |
+| 20 | Admin payroll roster (in-app) | **Built** 2026-08-11 — owner-directed; `src/app/payroll.tsx` on admin-only `GET /payroll/compute`, 330 tests green (+7); no PII, no on-device math, gated on real role. Phase 16 self-view still blocked; device check outstanding |
 
 ---
 

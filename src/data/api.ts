@@ -1757,6 +1757,54 @@ export async function getAttendanceHistory(): Promise<any[]> {
   return (await tryReal<any[]>('/attendance/history?limit=30', {}, isArr, '/attendance/history')) ?? [];
 }
 
+/* ----------------------------------------------------- Payroll (admin-only) */
+/**
+ * One member's per-calendar-month payroll figures, as `GET /api/payroll/compute` returns
+ * them (`contracts/api.md` §`/api/payroll`). `per_day_rate` is null for the `base` segment.
+ * `payable_precise` is the un-rounded number; the roster's `payable` is the rounded ₹ figure.
+ */
+export type PayrollMonth = {
+  year: number;
+  month: number;
+  working_days: number;
+  present_days: number;
+  worked_hours: number;
+  per_day_rate: number | null;
+  payable_precise?: number;
+};
+export type PayrollRow = {
+  user_id: string;
+  name: string | null;
+  /** false = no staff Profile matched this payroll `user_id` (an orphan row). */
+  staff_found: boolean;
+  segment: string;            // 'day_wise' | 'hourly' | 'base'
+  salary_amount: number;
+  office_hours?: number;
+  /** Server-computed, rounded to ₹1. The app RENDERS this; it never multiplies a rate. */
+  payable: number;
+  months: PayrollMonth[];
+};
+
+/**
+ * Admin-only salary roster for a single calendar month.
+ * `GET /api/payroll/compute?year=&month=` (the salary engine, `services/payrollEngine.js`).
+ *
+ * ACCESS. The whole payroll router is `router.use(protect); router.use(authorize('admin'))`
+ * (`routes/payroll.js:22-23`), so ONLY an `admin`/`super_admin` token gets rows — a `leader`
+ * or lower is **403**'d. `tryReal` classifies 403 as an ANSWER, not an outage, so it returns
+ * `null` and raises no banner (the screen gates on the real role before calling, so a 403 is a
+ * belt-and-braces edge, not the norm). A **503** (DB down) IS an outage and raises the banner.
+ * **400** cannot occur here: the period is built from a real `year`+`month`, never reversed.
+ *
+ * RETURN. The roster array on success — possibly `[]` when no payroll profiles exist — or
+ * `null` on any failure/refusal, so the screen can tell "loaded, none" from "could not load".
+ * Every `payable` is computed server-side from the member's own `daylogs`; nothing here
+ * derives money from a rate (CLAUDE.md money rule).
+ */
+export async function getPayrollRoster(year: number, month: number): Promise<PayrollRow[] | null> {
+  return await tryReal<PayrollRow[]>(`/payroll/compute?year=${year}&month=${month}`, {}, isArr);
+}
+
 /* --------------------------------------------------- Movement tracking */
 export type TrackPoint = { lat: number; lng: number; at?: string | number; accuracy?: number; speed?: number; heading?: number; battery?: number };
 export type TrackSession = { session_id: string; date: string; started_at: string; ended_at: string | null; point_count: number; distance_m: number };

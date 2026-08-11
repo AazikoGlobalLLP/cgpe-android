@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 20: built an admin-only in-app payroll roster (owner-directed scope change)
+
+**Context.** After the Phase 16 re-eval (below), the user (as product owner) was asked how to handle
+salary in the app given the backend is deliberately admin-only. They chose **"Build an admin-only salary
+screen in the app."** First the state was re-verified against `cgpe-api`'s real code — not the earlier
+read, not the tags: `routes/payroll.js:22-23` still wraps the whole router in `authorize('admin')`,
+`middleware/auth.js:73` still 403s every non-admin, and a whole-tree grep (`earnings|my-earnings|/payroll`)
+found only the 8 admin routes. So the Phase 16 self-view is genuinely still blocked; the admin surface is
+what exists.
+
+**Decision.** Built `src/app/payroll.tsx` on `GET /api/payroll/compute` (admin/super_admin only), as a
+**separate** screen from Phase 16 — not a re-scope of it. The Phase 16 UI lock and its filed self-read ask
+are untouched.
+- **No PII on the phone.** Consumed `/compute`, which omits Aadhaar/PAN/bank (`routes/payroll.js:306`) — not
+  `/profiles` or `/export`. This is why the "PII on mobile" concern raised when offering the option shrank:
+  the screen shows salary + attendance figures + the server payable, no identity PII.
+- **The app never multiplies.** Every `payable` is server-computed; the one on-device sum is the roster
+  total, a `reduce(+)` over the server's own payables — an aggregate of computed figures, not a rate
+  derivation. A test pins that `payable` is passed through unchanged.
+- **Gated on the REAL role, not the tier.** `store/roles.ts` `tierOf()` folds `leader` into the `admin`
+  tier, but the backend 403s a leader — so both the More entry row and the screen gate on
+  `user.role === 'admin' || 'super_admin'`, never `caps.manageTeam`. A leader never reaches the fetch; a
+  stale-role deep-link degrades to the honest "admin-only"/"could not load" states (403 → `tryReal` null),
+  never a false ₹0. Two tests pin that 403 is an answer (no banner) and 503 is an outage (banner).
+
+**Consequence.** The app now has an admin payroll view that duplicates a slice of the `cgpe-admin` panel —
+an accepted duplication, by owner choice. Phase 16 (self-view for all staff) remains blocked on a
+self-scoped backend read that does not exist. If a future session is tempted to point this screen at a
+self-read for advisors, that is Phase 16's job and needs the endpoint first. `npx tsc --noEmit` 0;
+`npm test` **330** (+7 in `api-payroll.test.ts`); `npm run lint` 0 errors / 12 warnings (baseline). Spec:
+`docs/spec/PHASE-20.md`.
+
 ## 2026-08-11 — Phase 16 re-eval: backend payroll landed but admin-only; ask narrowed, no build
 
 **Context.** A boot found the backend's Phase 25 payroll cluster (25a profiles / 25b compute / 25c
