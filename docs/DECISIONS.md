@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 6 (partial) BUILT: notes `search`→`q` and LIC `{meta,plans}` unwrap + adapter; the LIC "404 in production" claim was stale
+
+**Context.** Phase 6's two app-side halves (DECISIONS 2026-08-11 "Phase 6 splits"). The LIC half
+carried a blocker the handoff flagged explicitly: `api.ts` comments asserted `/api/lic-plans` **404s
+in production**, while `contracts/api.md:1187` documents it live — shipping an unwrap for a dead
+endpoint would be wasted work.
+
+**Decision.** Settled the disagreement against the producer's real code, not the prose: `app.js:461`
+mounts `app.use('/api/lic-plans', require('./routes/licPlans'))`, and `routes/licPlans.js:62-71` GET
+returns `{ success:true, data:{ meta, plans } }` with `plans = rows.map(unifiedToLic)`. It is
+deployed, mounted code — **live, not 404** (D-1). The "404 in production" comments (`api.ts` two
+sites, `lic-plans.tsx` header + empty-state copy) are stale and were corrected (Phase 8
+honesty-of-comments precedent). `getLicPlans` now validates `Array.isArray(d.plans)` and maps each
+row through the new pure `adaptLicPlan` (D-2): `product_id→id`, `plan_name→name`, `plan_table→code`,
+`category_label→type`, `summary→highlight`, `riders→tags`. Entry-age and term stay EMPTY — the wire
+carries neither as a plan-level fact (the only `term` is one illustrative value inside
+`worked_example.inputs`), so mining one would fabricate a figure. Notes: `getNotes` sends `q` (the
+key `noticeBoard.js:93` reads), not the ignored `search`. LIC detail's `tags` pill heading moved
+"Sold for"→"Riders" (D-3, tags are riders now) and its empty state branches on
+`useDataHealth().degraded` like `kb.tsx` (D-4).
+
+**Consequence.** `getNotes` filters for real; `getLicPlans` renders real plans and no longer raises a
+false outage. Gates green: `npx tsc --noEmit` exit 0; `npm test` **299/13** (+18: 6 `adaptLicPlan`
+in `adapt.test.ts`, 5 `api-notes.test.ts`, 7 `api-lic.test.ts`); `npm run lint` **0 errors / 12
+warnings** (Phase-15 baseline). Commissions stays backend-blocked (D-5) — raw rows, no aggregate,
+`target` has no source; the product aggregate endpoint is still pending — so `commissions.tsx` is
+untouched and Phase 6 remains **partial**. Device checks (LIC catalogue renders against production,
+notes search narrows the list) are **carried** — web/`npm test` cannot exercise the live host. Full
+spec: `docs/spec/PHASE-6.md`.
+
 ## 2026-08-11 — Phase 12 is app-side: read the roster from `/team/task-overview`, not admin-only `/profiles` (Phase 12, specced, not built)
 
 **Context.** `docs/PHASES.md` tagged Phase 12 `[api]` and framed the fix's dependency as a backend

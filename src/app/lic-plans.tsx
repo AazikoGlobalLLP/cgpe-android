@@ -9,6 +9,7 @@ import { EmptyState, Skeleton } from '@/ui/feedback';
 import { DataRow, ListSection, Pill } from '@/ui/data';
 import { Sheet } from '@/ui/sheet';
 import { Appear } from '@/ui/motion';
+import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 
 import * as api from '@/data/api';
@@ -17,25 +18,27 @@ import type { LicPlan } from '@/data/types';
 /* ------------------------------------------------------------------ *
  * LIC Plans — the product library.
  *
- * THIS SCREEN IS EXPECTED TO BE EMPTY IN THE SHIPPED BUILD. `/api/lic-plans` is served by
- * the local backend only; in production it 404s, so `getLicPlans` resolves to an empty
- * array. Two consequences shaped everything here.
+ * THE ENDPOINT IS LIVE. `GET /api/lic-plans` is mounted in production (app.js:461) and returns
+ * `{ meta, plans }`; `getLicPlans` unwraps `data.plans` and maps the legacy LIC shape through
+ * `adaptLicPlan` (Phase 6). An earlier version of this screen assumed the route 404'd in
+ * production and framed its empty state as "not published to this build" — that is now wrong,
+ * so the empty state branches on `useDataHealth().degraded` like every other list screen:
+ * "couldn't load, retry" for an outage, a calm "no plans on file yet" for a genuinely empty
+ * library. It is calm on purpose — a red alarm on an empty-but-healthy library trains people
+ * to ignore the alarms that matter.
  *
- *   · THE EMPTY STATE IS THE MAIN SCREEN, so it is written like one: it names the cause
- *     ("not published to the app on this build"), says where the same information does
- *     live, and offers a retry. It is calm on purpose. A red alarm on a route that is
- *     simply not switched on yet trains people to ignore the alarms that matter.
  *   · NOTHING IS SYNTHESISED TO FILL IT. The previous version of this screen carried a
  *     "benefit estimator" that multiplied the sum assured by a made-up factor and printed
  *     an estimated premium and maturity value. Those figures came from nowhere: not from
  *     LIC, not from the backend, not from an actuary. On a phone in front of a customer an
  *     indicative-looking rupee figure IS a quote, which is exactly the class of fabrication
- *     the no-mock-data contract exists to stop. It has been removed, not restyled.
+ *     the no-mock-data contract exists to stop. It has been removed, not restyled. In the
+ *     same spirit `adaptLicPlan` leaves entry-age and term EMPTY (the wire carries neither as
+ *     a plan-level fact) rather than mining one worked example — see its doc comment.
  *
- * FIELDS ARE TREATED AS UNTRUSTED. `getLicPlans` casts the raw documents straight to
- * `LicPlan` with no adapter, so any field can be missing at runtime whatever the type says.
- * Everything is normalised once in `views` and every optional value is dropped rather than
- * printed as "undefined to undefined years".
+ * FIELDS ARE STILL TREATED AS UNTRUSTED. Even with an adapter, any field can be missing at
+ * runtime whatever the type says, so everything is normalised once more in `views` and every
+ * optional value is dropped rather than printed as "undefined to undefined years".
  * ------------------------------------------------------------------ */
 
 /** A plan, normalised once so nothing downstream has to defend itself. */
@@ -69,6 +72,7 @@ const ALL = 'all';
 export default function LicPlans() {
   const c = useTheme();
   const insets = useSafeAreaInsets();
+  const health = useDataHealth();
 
   const [plans, setPlans] = useState<LicPlan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -178,19 +182,22 @@ export default function LicPlans() {
         {loading ? (
           <LibrarySkeleton />
         ) : views.length === 0 ? (
-          /* NOTHING PUBLISHED. Framed, explanatory, and paired with a note about where the
-             same information lives today. Structurally unlike the filter miss below. */
+          /* EMPTY. Two truthful cases, branched on health like every other list screen: the
+             server did not answer (outage), or it answered with an empty library. Never the old
+             "not published to this build" claim — the endpoint is live (Phase 6, D-4). */
           <View style={{ gap: spacing.md, paddingTop: spacing.md }}>
             <Card>
               <EmptyState
-                icon="library-outline"
-                title="The plan library is not published yet"
-                subtitle="The product catalogue is not being served to the app on this build, so there is nothing to list here. Nothing has gone wrong with your account."
+                icon={health.degraded ? 'cloud-offline-outline' : 'library-outline'}
+                title={health.degraded ? 'The plan library could not load' : 'No plans on file yet'}
+                subtitle={health.degraded
+                  ? 'The server did not answer, so nothing here is confirmed. Pull down to try again.'
+                  : 'The product catalogue is empty right now, so there is nothing to list here. Nothing has gone wrong with your account.'}
                 action={{ label: 'Check again', onPress: retry }}
               />
             </Card>
             <Txt size={font.tiny} color={c.faint} style={{ textAlign: 'center', lineHeight: 16 }}>
-              Plan wordings and benefit tables stay with your branch until the library is switched on.
+              Plan wordings and benefit tables stay with your branch until the library is populated.
             </Txt>
           </View>
         ) : (
@@ -274,7 +281,7 @@ function PlanSheet({ plan, onClose }: { plan: PlanView | null; onClose: () => vo
 
           {plan.tags.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
-              <Txt size={font.cap} weight="700" color={c.muted}>Sold for</Txt>
+              <Txt size={font.cap} weight="700" color={c.muted}>Riders</Txt>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                 {plan.tags.map((t) => <Pill key={t} label={t} tone="primary" small />)}
               </View>

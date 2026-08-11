@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 6 (partial) — done.** Built 2026-08-11. The two app-side halves shipped; **commissions stays
+backend-blocked** (D-5), so the phase remains partial. `npm test` runs **299** tests across 13 files
+and exits 0 (+18: 6 `adaptLicPlan` cases, a new `api-notes.test.ts` (5), a new `api-lic.test.ts` (7));
+`npx tsc --noEmit` exits 0; `npm run lint` stays at the Phase-15 baseline (0 errors / 12 warnings).
+(1) **Notes search** — `getNotes` sent `search=`, but `/api/notice-board` reads **`q`**
+(`noticeBoard.js:93,102`) and ignored `search`, so every notes search returned the whole board
+unfiltered; now sends `q`. (2) **LIC plans** — the **`[api]` framing and the "404 in production"
+comment were both stale**. `GET /api/lic-plans` is **live** (`app.js:461`) and returns
+`{ data:{ meta, plans } }` (`routes/licPlans.js:62-71`); the old `getLicPlans` validated that object
+with `isArr`, always missed, and showed empty + a false outage. It now unwraps `data.plans` and maps
+the legacy LIC shape through a new `adaptLicPlan` (`product_id→id`, `plan_name→name`,
+`plan_table→code`, `category_label→type`, `summary→highlight`, `riders→tags`; entry-age/term stay
+empty — the wire carries neither, D-2). The stale comments are corrected and the LIC empty state now
+branches on `useDataHealth().degraded` (D-4). **The LIC catalogue rendering against production and
+notes-search narrowing both need a handset + live host** — carried, like Phases 1/4/5/7/12/13. Spec:
+`docs/spec/PHASE-6.md`.
+
 **Phase 12 — done.** Built 2026-08-11, commit `4507d6e`. `npm test` runs **281** tests across 11 files
 and exits 0 (10 new in `api-agents.test.ts`); `npx tsc --noEmit` exits 0; `npm run lint` stays at the
 Phase-15 baseline (0 errors / 12 warnings). Its **`[api]` tag was wrong — the fix is fully app-side**
@@ -119,14 +136,15 @@ exercise.
 
 ## Next 3
 
-1. **Phase 6 (partial)** — notes (`search`→`q`) and LIC (`{meta,plans}` unwrap + field adapter) are
-   app-side and buildable; commissions is **backend-blocked** (needs a pending server aggregate
-   endpoint — product owner confirmed). LIC also needs the `api.ts:1966`-vs-`api.md:1192`
-   404-in-production-vs-live disagreement settled first. See DECISIONS 2026-08-11 (Phase 6).
-2. **Device-verification backlog** — handset-only acceptance criteria carried from Phases 1, 4, 5, 7,
-   10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
-   airplane-mode behaviour, **a leader's true "On duty now" count**, the offline map render). Needs a
-   device, not an editor.
+1. **Phase 6 commissions (the remaining third)** — **backend-blocked.** Notes + LIC shipped
+   2026-08-11 (above). Commissions needs `cgpe-api` to expose the *product* aggregate the screen
+   wants (`GET /api/commissions` returns raw owner-scoped rows, and `target` has no source in them);
+   the product owner confirmed that endpoint is still pending. Deriving money on-device is rejected
+   (Phase 16 precedent). Nothing app-side to build until the endpoint lands. See spec D-5.
+2. **Device-verification backlog** — handset-only acceptance criteria carried from Phases 1, 4, 5, 6,
+   7, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
+   airplane-mode behaviour, a leader's true "On duty now" count, the offline map render, **the LIC
+   catalogue rendering + notes search narrowing against production**). Needs a device, not an editor.
 3. **The `dashboards.tsx:292-297` partial-outage tile** carried out of Phase 3 (below) — a *partial*
    outage still renders "0 clients · ₹0 claims paid" as fact on the Master KPI tiles; the hero above
    already uses `NO_VALUE`. Small and specified.
@@ -151,7 +169,7 @@ exercise.
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
 | 4 | Leads contract | **Done** 2026-08-10 — 188 tests green (`5c08872`…`edc373c`); device checks outstanding |
 | 5 | WhatsApp send | **Done** 2026-08-10 — 219 tests green (`95f1ccb`); device checks outstanding |
-| 6 | Remaining envelope mismatches `[api]` | Blocked on `cgpe-api` |
+| 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint) |
 | 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
 | 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
 | 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
@@ -282,11 +300,34 @@ Full spec, the fourteen locked decisions and what was deliberately left out: `do
 > The lenient reading turns a Mongo `_id` hex into a plausible Indian mobile and sends a
 > customer's message to a stranger. There is a test named after exactly that.
 
-## Phase 6 — Remaining envelope mismatches `[api]`
+## Phase 6 — Remaining envelope mismatches ~~`[api]`~~ ✅ PARTIAL — DONE 2026-08-11 (notes + LIC)
 Commissions (array vs aggregate), LIC plans (`{meta, plans}` vs array), notes search (`search` vs `q`).
-**Files:** `src/data/api.ts`, `src/app/commissions.tsx`, `src/app/lic-plans.tsx`, `src/app/notes.tsx`
-**Done when:** all three screens show real data against production. Needs `cgpe-api` to un-shadow
-`GET /api/commissions/team-summary` (declared after `/:id`, so it is dead code today).
+**Files (shipped):** `src/data/api.ts`, `src/data/adapt.ts` (new `adaptLicPlan`), `src/app/lic-plans.tsx`,
+plus new `__tests__/{api-lic,api-notes}.test.ts` and `adaptLicPlan` cases in `adapt.test.ts` — **not**
+`src/app/notes.tsx` (the fix is one wire key in `getNotes`, upstream of the screen).
+**Done when:** all three screens show real data against production.
+
+**Result — two of three shipped, app-side.** The `[api]` tag was stale for both shipped halves.
+
+1. **Notes search** — the app sent `search=`; `/api/notice-board` reads **`q`**
+   (`noticeBoard.js:93,102-105`) and ignored `search`, so no notes search ever filtered. One wire key.
+2. **LIC plans** — the endpoint is **live**, not 404. It is mounted at `app.js:461` and returns
+   `{ success:true, data:{ meta, plans } }` (`routes/licPlans.js:62-71`), each plan in the legacy LIC
+   shape from `unifiedToLic`. The old `getLicPlans` validated the unwrapped `{meta,plans}` object with
+   `isArr`, always missed, and rendered empty + a false outage. Now it unwraps `data.plans` and maps
+   each row through `adaptLicPlan` (spec D-2). The "404 in production" comments (two in `api.ts`, the
+   `lic-plans.tsx` header + empty-state copy) were **stale and are corrected**; the LIC empty state now
+   branches on `useDataHealth().degraded` (D-4) and the detail's rider pills are relabelled from
+   "Sold for" to "Riders" (D-3). Entry-age and term are left empty — the wire carries neither as a
+   plan-level fact, so mining one would fabricate a figure.
+3. **Commissions — still `cgpe-api`-blocked (D-5).** `GET /api/commissions` returns owner-scoped **raw
+   rows**, not the aggregate the screen wants, and `target` has no source in the rows. The
+   `/commissions/team-summary` shadow was un-shadowed by backend Phase 13, but the *product* aggregate
+   the screen needs is still pending (product-owner confirmed). Deriving money on-device is rejected
+   (Phase 16 precedent). `commissions.tsx` is untouched.
+
+**LIC rendering against production and notes search narrowing both need a handset + live host** — carried.
+Full spec, the five locked decisions and what was left out: `docs/spec/PHASE-6.md`.
 
 ## Phase 7 — Geofence and tracking correctness ✅ DONE 2026-08-10 (`3e092ad`, `fc09934`)
 Adopt `contracts/INBOX.md` **D5** (`session_id`, not `sessionId`) and **D10** (effective fence is up

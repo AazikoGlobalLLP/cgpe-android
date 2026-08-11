@@ -3,7 +3,7 @@
  * app's typed shapes. Mirrors backend services/greetingEngine.js normalizeClient so
  * real client data renders correctly. Also holds the fupDate premium-due rule.
  */
-import type { AppNotification, Claim, Client, Lead, LeadStage, Policy, Reminder, User, WaMessage, WaThread } from './types';
+import type { AppNotification, Claim, Client, Lead, LeadStage, LicPlan, Policy, Reminder, User, WaMessage, WaThread } from './types';
 
 function num(v: any): number {
   const n = Number(v);
@@ -62,6 +62,37 @@ function daysUntil(d: Date | null): number | null {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const t = new Date(d); t.setHours(0, 0, 0, 0);
   return Math.round((t.getTime() - today.getTime()) / 86400000);
+}
+
+/**
+ * LIC Plans — legacy provider-scoped view. `GET /api/lic-plans` returns `{ meta, plans }` where
+ * each plan is the LEGACY LIC shape produced by the backend's `unifiedToLic`
+ * (`services/productIngestion.js:142-157`): `product_id`, `plan_name`, `plan_table`,
+ * `category_label`, `summary`, `riders[]` — none of which match the app's `LicPlan`. Map the
+ * fields that correspond and no more.
+ *
+ * ENTRY-AGE AND TERM ARE DELIBERATELY EMPTY. The wire carries no plan-level entry-age band and no
+ * plan-level term; the only `term` in the source is a single illustrative value inside
+ * `worked_example.inputs`, which is one example, not the plan's range. Mining a plan-wide figure
+ * from it would fabricate a number the data does not assert, so `minAge`/`maxAge`/`term` stay
+ * empty and the screen drops those rows (Phase 6, D-2).
+ */
+export function adaptLicPlan(raw: any): LicPlan {
+  const r = raw || {};
+  const s = (v: any): string => (typeof v === 'string' ? v.trim() : '');
+  return {
+    id: s(r.product_id) || s(r._id),
+    name: s(r.plan_name),
+    code: s(r.plan_table),
+    type: s(r.category_label) || s(r.category),
+    minAge: 0,
+    maxAge: 0,
+    term: '',
+    highlight: s(r.summary) || s(r.benefit_note),
+    tags: Array.isArray(r.riders)
+      ? r.riders.filter((t: any): t is string => typeof t === 'string' && !!t.trim()).map((t: string) => t.trim())
+      : [],
+  };
 }
 
 export function adaptClient(raw: any): Client {

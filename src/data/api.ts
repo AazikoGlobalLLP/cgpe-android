@@ -31,7 +31,7 @@ import { expireSession, resetSessionGuard } from '@/lib/session';
 // `nbsp` is the house guarantee that a value never wraps between its number and its unit.
 import { nbsp } from '@/lib/format';
 import { reportFailure, reportSuccess } from './health';
-import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification } from './adapt';
+import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification, adaptLicPlan } from './adapt';
 // Types only. The seed arrays these modules once exported (`teamMembers`, `teamActivityFeed`,
 // `tasks`) were deleted — importing them is what kept sample records inside the shipped bundle,
 // one `??` away from reaching a screen. Task data comes from getTasks; team data from /profiles.
@@ -122,8 +122,8 @@ const healthKey = (path: string) => path.split('?')[0].replace(ID_SEGMENT, '/:id
  *         perfectly healthy backend — failing this phase's own acceptance criterion.
  *   404 / 501 — the endpoint is not deployed. Phase 1 already named this case `unsupported`
  *         (see `WriteFailure` above): "not a transient fault: the endpoint is not there, and
- *         retrying will never help." `/lic-plans` is documented as exactly this in
- *         production, and reporting it would hold the banner open for the whole session.
+ *         retrying will never help." Reporting a 404 would hold the banner open for the whole
+ *         session on a route the caller can do nothing about.
  *
  * Everything else — 4xx that indicates a malformed request, and every 5xx — is reported.
  */
@@ -1365,8 +1365,14 @@ export async function getContests(): Promise<Contest[]> {
   return (await tryReal<Contest[]>('/contests', {}, isArr)) ?? unavailable('/contests', state.contests);
 }
 export async function getLicPlans(): Promise<LicPlan[]> {
-  const real = await tryReal<any[]>('/lic-plans', {}, isArr);
-  return real ? (real as LicPlan[]) : unavailable('/lic-plans', state.licPlans);
+  // GET /api/lic-plans → { success:true, data:{ meta, plans } } (routes/licPlans.js:62-71).
+  // `tryReal` unwraps the `data` envelope, leaving `{ meta, plans }`; the plans are the legacy LIC
+  // shape, mapped to the app's `LicPlan` by `adaptLicPlan`. The old code validated with `isArr`
+  // against that object and always missed — so the screen showed empty (and raised a false outage)
+  // against a healthy backend. The endpoint is LIVE, not 404 (app.js:461) — Phase 6, D-1.
+  const real = await tryReal<{ plans?: unknown[] }>('/lic-plans', {}, (d) => d && Array.isArray(d.plans));
+  if (!real || !Array.isArray(real.plans)) return unavailable('/lic-plans', state.licPlans);
+  return real.plans.map(adaptLicPlan);
 }
 
 /* --------------------------------------------------------- Team (admin) */
@@ -1974,9 +1980,10 @@ export async function sendCampaign(type: 'renewal' | 'birthday' | 'anniversary' 
  * Guessing here yields a screen that renders blank rows against a perfectly healthy server,
  * which is indistinguishable from an outage and impossible to debug from the UI.
  *
- * ONE KNOWN GAP IS FLAGGED, NOT HIDDEN. `/api/lic-plans` returns 404 in production while
- * existing locally, so that screen legitimately comes back empty in a shipped build until
- * the backend is redeployed. It surfaces through `data/health` like any other outage.
+ * `/api/lic-plans` IS LIVE (mounted at app.js:461), CORRECTED IN PHASE 6. An earlier note here
+ * claimed it 404s in production; it does not — it returns `{ meta, plans }` (routes/licPlans.js),
+ * and `getLicPlans` now unwraps `data.plans` and maps the legacy LIC shape through `adaptLicPlan`.
+ * A genuinely empty library or a real outage still surfaces through `data/health` as usual.
  * ==================================================================== */
 
 /**
@@ -2151,7 +2158,9 @@ const EMPTY_NOTES: NotesPage = {
  */
 export async function getNotes(opts: { search?: string; category?: string; page?: number; limit?: number } = {}): Promise<NotesPage> {
   const path = `/notice-board?${qs({
-    search: opts.search,
+    // The handler reads `q` (noticeBoard.js:93,102), NOT `search` — the old key was silently
+    // ignored, so every notes search returned the whole board unfiltered (Phase 6).
+    q: opts.search,
     category: opts.category && opts.category !== 'all' ? opts.category : undefined,
     page: opts.page ?? 1,
     limit: opts.limit ?? 30,

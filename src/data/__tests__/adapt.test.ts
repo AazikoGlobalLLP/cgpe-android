@@ -13,7 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  adaptClaim, adaptClient, adaptLead, adaptNotification, adaptReminder,
+  adaptClaim, adaptClient, adaptLead, adaptLicPlan, adaptNotification, adaptReminder,
   adaptUser, adaptWaMessage, adaptWaThread,
   dayMatches, isBirthdayThisMonth, isBirthdayToday, isPremiumDueThisMonth, monthMatches,
 } from '@/data/adapt';
@@ -670,5 +670,66 @@ describe('pinned known bugs — these must be updated deliberately when fixed', 
     expect(note.id).toBe('0');
     expect(note.text).toBe('plain');
     expect(typeof note.at).toBe('function');
+  });
+});
+
+/* ------------------------------------------------------------ LIC plans (Phase 6) */
+
+describe('adaptLicPlan', () => {
+  /** A plan exactly as the backend's `unifiedToLic` serialises one (productIngestion.js:142-157). */
+  const legacyPlan = (extra: Record<string, unknown> = {}) => ({
+    _id: '652f0000000000000000abcd',
+    product_id: 'LIC-914',
+    company: 'LIC',
+    plan_name: 'New Endowment Plan',
+    plan_table: '914',
+    category: 'endowment_par',
+    category_label: 'Endowment (participating)',
+    participating: true,
+    status: 'active',
+    summary: 'Classic savings + life cover; lump sum at maturity with bonuses.',
+    benefit_note: '',
+    riders: ['Accidental Death & Disability', 'Term Assurance', 'Critical Illness'],
+    ...extra,
+  });
+
+  it('maps the legacy LIC field names onto LicPlan', () => {
+    const p = adaptLicPlan(legacyPlan());
+    expect(p.id).toBe('LIC-914');
+    expect(p.name).toBe('New Endowment Plan');
+    expect(p.code).toBe('914');                      // plan_table = the LIC plan/table number
+    expect(p.type).toBe('Endowment (participating)'); // category_label
+    expect(p.highlight).toContain('Classic savings');
+    expect(p.tags).toEqual(['Accidental Death & Disability', 'Term Assurance', 'Critical Illness']);
+  });
+
+  it('leaves entry-age and term empty — the wire carries neither as a plan-level fact (D-2)', () => {
+    const p = adaptLicPlan(legacyPlan());
+    expect(p.minAge).toBe(0);
+    expect(p.maxAge).toBe(0);
+    expect(p.term).toBe('');
+  });
+
+  it('falls back id→_id and type→category when the primary field is empty', () => {
+    const p = adaptLicPlan(legacyPlan({ product_id: '', category_label: '' }));
+    expect(p.id).toBe('652f0000000000000000abcd');
+    expect(p.type).toBe('endowment_par');
+  });
+
+  it('prefers summary but falls back to benefit_note for the highlight', () => {
+    const p = adaptLicPlan(legacyPlan({ summary: '', benefit_note: 'Guaranteed additions apply.' }));
+    expect(p.highlight).toBe('Guaranteed additions apply.');
+  });
+
+  it('keeps only non-empty string riders as tags — never a number or a blank', () => {
+    const p = adaptLicPlan(legacyPlan({ riders: ['Premium Waiver', '', '  ', 42, null] }));
+    expect(p.tags).toEqual(['Premium Waiver']);
+  });
+
+  it('does not throw on a null/garbage document', () => {
+    const p = adaptLicPlan(null);
+    expect(p.name).toBe('');
+    expect(p.tags).toEqual([]);
+    expect(p.minAge).toBe(0);
   });
 });
