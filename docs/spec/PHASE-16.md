@@ -1,7 +1,50 @@
 # SPEC LOCK — Phase 16: "My earnings" (attendance-derived salary)
 
-Requested 2026-08-10. Status: **BLOCKED — awaiting the salary formula + a backend field.**
-The UI is locked below and can be approved now. The number it displays cannot be computed yet.
+Requested 2026-08-10. Status: **STILL BLOCKED — but the blocker shrank to one endpoint.**
+The UI is locked below and can be approved now. The number it displays cannot be read by a
+non-admin yet.
+
+---
+
+## UPDATE 2026-08-11 — re-evaluated against the backend's real code; blocker moved, not cleared
+
+The two things this spec asked `cgpe-api` to **build** now both **exist** (backend Phase 25 payroll
+cluster, 25a/b/c). But they are gated admin-only, so a mobile self-view still cannot read them. Verified
+against the producer's code, not the INBOX payroll notices (those are addressed to `cgpe-admin`, and
+mobile has been burned by wrong `[api]` tags on Phases 6/9/10/11/12):
+
+- **Pay field now EXISTS** — `models/PayrollProfile.js` / `payroll_profiles.salary_amount` + `segment`
+  (`day_wise|hourly|base`). Blocker #1 below ("no pay data anywhere") is **stale**.
+- **Server-side computation now EXISTS** — `services/payrollEngine.js` `computeRangeSalary()` returns a
+  rounded `payable` **number** (exactly the "compute server-side, app never multiplies" shape §Consequence
+  demanded), reached via `GET /api/payroll/compute`.
+- **BUT admin-only, so mobile is still blocked.** `routes/payroll.js:22-23` wraps the whole router in
+  `router.use(protect); router.use(authorize('admin'))`; `authorize` (`middleware/auth.js:73`) 403s
+  anyone not `super_admin`/`admin`. So every user this spec targets (advisor / learn_advisor / leader /
+  payroll_staff) gets **403** on `/compute`. `?user_id=` only picks which member an *admin* computes — it
+  is not a self-scope. `grep -i earnings` over the whole backend = **0 hits**: the `GET /api/payroll/my-earnings`
+  proposed in §"Proposed backend contract" was never built, and `computeRangeSalary()` is reachable ONLY
+  through the two admin routes (`/compute`, `/export`). What landed is the *manager-views-salary* surface
+  this spec's §OUT OF SCOPE explicitly refused, and it belongs to `cgpe-admin`.
+
+**The narrowed ask (filed to `cgpe-api` in `../contracts/INBOX.md`, 2026-08-11):** one self-scoped read —
+`GET /api/payroll/my-earnings` (`protect` only, own records only, same posture as `/time-tracker/stats`),
+**or** a self path reusing `buildRoster()` with `user_id` forced to `req.user.user_id`, lifted out of the
+admin gate. No new math — same engine, same numbers.
+
+**Two of the original blockers below are now moot for this path** (recorded so the design doesn't reopen
+them): the "app must not multiply" rule is satisfied because the server returns the number; and blockers
+#3/#4/#5 (ambiguous present-days, self-writable `/work-settings`, unscoped `/attendance/user/:id`) are
+sidestepped because the engine reads the member's own `daylogs` by their `_id` server-side and trusts no
+client figure. The **only** thing left is scoping the READ to the caller — which is strictly safer than the
+existing admin `/compute` (caller sees only themselves).
+
+**Not built this session, deliberately:** shipping the locked UI against a non-existent endpoint would be
+untested dead code that can only ever render its error/empty state; and §RISKS makes unfixed clock-in
+(Phase 1) a hard prerequisite regardless. Phase 16 resumes the moment a self-scoped read exists.
+
+*(The rest of this spec is the original 2026-08-10 lock, preserved. Blockers #1 and #2 in "What does not
+exist" are superseded by this update; the UI lock, state matrix, and acceptance criteria still stand.)*
 
 ## Scope, as read
 

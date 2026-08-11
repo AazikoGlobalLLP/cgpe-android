@@ -14,6 +14,24 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 16 re-evaluation (no build) — 2026-08-11.** A boot found the backend's **Phase 25 payroll
+cluster** had landed (25a profiles / 25b compute / 25c export) — the endpoints Phase 16 ("My earnings")
+was blocked on. Re-verified against `cgpe-api`'s **real code** (not the payroll INBOX notices, which are
+addressed to `cgpe-admin`, and mobile tags have been wrong 5×): the pay field
+(`payroll_profiles.salary_amount`) and the server-side formula (`services/payrollEngine.js`
+`computeRangeSalary` → a `payable` **number**) now **exist**, so the two things Phase 16 asked to be built
+are done. **But** `routes/payroll.js:22-23` gates the whole router `authorize('admin')`
+(`middleware/auth.js:73` 403s any non-admin/super_admin), and `grep -i earnings` over the backend = **0** —
+there is no self-service read, and `?user_id=` is admin-only member selection, not a self-scope. So a
+signed-in advisor still cannot see their **own** pay; what landed is the *manager-views-salary* surface
+Phase 16 declared OUT OF SCOPE (it is `cgpe-admin`'s to consume). **Outcome:** Phase 16 stays blocked, but
+the ask **narrowed** from "build a pay field + a formula" to one self-scoped read
+(`GET /api/payroll/my-earnings`, own records only, reusing the existing engine) — re-filed to `cgpe-api`
+in `../contracts/INBOX.md` (grepped back after writing, per the concurrent-write rule). No `src/` change,
+no gate re-run. Updated `docs/spec/PHASE-16.md` §"UPDATE 2026-08-11", this board, and the handoff. The
+locked UI was deliberately **not** built against a non-existent endpoint (untested dead code; Phase 1
+clock-in is a hard prerequisite anyway). Push still 403s.
+
 **Phase 19 — language toggle verified + hardened. BUILT 2026-08-11.** Verify + harden the *existing*
 5-language toggle (English, ગુજરાતી, हिन्दी, **Hinglish**, **Roman Gujarati/Gujlish**), not build a new
 one. Shipped in two units. **(1) The durable core:** a dictionary-parity Vitest
@@ -259,12 +277,18 @@ exercise.
 
 ## Next 3
 
-1. **Phase 16 salary + Phase 6 commissions — backend-blocked; waiting for the backend to create the
-   endpoints.** Re-verified real 2026-08-11 against `cgpe-api`'s code: no product aggregate / no
-   `target` in `routes/commissions.js` (Phase 6); no `salary`/`wage`/`per_day`/`ctc`/`pay_rate` field
-   on any backend model or route (Phase 16) — only the role `payroll_staff` / department `payroll`.
-   Backend Phase 18's real `/api/leaves` is leave data, not pay. Deriving money on-device stays
-   rejected. Filed to `cgpe-api` (INBOX). Nothing app-side until the endpoints land.
+1. **Phase 16 salary + Phase 6 commissions — still backend-blocked, but Phase 16's blocker SHRANK
+   (2026-08-11).** Backend Phase 25 payroll cluster landed: the pay field (`payroll_profiles.salary_amount`)
+   and the server-side formula (`services/payrollEngine.js` `computeRangeSalary` → a `payable` number)
+   now **exist** — the two things Phase 16 asked to be built. But `routes/payroll.js:22-23` gates the
+   whole router `authorize('admin')` (`middleware/auth.js:73` 403s non-admin/super_admin), so an advisor
+   /leader cannot read their own pay; `?user_id=` is admin-only member selection, not a self-scope, and
+   `grep -i earnings` over the backend = 0 (no `my-earnings` route was built). What landed is the
+   *manager-views-salary* surface Phase 16 put OUT OF SCOPE — it is `cgpe-admin`'s. Ask **narrowed** to
+   one self-scoped read (`GET /api/payroll/my-earnings`, own records only) and re-filed to `cgpe-api`
+   (INBOX 2026-08-11). Commissions (Phase 6) unchanged: no product aggregate / no `target` in
+   `routes/commissions.js`. Deriving money on-device stays rejected. Nothing app-side until the self-read
+   lands. Full re-eval: `docs/spec/PHASE-16.md` §"UPDATE 2026-08-11".
 2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13**
    (haptics, the AsyncStorage clock key, background GPS, the master route replay, airplane-mode
    behaviour, a leader's true "On duty now" count, the offline map render, the LIC catalogue + notes
@@ -315,7 +339,7 @@ exercise.
 | 13 | Vendor Leaflet | **Done** 2026-08-11 — 271 tests green; device check outstanding |
 | 14 | Dead-code sweep | **Done** 2026-08-11 — 271 tests green (`1a37144`); lint 46→45 |
 | 15 | Lint to green | **Done** 2026-08-11 — `npm run lint` exits 0 (was 45 errors); 271 tests green (`292610b`) |
-| 16 | "My earnings" salary section `[api]` | **Blocked** — waiting for the backend to create the endpoint (pay field + computed earnings); re-verified real 2026-08-11 |
+| 16 | "My earnings" salary section `[api]` | **Blocked (narrowed)** 2026-08-11 — backend Phase 25 payroll cluster landed, so the pay field + server-side formula now EXIST (`payroll_profiles.salary_amount`, `computeRangeSalary`), but `routes/payroll.js:22-23` gates the whole surface `authorize('admin')` → advisor/leader get 403. Ask narrowed to ONE self-scoped read (`GET /api/payroll/my-earnings`); filed to INBOX |
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
 | 18 | Watchable A–Z + worst-case E2E test | **Built** 2026-08-11 — Playwright/Expo-web harness, 33 tests green (42 screens render + 21 worst-case + 9 bad-input); web boots with no guard; gates green |
 | 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Built** 2026-08-11 — parity Vitest (323/323, +18) + per-language E2E walk (42/42 render, 0 key leaks × 5 langs); dictionaries already complete; naturalness review outstanding |
