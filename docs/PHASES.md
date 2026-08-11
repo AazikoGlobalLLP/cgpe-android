@@ -14,6 +14,16 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 14 — done.** Built 2026-08-11, commit `1a37144`. `npm test` still runs **271** tests across
+10 files and exits 0 (no new pure logic to pin — this only removes code); `npx tsc --noEmit` exits 0;
+`npm run lint` is now **45 errors / 12 warnings**, *down* from the 46/15 baseline (the deleted files
+carried 1 error + 3 warnings), so no new errors. Seven dead files were removed as a closed cluster
+(`ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`, `hooks/use-color-scheme.ts` + `.web.ts`,
+`constants/theme.ts`, `global.css`), plus the orphaned date helpers in `data/tasks.ts` and the
+`teamMembers`/`teamActivityFeed` zero-consumer exports (and their helpers) in `data/team.ts`. Types
+and live runtime exports were untouched. `src/ui/vendor/leaflet-1.9.4.ts` was **not** touched — it is
+imported by `LeafletMap.tsx` and only looks orphaned because eslint ignores it (handoff warning heeded).
+
 **Phase 13 — done.** Built 2026-08-11. `npm test` runs **271** tests across 10 files and exits 0
 (5 new, pinning the vendored payload and that `LeafletMap.tsx` no longer references the CDN);
 `npx tsc --noEmit` exits 0; `npm run lint` stays at the 46-error baseline. Leaflet 1.9.4 (JS + CSS)
@@ -82,9 +92,9 @@ exercise.
 
 ## Next 3
 
-1. **Phase 14** — dead-code sweep. Pure app-side; six known-dead files plus orphaned helpers.
-2. **Phase 15** — lint to green. Pure app-side; 46 errors on a clean tree today.
-3. **Phase 12** — `/profiles` role gate `[api]`, if `cgpe-api` has shipped it; otherwise **Phase 6**
+1. **Phase 15** — lint to green. Pure app-side; **45 errors** on a clean tree today (was 46 before
+   Phase 14 removed one with the dead files).
+2. **Phase 12** — `/profiles` role gate `[api]`, if `cgpe-api` has shipped it; otherwise **Phase 6**
    (remaining envelope mismatches) — note backend Phase 13 has now un-shadowed
    `GET /api/commissions/team-summary`, but Phase 6 is the *base* `/commissions` envelope, so
    re-read the `api.md` row before assuming it's unblocked.
@@ -117,7 +127,7 @@ exercise.
 | 11 | Server-derived tier | **Done** 2026-08-11 — 258 tests green |
 | 12 | `/profiles` role gate `[api]` | Blocked on `cgpe-api` |
 | 13 | Vendor Leaflet | **Done** 2026-08-11 — 271 tests green; device check outstanding |
-| 14 | Dead-code sweep | Not started |
+| 14 | Dead-code sweep | **Done** 2026-08-11 — 271 tests green (`1a37144`); lint 46→45 |
 | 15 | Lint to green | Not started |
 | 16 | "My earnings" salary section `[api]` | **Blocked** — awaiting the salary formula *and* a backend pay field |
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
@@ -407,10 +417,29 @@ inlined as a bundled string, not shipped as an asset file (spec D-2).
 
 Full spec, the six locked decisions and what was left out: `docs/spec/PHASE-13.md`.
 
-## Phase 14 — Dead-code sweep
+## Phase 14 — Dead-code sweep ✅ DONE 2026-08-11 (`1a37144`)
 Remove `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`, `hooks/use-color-scheme*.ts`,
 `constants/theme.ts`, `src/global.css`, and the orphaned helpers in `data/tasks.ts` / `data/team.ts`.
 **Done when:** `npx tsc --noEmit` is still clean and nothing imports the removed modules.
+
+**Result.** No new tests — the phase only removes code. Three things worth recording:
+
+1. **The seven files were a *closed* dead cluster, verified before deleting, not assumed.** Each was
+   imported only by another member of the set or by nothing: `global.css ← constants/theme.ts ←
+   use-theme.ts`; `use-color-scheme.ts`/`.web.ts ← use-theme.ts`; `kit.tsx`, `characters.tsx` and
+   `use-theme.ts` had zero importers. Live code (`theme/theme.tsx`, `ui/Splash.tsx`) imports
+   `useColorScheme` straight from `react-native`, not from the deleted hook.
+2. **`kit.tsx`'s own docstring lied — it claimed "81 import sites across 39 screens."** A precise
+   `from '@/ui/kit'` grep across the whole tree returned **zero** import statements; the screens were
+   migrated to the split modules (`@/ui/base`, `@/ui/data`, …) in an earlier phase and the barrel's
+   header was never updated. `PROJECT_MAP.md`'s "zero importers despite its docstring" was right.
+3. **`global.css` is genuinely dead — there is no CSS toolchain to process it.** No NativeWind,
+   Tailwind or `cssInterop` anywhere in the repo's config; its only importer was the dead
+   `constants/theme.ts`. In `data/tasks.ts`/`team.ts` only zero-consumer code was removed (private
+   date helpers left over from the deleted seed arrays, and `team.ts`'s `teamMembers`/
+   `teamActivityFeed` empty stubs that every import site had already stopped using via `import type`);
+   all types and live label maps / `taskProgress` stayed. `src/ui/vendor/leaflet-1.9.4.ts` was left
+   alone — it is imported by `LeafletMap.tsx` and only looks orphaned because eslint ignores it.
 
 ## Phase 15 — Lint to green
 46 errors on a clean tree, mostly React-Compiler rules firing on Reanimated shared values.
