@@ -1,68 +1,85 @@
-# HANDOFF — CGPE Connect (Android) — INBOX sync (no phase) — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — session close (Phases 18 & 19 planned, no build) — 2026-08-11
 
-No phase was built this session. The board is still **exhausted for editor-buildable work** — every
-app-side phase is done, and the only two that remain (Phase 6 commissions, Phase 16 salary) are
-genuinely `cgpe-api`-blocked. This was a boot → verify → INBOX-hygiene session. **No `src/` file
-changed; no gates were re-run** (nothing to gate). The only writes were two acknowledgement replies
-in `../contracts/INBOX.md`, which is outside the `ANDROID` git repo.
+No `src/` code was written this session. This was a **boot → re-verify the blockers → plan two new
+phases** session, at the user's direction. The reason nothing shipped is simple and worth stating
+plainly: **the only remaining feature work (salary, commissions) is waiting for the backend to
+create the endpoints** — re-confirmed against `cgpe-api`'s real code this session, not trusted from a
+tag. So instead of forcing a non-existent phase, the user asked to lay the path for a full test pass
+and a language-toggle pass, and to queue those **ahead of** salary.
 
 ## Done
-- **Answered the two newest `→ cgpe-admin, cgpe-mobile` FYIs from `cgpe-api`** (both dated
-  2026-08-11, both previously unanswered by this session — `cgpe-admin` had replied, mobile had not).
-  Each verified against our own code (not trusted from the notice) and confirmed a genuine no-op:
-  - **Backend Phase 18** (`/api/leaves` is now a real feature, was a stub; `GET /api/attendance/calendar`
-    and `/day/:date` gained `is_leave` / `leave_type` and a new `status:'leave'`) — the app calls
-    **none** of the 8 `/api/leaves` routes (`grep -niE "leave|/api/leaves" ANDROID/src` → only prose,
-    the `leaveTimer`/`LEAVE_AFTER_*` identifiers, and one "Leave unassigned" UI string; no leave
-    helper), and it opens **neither** attendance endpoint Phase 18 changed (`grep -nE
-    "is_leave|leave_type" → 0`; `grep -nE "attendance/calendar|attendance/day" → 0`; the app's whole
-    attendance surface is `/attendance/history`, `/time-tracker/history`, `/attendance/user/:id`).
-    `attendance.tsx`'s `Entry` shape (`:49`) carries no `status` field, so the new `status:'leave'`
-    value is inert by construction.
-  - **Backend Phase 17** (weekly-report scheduler wired to already-stored `report_schedule`; `weekday`
-    convention pinned `0`=Sun…`6`=Sat; `last_sent` now written) — `grep -niE
-    "report-schedule|report_schedule|last_sent|/reports|weekly" ANDROID/src` → **0 matches**. The app
-    never reads the report schedule or calls `/api/settings/report-schedule` or `/api/reports`; that
-    config lives only in the panel. Droplet email-transport gap (`SMTP_*` / empty
-    `N8N_EMAIL_WEBHOOK_URL`) is the same console-side blocker already on record.
+- **Re-verified both remaining blockers are real, against the sibling backend's actual code** (the
+  discipline CLAUDE.md + memory demand — Phases 6/9/10/11/12 all had wrong `[api]` tags):
+  - **Phase 6 commissions** — `../cgpe-backend-main/routes/commissions.js` is the whole surface.
+    `GET /` returns raw owner-scoped rows; `/team-summary` is a per-member rollup for leaders/admins.
+    **No product-level aggregate, no `target` field anywhere.** Still blocked. This also closes the
+    board's one open editor thread ("re-check Phase 6 vs current backend" — INBOX line ~2341);
+    re-checked against the live handler, answer unchanged.
+  - **Phase 16 salary** — grep across all backend `models/` and `routes/` for
+    `salary|wage|payroll|per_day|ctc|pay_rate|compensation` returns **only** the role name
+    `payroll_staff` and the task department `payroll`. **No pay field exists.** Still blocked.
+  - Newest contract entry is Backend Phase 18 (`/api/leaves`) — real leave data, but leaves ≠ pay,
+    so it unblocks neither.
+- **Planned two new phases and wrote their specs (the "path" the user asked for first):**
+  - **Phase 18 — watchable, A-to-Z, worst-case end-to-end test pass** (`docs/spec/PHASE-18.md`).
+  - **Phase 19 — language toggle: verify + harden all 5 languages incl. Hinglish/Gujlish**
+    (`docs/spec/PHASE-19.md`).
+- **Filed one consolidated INBOX ask to `cgpe-api`** making the two blocking endpoints explicit and
+  durable (commissions product aggregate + a computed salary/earnings endpoint). Grep-verified
+  present after writing.
 
 ## Files changed
-- `../contracts/INBOX.md` — two `[cgpe-mobile, 2026-08-11, boot]` replies appended under the Backend
-  Phase 18 and Phase 17 items (boxes left unticked — both multi-recipient with `cgpe-admin`, per
-  protocol). Grep-verified present after writing (survived any concurrent write).
-- **No `src/` change. No `ANDROID` repo change** other than this doc set (HANDOFF/DECISIONS/PHASES/
-  STATUS).
+- `docs/spec/PHASE-18.md` — **new.** Full path for the watchable E2E pass: Playwright driving the
+  Expo **web** build in headed Chromium, video+trace, deterministic edge-case injection via network
+  mocking, A-to-Z screen inventory, and an honest list of native-only surfaces web can't reach.
+- `docs/spec/PHASE-19.md` — **new.** Full path for the 5-language verification: a dictionary-parity
+  Vitest (buildable now, no device) as the durable core, plus a visual per-language pass riding the
+  Phase 18 harness. Defines Hinglish (Hindi-in-Latin) / Gujlish (Gujarati-in-Latin) per the user.
+- `docs/PHASES.md` — added Phase 18 + Phase 19 (status board rows + full sections); rewrote `## Now`
+  and `## Next 3` to put testing ahead of salary; recorded the blockers as re-verified.
+- `docs/DECISIONS.md` — appended this session's decisions (tool choice, ordering, reason).
+- `docs/STATUS.md` — rewritten for a manager (no jargon).
+- `../contracts/INBOX.md` — one new `→ cgpe-api` item (outside the ANDROID git repo).
 
 ## Decisions made
-- **Answered rather than left silent, and recorded a forward-looking note on Phase 18.** Both were
-  "nothing to do" FYIs, but an unanswered box reads to `cgpe-api` as "mobile hasn't picked this up"
-  (the exact failure the Phase-4 boxes hit). The one non-obvious point worth keeping: when Phase 16
-  ("My earnings") eventually unblocks, the now-**real** leave data + the attendance `status:'leave'`
-  day become a legitimate *input* to a "present days / payable days" figure — a leave day is not an
-  absence. But Phase 16 stays blocked on a **pay field + salary formula**, which Phase 18 does not
-  supply (leaves ≠ salary). See DECISIONS 2026-08-11 (top).
-- **No commit, by design.** `../contracts/` is untracked and must not be committed from here
-  (CLAUDE.md), and the `ANDROID` repo had no source change. The pre-existing `M .claude/settings.json`
-  from boot was left untouched.
+- **Reason for no build = waiting for the backend to create the endpoint.** Both remaining features
+  (salary, commissions) need a backend endpoint that does not exist; re-verified in `cgpe-api`'s code
+  this session. Not an app-side gap.
+- **Test tooling (user pre-approved "whatever you use"): Playwright + Expo Web, headed.** It opens a
+  real browser the user watches, records video+trace for replay, and — critically — lets us inject
+  every worst-case response (`500/503/empty/malformed/timeout/401/403/huge list`) **deterministically
+  and offline**, touching **zero production data**. Chosen over Maestro/emulator because it needs no
+  Android SDK on this Windows box and makes edge-case injection trivial. Honest cost: **web cannot
+  exercise haptics, the AsyncStorage clock key, background GPS, biometric lock, or the native
+  WebView map** — those stay on the handset backlog; Phase 18 shrinks that backlog, it doesn't
+  replace it.
+- **Order: Phase 18 (test) → Phase 19 (language) → Phase 16 (salary) / Phase 6 (commissions).**
+  Per the user's explicit sequence. 18 and 19 are largely buildable now (19's parity test needs
+  nothing); 16 and 6 stay backend-blocked.
+- **Phase 19 will not machine-translate missing strings.** A wrong Hinglish/Gujlish string is worse
+  than an obvious English fallback; gaps are reported, not guessed.
 
 ## Known broken / deliberately skipped
-- **`git push` still 403s** — unchanged. Every local commit back through `7c11c82` is unpushed.
-  Credential `reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`. Needs a
-  human. Not retried.
-- **Phase 6 commissions & Phase 16 salary — still `cgpe-api`-blocked.** Phase 18 making `/api/leaves`
-  real does **not** unblock Phase 16 — it supplies leave data, not a pay rate or a salary formula.
-- **Device-verification backlog** — handset-only acceptance criteria carried from Phases
-  1/4/5/6/7/9/10/12/13 (haptics, AsyncStorage clock key, background GPS, master route replay,
-  airplane-mode behaviour, leader on-duty count, offline map render, LIC catalogue + notes-search
-  against production, reminder cold-start persistence). Needs a device, not an editor.
+- **Salary (Phase 16) & commissions (Phase 6) — backend-blocked.** Waiting for the backend to create
+  the endpoints (a computed earnings endpoint + a pay-rate field; a commissions *product* aggregate
+  with a `target` source). Filed to `cgpe-api` this session.
+- **`git push` still 403s** — credential `reactjsaaziko` has no write access to
+  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`. Every local commit is unpushed. Needs a human.
+- **Web build may not boot as-is** — Phase 18's first task is getting `expo start --web` to render
+  login without a redbox (module-scope native imports like `@/lib/tracker` may need a web guard).
+  This is a known risk, written into the spec, not a surprise.
+- **Device-verification backlog** — unchanged; handset-only checks from Phases 1/4/5/6/7/9/10/12/13.
+  Phase 18 covers the web-reachable subset; the native-only remainder still needs a phone.
 
 ## Next session starts here
-- **No editor-buildable phase remains.** Next is either a **device-verification pass** (needs a
-  handset + live backend + signed-in staff account) or a **`cgpe-api` unblock landing** — the moment
-  they ship the commissions *product* aggregate or a salary/pay field, Phase 6 commissions / Phase 16
-  become buildable.
-- **First command:** `/boot`
-- **Watch out for:** don't re-verify the Phase-17/18 FYIs — they're answered and confirmed no-ops
-  this session. And **don't trust a phase's `[api]`/"blocked" tag without grepping the sibling
-  backend first** — it has been wrong for Phases 6/9/10/11/12. Before concluding a phase is
-  backend-blocked, read the actual handler.
+- **Phase 18:** build the watchable end-to-end test harness — get the Expo web build to boot, stand
+  up headed Playwright with video+trace, walk all 47 screens A-to-Z, then inject the worst-case edge
+  states. Full path: `docs/spec/PHASE-18.md`.
+- **First command:** `/boot` (then, when building: `npx expo start --web` to confirm the web build
+  renders `/(auth)/login` before writing any Playwright test — this is Phase 18 step 1 and its main
+  risk).
+- **Watch out for:** the app may not run on web without a small `Platform.OS !== 'web'` guard around
+  module-scope native registrations (`_layout.tsx:18` `import '@/lib/tracker'`, biometric/secure-store,
+  the WebView map). Make the **minimum** guard, keep the three gates green, record each as a decision
+  — do **not** rewrite screens to please web, and do **not** run the write/edge suite against
+  production (`https://cgpe.in/internal/api`).

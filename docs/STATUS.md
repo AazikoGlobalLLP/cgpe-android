@@ -1,13 +1,15 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-11
-**Working on right now:** Nothing in progress. Every improvement that can be made at a desk is now finished; what's left needs either a test phone or the server team.
+**Working on right now:** Planning a full, watchable test of the whole app — one where you can sit and watch every screen and action go by in a browser window — plus checking the app works in all its languages, including the two "Roman" ones (Hindi and Gujarati written in English letters).
+
 **Done this week:**
-- Checked the latest batch of updates the server team sent over — this round covered staff leave records, a new weekly-report email, attendance alerts, and some tidy-up on their side — and confirmed none of them require any change to the app. Logged that back to them so both teams stay in step.
-- Noted for later: the server team's new leave records will be useful the day we build the "my earnings/salary" screen (a day on approved leave shouldn't count as absent), but that screen is still waiting on them to provide the actual pay figures first.
-- The app's to-do reminders now save properly — marking one done keeps it done after you close and reopen the app, and if the save fails (no signal) the app says so instead of pretending.
-- Double-checked the two remaining unfinished screens ("commissions" and "my earnings/salary") — both are still waiting on the server team to provide figures the app can read. Nothing we can build until they do.
-- Earlier this week: the notifications screen, manager dashboards, LIC plans catalogue and Notes search were all made honest/working.
+- Double-checked the two unfinished money screens ("commissions" and "my earnings / salary") one more time, this time by reading the server team's actual code rather than trusting a label. Confirmed again: the app genuinely cannot build these yet because the server has not created the data they need (a pay figure, and a per-product commission total). This is a server-side gap, not an app gap.
+- Wrote a clear plan for a from-scratch, watch-along test of the entire app — every screen, deliberately trying to break it with the worst possible inputs and connection failures — set up so you can watch it happen live and replay a recording afterwards.
+- Wrote a plan to confirm the app works fully in all five languages, including "Hinglish" and "Gujlish" (Hindi/Gujarati spoken the same way but written in the English alphabet).
+- Told the server team, in writing, exactly which two things they need to build before the salary and commissions screens can be finished.
+
 **Blocked on:**
-- Finished work still can't be uploaded to GitHub — the login saved on this machine doesn't have permission. Someone with access needs to grant it or swap the login. This is the single thing holding back sharing everything that's been built.
-- The "commissions" and "my earnings/salary" screens need the server team to add pay and commission figures first. Re-checked this week — genuinely not available yet.
-**Next:** Sort out the upload permission so the built work can be shared, then do the final round of checks on a real phone against the live server (including confirming a completed reminder is still complete after closing and reopening the app).
+- The salary and commissions screens are waiting for the server team to create the data endpoints — re-confirmed this week that they still don't exist.
+- Finished work still can't be uploaded to GitHub — the login saved on this machine doesn't have permission. Someone with access needs to grant it or swap the login.
+
+**Next:** Build the watch-along test of the whole app, then the language check — both can be done here without a test phone. Salary and commissions come after that, once the server team provides the missing data.

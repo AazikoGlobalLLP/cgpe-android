@@ -970,3 +970,48 @@ now correct at the wire; `npx tsc --noEmit` exit 0; `npm test` 281/11 (+10 in `a
 backend, someone actually clocked in; none reachable from `npm test`. If a leader unexpectedly sees
 the whole company on the agent map after a backend change, the cause is `visibilityScope`'s
 `canViewAll` gating having changed so a leader's `?scope=all` widens — filed to `cgpe-api` in INBOX.
+
+## 2026-08-11 — Session close: no build; blockers re-verified real; Phases 18 & 19 planned
+
+**Context.** Boot found the board editor-exhausted (Phases 1-15, 17 done; 6 commissions + 16 salary
+backend-blocked). Rather than trust the "blocked" tags — wrong before on Phases 6/9/10/11/12 — this
+session re-verified both against `cgpe-api`'s real code, then, at the user's direction, planned two
+new phases and queued them ahead of salary.
+
+**Blockers confirmed real (read the producer, not the tag).**
+- **Phase 6 commissions.** `../cgpe-backend-main/routes/commissions.js` is the entire commissions
+  surface. `GET /` returns raw owner-scoped rows (`amount`/`commission_type`/`status`/`is_paid`);
+  `/team-summary` is a per-member rollup gated to leaders/admins. No product-level aggregate and no
+  `target` field anywhere. Still blocked. (Also closes the board's open "re-check Phase 6 vs current
+  backend" thread — re-checked against the live handler, not just `api.md`; answer unchanged.)
+- **Phase 16 salary.** Grep across all backend `models/` and `routes/` for
+  `salary|wage|payroll|per_day|ctc|pay_rate|compensation` returns only the role name `payroll_staff`
+  and the task department `payroll` — no pay field on any model. Still blocked. Backend Phase 18's
+  real `/api/leaves` is leave data, not pay, so it does not unblock this.
+
+**Decision: reason for no build = waiting for the backend to create the endpoint.** Recorded in
+HANDOFF/STATUS and filed to `cgpe-api` in INBOX as one consolidated ask (commissions product
+aggregate + a computed salary/earnings endpoint).
+
+**Decision: Phase 18 test tooling = Playwright + Expo Web, headed (user pre-approved the choice).**
+The user asked to *watch* the app being tested A-to-Z with worst-case edge cases. Chosen because:
+(1) it opens a real browser window they watch, with `video:'on'` + `trace:'on'` for frame-by-frame
+replay; (2) Playwright `page.route` injects every fault (500/503/empty/malformed/timeout/401/403/
+huge list) **deterministically and offline**, so the "worst testing" touches zero production data;
+(3) no Android SDK/emulator/JDK needed on this Windows box. Rejected Maestro+emulator as the primary
+(heavier Windows setup) — kept as an optional stretch for native-only flows. **Honest cost, written
+into the spec:** web cannot exercise haptics, the AsyncStorage `clock.<date>` key, background GPS,
+the biometric AppLock, or the `react-native-webview` LeafletMap — those remain handset-only. Phase 18
+shrinks the device backlog; it does not replace it. Its first task/risk: `expo start --web` may need
+a minimal `Platform.OS !== 'web'` guard around module-scope native imports before it boots.
+
+**Decision: order = Phase 18 (test) → Phase 19 (language) → Phase 16 (salary) / Phase 6
+(commissions).** Per the user's explicit sequence ("yeh 2 ho jaaye uske baad salary aur jo baaki
+hai"). 18 and 19 are largely buildable now; 19's dictionary-parity Vitest depends on nothing and is
+the honest first green thing if the web build proves slow to boot. 16/6 stay backend-blocked.
+
+**Decision: Phase 19 verifies + hardens the *existing* 5-language toggle, and never machine-
+translates a gap.** The app already ships English/हिन्दी/ગુજરાતી/Hinglish/Roman-Gujarati (`i18n/
+index.tsx`, 5×74 keys). Hinglish = Hindi-in-Latin, Gujlish = Gujarati-in-Latin (user's definition).
+A missing key is a *finding to report*, not a gap to fill with a guessed transliteration — a wrong
+Hinglish string is worse than an obvious English fallback.

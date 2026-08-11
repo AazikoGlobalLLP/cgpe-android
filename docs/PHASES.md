@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Session close — two new phases planned, no build — 2026-08-11.** At the user's direction, this
+session re-verified the two remaining blockers against `cgpe-api`'s **real code** (not the tags —
+wrong before on Phases 6/9/10/11/12) and confirmed both still real: `routes/commissions.js` has no
+product aggregate and no `target` (Phase 6), and no backend model/route carries any
+`salary|wage|per_day|ctc|pay_rate` field — only the role `payroll_staff` / department `payroll`
+(Phase 16). **Reason nothing shipped: waiting for the backend to create the endpoints.** Instead,
+laid the path for two new phases and queued them **ahead of** salary, per the user's order: **Phase
+18** — a *watchable*, A-to-Z, worst-case end-to-end test pass (Playwright driving the Expo **web**
+build in headed Chromium, video+trace, deterministic edge-case injection; `docs/spec/PHASE-18.md`);
+and **Phase 19** — verify + harden the *existing* 5-language toggle incl. **Hinglish** (Hindi-in-
+Latin) / **Gujlish** (Gujarati-in-Latin), core being a dictionary-parity Vitest that needs no device
+(`docs/spec/PHASE-19.md`). Filed one consolidated `→ cgpe-api` INBOX ask for the two blocking
+endpoints (commissions product aggregate + a computed salary/earnings endpoint), grep-verified
+present. No `src/` change, no gate re-run. See `docs/HANDOFF.md` + DECISIONS 2026-08-11 (top).
+
 **INBOX sync (no phase) — 2026-08-11 (2nd of the day).** A boot found the board still
 **editor-exhausted** and the two newest `→ cgpe-admin, cgpe-mobile` FYIs from `cgpe-api` unanswered by
 this session — Backend **Phase 18** (`/api/leaves` is now a real 8-route feature, was a stub;
@@ -200,25 +215,28 @@ exercise.
 
 ## Next 3
 
-1. **Phase 6 commissions (the remaining third)** — **backend-blocked.** Notes + LIC shipped
-   2026-08-11 (above). Commissions needs `cgpe-api` to expose the *product* aggregate the screen
-   wants (`GET /api/commissions` returns raw owner-scoped rows, and `target` has no source in them);
-   the product owner confirmed that endpoint is still pending. Deriving money on-device is rejected
-   (Phase 16 precedent). Nothing app-side to build until the endpoint lands. See spec D-5.
-2. **Device-verification backlog** — handset-only acceptance criteria carried from Phases 1, 4, 5, 6,
-   7, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
-   airplane-mode behaviour, a leader's true "On duty now" count, the offline map render, **the LIC
-   catalogue rendering + notes search narrowing against production**). Needs a device, not an editor.
-3. ~~**Phase 9 (reminders/checklists persist)**~~ — **DONE 2026-08-11.** Its `[api]` tag was wrong:
-   `POST /reminders/:id/acknowledge` already existed, so `toggleReminder` was wired app-side (see
-   "## Now"). ~~The `dashboards.tsx` partial-outage tile~~ and ~~the INBOX Phase-14 grep~~ were closed
-   earlier the same day. **With Phase 9 built, the only remaining editor-buildable candidates are
-   genuinely `cgpe-api`-blocked** — Phase 6 commissions (no *product* aggregate; `target` has no
-   source — re-verified in `routes/commissions.js` at this session's boot) and Phase 16 salary (no
-   pay field on any backend model). **Backend Phase 18 (2026-08-11) landed a real `/api/leaves`
-   feature + a `Leave` model, but that is leave data, not pay — there is still no `salary`/`wage`/
-   `per_day`/`ctc` field anywhere, so Phase 16 stays blocked.** Everything else on the board is a
-   handset-only acceptance check.
+1. **Phase 18 — watchable, A-to-Z, worst-case end-to-end test pass.** **Buildable app-side now**
+   (no handset for the web-reachable subset). Playwright drives the Expo **web** build in headed
+   Chromium so the user watches every action live and re-watches a video/trace; edge states
+   (500/503/empty/malformed/timeout/401/403/huge-list) are injected deterministically via network
+   mocking, touching zero production data. First task/risk: getting `expo start --web` to boot. Full
+   path: `docs/spec/PHASE-18.md`.
+2. **Phase 19 — language toggle: verify + harden all 5 languages (incl. Hinglish / Gujlish).** The
+   app already ships the 5 dictionaries; this verifies them. Its core — a dictionary-parity Vitest
+   (all 5 dicts, same 74 keys, no blanks) — **depends on nothing and is buildable today**; the visual
+   per-language pass rides the Phase 18 harness. Full path: `docs/spec/PHASE-19.md`.
+3. **Phase 16 salary + Phase 6 commissions — backend-blocked; waiting for the backend to create the
+   endpoints.** Re-verified real this session against `cgpe-api`'s code: no product aggregate / no
+   `target` in `routes/commissions.js` (Phase 6); no `salary`/`wage`/`per_day`/`ctc`/`pay_rate` field
+   on any backend model or route (Phase 16) — only the role `payroll_staff` / department `payroll`.
+   Backend Phase 18's real `/api/leaves` is leave data, not pay. Deriving money on-device stays
+   rejected. Filed to `cgpe-api` (INBOX) this session. Nothing app-side until the endpoints land.
+
+> **Also still open:** the **device-verification backlog** — handset-only acceptance criteria carried
+> from Phases 1, 4, 5, 6, 7, 9, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the
+> master route replay, airplane-mode behaviour, a leader's true "On duty now" count, the offline map
+> render, the LIC catalogue + notes search against production, reminder cold-start persistence).
+> Phase 18 covers the **web-reachable** slice of this; the native-only remainder still needs a phone.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -251,8 +269,10 @@ exercise.
 | 13 | Vendor Leaflet | **Done** 2026-08-11 — 271 tests green; device check outstanding |
 | 14 | Dead-code sweep | **Done** 2026-08-11 — 271 tests green (`1a37144`); lint 46→45 |
 | 15 | Lint to green | **Done** 2026-08-11 — `npm run lint` exits 0 (was 45 errors); 271 tests green (`292610b`) |
-| 16 | "My earnings" salary section `[api]` | **Blocked** — awaiting the salary formula *and* a backend pay field |
+| 16 | "My earnings" salary section `[api]` | **Blocked** — waiting for the backend to create the endpoint (pay field + computed earnings); re-verified real 2026-08-11 |
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
+| 18 | Watchable A–Z + worst-case E2E test | **Planned** 2026-08-11 — path laid (`docs/spec/PHASE-18.md`); buildable app-side (headed browser + edge-case injection) |
+| 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Planned** 2026-08-11 — path laid (`docs/spec/PHASE-19.md`); dictionary-parity test buildable now |
 
 ---
 
@@ -734,6 +754,66 @@ not this phase's blocker — see the "does not need a `cgpe-api` change" note ab
    sentence from `distance_m` without duplicating the km/m rounding rule.
 
 Full spec and the five locked decisions: `docs/spec/PHASE-17.md`.
+
+---
+
+## Phase 18 — Watchable, A-to-Z, worst-case end-to-end test pass 🟡 PLANNED 2026-08-11
+Requested directly: test the whole app A-to-Z, worst-case / all-unexpected-edge-cases, in a way the
+user can **watch** — a browser opening, or some mobile-screen-type surface, where every action is
+visible. User pre-approved the tooling choice.
+
+**The path, chosen and locked (full spec: `docs/spec/PHASE-18.md`):** **Playwright driving the Expo
+*web* build (`npx expo start --web`) in headed Chromium**, with `video`+`trace`+`screenshot` on, and
+**deterministic edge-case injection** via `page.route` network mocking (500 / 503+Retry-After /
+empty `{data:[]}` / malformed body / timeout / 401 mid-session / 403 RBAC / oversized list / slow
+net). The user watches live and re-watches the recording; edge states are synthetic, so the run
+touches **zero production data**.
+
+**Files (new, outside `src/` so `tsc`/Vitest/EAS ignore them):** `e2e/playwright.config.ts`,
+`e2e/*.spec.ts`, `e2e/artifacts/` (git-ignored). Plus, *only if needed*, a minimal
+`Platform.OS !== 'web'` guard around a module-scope native import to make the web build boot (each
+such guard recorded as a decision; the three gates must stay green).
+
+**Done when:** one command opens a visible browser that walks all 47 screens A-to-Z while the user
+watches; a video+trace is saved; every web-reachable screen renders (no blank, no error boundary) in
+its normal **and** injected worst-case states; every form takes bad-input/boundary abuse; a
+pass/fail report + per-state screenshots land in one folder.
+
+**First task + main risk:** the app may not boot on web as-is (`_layout.tsx:18`
+`import '@/lib/tracker'` and other module-scope native imports). Step 1 is getting `/(auth)/login` to
+render web-side without a redbox. Make the **minimum** web guard — do not rewrite screens for web.
+
+**Explicitly NOT covered by the web harness (stays handset-only):** haptics, the AsyncStorage
+`clock.<date>` key, background GPS, the biometric AppLock, the `react-native-webview` LeafletMap, and
+the native base-URL branch. Phase 18 **shrinks** the device-verification backlog; it does not replace
+it. A green web pass must not be read as "the whole app is verified."
+
+## Phase 19 — Language toggle: verify + harden all 5 languages (incl. Hinglish / Gujlish) 🟡 PLANNED 2026-08-11
+Requested directly: the app can run in **Gujlish / Hinglish** too — *Hinglish* = Hindi pronunciation
+in English letters, *Gujlish* = Gujarati pronunciation in English letters. Add it as a tracked row.
+
+**What's already true:** the app **ships** all 5 dictionaries today (`src/i18n/index.tsx`: English,
+हिन्दी, ગુજરાતી, Hinglish, Roman Gujarati — 5 × 74 keys). So this phase **verifies + hardens the
+existing toggle**, it does not build a new one. Full spec: `docs/spec/PHASE-19.md`.
+
+**The path:** (1) **buildable now, needs no device** — a `src/i18n/__tests__/dictionaries.test.ts`
+(Vitest) asserting all 5 dictionaries share the exact same key set with no blank / missing / key-echo
+values; this is a *permanent gate* against the "added a key in English, forgot the other four"
+regression. (2) **visual half** — rides the Phase 18 harness: set each of the 5 languages, walk the
+screen inventory, screenshot each; a human confirms Hinglish/Gujlish read naturally and layout holds
+at 390 px.
+
+**Done when:** the parity test is green in `npm test`; no screen leaks a raw i18n key in any language;
+the toggle switches + persists; Hinglish/Gujlish screenshots read as Hindi/Gujarati-in-Latin (human
+review), and no text clips/overflows.
+
+**Not done:** machine-translating or auto-transliterating a missing string — a wrong romanised string
+is worse than an obvious English fallback, so gaps are **reported**, not guessed. No new language, no
+RTL (none of the five are RTL).
+
+**Sequencing (both 18 & 19):** land **before** Phase 16 (salary) / Phase 6 (commissions), per the
+user's order — "pehle test + language, uske baad salary aur jo baaki hai." 16 and 6 stay
+backend-blocked regardless.
 
 ---
 
