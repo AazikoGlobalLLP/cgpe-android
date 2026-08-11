@@ -357,7 +357,10 @@ const REMINDER_TYPE: Record<string, Reminder['type']> = {
 export function adaptReminder(raw: any): Reminder {
   raw = raw || {};
   const t = String(raw.type || '').toLowerCase();
-  const done = /done|complete|sent|dismiss|cancel/.test(String(raw.status || ''));
+  // PHASE 9: 'acknowledg' is how the backend records a reminder finished (`status:'acknowledged'`,
+  // set by POST /reminders/:id/acknowledge) — the state `toggleReminder` now writes. Kept
+  // case-sensitive like the rest of this line: the wire value is lowercase.
+  const done = /done|complete|sent|dismiss|cancel|acknowledg/.test(String(raw.status || ''));
   return {
     id: String(raw._id || raw.id),
     type: REMINDER_TYPE[t] || 'followup',

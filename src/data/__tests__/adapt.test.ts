@@ -555,6 +555,9 @@ describe('adaptReminder', () => {
     expect(adaptReminder({ _id: 'r5', status: 'done' }).done).toBe(true);
     expect(adaptReminder({ _id: 'r6', status: 'cancelled' }).done).toBe(true);
     expect(adaptReminder({ _id: 'r7', status: 'scheduled' }).done).toBe(false);
+    // PHASE 9: 'acknowledged' is the status the backend writes on POST /reminders/:id/acknowledge,
+    // which is the state `toggleReminder` now creates — it must read back as done.
+    expect(adaptReminder({ _id: 'r8', status: 'acknowledged' }).done).toBe(true);
   });
 });
 

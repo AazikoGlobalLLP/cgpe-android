@@ -7,7 +7,8 @@ import { font, radius, spacing, useTheme } from '@/theme/theme';
 import { Card, Header, Row, Screen, SectionHeader, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
 import { IconBtn } from '@/ui/controls';
-import { EmptyState, Skeleton } from '@/ui/feedback';
+import { Banner, EmptyState, Skeleton } from '@/ui/feedback';
+import type { FeedbackTone } from '@/ui/feedback';
 import { Spine, SpineRow } from '@/ui/spine';
 import type { SpineTone } from '@/ui/spine';
 import { SwipeRow } from '@/ui/swipe';
@@ -46,10 +47,13 @@ import { whatsapp } from '@/lib/actions';
  * undiscoverable and unusable for anyone who cannot swipe precisely, so the same action is
  * also a 44pt tick in the row. Neither is the "real" one.
  *
- * THE WRITE IS OPTIMISTIC AND UNCONFIRMED, and the haptic says exactly that. `toggleReminder`
- * resolves void whether or not anything reached the server, so this fires `haptics.tap` at
- * the moment of commit rather than `haptics.success`, which would be claiming an
- * acknowledgement the API never gives.
+ * COMPLETION IS OPTIMISTIC BUT CONFIRMED, AND ONE-WAY. PHASE 9: `toggleReminder` now writes
+ * to the server (`POST /reminders/:id/acknowledge`) and returns whether it was accepted. The
+ * tick lands on the touch for a walking agent, but if the server refuses it the row is put
+ * back and a Banner says so — an optimistic UI that cannot un-promise is a lie with good
+ * timing. Only a confirmed write earns `haptics.success`. There is NO reopen: the backend has
+ * no un-acknowledge, so a reopen control could only revert on the next refetch, which is the
+ * exact silent-tick failure this phase removes.
  * ------------------------------------------------------------------ */
 
 /** Milliseconds since epoch, or NaN for a record with no usable date. */
@@ -149,6 +153,7 @@ export default function Reminders() {
   const [items, setItems] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
 
   /** The leak guard. No state is written once the screen is gone. */
   const mounted = useRef(true);
@@ -178,14 +183,32 @@ export default function Reminders() {
   }, [load]));
 
   /**
-   * Optimistic toggle. The row flips on the same frame as the touch, because a follow-up
-   * being ticked while walking cannot wait for a round trip. Nothing is read back after the
-   * await, so there is no post-unmount write to guard.
+   * Optimistic completion with a real rollback. PHASE 9. The row flips to done on the same
+   * frame as the touch, because a follow-up being ticked while walking cannot wait for a round
+   * trip — but `toggleReminder` now returns whether the server accepted it, so a refusal puts
+   * THIS row back and raises a notice rather than leaving a tick the next refetch would wipe.
+   * Completion is one-way (the backend has no un-acknowledge), so an already-done row is a no-op.
    */
   const toggle = useCallback(async (r: Reminder) => {
+    if (r.done) return;
     haptics.tap();
-    setItems((prev) => prev.map((x) => (x.id === r.id ? { ...x, done: !x.done } : x)));
-    await api.toggleReminder(r.id);
+    setItems((prev) => prev.map((x) => (x.id === r.id ? { ...x, done: true } : x)));
+    const ok = await api.toggleReminder(r.id);
+    if (!mounted.current) return;
+    if (ok) {
+      haptics.success();
+      setNotice(null);
+      return;
+    }
+    // Nothing reached the server — restore only this row, so a failure here never reverts a
+    // different reminder the user completed while this request was in the air.
+    setItems((prev) => prev.map((x) => (x.id === r.id ? { ...x, done: false } : x)));
+    haptics.warn();
+    setNotice({
+      tone: 'warning',
+      title: 'Not marked done',
+      message: `"${r.title}" could not be saved — it never reached the server, so it is still open. Check your connection and try again.`,
+    });
   }, []);
 
   /**
@@ -225,6 +248,15 @@ export default function Reminders() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >
+        {notice ? (
+          <Banner
+            tone={notice.tone}
+            title={notice.title}
+            message={notice.message}
+            onDismiss={() => setNotice(null)}
+          />
+        ) : null}
+
         {loading ? <RemindersSkeleton /> : nothing ? (
           <Card>
             {health.degraded ? (
@@ -263,7 +295,7 @@ export default function Reminders() {
               <EmptyState
                 icon="checkmark-done-circle-outline"
                 title="Nothing left to chase"
-                subtitle="Every follow-up on your book is closed. Reopen one from the list above if it came back."
+                subtitle="Every follow-up on your book is closed. New ones appear here as they come due."
               />
             ) : null}
 
@@ -298,10 +330,10 @@ function Group({ title, items, onToggle, index = 0 }: {
         <Card>
           <Spine>
             {items.map((r, i) => {
+              // PHASE 9: completion is one-way (no un-acknowledge on the backend), so a done row
+              // carries no swipe action — a "Reopen" here could only revert on the next refetch.
               const actions: SwipeAction[] = [];
-              if (r.done) {
-                actions.push({ icon: 'arrow-undo', label: 'Reopen', tone: 'warning', onPress: () => onToggle(r) });
-              } else {
+              if (!r.done) {
                 actions.push({ icon: 'checkmark-done', label: 'Done', tone: 'success', onPress: () => onToggle(r) });
                 if (r.phone) {
                   actions.push({
@@ -328,14 +360,18 @@ function Group({ title, items, onToggle, index = 0 }: {
                     tone={toneFor(r)}
                     icon={r.done ? 'checkmark-circle' : ((REMINDER_ICON[r.type] ?? 'notifications') as IconName)}
                     right={
-                      <IconBtn
-                        icon={r.done ? 'arrow-undo' : 'checkmark'}
-                        size={34}
-                        bg={r.done ? c.cardAlt : c.successSoft}
-                        color={r.done ? c.muted : c.success}
-                        accessibilityLabel={r.done ? `Reopen ${r.title}` : `Mark ${r.title} done`}
-                        onPress={() => onToggle(r)}
-                      />
+                      // A done reminder shows no action button — the left success check is the
+                      // whole story, and there is nothing to reopen (PHASE 9, one-way completion).
+                      r.done ? undefined : (
+                        <IconBtn
+                          icon="checkmark"
+                          size={34}
+                          bg={c.successSoft}
+                          color={c.success}
+                          accessibilityLabel={`Mark ${r.title} done`}
+                          onPress={() => onToggle(r)}
+                        />
+                      )
                     }
                   />
                 </SwipeRow>

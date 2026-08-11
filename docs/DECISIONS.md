@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 9: reminders persist via `acknowledge` (one-way); task-steps already gone, claim-docs already honest — the `[api]` tag was wrong
+
+**Context.** `docs/PHASES.md` marked Phase 9 ("reminders/checklists persist") **`[api]` / Blocked on
+cgpe-api**. A fresh read of the backend at session start found `POST /api/reminders/:id/acknowledge`
+(`cgpe-backend-main/routes/reminders.js:419`, `contracts/api.md:914`) has existed since before this
+app did — the same "predicted backend dependency was never real" pattern as Phases 6/10/11/12. The
+phase names three controls; they have three different truths (see `docs/spec/PHASE-9.md`).
+
+**Decision.** (1) **`toggleReminder`** wired to `POST /reminders/:id/acknowledge`, returning the
+server's verdict (`Promise<boolean>`, modelled on `markAllNotificationsRead` — no `reportFailure`, a
+single write surfaces inline). `adaptReminder`'s done-regex gained `acknowledg` (case-sensitive; the
+wire value is lowercase `acknowledged`) so the persisted state reads back as done. `getReminders`
+already reads `GET /reminders` — the **same** Mongoose store scoped by `user_id`, same `_id` space — so
+no new read and no id translation. (2) **Completion is one-way**: the backend has no un-acknowledge
+(`PUT /:id` takes no `status`; `/:id/cancel` sets `cancelled`, still *done*), so `reminders.tsx`'s
+"Reopen" swipe action and done-row undo button were **removed** — a reopen could only revert on the
+next refetch, the exact silent-tick lie this phase deletes. The screen now mirrors `tasks.tsx`:
+optimistic tick, per-row rollback + warning `Banner` on a refused write, `haptics.success` only on a
+confirmed one. (3) **`toggleTaskStep`** was already removed in Phase 1 (no endpoint exists) — the "or
+the control is gone" arm is already satisfied; untouched.
+
+**Deviation from the approved plan — `toggleClaimDoc` left as-is, NOT made read-only.** The session
+plan (and the question the user approved) said "make the claim-docs control read-only." Reading
+`claim/[id].tsx` showed that would be wrong: the checklist **already discloses it does not persist**
+(the footer renders "This checklist is a working note on your handset. Ticking a document does not
+update the register.", `:416`) and uses `haptics.select`, so it is not the silent-revert harm the phase
+targets; and the tick is **load-bearing for the real upload flow** (`:262-270` ticks the doc after a
+genuine `/upload`). There is also nothing to wire — the backend `Claim` schema has no persisted
+`documents` field (`cgpe-api`'s Phase-8 INBOX notice). Making it read-only would delete honest, working
+functionality to fix a lie that is not there. Left untouched; flagged here and in the handoff so the
+call is visible and reversible.
+
+**Consequence.** A reminder marked done now stays done across a cold start (device-verify carried,
+criterion 4). No contract/`CHANGELOG` change — every endpoint already existed and was documented; the
+`[api]` tag is struck. Gates: `npx tsc --noEmit` exit 0; `npm test` **305 tests / 14 files** (+6:
+`api-reminders.test.ts` pins the acknowledge request + four outcomes, plus one `adapt.test.ts`
+`acknowledged → done` case); `npm run lint` **0 errors / 12 warnings** (baseline unchanged). Push still
+403s — commit is local. A "shipped, nothing owed, your `[api]` tag was wrong" INBOX notice to
+`cgpe-api`/`cgpe-admin` is the follow-up, in the Phase-10/11/12 shape.
+
 ## 2026-08-11 — INBOX Phase-14 (notifications/notices 5xx) verified conformant — no app change
 
 **Context.** Backend Phase 14 (`contracts/INBOX.md`, 2026-08-11 item from `cgpe-api`) changed three

@@ -14,6 +14,20 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 9 — reminders persist; `[api]` tag was wrong. Done.** Built 2026-08-11. The board marked
+Phase 9 "Blocked on cgpe-api", but `POST /reminders/:id/acknowledge` has existed all along
+(`routes/reminders.js:419`) — same stale-tag pattern as Phases 6/10/11/12. `toggleReminder` now POSTs
+that endpoint and returns the server's verdict; `adaptReminder`'s done-regex gained `acknowledg` so the
+persisted state reads back as done; and since the backend has no un-acknowledge, the reopen control was
+removed (completion is one-way) and `reminders.tsx` gained `tasks.tsx`-style optimistic rollback (revert
++ warning `Banner` on a refused write, `haptics.success` only on a confirmed one). `toggleTaskStep` was
+already removed in Phase 1; **`toggleClaimDoc` was deliberately left as-is** — the claim checklist
+already discloses it does not persist (`claim/[id].tsx:416`) and its tick is load-bearing for the upload
+flow, so making it read-only (the original plan) would delete honest working code (D-3, a flagged
+deviation). `npx tsc --noEmit` exit 0; `npm test` **305 / 14** (+6); `npm run lint` 0 errors / 12
+warnings. Push still 403s — commit local. Cold-start persistence needs a handset (carried). Spec:
+`docs/spec/PHASE-9.md`; DECISIONS 2026-08-11 (top).
+
 **INBOX backend-Phase-14 grep (notifications/notices 5xx) — verified conformant, no app change.**
 2026-08-11. `cgpe-api` changed `GET /api/notifications`, `/notifications/unread-count`,
 `/notices/unread` to answer **503/500** on a DB fault instead of `200 { data:[] }`, and asked both
@@ -174,12 +188,14 @@ exercise.
    7, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
    airplane-mode behaviour, a leader's true "On duty now" count, the offline map render, **the LIC
    catalogue rendering + notes search narrowing against production**). Needs a device, not an editor.
-3. ~~**The `dashboards.tsx:292-297` partial-outage tile** carried out of Phase 3~~ — **DONE
-   2026-08-11.** Both KPI grids now blank org figures to `NO_VALUE` on a missing snapshot instead of
-   `?? 0`. See DECISIONS 2026-08-11. ~~**The INBOX backend-Phase-14 grep**~~ (notifications/notices
-   5xx honesty) — **also DONE 2026-08-11**, verified conformant, no app change (see "## Now"). **With
-   both closed, no editor-buildable work remains** — Phase 6 commissions / 9 / 16 are
-   `cgpe-api`-blocked, and everything else on the board is a handset-only acceptance check.
+3. ~~**Phase 9 (reminders/checklists persist)**~~ — **DONE 2026-08-11.** Its `[api]` tag was wrong:
+   `POST /reminders/:id/acknowledge` already existed, so `toggleReminder` was wired app-side (see
+   "## Now"). ~~The `dashboards.tsx` partial-outage tile~~ and ~~the INBOX Phase-14 grep~~ were closed
+   earlier the same day. **With Phase 9 built, the only remaining editor-buildable candidates are
+   genuinely `cgpe-api`-blocked** — Phase 6 commissions (no *product* aggregate; `target` has no
+   source — re-verified in `routes/commissions.js` at this session's boot) and Phase 16 salary (no
+   pay field on any backend model — re-verified). Everything else on the board is a handset-only
+   acceptance check.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -205,7 +221,7 @@ exercise.
 | 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint) |
 | 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
 | 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
-| 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
+| 9 | Reminders/checklists persist ~~`[api]`~~ | **Done** 2026-08-11 — 305 tests green; `[api]` tag was wrong (reminders wired to existing `acknowledge`); device check outstanding |
 | 10 | Server-driven navigation (§9 gap) | **Done** 2026-08-11 — 266 tests green |
 | 11 | Server-derived tier | **Done** 2026-08-11 — 258 tests green |
 | 12 | `/profiles` role gate ~~`[api]`~~ | **Done** 2026-08-11 — 281 tests green (`4507d6e`); verified **app-side** (tag was wrong); device check outstanding |
@@ -431,13 +447,34 @@ things turned out to be true that the phase text did not say:
 
 Full spec, the six locked decisions and what the review found: `docs/spec/PHASE-8.md`.
 
-## Phase 9 — Make reminders and checklists persist `[api]`
-`toggleReminder`, `toggleTaskStep` and `toggleClaimDoc` make no network call and mutate buffers that
+## Phase 9 — Make reminders and checklists persist ~~`[api]`~~ ✅ DONE 2026-08-11 — the `[api]` tag was wrong
+`toggleReminder`, `toggleTaskStep` and `toggleClaimDoc` made no network call and mutated buffers that
 are never populated. Either wire them or remove the controls — a tick that silently reverts is worse
 than no tick.
-**Files:** `src/data/api.ts`, `src/app/reminders.tsx`, `src/app/task/[id].tsx`,
-`src/app/claim/[id].tsx`
+**Files:** `src/data/api.ts` (`toggleReminder`), `src/data/adapt.ts` (`adaptReminder` done-regex),
+`src/app/reminders.tsx`, plus new `__tests__/api-reminders.test.ts` and an `adapt.test.ts` case —
+**not** `src/app/task/[id].tsx` (control already removed in Phase 1) or `src/app/claim/[id].tsx`
+(already honest — D-3).
 **Done when:** a completed reminder is still complete after a cold start, or the control is gone.
+
+**Result.** 6 new tests. The `[api]` tag was stale: `POST /reminders/:id/acknowledge` has existed
+since before the app did (`routes/reminders.js:419`, `api.md:914`) — same "predicted dependency was
+never real" shape as Phases 6/10/11/12. Three controls, three truths:
+1. **`toggleReminder` — wired.** Now POSTs `/reminders/:id/acknowledge` and returns the server's
+   verdict (`Promise<boolean>`, `markAllNotificationsRead` shape). `adaptReminder`'s done-regex gained
+   `acknowledg` so the persisted `status:'acknowledged'` reads back as done; `getReminders` already
+   reads the same Mongoose store, same `_id` space, so no new read. **Completion is one-way** — the
+   backend has no un-acknowledge — so the "Reopen" swipe + undo button were removed (a reopen could
+   only silently revert). `reminders.tsx` now mirrors `tasks.tsx`: optimistic tick, per-row rollback +
+   warning `Banner` on refusal, `haptics.success` only on a confirmed write.
+2. **`toggleTaskStep` — already gone** (Phase 1 tombstone at `api.ts:465`); no endpoint exists.
+3. **`toggleClaimDoc` — left as-is (D-3), a deviation from the plan.** The claim checklist already
+   discloses it does not persist (`claim/[id].tsx:416`) and its tick is load-bearing for the real
+   upload flow; there is no `documents` field on the backend `Claim` to wire. Making it read-only would
+   delete honest working code to fix a non-existent lie. Flagged in DECISIONS + handoff.
+
+**The cold-start persistence needs a handset + live backend** (criterion 4) — carried, like the other
+device checks. Spec: `docs/spec/PHASE-9.md`.
 
 ## Phase 10 — Wire server-driven navigation ✅ DONE 2026-08-11
 The documented known gap (`ADMIN_PANEL_SYNC.md` §9). `(tabs)/_layout.tsx` builds its bar from

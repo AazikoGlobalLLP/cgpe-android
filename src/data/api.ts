@@ -1061,10 +1061,29 @@ export async function getReminders(): Promise<Reminder[]> {
   }
   return unavailable('/reminders', state.reminders);
 }
-export async function toggleReminder(id: string): Promise<void> {
-  const r = state.reminders.find((x) => x.id === id);
-  if (r) r.done = !r.done;
-  await wait(100);
+/**
+ * Mark a reminder done, for real. PHASE 9.
+ *
+ * One-way on purpose: the only "this is finished" write the backend offers is
+ * `POST /reminders/:id/acknowledge` (`routes/reminders.js:419`, sets `status:'acknowledged'`),
+ * and there is no un-acknowledge — `PUT /:id` takes no `status`, and `/:id/cancel` sets
+ * `cancelled` (still *done* to `adaptReminder`). So this completes a reminder and returns whether
+ * the SERVER accepted it; the screen reverts its optimistic tick when it did not, rather than
+ * leaving a tick that the next `getReminders` would wipe. Same shape as `markAllNotificationsRead`
+ * — no `reportFailure`, because a single user-initiated write surfaces inline, not on the global
+ * read-outage banner.
+ */
+export async function toggleReminder(id: string): Promise<boolean> {
+  if (!sessionReal || FORCE_DEMO) return false;
+  try {
+    const { ok, json } = await req(`/reminders/${id}/acknowledge`, { method: 'POST' });
+    if (!ok || json?.success === false) return false;
+    const r = state.reminders.find((x) => x.id === id);
+    if (r) r.done = true;
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /* ------------------------------------------------------------------- Misc */
