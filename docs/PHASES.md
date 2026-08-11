@@ -14,6 +14,19 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**INBOX backend-Phase-14 grep (notifications/notices 5xx) — verified conformant, no app change.**
+2026-08-11. `cgpe-api` changed `GET /api/notifications`, `/notifications/unread-count`,
+`/notices/unread` to answer **503/500** on a DB fault instead of `200 { data:[] }`, and asked both
+clients to confirm they branch on `success`/HTTP status rather than reading the empty-200 as "empty".
+Verified clean: the app calls **only `/notifications`** of the three (the other two have zero callers;
+unread is derived client-side), `getNotifications` already keys on HTTP `ok` so a 5xx falls through to
+`unavailable('/notifications')` → global `<HealthBanner/>`, and `notifications.tsx:286-300` already
+branches its empty state on `useDataHealth().degraded`. `getCompanyNotices` reads a *different*
+endpoint (`/notices?limit=60`, not `/notices/unread`) through the reporting `tryEnvelope`, and
+`markNoticeRead`'s new 404-on-stale-id is silently absorbed by its fire-and-forget caller. The app
+inherits the backend honesty fix for free. Recorded as a reply under the INBOX item (box left unticked
+— multi-recipient with `cgpe-admin`). No source changed; gates not re-run. DECISIONS 2026-08-11 (top).
+
 **Dashboards partial-outage tile (Phase-3 carry-out) — done.** Built 2026-08-11. The last
 editor-buildable item on the board: `src/screens/dashboards.tsx`'s Master (`:292-297`) and Admin
 (`:211-213`) KPI grids rendered each org figure as `snapshot?.field ?? 0`, so a partial outage
@@ -163,9 +176,10 @@ exercise.
    catalogue rendering + notes search narrowing against production**). Needs a device, not an editor.
 3. ~~**The `dashboards.tsx:292-297` partial-outage tile** carried out of Phase 3~~ — **DONE
    2026-08-11.** Both KPI grids now blank org figures to `NO_VALUE` on a missing snapshot instead of
-   `?? 0`. See "## Now" and DECISIONS 2026-08-11. **With this closed, no editor-buildable work
-   remains** — Phase 6 commissions / 9 / 16 are `cgpe-api`-blocked, and everything else on the board
-   is a handset-only acceptance check.
+   `?? 0`. See DECISIONS 2026-08-11. ~~**The INBOX backend-Phase-14 grep**~~ (notifications/notices
+   5xx honesty) — **also DONE 2026-08-11**, verified conformant, no app change (see "## Now"). **With
+   both closed, no editor-buildable work remains** — Phase 6 commissions / 9 / 16 are
+   `cgpe-api`-blocked, and everything else on the board is a handset-only acceptance check.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract

@@ -6,6 +6,45 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — INBOX Phase-14 (notifications/notices 5xx) verified conformant — no app change
+
+**Context.** Backend Phase 14 (`contracts/INBOX.md`, 2026-08-11 item from `cgpe-api`) changed three
+read endpoints — `GET /api/notifications`, `GET /api/notifications/unread-count`,
+`GET /api/notices/unread` — to answer **503/500** on a thrown query instead of masking it as
+`200 { success:true, data:[] }`. The item asked both clients to grep: "if a client reads the empty-200
+as 'empty', branch on `success`/HTTP status so an outage shows 'couldn't load', not 'no
+notifications'." The previous handoff flagged this as the one genuinely-buildable carry-item and said
+"if clean, tick it; if not, it's a small honesty fix in the Phase-3 class."
+
+**Decision.** Verified clean; **no code change**. Findings, each grep-confirmed:
+(1) Of the three endpoints the app calls **only `GET /api/notifications`** (`api.ts` `getNotifications`,
+`/notifications?limit=50`). `/notifications/unread-count` and `/notices/unread` have **zero callers**
+in `src/` — the unread count is derived client-side from the fetched list (`home.tsx:674`,
+`notifications.tsx:139`). So two of the three cannot mislead because they are never read.
+(2) `getNotifications` returns rows only under `if (ok && arr)` — it keys on HTTP `ok`, not on
+empty-vs-non-empty — so a non-2xx (the new 5xx) falls through to `unavailable('/notifications')`,
+which `reportFailure`s and raises the global `<HealthBanner/>`. `healthKey` strips the query
+(`api.ts:110`), so the success-clear (`reportSuccess('/notifications')`) and the failure-set share one
+banner row and recovery clears it. Before the fix, the empty-200 gave `ok:true, arr:[]` → returned
+`[]` with no report → the exact silent false-empty the item warned about; the backend 5xx + our
+existing `ok`-keying now surface it together.
+(3) `notifications.tsx:286-300` already branches its zero-items empty state on
+`useDataHealth().degraded` ("The feed did not load / Try again" vs "You are all caught up").
+(4) `getCompanyNotices` reads `GET /notices?limit=60` — a **different** endpoint from the item's
+`/notices/unread` — through the reporting `tryEnvelope`, and `notice-board.tsx` has a dedicated
+`/notices` outage branch. Honest regardless.
+(5) `POST /notices/:id/read` now 404s on a stale id; our one caller (`notice-board.tsx:173`) fires
+`markNoticeRead` fire-and-forget with the result ignored (bare `req`, no health report), so a 404 is
+silently absorbed as "gone" — matching the backend's guidance. We do not read the new `read_by` field.
+
+**Consequence.** The app inherits the backend honesty fix with zero source change: an outage on the
+notifications feed now shows a health banner + "couldn't load / retry", where before Phase 14 it showed
+a silent "you're all caught up". Recorded as a reply under the INBOX item; **box left unticked**
+because the item is addressed to `cgpe-admin` as well (multi-recipient protocol), and the item itself
+asks for no tick. No CHANGELOG entry — nothing changed shape on the app side. No test file — no new
+pure logic; the verified behavior is existing `unavailable`/`degraded` plumbing already covered by the
+data-health suite. Gates not re-run (no source touched).
+
 ## 2026-08-11 — Master/Admin KPI tiles blank to NO_VALUE on a missing org snapshot, gated on `snapshot`-presence (not `useDataHealth().degraded`) — Phase-3 carry-out CLOSED
 
 **Context.** The last open item from Phase 3 (`docs/spec/PHASE-3.md` §2, `docs/PHASES.md` "Next 3"
