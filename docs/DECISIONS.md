@@ -6,6 +6,43 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — INBOX sync: backend Phase 17 / 18 FYIs verified as no-ops for the app — no code change
+
+**Context.** A boot re-read of `contracts/INBOX.md` surfaced the two newest `→ cgpe-admin, cgpe-mobile`
+notices from `cgpe-api`, both dated 2026-08-11 and both previously answered by `cgpe-admin` only:
+Backend **Phase 18** (`/api/leaves` is now a real feature — 8 routes, was a 5-route stub — and
+`GET /api/attendance/calendar` + `/day/:date` gained `is_leave` / `leave_type` and a new
+`status:'leave'`, precedence `holiday › leave › attendance`) and Backend **Phase 17** (a background
+sender now reads the already-stored `report_schedule`; `weekday` pinned `0`=Sun…`6`=Sat; `last_sent`
+now written). "Receiving an item is not authorisation" — each verified from our own code before reply.
+
+**Decision.** Confirmed both are genuine no-ops for the app; **no `src/` change**, replies appended
+under each item (boxes left unticked — multi-recipient, per protocol). Evidence, each grep-confirmed:
+- **Phase 18 — `/api/leaves`:** `grep -niE "leave|/api/leaves" ANDROID/src` returns only prose, the
+  `leaveTimer`/`LEAVE_AFTER_DONE`/`LEAVE_AFTER_TRANSFER` identifiers (`task/[id].tsx:64-65`), and one
+  "Leave unassigned" UI string — **no `/api/leaves` path and no `createLeave`/`getLeaves`/`approveLeave`
+  helper**. The app has no leave-request/list/approval surface, so the stub→real transition lands
+  entirely on the backend + panel.
+- **Phase 18 — attendance calendar fields:** `grep -nE "is_leave|leave_type" → 0`;
+  `grep -nE "attendance/calendar|attendance/day" → 0` (the `/calendar` hits are all
+  `router.push('/calendar')` to our own client route). The app's entire attendance read surface is
+  `getAttendanceHistory` (`api.ts:1746` → `/time-tracker/history`, `/attendance/history`) and
+  `getAgentLocations` (`api.ts:1862+` → `/attendance/user/:id`) — it opens **neither** endpoint Phase 18
+  changed. And `attendance.tsx` adapts each row to `Entry = { date, inTime?, outTime?, location? }`
+  (`:49`) — **no `status` field, nothing switches on one** — so the new `status:'leave'` enum value is
+  inert by construction, not a mis-routing risk.
+- **Phase 17 — report scheduler:** `grep -niE "report-schedule|report_schedule|last_sent|/reports|weekly"
+  ANDROID/src` → **0 matches**. The app never reads `report_schedule` / `weekday` / `last_sent`, never
+  calls `/api/settings/report-schedule` or `/api/reports`, and has no schedule UI — that lives only in
+  the panel's Settings. Wiring a sender to stored data is invisible to the app.
+
+**Consequence.** Both FYIs are closed on our side and should not be re-verified next boot. No
+contract/`CHANGELOG` change (no shape moved). One forward-looking note recorded under Phase 18: when
+mobile **Phase 16** ("My earnings") eventually unblocks, the now-real leave data + attendance
+`status:'leave'` day becomes a valid *input* to a "present days / payable days" figure (a leave day is
+not an absence) — but Phase 16 stays `cgpe-api`-blocked on a **pay field + salary formula**, which
+Phase 18 does not supply (leaves ≠ salary). Board remains editor-exhausted.
+
 ## 2026-08-11 — INBOX sync: backend Phase 9 / 10 / 15 FYIs verified as no-ops for the app — no code change
 
 **Context.** After Phase 9 closed, a boot re-read of `contracts/INBOX.md` surfaced three newer

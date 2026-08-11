@@ -2,8 +2,9 @@
 **Updated:** 2026-08-11
 **Working on right now:** Nothing in progress. Every improvement that can be made at a desk is now finished; what's left needs either a test phone or the server team.
 **Done this week:**
-- The app's to-do reminders now save properly — marking one done keeps it done after you close and reopen the app, and if the save fails (no signal) the app says so instead of pretending. This turned out not to need the server team; the feature was already there and just wasn't connected.
-- Checked the three latest updates the server team sent over (about attendance alerts, GPS trip records, and some tidy-up on their side) and confirmed none of them require any change to the app. Logged that back to them so both teams stay in step.
+- Checked the latest batch of updates the server team sent over — this round covered staff leave records, a new weekly-report email, attendance alerts, and some tidy-up on their side — and confirmed none of them require any change to the app. Logged that back to them so both teams stay in step.
+- Noted for later: the server team's new leave records will be useful the day we build the "my earnings/salary" screen (a day on approved leave shouldn't count as absent), but that screen is still waiting on them to provide the actual pay figures first.
+- The app's to-do reminders now save properly — marking one done keeps it done after you close and reopen the app, and if the save fails (no signal) the app says so instead of pretending.
 - Double-checked the two remaining unfinished screens ("commissions" and "my earnings/salary") — both are still waiting on the server team to provide figures the app can read. Nothing we can build until they do.
 - Earlier this week: the notifications screen, manager dashboards, LIC plans catalogue and Notes search were all made honest/working.
 **Blocked on:**

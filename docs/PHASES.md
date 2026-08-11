@@ -14,15 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**INBOX sync (no phase) — 2026-08-11.** A boot after Phase 9 found the board **editor-exhausted**
-and three newer `→ cgpe-admin, cgpe-mobile` FYIs from `cgpe-api` — Backend **Phase 9** (attendance
-watchdog), **Phase 10** (`ux_session_id` unique index on `location_tracks.session_id`), **Phase 15**
-(dead-code sweep). All three verified against our own code as genuine no-ops (0 grep hits for the
-attendance webhook/violations/summary; the app already sends `session_id` snake-case with no
-`sessionId` alias; no Gujarati/`/api/health` caller and nothing keys on the old 404 body) and
-answered underneath in `INBOX.md` (boxes left unticked — multi-recipient). **No `src/` change, no
-gate re-run.** Phase 6 commissions and Phase 16 salary re-confirmed still `cgpe-api`-blocked against
-`CHANGELOG.md`. DECISIONS 2026-08-11 (top). See `docs/HANDOFF.md`.
+**INBOX sync (no phase) — 2026-08-11 (2nd of the day).** A boot found the board still
+**editor-exhausted** and the two newest `→ cgpe-admin, cgpe-mobile` FYIs from `cgpe-api` unanswered by
+this session — Backend **Phase 18** (`/api/leaves` is now a real 8-route feature, was a stub;
+`GET /api/attendance/calendar` + `/day/:date` gained `is_leave`/`leave_type` + `status:'leave'`) and
+Backend **Phase 17** (weekly-report scheduler wired to stored `report_schedule`; `weekday` pinned
+`0`=Sun…`6`=Sat; `last_sent` now written). Both verified against our own code as genuine no-ops
+(`grep` for `/api/leaves` → only prose + local `leaveTimer`/`LEAVE_AFTER_*` identifiers, no helper;
+`is_leave`/`leave_type`/`attendance/calendar`/`attendance/day` → 0 hits, and `attendance.tsx`'s `Entry`
+shape has no `status` field so `status:'leave'` is inert; `report-schedule`/`report_schedule`/
+`last_sent`/`/reports`/`weekly` → 0 hits) and answered underneath in `INBOX.md` (boxes left unticked —
+multi-recipient). **No `src/` change, no gate re-run.** Recorded that Phase 18's real leave data will
+matter to Phase 16 ("My earnings") as a *payable-days* input **if/when** Phase 16 unblocks — but Phase
+16 stays blocked on a pay field + formula, which Phase 18 does not supply (leaves ≠ salary). DECISIONS
+2026-08-11 (top). See `docs/HANDOFF.md`.
+
+**INBOX sync (no phase) — 2026-08-11 (1st).** An earlier boot found the board editor-exhausted and
+three `→ cgpe-admin, cgpe-mobile` FYIs — Backend **Phase 9** (attendance watchdog), **Phase 10**
+(`ux_session_id` unique index on `location_tracks.session_id`), **Phase 15** (dead-code sweep). All
+three verified against our own code as genuine no-ops and answered underneath in `INBOX.md` (boxes
+left unticked — multi-recipient). **No `src/` change, no gate re-run.** DECISIONS 2026-08-11.
 
 **Phase 9 — reminders persist; `[api]` tag was wrong. Done.** Built 2026-08-11. The board marked
 Phase 9 "Blocked on cgpe-api", but `POST /reminders/:id/acknowledge` has existed all along
@@ -204,8 +215,10 @@ exercise.
    earlier the same day. **With Phase 9 built, the only remaining editor-buildable candidates are
    genuinely `cgpe-api`-blocked** — Phase 6 commissions (no *product* aggregate; `target` has no
    source — re-verified in `routes/commissions.js` at this session's boot) and Phase 16 salary (no
-   pay field on any backend model — re-verified). Everything else on the board is a handset-only
-   acceptance check.
+   pay field on any backend model). **Backend Phase 18 (2026-08-11) landed a real `/api/leaves`
+   feature + a `Leave` model, but that is leave data, not pay — there is still no `salary`/`wage`/
+   `per_day`/`ctc` field anywhere, so Phase 16 stays blocked.** Everything else on the board is a
+   handset-only acceptance check.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
