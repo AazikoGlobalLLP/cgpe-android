@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 16 re-eval: backend payroll landed but admin-only; ask narrowed, no build
+
+**Context.** A boot found the backend's Phase 25 payroll cluster (25a profiles / 25b compute / 25c
+export) had landed — the endpoints mobile Phase 16 ("My earnings" self-view) was blocked on. The board
+tag read "waiting for the backend to create the endpoint (pay field + computed earnings)". The payroll
+INBOX notices are addressed to `cgpe-admin`, not mobile, and mobile `[api]` tags have been wrong 5×
+(Phases 6/9/10/11/12), so the state had to be verified against the producer's code before acting.
+
+**Decision.** Verified against `cgpe-api`'s real code, filed a narrowed ask, and deliberately built no
+`src/` code.
+- **The two things Phase 16 asked to be built now EXIST.** Pay field: `payroll_profiles.salary_amount`
+  + `segment` (`models/PayrollProfile.js`). Server-side formula: `services/payrollEngine.js`
+  `computeRangeSalary()` → a rounded `payable` **number** via `GET /api/payroll/compute` — precisely the
+  "compute server-side, the app never multiplies" shape the spec's §Consequence demanded.
+- **But it is admin-only, so a mobile self-view still cannot read it.** `routes/payroll.js:22-23` wraps
+  the whole router in `router.use(protect); router.use(authorize('admin'))`; `authorize`
+  (`middleware/auth.js:73`) 403s anyone not `super_admin`/`admin`. So advisor / learn_advisor / leader /
+  payroll_staff — every user Phase 16 targets — get 403 on `/compute`. `?user_id=` is admin-only member
+  selection, not a self-scope. `grep -i earnings` over the backend = 0: the proposed
+  `GET /api/payroll/my-earnings` was never built, and the engine is reachable ONLY via the two admin
+  routes (`/compute`, `/export`). What landed is the *manager-views-salary* surface Phase 16 declared
+  OUT OF SCOPE — it belongs to `cgpe-admin`.
+- **Narrowed the ask and re-filed to `cgpe-api`** (INBOX, appended + grepped back): one self-scoped read,
+  `GET /api/payroll/my-earnings` (`protect` only, own records only, same posture as
+  `/time-tracker/stats`) or a self path reusing `buildRoster()` with `user_id = req.user.user_id`. No new
+  math. Two original blockers are now moot for this path (recorded so the design doesn't reopen them):
+  "app must not multiply" (server returns the number) and the ambiguous-present-days /
+  self-writable-`/work-settings` / unscoped-`/attendance/user/:id` trio (the engine reads the member's
+  own `daylogs` by `_id` server-side). The only thing left is scoping the READ to the caller.
+- **Did NOT build the locked UI against a non-existent endpoint** (it could only render its error/empty
+  state — untested dead code; §RISKS makes unfixed clock-in a hard prerequisite), and **did NOT re-scope
+  Phase 16 into an in-app admin payroll screen** (that is `cgpe-admin`'s surface; Phase 16 scoped a
+  self-view).
+
+**Consequence.** Phase 16 stays blocked, but the surface area of the ask is now **one route, not a
+feature** — the pay field and formula are done; only a self-scoped read is missing. No `src/` change, no
+gate re-run. Notify `cgpe-api` (done, INBOX). Docs updated: `docs/spec/PHASE-16.md` §"UPDATE 2026-08-11",
+`docs/PHASES.md`, `docs/HANDOFF.md`, this file. Commit `21b3be1` local (push 403s). Memory:
+`phase16-blocked-on-self-scoped-read`.
+
 ## 2026-08-11 — Phase 19 built: 5-language toggle verified + hardened (parity gate + visual walk)
 
 **Context.** Phase 19 asked to verify + harden the *existing* 5-language toggle (English, Gujarati,

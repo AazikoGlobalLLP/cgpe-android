@@ -1,17 +1,14 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-11
-**Working on right now:** Checking that the app reads correctly in all five languages — English, Gujarati, Hindi, and the two written-in-English-letters versions (Hindi and Gujarati spelled the way people type them on WhatsApp) — and adding an automatic test so a future change can never quietly leave one language half-translated.
+**Working on right now:** Re-checked the "My salary" screen after the server team built the pay data it was waiting for — and found it is only half-ready: the salary numbers now exist on the server, but only managers are allowed to see them, so a normal staff member still can't see their own pay in the app.
 
 **Done this week:**
-- Added an automatic safety check that confirms all five languages are complete — every label present, nothing left blank, nothing showing a raw code instead of real words. It passed straight away: the five languages were already complete. From now on this check runs every time and will catch it immediately if anyone adds a new label and forgets to translate it.
-- Used the watch-along browser test to switch the app into each of the five languages in turn and photograph every one of the 42 screens. All 42 screens work in all five languages, and none of them leak a raw code onto the screen. The photos are saved so a person who reads Hinglish and Gujarati can confirm they read naturally.
-- Made those photos actually usable — before, many were catching the opening logo animation instead of the real screen; now they wait for the screen to settle first.
-
-**Found, worth a decision:**
-- The language switch only changes the parts of the app that were built to be translatable — about 74 labels (the menus, the home screen, the main buttons). A lot of the app is still written in fixed English and stays English whichever language is chosen (for example the Settings list). This is how the app was already built; it is not a fault in the switch. If you want more of the app to translate, that is a separate, bigger piece of work — and it would need a person to supply the correct Hinglish/Gujarati wording, not a machine guess. The photos show exactly which screens are still English.
+- Confirmed the server team has now built the salary calculation (each person's pay worked out from their attendance). This is real progress — it's the piece the salary screen was blocked on for weeks.
+- But found the catch: right now only an admin can open that salary data. A regular team member gets refused. The app's screen was always meant to show each person *their own* pay, so it still can't be built until the server allows a person to see their own figure.
+- Sent the server team a short, precise request for that one missing piece — "let a signed-in person read their own already-calculated pay" — and wrote down exactly why, so it's clear and easy to act on. This is a much smaller ask than before (the hard part, the calculation, is already done).
 
 **Blocked on:**
-- The salary and commissions screens are still waiting for the server team to create the data they need — unchanged.
+- The salary screen still can't be built until the server team allows a person to see their own pay (not just admins). The commissions screen is still waiting for its data too — unchanged.
 - Finished work still can't be uploaded to GitHub — the login saved on this machine doesn't have permission. Someone with access needs to grant it or swap the login. Everything is saved safely on this machine in the meantime.
 
-**Next:** Salary and commissions, once the server team provides the missing data. In the meantime, the remaining checks that can only be done on a real phone (not a browser), and — if you want it — translating more of the app.
+**Next:** Build the salary screen the moment the server team allows self-access. In the meantime, either translate more of the app (needs someone to supply the correct Hinglish/Gujarati wording) or work through the checks that can only be done on a real phone.
