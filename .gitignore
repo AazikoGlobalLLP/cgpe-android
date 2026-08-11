@@ -44,3 +44,9 @@ example
 
 # agent tooling installed into the working copy, not project source
 .agents/
+
+# Phase 18 E2E harness — commit the specs/config, ignore the run output
+e2e/artifacts/
+test-results/
+playwright-report/
+.playwright/

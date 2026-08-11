@@ -6,7 +6,11 @@ module.exports = defineConfig([
   expoConfig,
   {
     // src/ui/vendor/* is generated, verbatim third-party source (see scripts/vendor-leaflet.mjs).
-    ignores: ["dist/*", "src/ui/vendor/*"],
+    // e2e/** is the Phase 18 Playwright harness — Node/browser test code that lives outside the
+    // app and is intentionally invisible to the app's gates (already excluded from tsconfig and
+    // never bundled by EAS); linting it against this RN/React-Compiler config would only produce
+    // spurious errors. It has its own tsconfig; Playwright type-checks it.
+    ignores: ["dist/*", "src/ui/vendor/*", "e2e/**"],
   },
   {
     // React Compiler lint rules (eslint-plugin-react-hooks v7), which eslint-config-expo
