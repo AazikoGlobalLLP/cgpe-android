@@ -1,73 +1,82 @@
-# HANDOFF — CGPE Connect (Android) — INBOX Phase-14 verification (notifications/notices 5xx) — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — Phase 9 (reminders persist) — 2026-08-11
 
-Verification-only session. **No code changed** — the app was found already conformant to backend
-Phase 14, and the finding was recorded in `../contracts/INBOX.md`. `git push` still 403s (unchanged
-— credential `reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`); every
-commit back through `3ef5539` / `7c11c82` remains **local only**. No new commit this session (the only
-edit was to `contracts/`, which is not under version control by anyone).
+Built this session: **Phase 9**. Its `[api]` / "Blocked on cgpe-api" tag was **wrong** — the backend
+endpoint existed all along, so this was pure app-side work (same pattern as Phases 6/10/11/12). One
+local commit, `bff1971`; **push still 403s**, so it — and every commit back through `7c11c82` — is
+local only.
 
-Gates: not re-run and not needed — zero source files changed. Last known green (from `3ef5539`):
-`npx tsc --noEmit` exit 0; `npm test` **299 tests / 13 files**; `npm run lint` **0 errors / 12 warnings**.
+Gates all green: `npx tsc --noEmit` exit 0; `npm test` **305 tests / 14 files** (+6); `npm run lint`
+**0 errors / 12 warnings** (Phase-15 baseline, unchanged).
 
 ## Done
 
-- **Confirmed the app tells the truth when the backend returns 5xx (not an empty-200) on a
-  notifications query error.** Backend Phase 14 (`INBOX.md`, 2026-08-11 item) made
-  `GET /api/notifications`, `/notifications/unread-count`, and `/notices/unread` answer 503/500 on a
-  DB fault instead of `200 { data:[] }`. The one of the three the app calls — `GET /api/notifications`
-  via `getNotifications` — already keys on HTTP `ok`, not on empty-vs-non-empty, so a 5xx falls
-  through to `unavailable('/notifications')` → raises the app-wide `<HealthBanner/>`, and
-  `notifications.tsx` shows "The feed did not load / Try again" instead of "You are all caught up".
-  **The app inherits the backend fix for free; no change was required.** Before the fix, the empty-200
-  produced `ok:true, arr:[]` → a silent false-empty — exactly the case the item warned about.
+- **A reminder marked done is now a real, server-confirmed write, and it sticks.** `toggleReminder`
+  used to flip an in-process buffer that a live session never reads back, so the tick reverted on the
+  next refetch and the screen deliberately fired `haptics.tap` (not success) because "the API never
+  gives an acknowledgement." It now POSTs `/reminders/:id/acknowledge` (which persists
+  `status:'acknowledged'`), returns whether the server accepted it, and `adaptReminder` reads
+  `acknowledged` back as done — so a completed reminder survives a cold start.
+- **A refused completion no longer lies.** `reminders.tsx` now mirrors `tasks.tsx`: the tick is
+  optimistic, but if the write fails the row is put back and a warning `Banner` says so; only a
+  server-confirmed write earns `haptics.success`.
+- **Completion is one-way and the UI says so by omission.** The backend has no un-acknowledge, so the
+  "Reopen" swipe action and the done-row undo button were removed — a reopen could only silently
+  revert. A done reminder shows a static success check, no action.
 
 ## Files changed
 
-- `../contracts/INBOX.md` — appended the mobile-side verification reply under the 2026-08-11
-  `→ cgpe-admin, cgpe-mobile · from cgpe-api` Phase-14 item. Box left **unticked** (co-recipient is
-  `cgpe-admin`, per the foot-of-file protocol); the reply records the audit trail. Grep-verified back
-  after writing, per CLAUDE.md's concurrent-write rule — it survived.
-- **No ANDROID source file changed.** `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/PHASES.md`,
-  `docs/STATUS.md` updated by this handoff.
+- `src/data/api.ts` — `toggleReminder` → `Promise<boolean>`, POSTs `/reminders/:id/acknowledge`
+  (`markAllNotificationsRead` shape; no `reportFailure` — a single write surfaces inline).
+- `src/data/adapt.ts` — `adaptReminder`'s done-regex gained `acknowledg` (case-sensitive; wire value
+  is lowercase `acknowledged`).
+- `src/app/reminders.tsx` — optimistic-write-with-rollback (notice `Banner`), reopen affordances
+  removed, header comment + empty-state copy corrected.
+- `src/data/__tests__/api-reminders.test.ts` — **new**, 6 cases: the acknowledge request shape + the
+  four return outcomes + the no-session no-network case.
+- `src/data/__tests__/adapt.test.ts` — added the `acknowledged → done:true` assertion.
+- `docs/spec/PHASE-9.md` — **new**, the spec (goal, §1 verification, 5 locked decisions, deviation).
+- `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md` — status updated.
+- `../contracts/INBOX.md` — "shipped, nothing owed, `[api]` tag was wrong" notice to
+  `cgpe-api`/`cgpe-admin` (grep-verified it survived a concurrent write).
 
 ## Decisions made
 
-- **No app change; verify-and-record, not fix.** The three Phase-14 endpoints: the app calls **only
-  `/notifications`** (grepped twice — `/notifications/unread-count` and `/notices/unread` have zero
-  callers; the unread count is derived client-side from the fetched list). `getNotifications` already
-  branches on HTTP status, `notifications.tsx` already branches its empty state on
-  `useDataHealth().degraded`, home's bell shows no badge on outage (banner carries it), and
-  `getCompanyNotices` reads a *different* endpoint (`/notices?limit=60`, not `/notices/unread`) through
-  the reporting `tryEnvelope`. Nothing to fix. Full reasoning in DECISIONS 2026-08-11 (top entry).
-- **`POST /notices/:id/read` 404-on-stale-id needs no handling.** Our one caller
-  (`notice-board.tsx`, opening a notice) fires `markNoticeRead(id)` fire-and-forget with the result
-  ignored (bare `req`, no health report), so a 404 is silently absorbed as "this notice is gone" —
-  which is exactly the backend's guidance. We never read the new `read_by` field.
-- **Box left unticked, reply underneath.** Item is multi-recipient (`cgpe-admin` + `cgpe-mobile`),
-  and the item itself says "no tick needed unless you want the audit trail" — same protocol call as
-  every earlier multi-recipient reply in the file.
+- **`toggleClaimDoc` left as-is — a deliberate deviation from the approved plan (D-3).** The plan said
+  "make the claim-docs control read-only." Reading `claim/[id].tsx` showed that would delete honest,
+  working code: the checklist already discloses it does not persist (footer at `:416` — *"This
+  checklist is a working note on your handset. Ticking a document does not update the register."*), so
+  it is not the silent-revert harm Phase 9 targets, and its tick is load-bearing for the real upload
+  flow (`:262-270`). There is also no `documents` field on the backend `Claim` to wire. Flagged to the
+  user; easily reversible if they still want the manual tap gone.
+- **Completion is one-way; reopen removed, not faked (D-2).** `PUT /reminders/:id` takes no `status`
+  and `/:id/cancel` sets `cancelled` (still *done*), so the backend cannot move a reminder back to
+  pending. A reopen control would be exactly the silent-revert lie this phase deletes.
+- **No contract/`CHANGELOG` change (D-4).** Every endpoint already existed and was documented; the
+  `[api]` tag was stale. The cross-boundary note is the INBOX item, not an `api.md` edit.
 
 ## Known broken / deliberately skipped
 
-- **`git push` still 403s** — all local commits (back through `3ef5539` / `7c11c82`) are unpushed. A
-  human must grant write access or swap the Windows-credential-manager credential. Not retried.
-- **No editor-buildable phase remains.** Phase 6 commissions / 9 / 16 are `cgpe-api`-blocked (no
-  aggregate/salary endpoint). Everything else on the board (Phases 1/4/5/6/7/10/12/13) is a
-  **handset-only** acceptance check that needs a device + live backend, not an editor.
-- **The other three 2026-08-11 backend FYI notices to `cgpe-mobile` remain unticked** — Phase 5
-  (`protect` user_id), Phase 9 (attendance watchdog), Phase 10 (`location_tracks` unique index),
-  Phase 15 (dead-code), Phase 17 (weekly report). All are "FYI, nothing to do", multi-recipient, and
-  none affects the app. Not ticked (editing `INBOX.md` for no functional reason invites the documented
-  concurrent-write data loss).
+- **`git push` still 403s** — `bff1971` and everything back through `7c11c82` are unpushed. Credential
+  `reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`. Needs a human. Not
+  retried.
+- **Cold-start persistence for reminders is code-complete but device-unverified** — criterion 4 needs
+  a handset + live backend + a signed-in staff account (complete a reminder, kill/reopen the app,
+  confirm it is still done). Carried, like every other handset criterion.
+- **No in-app un-complete for reminders** — one-way by backend design. Reopening a mistakenly-completed
+  reminder would need a `cgpe-api` un-acknowledge (or `PUT` accepting `status:'pending'`). Filed as a
+  non-request in the INBOX notice; not this phase's.
+- **Phase 6 commissions and Phase 16 salary — re-verified genuinely `cgpe-api`-blocked this session.**
+  `routes/commissions.js` has no *product* aggregate and no `target` source; no backend model has any
+  `salary`/`per_day`/`wage`/`ctc`/`pay_rate` field. Nothing app-side to build until those land.
 
 ## Next session starts here
 
-- **No editor-buildable work remains.** The only genuinely-buildable carry-item (this session's
-  Phase-14 grep) is now closed clean. Next is either a **handset + live-backend verification pass**
-  (the Phases 1/4/5/6/7/10/12/13 acceptance criteria) or a **`cgpe-api` unblock** landing (then build
-  Phase 6 commissions / 9 / 16).
+- **No editor-buildable phase remains that is confirmed unblocked.** With Phase 9 done, the board is:
+  Phase 6 commissions and Phase 16 salary are `cgpe-api`-blocked (re-verified), and everything else is
+  a handset-only acceptance check (Phases 1/4/5/6/7/9/10/12/13). Next is either a **device-verification
+  pass** or a **`cgpe-api` unblock landing** (then build Phase 6 commissions / 16).
 - **First command:** `/boot`
-- **Watch out for:** don't re-run the notifications/notices grep — it's verified. The app calls **only
-  `GET /api/notifications`** of the three Phase-14 endpoints; the unread-count and notices/unread
-  endpoints have no caller. And `health.degraded` is **global and sticky** — gate empty-state *copy*
-  on it (as `notifications.tsx` does), but gate an individual *value* on its own data's presence.
+- **Watch out for:** don't re-run the reminders wire — it's done and green. And **do not trust a
+  phase's `[api]`/"blocked" tag without grepping the sibling backend first** — it has now been wrong
+  for Phases 6, 9, 10, 11 and 12. Before concluding a phase is backend-blocked, read
+  `../cgpe-backend-main/routes/*` for the endpoint; the tag is a hypothesis, not a fact.
