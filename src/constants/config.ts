@@ -13,11 +13,12 @@ import { Platform } from 'react-native';
  * (cgpe.in) — there is no separate public API host.
  *
  * So real data works in exactly these cases:
- *   1. NATIVE app (this APK / dev build) pointed at a reachable HTTPS backend URL
- *      (native apps have no browser CORS/mixed-content limits). Set API_BASE_URL below.
- *   2. WEB build deployed to the SAME origin as the backend (your cgpe.in droplet),
- *      where the relative `/internal/api` resolves — same as your existing frontend.
- *   3. Running `npx expo start --web` on the PC that runs the backend (localhost).
+ *   1. NATIVE app (this APK / dev build / Expo Go) — always resolves to `PROD_API` below,
+ *      with no config to set (native apps have no browser CORS/mixed-content limits).
+ *   2. WEB build deployed to the SAME origin as the backend (your cgpe.in droplet) —
+ *      also resolves to `PROD_API`, same as your existing frontend.
+ *   3. Running `npx expo start --web` on the PC that runs the backend (localhost) —
+ *      resolves to the backend's local port instead. See `API_BASE_URL` below.
  *
  * The hosted preview at *.expo.app is a DIFFERENT origin from your backend and cannot
  * reach it, so every screen shows its empty state with the outage banner raised. That
@@ -43,8 +44,9 @@ export const FORCE_DEMO = false;
  *    "default" to hand-edit for a phone on a different network; a phone already reaches
  *    the production backend over HTTPS. Pointing a native build at a *local* backend
  *    needs a code change to the ternary below, not a config value.
- *  - WEB deployed same-origin as the backend (or `--web` on `localhost`) resolves the
- *    relative/local address automatically — see the ternary below.
+ *  - WEB on `localhost` (running `--web` on the same PC as the backend) resolves to the
+ *    backend's local port instead; any other web origin resolves to `PROD_API` too — see
+ *    the ternary below.
  */
 /** Confirmed live production backend (verified: /health -> 200, environment: production). */
 export const PROD_API = 'https://cgpe.in/internal/api';
