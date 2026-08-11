@@ -141,8 +141,11 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   when `src/constants/config.ts`'s base-URL logic or the login path changes again.
 - **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** Only **74 keys** are wired through
   `t()` across 6 files; ~40 screens are 100% hardcoded English (the full worklist + plan is scoped in
-  `docs/i18n/`, 2026-08-11). (1) `t()` is `t(key)=>string` with **NO interpolation** — dynamic strings
-  need a `t(key, params)`+plural extension first, never string concatenation (Hindi/Gujarati word order).
+  `docs/i18n/`, 2026-08-11). (1) `t()` is now `t(key, params?)` (Phase 21 P0, 2026-08-11, `a7a0979`):
+  named `{placeholder}` interpolation + count-plurals (`key_one`/`key_other`, CLDR by active language,
+  falls back to base key). Use `t(key, {name})` / `t(key, {count})` for dynamic strings — **never string
+  concatenation** (Hindi/Gujarati word order). Single-arg `t(key)` is unchanged. Pure seams
+  `pluralCategory`/`interpolate`/`translate(…,lookup?)` are exported and tested in `__tests__/format.test.ts`.
   (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes `EN_KEYS.length === 74` (bump
   it deliberately when adding keys) **and** its leak check rejects only `value === key`, **not**
   `value === English` — so a Gujarati entry left as the English string **passes the suite green**. The

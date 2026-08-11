@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 21 (i18n P0) — `t()` extended to `t(key, params?)`. BUILT 2026-08-11 (`a7a0979`).** The one
+copy-free, backend-free step off the scoped i18n worklist (`docs/i18n/SCOPE.md` §3 P0). `t` gained (1)
+named `{placeholder}` interpolation — an unmatched token is left **verbatim** (`{name}`), a visible bug
+not a silent blank — and (2) count-aware plurals: `params.count` (a number) selects `key_one`/`key_other`
+by the **CLDR cardinal rule for the active language** (English marks only 1 as `one`; Hindi & Gujarati and
+their romanized pair mark **both 0 and 1** as `one`), falling back to the base key when no variant exists.
+**No string concatenation** — Hindi/Gujarati word order differs, so a dynamic string is one template.
+Single-arg `t(key)` is **byte-identical** to before (language → English → key). **No dictionary key added**,
+so the hard `EN_KEYS.length === 74` parity gate is untouched and still green. Three pure exported seams
+(`pluralCategory`, `interpolate`, `translate(…, lookup?)` with an injected lookup) let every branch be
+pinned against a controlled dictionary without a real key — `src/i18n/__tests__/format.test.ts`, 20 cases.
+Gates: `tsc` 0, `npm test` **350/350** (+20), `lint` 0 errors/12 warnings (baseline). Push still 403s
+(commit local). The mechanism is now in place; wiring dynamic strings still waits on human copy. Next
+copy-free step is P1 (the `common.*` dedup layer). Full path: `docs/i18n/SCOPE.md`; DECISIONS 2026-08-11 (top).
+
 **i18n `t()` widening — SCOPED, not built — 2026-08-11.** Board was editor-exhausted (Phase 16 self-view
 re-verified still backend-blocked: `routes/payroll.js:22-23` still `authorize('admin')`, no `my-earnings`,
 INBOX ask unanswered). At the user's direction, scoped the PHASES "Next 3" #3 item instead: six parallel
@@ -338,14 +353,15 @@ exercise.
    search against production, reminder cold-start persistence, and now the language-key cold-start).
    Phases 18/19 cover the web-reachable slice; the native-only remainder still needs a phone + a live
    backend. Not editor-buildable.
-3. **Widen `t()` coverage — NOW SCOPED (2026-08-11), partly editor-buildable.** Full worklist +
-   plan in `docs/i18n/` (`SCOPE.md` + `inventory/01–06*.md`): only 74 keys wired across 6 files, ~40
-   screens 100% hardcoded, ~1,800 string occurrences. The **copy** still needs **human-supplied**
-   Hinglish/Gujlish/Hindi/Gujarati (~4,800 strings; no machine guess, Phase 19 §4) — but the **P0
-   prerequisites are buildable now with no copy:** the `t(key, params)` interpolation + count-plural
-   extension (~30% of strings are dynamic) and the `common.*` dedup layer. Do P0 first, then wire one
-   Tier-1 screen (SCOPE.md §5) and hand the owner its fill-in list. Trap: bump the parity test's hard
-   `EN_KEYS.length===74`, and note it won't catch an English string left in a non-English dict.
+3. **Widen `t()` coverage — SCOPED (2026-08-11); P0 now BUILT, P1 is the next copy-free step.** Full
+   worklist + plan in `docs/i18n/` (`SCOPE.md` + `inventory/01–06*.md`): only 74 keys wired across 6
+   files, ~40 screens 100% hardcoded, ~1,800 string occurrences. **P0 done (Phase 21, `a7a0979`):**
+   `t(key, params?)` interpolation + count-plural extension now exists and is tested — dynamic strings can
+   be wired without concatenation. **Still buildable with no copy:** P1, the `common.*` dedup layer
+   (~1,800 occurrences → ~1,200 unique keys). The **copy itself** still needs **human-supplied**
+   Hinglish/Gujlish/Hindi/Gujarati (~4,800 strings; no machine guess, Phase 19 §4). After P1, wire one
+   Tier-1 screen (SCOPE.md §5) and hand the owner its fill-in list. Trap: adding real keys bumps the
+   parity test's hard `EN_KEYS.length===74`, and it won't catch an English string left in a non-English dict.
 
 > **Also still open:** the **device-verification backlog** — handset-only acceptance criteria carried
 > from Phases 1, 4, 5, 6, 7, 9, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the
@@ -389,6 +405,7 @@ exercise.
 | 18 | Watchable A–Z + worst-case E2E test | **Built** 2026-08-11 — Playwright/Expo-web harness, 33 tests green (42 screens render + 21 worst-case + 9 bad-input); web boots with no guard; gates green |
 | 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Built** 2026-08-11 — parity Vitest (323/323, +18) + per-language E2E walk (42/42 render, 0 key leaks × 5 langs); dictionaries already complete; naturalness review outstanding |
 | 20 | Admin payroll roster (in-app) | **Built** 2026-08-11 — owner-directed; `src/app/payroll.tsx` on admin-only `GET /payroll/compute`, 330 tests green (+7); no PII, no on-device math, gated on real role. Phase 16 self-view still blocked; device check outstanding |
+| 21 | i18n P0 — `t(key, params?)` interpolation + plurals | **Built** 2026-08-11 (`a7a0979`) — named `{placeholder}` fill + CLDR `key_one`/`key_other` by active language; single-arg `t()` byte-identical; no dict key added (parity 74 untouched); 350 tests green (+20); pure engine only, no screen wired yet |
 
 ---
 

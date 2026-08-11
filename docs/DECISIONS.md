@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 21 P0: extended `t()` to `t(key, params?)` — interpolation + plurals, no copy
+
+**Context.** The i18n widening was scoped (entry below) but not built; its P0 prerequisite — `t()` has no
+interpolation — is the one part buildable now with **no** human copy, no backend, and no new dictionary
+keys. Phase 16 self-view is still backend-blocked (INBOX `my-earnings` ask unanswered), so this was the
+next editor-buildable step per `docs/i18n/SCOPE.md` §3 P0.
+
+**Decision.** Extended `t: (key) => string` to `t(key, params?)` in `src/i18n/index.tsx`, adding **only**:
+1. **Named interpolation** — `{name}` tokens filled from `params` by name. A placeholder with no matching
+   (non-null) value is left **verbatim** (`{name}`) — a visible gap is a bug you can see, never a silent
+   blank or the string `"undefined"`. Only `{word}` tokens are touched, so a stray brace in copy is safe.
+2. **Count-aware plurals** — when `params.count` is a number, prefer `key_one` / `key_other`, chosen by the
+   **CLDR cardinal rule for the ACTIVE language**: English marks only exactly 1 as `one`; Hindi & Gujarati
+   (and their romanized pair) mark **both 0 and 1** as `one`. Falls back to the base `key` when neither
+   variant exists. **No string concatenation** anywhere — the whole reason plurals live in the dictionary.
+- **Single-arg `t(key)` is byte-identical** to the old implementation (language → English → key), so all
+  74 existing keys and every current call site are unchanged.
+- **Testability seam:** the pure engine `translate(lang, key, params?, lookup?)` takes an optional
+  injected `lookup`, so the plural + interpolation branches are pinned against a **controlled** dictionary
+  in `__tests__/format.test.ts` **without adding any real key** (which would trip the hard 74-key parity
+  count). `pluralCategory` and `interpolate` are exported and pinned as pure units too.
+
+**Why per-language plural rules, not English-only.** Rendering "0 kaam" with the English `_other` form
+would be grammatically wrong in Hindi/Gujarati, which take the singular at 0. The category is computed
+from the display language, which is the standard (i18next/CLDR) behaviour and the boring correct one.
+
+**Consequence.** No dictionary key added → `EN_KEYS.length === 74` parity gate untouched and still green.
+The mechanism is now in place; a future phase can wire dynamic strings (`{n} of {total}`, `Overdue by {n}
+days`, `Namaste {name}`) once human copy exists. Gates: `tsc` 0, `npm test` **350/350** (+20), `lint`
+0 errors/12 warnings. Committed `a7a0979` (push still 403s). Next: the `common.*` dedup layer (P1, also
+copy-free), then wire one Tier-1 screen and hand the owner its fill-in list.
+
 ## 2026-08-11 — i18n `t()` widening: SCOPED, not built (board was blocked)
 
 **Context.** Phase 16 self-view stays backend-blocked (re-verified `routes/payroll.js:22-23` is still

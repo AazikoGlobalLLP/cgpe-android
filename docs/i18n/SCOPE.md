@@ -43,7 +43,15 @@ account, settings body, WhatsApp, analytics, claims, leads, clients — renders 
 
 ## 3. Three prerequisites — do these before any copy is useful
 
-### P0. `t()` has no interpolation. It must be extended first.
+### P0. `t()` has no interpolation. It must be extended first. — ✅ BUILT 2026-08-11 (`a7a0979`)
+**Done.** `t` is now `t(key, params?)` in `src/i18n/index.tsx`: named `{placeholder}` fill (unmatched token
+left verbatim) + count-aware `key_one`/`key_other` plurals selected by the CLDR rule for the active language
+(English: only 1 is `one`; Hindi/Gujarati: 0 and 1 are `one`), falling back to the base key. Single-arg
+`t(key)` is byte-identical to before; **no dictionary key was added** so the 74-key parity count is untouched.
+Pinned in `__tests__/format.test.ts` (20 cases) via the pure exported seams `pluralCategory` / `interpolate`
+/ `translate(…, lookup?)`. Gates green (`tsc` 0, `npm test` 350/350, `lint` 0 errors). Next copy-free step: P1.
+Original problem statement, still accurate, below.
+
 Today `t: (key: string) => string`. **~30% of the extracted strings are dynamic** template literals —
 `{n} of {total}`, `{present}/{working} days`, `Moved to {stage}`, `Overdue by {n} days`, `Namaste {name}`.
 These **cannot be wired** to the current `t()`. And they must **not** be wired by string concatenation:
@@ -136,6 +144,8 @@ The `inventory/` files cite line numbers as extracted on 2026-08-11. Per the pro
 time (a `grep` for the English literal is the reliable handle).
 
 ## 8. Status
-Scoping only. Nothing built, no gate re-run, no dictionary touched. This is the input to a decision:
-**which tier (if any) to wire, and whether to do the P0 `t()` extension first.** See `inventory/` for the
+**P0 built (2026-08-11, `a7a0979`)** — the `t(key, params?)` interpolation + plural extension exists and is
+tested; see §3 P0. **Still scoping-only for everything else:** no dictionary touched, no string translated,
+no tier wired. The open decision is unchanged: **which tier (if any) to wire, and whether to do P1 (the
+`common.*` dedup layer, also copy-free) next** before any human copy is supplied. See `inventory/` for the
 full string list.
