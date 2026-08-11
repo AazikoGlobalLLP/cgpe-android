@@ -14,6 +14,16 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 12 — specced, NOT built.** 2026-08-11. Verification found its **`[api]` tag is wrong — the
+fix is fully app-side.** A leader's "0 on duty" is caused by `getAgentLocations()` reading the roster
+through admin-only `GET /api/profiles` (403s for a leader); the correct source `GET /api/team/task-overview`
+is readable by any staff, already trusted by `getTeam()`, and the `/attendance/user/:id` fan-out it
+feeds has no role check (`api.md:544`). A ~4-line swap in one function; `getTeam`/`team/index.tsx`/
+`agent-map.tsx` need no change. Spec: `docs/spec/PHASE-12.md`. **Not built** — stopped at the approval
+gate. First build step: verify the `?scope=all` leader-clamp in `../cgpe-backend-main/routes/team.js`
+(spec D-2), then edit `api.ts:1855` + add `api-agents.test.ts`. No source changed this session; no
+commit until the handoff docs.
+
 **Phase 15 — done.** Built 2026-08-11, commit `292610b`. `npm run lint` now **exits 0**, down from
 45 errors on a clean tree; `npx tsc --noEmit` exits 0; `npm test` still **271** across 10 files.
 All 45 errors were React-Compiler rules (`eslint-plugin-react-hooks` v7, promoted to errors because
@@ -105,15 +115,17 @@ exercise.
 
 ## Next 3
 
-1. **Phase 12** — `/profiles` role gate `[api]`, if `cgpe-api` has shipped it; otherwise **Phase 6**
-   (remaining envelope mismatches) — note backend Phase 13 has now un-shadowed
-   `GET /api/commissions/team-summary`, but Phase 6 is the *base* `/commissions` envelope, so
-   re-read the `api.md` row before assuming it's unblocked.
-2. **Device-verification backlog** — with Phase 15 done, every remaining *coding* phase for this
-   session (6, 9, 12, 16) is blocked on `cgpe-api`. The outstanding non-code work is the handset-only
-   acceptance criteria carried from Phases 1, 4, 5, 7, 10, 13 (haptics, the AsyncStorage clock key,
-   background GPS, the master route replay, airplane-mode behaviour, the offline map render). Needs a
-   device, not an editor.
+1. **Phase 12 — BUILD IT** (specced 2026-08-11, `docs/spec/PHASE-12.md`, verified app-side, not
+   `[api]`-blocked). First: verify the `?scope=all` leader-clamp in `../cgpe-backend-main/routes/team.js`
+   (spec D-2); then the `getAgentLocations` roster-source swap in `api.ts` + `api-agents.test.ts` +
+   gates. Only genuinely unblocked coding phase this session found.
+2. **Phase 6 (partial)** — notes (`search`→`q`) and LIC (`{meta,plans}` unwrap + field adapter) are
+   app-side and buildable; commissions is **backend-blocked** (needs a pending server aggregate
+   endpoint — product owner confirmed). LIC also needs the `api.ts:1966`-vs-`api.md:1192`
+   404-in-production-vs-live disagreement settled first. See DECISIONS 2026-08-11 (Phase 6).
+3. **Device-verification backlog** — handset-only acceptance criteria carried from Phases 1, 4, 5, 7,
+   10, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
+   airplane-mode behaviour, the offline map render). Needs a device, not an editor.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -141,7 +153,7 @@ exercise.
 | 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
 | 10 | Server-driven navigation (§9 gap) | **Done** 2026-08-11 — 266 tests green |
 | 11 | Server-derived tier | **Done** 2026-08-11 — 258 tests green |
-| 12 | `/profiles` role gate `[api]` | Blocked on `cgpe-api` |
+| 12 | `/profiles` role gate ~~`[api]`~~ | **Specced, NOT built** 2026-08-11 — verified **app-side** (tag was wrong); `docs/spec/PHASE-12.md` |
 | 13 | Vendor Leaflet | **Done** 2026-08-11 — 271 tests green; device check outstanding |
 | 14 | Dead-code sweep | **Done** 2026-08-11 — 271 tests green (`1a37144`); lint 46→45 |
 | 15 | Lint to green | **Done** 2026-08-11 — `npm run lint` exits 0 (was 45 errors); 271 tests green (`292610b`) |

@@ -1,82 +1,76 @@
-# HANDOFF — CGPE Connect (Android) — Phase 15 — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — Phase 12 (spec written, NOT built) — 2026-08-11
 
-Two commits on `Shivam`: `292610b` (the fix + rule disables) and `f69e814` (the PHASES.md board +
-Phase 15 section). **The branch is NOT pushed — `git push origin Shivam` still 403s**, re-tested
-non-interactively this session: `Permission to Dev-Shivam-05/CGPE-ANDROID-APPLICATION.git denied to
-reactjsaaziko`. Unchanged for several sessions; needs a human to grant write access or swap the
-credential in Windows Credential Manager. The remote was NOT changed and history was NOT rewritten.
-Fifteen phases now sit locally (14 done + Phase 1 code-complete-but-device-unverified).
-Gates: `npx tsc --noEmit` exit 0 · `npm test` **271 passed / 10 files** · `npm run lint`
-**exit 0 — 0 errors / 12 warnings** (was 45 errors / 12 warnings; all 12 warnings are pre-existing).
+This was a **verification + spec** session. No `src/` code changed, no tests changed, nothing was
+committed until this handoff. Branch `Shivam`; `git push` still 403s (unchanged, needs a human —
+credential `reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`).
+Gates were not re-run because no code moved — last known green from Phase 15: `tsc` exit 0,
+`npm test` 271/10 files, `npm run lint` 0 errors / 12 warnings.
 
 ## Done
 
-- **`npm run lint` now exits 0 on a clean tree.** It used to fail with 45 errors, so the second
-  green gate (alongside `tsc`) is now genuinely green rather than "no *new* errors on a known-red
-  tree". The 12 warnings that remain are all pre-existing and unchanged; no new ones were added.
-- **The one genuine bug among the 45 is fixed, not hidden.** `home.tsx` initialised a re-render
-  clock with `useState(Date.now())`, which evaluates the impure `Date.now()` in the render body on
-  every pass (`react-hooks/purity`). It is now `useState(() => Date.now())` — a lazy initialiser
-  that runs once at mount with an identical value. The `purity` rule stays **on**.
+- **Confirmed which blocked phase is actually buildable, and why.** The handoff-flagged "re-check
+  whether cgpe-api shipped a Phase 6 / Phase 12 dependency" is done, using the Phase-4 method (read
+  the contract row → the producer's handler → our own code):
+  - **Phase 12 is fully app-side — its `[api]` tag is WRONG.** The only break is that
+    `getAgentLocations()` enumerates the roster through admin-only `GET /api/profiles` (403s for a
+    leader → empty on-duty). The correct source, `GET /api/team/task-overview`, is readable by any
+    staff, server-scoped per role, already trusted by `getTeam()`, and carries the two fields the
+    pipeline needs (`user_id`, `name`). The attendance fan-out it feeds (`/attendance/user/:id`) has
+    **no role check at all** (`api.md:544`), so it already works for a leader. No cgpe-api change.
+  - **Phase 6 is mostly app-side too, but the money third is genuinely backend-blocked.** Notes
+    search sends `search=` where the server reads `q=` (`api.md:880`); LIC plans expects `data` to be
+    an array but the server sends `{ meta, plans }` (`api.md:1192`) — both pure client conformance
+    bugs against stable documented shapes. **Commissions** wants a personal aggregate but
+    `GET /api/commissions` returns owner-scoped raw rows (`api.md:1163`), and `target` has no source
+    in them — that needs a server aggregate endpoint the **product owner confirmed is still pending**.
+- **Wrote `docs/spec/PHASE-12.md`** — the full, approvable spec (goal, verified-today section with
+  citations, five locked decisions, one-file diff plan, acceptance criteria, out-of-scope). It was
+  presented for approval; the user ran `/handoff` before saying "build", so **the build has not
+  started.**
 
 ## Files changed
 
-- `src/app/(tabs)/home.tsx` — one line: `useState(Date.now())` → `useState(() => Date.now())`, with
-  a two-line comment saying why. No logic change; the clock's initial value is identical. This is the
-  only source edit in the phase.
-- `eslint.config.js` — added one override block turning **off** `react-hooks/immutability`,
-  `react-hooks/refs`, and `react-hooks/set-state-in-effect`, with a ~20-line rationale comment naming
-  each rule, its error count, and the pattern it fires on. `react-hooks/purity` is left on.
-- `docs/PHASES.md` — board row 15 → Done; `## Now` gains the Phase 15 entry; `## Next 3` drops
-  Phase 15 and records that every remaining coding phase is `[api]`-blocked; Phase 15 section marked
-  DONE with a Result.
-- `docs/DECISIONS.md`, `docs/STATUS.md`, `CLAUDE.md` (lint line) — updated (see below).
+- `docs/spec/PHASE-12.md` — **new.** The Phase 12 spec. This is the only new content besides the
+  handoff docs below.
+- `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/PHASES.md` — this handoff (board row 12, `## Now`,
+  `## Next 3`, two DECISIONS entries).
+- **No `src/` file was touched. No test file was added yet.**
 
 ## Decisions made
 
-- **Fix the one real error at source; disable the other three rules with a documented reason.** This
-  is what Phase 15's DONE-WHEN explicitly allows ("`npm run lint` exits 0, **or** every remaining
-  rule is explicitly disabled with a reason") and what the previous handoff directed. See
-  `docs/DECISIONS.md` (2026-08-11, Phase 15) for the full rationale.
-- **The disable is honest, not blind — the React Compiler is genuinely enabled.** `app.json` sets
-  `experiments.reactCompiler:true` and `babel-plugin-react-compiler@1.0.0` is installed, so these
-  `eslint-plugin-react-hooks` v7 rules are the compiler's own static analysis, not lint noise. The
-  compiler **bails out of optimising** a flagged component rather than miscompiling it, so the code
-  is safe as written; the cost of the disable is that those components forgo auto-memoisation, not
-  correctness. That trade-off is stated in the config comment and in DECISIONS.
-- **Did not rewrite 20+ screens to satisfy `set-state-in-effect`.** The flagged pattern is the app's
-  single documented data-fetch convention (`CLAUDE.md` §Conventions 3: effect → memoised loader →
-  setState), and the files include the 1915-line `home.tsx`, all with zero test coverage. A
-  lint-only phase is the wrong place for an unverifiable structural rewrite.
+- **Build Phase 12 next, not Phase 6.** Phase 12 is cleanly unblocked and needs no backend; Phase 6's
+  commissions third is backend-pending (user's call: skip/swap the `[api]` parts of Phase 6 for now).
+- **Phase 12 fix is a ~4-line swap in one function** (`getAgentLocations`): roster source
+  `/profiles?limit=60` → `/team/task-overview?scope=all`, validator `isArr` → `members`-array, read
+  `d.members`, report under the `/attendance` health key. `getTeam`, `team/index.tsx`,
+  `agent-map.tsx` need **no change** — the fix is upstream of all of them. Full rationale:
+  `docs/spec/PHASE-12.md` D-1…D-5, and DECISIONS 2026-08-11 (Phase 12).
 
 ## Known broken / deliberately skipped
 
-- **The branch is not pushed — 403, re-confirmed this session.** Needs a human (write access or a
-  credential swap). Do NOT change the remote URL, rewrite history, or re-clone to work around it.
-- **12 lint warnings remain, by policy.** They are all pre-existing (unused vars, two `require()`
-  imports, an `Array<T>` style nit, two `exhaustive-deps` advisories, a duplicate-import warning).
-  Phase 15's DONE-WHEN is about **errors**; warnings were never in scope and none are new.
-- **The three disabled rules no longer guard new code.** If someone writes a genuinely unsafe
-  Reanimated/effect pattern in future, these rules won't catch it. Accepted: they were 44/45 false
-  positives on this tree, and the alternative (leaving the gate red forever) is worse.
-- **Everything carried from Phases 1, 4, 5, 7, 10, 13's handset-only criteria remains unverified** —
-  no device work happened this session (haptics, the AsyncStorage clock key, background GPS, the
-  master route replay, airplane-mode behaviour, the offline map render). Phase 15 is pure
-  compiler/lint work, fully verified by `tsc` + `npm test` + `npm run lint`.
+- **Phase 12 is specced but NOT built** — no `getAgentLocations` edit, no test, gates not re-run.
+  Stopped at the approval gate.
+- **One open item to verify BEFORE finalising the Phase 12 diff (spec D-2):** confirm in
+  `../cgpe-backend-main/routes/team.js` + `utils/scope`'s `visibilityScope` that a **leader** passing
+  `?scope=all` on `/team/task-overview` is **clamped to their team, not widened org-wide**. If it is
+  NOT clamped, drop `?scope=all` and use the bare endpoint (a leader is still team-scoped by default).
+  This is the single thing that could change the diff.
+- **Phase 6 commissions/LIC/notes not started** — notes + LIC are buildable app-side but were not
+  bundled; commissions needs the pending server aggregate endpoint. Also unresolved: `api.ts:1966`
+  asserts `/api/lic-plans` **404s in production** while `api.md:1192` documents it live — a
+  contract-vs-deployment disagreement to settle (read the backend route / hit the live host) before
+  the LIC fix is worth shipping.
+- **`git push` still 403** — commit is local only; a human must grant write access or swap the
+  Windows-credential-manager credential.
+- **All handset-only criteria from Phases 1/4/5/7/10/13 remain unverified** — no device work here.
 
 ## Next session starts here
 
-- **Every remaining *coding* phase for this session (6, 9, 12, 16) is blocked on `cgpe-api`.** The
-  honest next work is either (a) re-check whether `cgpe-api` has shipped the dependency for
-  **Phase 12** (`/profiles` role gate) or **Phase 6** (commissions/LIC/notes envelope shapes —
-  re-read the `contracts/api.md` `/commissions` row first; team-summary being un-shadowed does NOT
-  by itself unblock Phase 6), or (b) the **device-verification backlog** (handset-only criteria from
-  Phases 1, 4, 5, 7, 10, 13 — needs a real Android device, not an editor).
-- First command: `npm test` (re-run once if the first cold-start run spuriously fails the whole
-  suite with `Cannot read properties of undefined (reading 'config')`), then re-read
-  `../contracts/INBOX.md` fresh at boot.
-- Watch out for: **there is no `docs/spec/PHASE-6/9/12/16` device-independent shortcut** — each of
-  those needs the backend contract confirmed before code. Do not start one on the assumption it is
-  unblocked; verify the `api.md` row and the producer's handler first (Phase 4's method). And as
-  always: `../contracts/INBOX.md` is written concurrently — re-read immediately before editing and
-  grep your own reply back afterwards.
+- **Phase 12:** build the `getAgentLocations` roster-source swap per `docs/spec/PHASE-12.md`, add
+  `src/data/__tests__/api-agents.test.ts` pinning the leader path, run the gates.
+- **First command:** read the backend clamp first — open
+  `../cgpe-backend-main/routes/team.js` and `../cgpe-backend-main/utils/scope*` and grep
+  `visibilityScope` to settle spec D-2 (`?scope=all` clamp for a leader). THEN edit `api.ts:1855-1863`.
+- **Watch out for:** the `?scope=all` clamp (D-2) is the one assumption that can be wrong — verify it
+  against the producer's code, don't trust the contract prose alone. And re-read `../contracts/INBOX.md`
+  fresh at boot; it is written concurrently.

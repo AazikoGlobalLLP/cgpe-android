@@ -6,6 +6,59 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 12 is app-side: read the roster from `/team/task-overview`, not admin-only `/profiles` (Phase 12, specced, not built)
+
+**Context.** `docs/PHASES.md` tagged Phase 12 `[api]` and framed the fix's dependency as a backend
+change. Verification (Phase-4 method: contract row → producer's handler → our code) found that wrong.
+The leader's "0 on duty" is caused by a single wrong endpoint: `getAgentLocations()`
+(`src/data/api.ts:1855`) enumerates the roster via `GET /api/profiles?limit=60`, which requires
+`role ∈ {admin, super_admin, payroll_staff}` (`contracts/api.md:211`) — a **leader 403s**, gets an
+empty roster, fires no `/attendance` calls, so every member reads `clockedIn:false` and the Team KPI
+/ agent-map say "0 on duty". The attendance fan-out it feeds, `GET /api/attendance/user/:id`, has
+**no ownership/role check at all** (`api.md:544`), so it already works for a leader; only the roster
+source was admin-gated.
+
+**Decision.** Swap only `getAgentLocations`'s roster source to `GET /api/team/task-overview?scope=all`
+— the endpoint `getTeam()` already trusts (`api.ts:340`), readable by any staff and scoped
+server-side per role (`api.md:715`). Its members carry `user_id` + `name`, the only two fields the
+downstream (`.filter(p=>p.user_id).slice(0,20)`, then `toPin`) consumes; no GPS is at stake (that has
+always come from the attendance rows, never the roster). `?scope=all` keeps admin/master org-wide
+while the server clamps a leader to their team — **to be verified against
+`../cgpe-backend-main/routes/team.js` + `visibilityScope` before the diff is final** (drop `scope=all`
+if a leader is not clamped). No `cgpe-api` change; the `[api]` tag on row 12 is removed on ship.
+
+**Consequence.** `getTeam`, `team/index.tsx` and `agent-map.tsx` need **no edit** — the fix is
+upstream of all three, so the predicted 3-file list collapses to one source file + a new
+`api-agents.test.ts` (same "list shrank" shape as Phase 11/5). A leader's on-duty count becomes real;
+`getTrackableMembers` stays on `/profiles` (master-only picker, correctly gated). Built/verified only
+at the wire-contract level by test — the DONE-WHEN proper (a real leader token showing a true count)
+is a handset + live-backend check, carried. Full spec: `docs/spec/PHASE-12.md`.
+
+## 2026-08-11 — Phase 6 splits: notes + LIC are app-side conformance bugs; only commissions is backend-blocked (Phase 6, re-scoped)
+
+**Context.** Phase 6 was tagged `[api]` with the stated blocker "un-shadow
+`GET /api/commissions/team-summary`" — which backend Phase 13 already shipped, and which was the wrong
+dependency anyway. Verified all three screens against the live contract.
+
+**Decision / findings.** (1) **Notes** — `getNotes` sends `search=` but `/api/notice-board` reads
+**`q`** (`api.md:880`); the filter is silently ignored. Pure app-side, trivial. (2) **LIC plans** —
+`getLicPlans` validates `data` as an array (`isArr`) but the server returns `{ meta, plans:[…] }`
+(`api.md:1192`), so it never reads `data.plans`; also a field-name gap (server `plan_name/product_code/
+category/riders` vs app `name/code/type/tags`, no adapter). App-side, but blocked on a real question:
+`api.ts:1966` claims `/api/lic-plans` **404s in production** while `api.md:1192` documents it live —
+settle before shipping. (3) **Commissions** — `GET /api/commissions` returns owner-scoped **raw rows**
+(`api.md:1163`), not the aggregate the screen wants, and `target` has **no source** in the rows.
+Product owner confirmed the server aggregate endpoint is **still pending**, so the commissions third
+stays backend-blocked; deriving money figures on-device was rejected (Phase 16 precedent).
+
+**Consequence.** Phase 6's `[api]` framing is stale for two-thirds of it. If picked up: notes + LIC
+can ship app-side (LIC pending the 404-vs-live resolution); commissions waits on `cgpe-api`. Not
+bundled into Phase 12. `isObj`/`isArr` (`api.ts:256-257`) are strict — `isObj` excludes arrays — which
+is why both the commissions (array vs object) and LIC (object vs array) validators silently fail
+today and fall through to the empty state, indistinguishable from an outage without this note.
+
+---
+
 ## 2026-08-11 — Vendor Leaflet by inlining a bundled string, and "renders offline" means the library, not the tiles (Phase 13, built)
 
 **Context.** `LeafletMap.tsx` built its whole map as one HTML string and handed it to a WebView as
