@@ -32,9 +32,9 @@ import { expireSession, resetSessionGuard } from '@/lib/session';
 import { nbsp } from '@/lib/format';
 import { reportFailure, reportSuccess } from './health';
 import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification } from './adapt';
-// Types only. The seed arrays these modules also export (`teamMembers`, `teamActivityFeed`,
-// `tasks`) are deliberately NOT imported any more: importing them is what kept sample records
-// inside the shipped bundle and one `??` away from reaching a screen.
+// Types only. The seed arrays these modules once exported (`teamMembers`, `teamActivityFeed`,
+// `tasks`) were deleted — importing them is what kept sample records inside the shipped bundle,
+// one `??` away from reaching a screen. Task data comes from getTasks; team data from /profiles.
 import type { TeamMember, TeamActivity } from './team';
 import { Task, TaskStatus } from './tasks';
 import type {

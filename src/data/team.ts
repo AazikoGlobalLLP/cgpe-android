@@ -1,5 +1,6 @@
-/** Team (admin view) — types only, imported with `import type` everywhere. No sample data
- *  remains: the seeded roster and activity feed were removed (see the note below). */
+/** Team (admin view) — types only, imported with `import type` everywhere. The seeded roster
+ *  and activity feed once exported here (plus their date helpers) were removed in the Phase 14
+ *  dead-code sweep; both are served exclusively from /profiles now. */
 export type TeamActivity = { id: string; icon: string; text: string; at: string; kind: 'lead' | 'claim' | 'client' | 'attendance' | 'campaign' | 'login' };
 export type TeamMember = {
   id: string;
@@ -16,20 +17,3 @@ export type TeamMember = {
   stats: { clients: number; premiumMtd: number; policiesMtd: number; renewalPct: number; openClaims: number; leads: number };
   activity: TeamActivity[];
 };
-
-const now = Date.now();
-const day = 86400000;
-const iso = (o: number) => new Date(now + o * day).toISOString();
-const at = (h: number) => new Date(now - h * 3600000).toISOString();
-
-/**
- * PHASE 10. The seeded roster and activity feed that used to live here are gone.
- *
- * Both are now served exclusively from /profiles. This module is imported for its TYPES
- * only (every import site uses `import type`), so it is erased at compile time.
- */
-export const teamMembers: TeamMember[] = [];
-
-export function teamActivityFeed(): TeamActivity[] {
-  return [];
-}

@@ -36,9 +36,6 @@ export const CATEGORY_ICON: Record<string, string> = {
   Collection: 'cash', General: 'checkbox',
 };
 
-const now = Date.now();
-const day = 86400000;
-const d = (o: number, h = 17) => { const dt = new Date(now + o * day); dt.setHours(h, 0, 0, 0); return dt.toISOString(); };
 export function taskProgress(t: Task): number {
   if (t.status === 'done') return 1;
   if (!t.steps.length) return t.status === 'in_progress' ? 0.5 : 0;
