@@ -1890,17 +1890,9 @@ export async function getAgentLocations(): Promise<AgentPin[]> {
   return recent.filter(Boolean) as AgentPin[];
 }
 
-/** Generate a family/client report -> POST /api/clients/generate-report. */
+/** Generate a family/client report -> POST /api/clients/generate-report. Null on any failure. */
 export async function generateReport(clientName: string): Promise<any | null> {
-  const real = await tryReal<any>('/clients/generate-report', { method: 'POST', body: JSON.stringify({ clientName }) }, isObj);
-  if (real) return real;
-  // demo fallback: a representative summary so the flow is visible offline
-  await wait(700);
-  return {
-    ok: true, familyHead: clientName, source: 'demo',
-    summary: { total_policies: 2, life_cover: 4200000, annual_premium: 186000, members: 1 },
-    viewUrl: null, pdfUrl: null,
-  };
+  return await tryReal<any>('/clients/generate-report', { method: 'POST', body: JSON.stringify({ clientName }) }, isObj);
 }
 
 /** Upload a captured/selected file -> POST /api/upload (multipart). Returns {url,key} or null. */

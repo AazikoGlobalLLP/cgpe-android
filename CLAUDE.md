@@ -108,8 +108,9 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
 - Dead, do not maintain: `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`,
   `hooks/use-color-scheme*.ts`, `constants/theme.ts`, `src/global.css`, `data/mock.ts`.
-- Stale docs: `HOW_TO_RUN.md` and `TESTING_GUIDE.md` describe an offline demo mode and a localhost
-  default that no longer exist.
+- `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no
+  longer describe an offline demo mode or a hand-editable localhost default. Keep them honest
+  when `src/constants/config.ts`'s base-URL logic or the login path changes again.
 
 ## Done means
 `npx tsc --noEmit` clean, `npm test` green, no new lint errors, and the affected rows of

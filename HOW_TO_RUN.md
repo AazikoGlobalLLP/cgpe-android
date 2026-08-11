@@ -1,7 +1,9 @@
 # CGPE Connect — how to open it on your phone (Expo Go)
 
-The app runs 100% offline with realistic demo data, so you can show it to your
-seniors without the backend running.
+The app is real-backend-only. There is no offline mode and nothing is ever invented to
+fill a screen: every screen either shows live data from the CGPE backend or an honest
+"could not load" state. To see anything populated you need a reachable backend and a
+real advisor account.
 
 ## Run it — pick one
 
@@ -33,9 +35,13 @@ See **TESTING_GUIDE.md** for a full module-by-module verification checklist.
 
 ## Log in
 
-Any credentials work — the email/password are pre-filled. Just tap **Sign in**.
+There is no offline path: `login.tsx` throws a `NetworkError` (a neutral "could not reach
+the server" banner, not a fallback session) whenever the backend is unreachable, and a
+wrong password or code is refused by the server, not accepted locally. **You need a real
+advisor email/password or a real mobile number for OTP**, and a reachable backend (see
+"Live data" below) — there is nothing to sign in with otherwise.
 
-## What you can demo (all interactive)
+## What's in the app (all interactive, against a real backend)
 
 - **Today** — GPS clock-in/out (asks location permission), live stats, follow-ups, hot leads, quick actions
 - **Leads** — pipeline filter, add a lead, open a lead, tap stages to advance, call / WhatsApp
@@ -45,15 +51,19 @@ Any credentials work — the email/password are pre-filled. Just tap **Sign in**
 
 ## Live data
 
-The app is **real-backend-first**: sign in with a real advisor account while your
-backend runs on the **same machine** (open the app with `--web` so the browser can reach
-`localhost:3001`) and every screen pulls live MongoDB data. If a call is unreachable it
-falls back to sample data for that call, so nothing is ever empty.
+Every path in the app is real-backend-only — there is no other mode. What decides
+whether a screen shows anything is only whether the app can **reach** the backend:
 
-Config in `src/constants/config.ts`:
-```ts
-export const FORCE_DEMO = false;                         // true = always sample data
-export const API_BASE_URL = 'http://localhost:3001/api'; // phone: use your PC's LAN IP
-```
-The data layer (`src/data/api.ts`) already speaks the CGPE REST shape (`{ success, data }`)
-and sends `Authorization: Bearer <token>`.
+- **Native (this Expo Go app, or the APK)** always points at the production backend,
+  `https://cgpe.in/internal/api` — a phone on any network already reaches it over HTTPS,
+  so `npx expo start --go` / `--go --tunnel` work as-is with a real advisor login.
+- **Web via `npx expo start --web`** resolves to `http://localhost:3001/api` automatically
+  when the browser's own origin is `localhost` — i.e. run it on the same PC as the backend.
+  On any other web origin it points at production instead.
+
+If a call cannot reach its target — wrong backend, backend down, expired session — the
+screen shows its empty/"could not load" state and the global outage banner, never
+invented data. `src/constants/config.ts` explains the exact resolution rules if you need
+to point a build at a different backend; it is a code change to the base-URL logic there,
+not a value to hand-edit per run. The data layer (`src/data/api.ts`) speaks the CGPE REST
+shape (`{ success, data }`) and sends `Authorization: Bearer <token>`.

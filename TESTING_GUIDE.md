@@ -2,9 +2,9 @@
 
 Everything you need to open the app and independently verify each module works.
 
-Verified by an automated end-to-end run (Chrome headless): login → home → leads →
-lead detail → stage change → clients → client 360 → claims → claim detail → more →
-commissions → account. **24/24 steps passed, 0 runtime errors.**
+The app is real-backend-only: there is no offline mode and nothing is ever invented to
+fill a screen. Every check below needs a reachable backend and a real advisor login —
+see §2 and §4.
 
 ---
 
@@ -44,9 +44,11 @@ First run may install `@expo/ngrok`. Scan the QR with Expo Go.
 
 ## 2. Login
 
-- The email/password are pre-filled. **Any credentials work** — tap **Sign in**.
-- To test **real login**, enter a real advisor email + password with your backend
-  running (see §4).
+- There is no offline path. An unreachable backend surfaces a neutral "could not reach
+  the server" banner (`login.tsx`'s own `NetworkError` handling), not a fallback session;
+  wrong credentials are refused by the server, not accepted locally.
+- **Enter a real advisor email + password** (or a real mobile number for OTP) with your
+  backend running and reachable (see §4). There is nothing to sign in with otherwise.
 - Biometric unlock: on a phone, enable it in **More → Settings → Biometric unlock**,
   then sign out and back in — it prompts for fingerprint/face. (No-op on web.)
 
@@ -85,25 +87,31 @@ Expected: you land on the **Today** home screen with the gradient commission car
 
 ---
 
-## 4. Getting LIVE data instead of sample data
+## 4. Reaching the backend
 
-The app is **real-backend-first**: when a real advisor session is active it calls your
-CGPE REST API; if any call is unreachable it falls back to sample data for that call so
-nothing is ever empty.
+The app is **real-backend-only** — there is no other mode, and nothing is invented to
+fall back to. What decides whether a screen is populated is only whether the app can
+reach the backend and whether the signed-in session is real:
 
-1. Start your backend on **:3001** on the **same PC** you open the web app on.
-2. Open the app with **`npx expo start --web`** (browser can reach `localhost`).
-3. **Sign in with a real advisor email + password.** On success, every screen pulls
-   live MongoDB data.
+- **Web via `npx expo start --web`**, opened on the **same PC** the backend runs on,
+  resolves to `http://localhost:3001/api` automatically — the browser's own origin
+  being `localhost` is what triggers it (`src/constants/config.ts`).
+- **Native — Expo Go on a phone, or the built APK** — always points at the production
+  backend, `https://cgpe.in/internal/api`, over HTTPS. A phone on any network already
+  reaches it; there is no LAN-IP address to configure.
+- Either way, **sign in with a real advisor email + password (or OTP).** On success,
+  every screen pulls live MongoDB data.
 
-Config in [`src/constants/config.ts`](src/constants/config.ts):
-- `API_BASE_URL` — default `http://localhost:3001/api`. For a **phone**, change to your
-  PC's LAN IP (e.g. `http://192.168.1.5:3001/api`) — `localhost` won't resolve on a phone.
-- `FORCE_DEMO` — set `true` to always use sample data (guaranteed populated, e.g. a
-  senior demo with no backend running).
+`FORCE_DEMO` in [`src/constants/config.ts`](src/constants/config.ts) is a compile-time
+kill switch (hardcoded `false`) that, if flipped, skips every network call and shows
+each screen's empty state immediately — it never invents anything either way.
+Pointing a build at a backend other than the two above (e.g. a different LAN host) is a
+code change to `API_BASE_URL`'s resolution logic, not a value to hand-edit per run.
 
 > If a live screen shows blank fields, the backend's response shape for that endpoint
-> differs from the app's model — tell me the endpoint and I'll map the fields.
+> differs from the app's model — tell me the endpoint and I'll map the fields. If a
+> screen shows its empty state with the outage banner raised, the call failed or timed
+> out — that is the honest failure path, not a bug in what you're looking at.
 
 ---
 

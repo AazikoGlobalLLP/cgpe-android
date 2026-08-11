@@ -1,4 +1,5 @@
-/** Team (admin view) — types + sample data. Real endpoints tried first in api.ts. */
+/** Team (admin view) — types only, imported with `import type` everywhere. No sample data
+ *  remains: the seeded roster and activity feed were removed (see the note below). */
 export type TeamActivity = { id: string; icon: string; text: string; at: string; kind: 'lead' | 'claim' | 'client' | 'attendance' | 'campaign' | 'login' };
 export type TeamMember = {
   id: string;

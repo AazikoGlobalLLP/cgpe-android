@@ -1,4 +1,5 @@
-/** Tasks — the app's primary domain for team members. Types + sample data. */
+/** Tasks — the app's primary domain for team members. Types and label maps only; the
+ *  fabricated seed array was removed (see the note below) and no sample data remains. */
 export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type TaskStep = { id: string; label: string; done: boolean };

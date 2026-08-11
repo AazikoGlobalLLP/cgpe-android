@@ -75,8 +75,6 @@ type ReportSummary = {
 type ReportPayload = {
   ok?: boolean;
   familyHead?: string;
-  /** The API layer labels an unreachable report service as 'demo'. Never shown as real. */
-  source?: string;
   summary?: ReportSummary;
   viewUrl?: string | null;
   pdfUrl?: string | null;
@@ -111,10 +109,7 @@ export default function ClientDetail() {
     setReporting(true);
     const r: ReportPayload | null = await api.generateReport(client.name);
     setReporting(false);
-    // The report service falls back to an illustrative summary when it cannot be reached.
-    // Those figures must never reach the screen: an advisor reading an invented life cover
-    // to a real customer is the exact failure this app is built to avoid.
-    if (r?.ok && r.source !== 'demo') {
+    if (r?.ok) {
       setReport(r);
       setReportOpen(true);
       haptics.success();
