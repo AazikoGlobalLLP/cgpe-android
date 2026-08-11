@@ -14,6 +14,22 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Dashboards partial-outage tile (Phase-3 carry-out) — done.** Built 2026-08-11. The last
+editor-buildable item on the board: `src/screens/dashboards.tsx`'s Master (`:292-297`) and Admin
+(`:211-213`) KPI grids rendered each org figure as `snapshot?.field ?? 0`, so a partial outage
+(roster loads, org endpoints down → `getOrgSnapshot` returns `null`) showed "0 clients · ₹0 claims
+paid" as fact. Each fabricating tile now mirrors the hero at `:266` — `snapshot ? <value> :
+NO_VALUE` — so an absent snapshot reads "-", never a conjured zero; a healthy backend is unchanged
+(a genuine org `0` still shows). Gated on **`snapshot`-presence, not the global `degraded` flag**:
+that is what the hero and home's analytics widget (`home.tsx:1682`) already key on, and `degraded`
+is app-wide/sticky (`health.ts` L8), so gating tile values on it would blank a loaded tile whenever
+any unrelated endpoint failed and make a tile disagree with the hero on the same number. Master's
+"Open tasks" tile keeps its **real** loaded-`tasks` fallback (not a fabricated zero) and is
+unchanged. 8 tile expressions, one file, no type widened / no shell invented / hero untouched. No
+test (presentational JSX, no RN renderer in-harness — same class as Phases 8/11/17). `npx tsc
+--noEmit` exit 0; `npm test` **299/13** (unchanged); `npm run lint` 0 errors / 12 warnings. Closes
+the `docs/spec/PHASE-3.md` §2 carry-out and "Next 3" #3. DECISIONS 2026-08-11.
+
 **Phase 6 (partial) — done.** Built 2026-08-11. The two app-side halves shipped; **commissions stays
 backend-blocked** (D-5), so the phase remains partial. `npm test` runs **299** tests across 13 files
 and exits 0 (+18: 6 `adaptLicPlan` cases, a new `api-notes.test.ts` (5), a new `api-lic.test.ts` (7));
@@ -145,20 +161,23 @@ exercise.
    7, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the master route replay,
    airplane-mode behaviour, a leader's true "On duty now" count, the offline map render, **the LIC
    catalogue rendering + notes search narrowing against production**). Needs a device, not an editor.
-3. **The `dashboards.tsx:292-297` partial-outage tile** carried out of Phase 3 (below) — a *partial*
-   outage still renders "0 clients · ₹0 claims paid" as fact on the Master KPI tiles; the hero above
-   already uses `NO_VALUE`. Small and specified.
+3. ~~**The `dashboards.tsx:292-297` partial-outage tile** carried out of Phase 3~~ — **DONE
+   2026-08-11.** Both KPI grids now blank org figures to `NO_VALUE` on a missing snapshot instead of
+   `?? 0`. See "## Now" and DECISIONS 2026-08-11. **With this closed, no editor-buildable work
+   remains** — Phase 6 commissions / 9 / 16 are `cgpe-api`-blocked, and everything else on the board
+   is a handset-only acceptance check.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
 > row, read the handler, then assert the envelope in a test that fails if the shape moves.
 
-> **Carried out of Phase 3, small and specified:** `src/screens/dashboards.tsx:292-297` renders the
-> Master KPI tiles as `snapshot?.total_clients ?? 0`, so a **partial** outage (roster loads, org
-> endpoints down) still shows "0 clients · ₹0 claims paid" as fact. The hero directly above it at
-> `:266` already does the right thing with its `NO_VALUE` placeholder — the tile grid just needs the
-> same treatment. Left out because `dashboards.tsx` is not in Phase 3's file list and the phase's
-> own DONE-WHEN (a *fully* dead backend) is met without it.
+> **Carried out of Phase 3 — CLOSED 2026-08-11.** `src/screens/dashboards.tsx`'s Master
+> (`:292-297`) and Admin (`:211-213`) KPI tiles rendered `snapshot?.field ?? 0`, so a **partial**
+> outage (roster loads, org endpoints down) showed "0 clients · ₹0 claims paid" as fact. Each
+> fabricating tile now mirrors the hero at `:266` — `snapshot ? <value> : NO_VALUE` — gated on
+> snapshot-presence (not the global `degraded` flag; see DECISIONS 2026-08-11 for why). Master's
+> "Open tasks" tile keeps its real loaded-`tasks` fallback. Left out of Phase 3 originally because
+> `dashboards.tsx` was not in its file list; now done as a standalone carry-out.
 
 ## Status board
 

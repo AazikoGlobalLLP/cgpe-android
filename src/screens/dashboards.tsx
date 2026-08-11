@@ -207,10 +207,17 @@ export function AdminDashboard({ team, tasks, snapshot }: {
         </View>
       </TierHero>
 
+      {/*
+        Org tiles gate on the snapshot exactly like the hero at MasterDashboard's :266 and
+        home's analytics widget: a real number when the snapshot loaded, NO_VALUE when it did
+        not. Never `?? 0` — an absent snapshot means an outage (org endpoints down) or a load
+        still in flight, and "0 clients in process" is a fabricated fact in both. The banner and
+        the hero sub already say which; a tile only has to stop asserting a zero it cannot back.
+      */}
       <KpiGrid items={[
-        { label: 'Client book', value: (snapshot?.total_clients ?? 0).toLocaleString('en-IN'), icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
-        { label: 'Claims in process', value: String(snapshot?.claims.under_process ?? 0), icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'Open tickets', value: String(snapshot?.tickets ?? 0), icon: 'chatbox-ellipses', tint: c.info, onPress: () => router.push('/tickets') },
+        { label: 'Client book', value: snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE, icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
+        { label: 'Claims in process', value: snapshot ? String(snapshot.claims.under_process) : NO_VALUE, icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
+        { label: 'Open tickets', value: snapshot ? String(snapshot.tickets) : NO_VALUE, icon: 'chatbox-ellipses', tint: c.info, onPress: () => router.push('/tickets') },
       ]} />
 
       <View>
@@ -288,12 +295,20 @@ export function MasterDashboard({ team, tasks, snapshot, notifications }: {
         </View>
       </TierHero>
 
+      {/*
+        Org tiles gate on the snapshot exactly like the hero at :266: a real number when it
+        loaded, NO_VALUE when it did not. Never `?? 0` — an absent snapshot is an outage (org
+        endpoints down) or a load in flight, and "0 clients · ₹0 claims paid" is a fabricated
+        fact in both. Only "Open tasks" keeps a fallback, and a REAL one: the count of the tasks
+        actually loaded into this session, not a zero conjured from nothing — same shape as the
+        hero's team-derived minis, which also stay live while the org big reads NO_VALUE.
+      */}
       <KpiGrid items={[
-        { label: 'Total clients', value: (snapshot?.total_clients ?? 0).toLocaleString('en-IN'), icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
-        { label: 'Active leads', value: (snapshot?.leads ?? 0).toLocaleString('en-IN'), icon: 'trending-up', tint: c.accent, onPress: () => router.push('/(tabs)/leads') },
-        { label: 'Claims total', value: String(snapshot?.claims.total ?? 0), icon: 'shield-checkmark', tint: c.warning, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'In process', value: String(snapshot?.claims.under_process ?? 0), icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'Claims paid', value: inrShort(snapshot?.claims.paid_amount ?? 0), icon: 'cash', tint: c.success, onPress: () => router.push('/(tabs)/claims') },
+        { label: 'Total clients', value: snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE, icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
+        { label: 'Active leads', value: snapshot ? snapshot.leads.toLocaleString('en-IN') : NO_VALUE, icon: 'trending-up', tint: c.accent, onPress: () => router.push('/(tabs)/leads') },
+        { label: 'Claims total', value: snapshot ? String(snapshot.claims.total) : NO_VALUE, icon: 'shield-checkmark', tint: c.warning, onPress: () => router.push('/(tabs)/claims') },
+        { label: 'In process', value: snapshot ? String(snapshot.claims.under_process) : NO_VALUE, icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
+        { label: 'Claims paid', value: snapshot ? inrShort(snapshot.claims.paid_amount) : NO_VALUE, icon: 'cash', tint: c.success, onPress: () => router.push('/(tabs)/claims') },
         { label: 'Open tasks', value: String(snapshot?.tasks.open ?? tasks.filter((t) => t.status !== 'done').length), icon: 'checkbox', tint: c.info, onPress: () => router.push('/(tabs)/tasks') },
       ]} />
 

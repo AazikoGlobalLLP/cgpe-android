@@ -6,6 +6,41 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Master/Admin KPI tiles blank to NO_VALUE on a missing org snapshot, gated on `snapshot`-presence (not `useDataHealth().degraded`) — Phase-3 carry-out CLOSED
+
+**Context.** The last open item from Phase 3 (`docs/spec/PHASE-3.md` §2, `docs/PHASES.md` "Next 3"
+#3): `src/screens/dashboards.tsx`'s Master KPI grid (`:292-297`) and Admin KPI grid (`:211-213`)
+rendered each org figure as `snapshot?.field ?? 0`, so a **partial outage** (roster loads, org
+endpoints down → `getOrgSnapshot` returns `null` at `api.ts:393`) still showed "0 clients · ₹0
+claims paid" as fact. The hero at `:266` already did the right thing (`snapshot ? … : NO_VALUE`);
+only the tile grids fabricated the zeros. The handoff scoped the fix as "the same `NO_VALUE`
+treatment the hero has, gated on `useDataHealth().degraded`, **not** to widen types or invent a new
+empty shell."
+
+**Decision.** Each fabricating tile now mirrors the hero: `snapshot ? <real value> : NO_VALUE`.
+Gated on **`snapshot`-presence, deliberately NOT on the global `degraded` flag** — two reasons, both
+verified in code: (1) it is what the hero at `:266` and home's own analytics widget
+(`home.tsx:1682`, the app's canonical org-snapshot pattern) already key on, so hero and tiles can
+never disagree on the same number (e.g. `total_clients` appears in both); (2) `health.degraded` is
+**global** (`health.ts:33`, `= failures.length > 0`, and `PHASE-3.md` L8 keeps it that way, sticky
+and app-wide), so gating tile VALUES on it would blank a tile whose data loaded fine whenever *any
+unrelated* endpoint failed — introducing exactly the hero/tile inconsistency the fix should avoid.
+The outage-vs-loading distinction `degraded` carries is already shown by the global `<HealthBanner/>`
+and the hero's "Loading the organisation book" sub, so it does not belong in a tile's number.
+Master's "Open tasks" tile keeps its fallback and is left unchanged — `tasks.filter(…).length` is
+**genuinely loaded** session data, not a zero conjured from nothing (same shape as the hero's
+team-derived minis, which also stay live while the org big reads NO_VALUE).
+
+**Consequence.** With the org endpoints down, both dashboards' org tiles read "-", not "0"/"₹0";
+a healthy backend renders the real figures unchanged (a genuine org `0` still shows, because a
+present snapshot is trusted). 8 tile expressions changed in one file; no type widened, no shell
+invented, hero untouched, no `useDataHealth` import added. No test file — `dashboards.tsx` is
+presentational JSX with zero coverage and no RN test renderer in the harness (same untestable-by-
+convention class as Phases 8/11/12-note/17); the change is two ternaries per tile. No INBOX item —
+nothing crosses a repo boundary. Gates green: `npx tsc --noEmit` exit 0; `npm test` **299/13**
+(unchanged — no new pure logic); `npm run lint` **0 errors / 12 warnings** (Phase-15 baseline). This
+closes the Phase-3 §2 carry-out and the `docs/PHASES.md` "Next 3" #3 item.
+
 ## 2026-08-11 — Phase 6 (partial) BUILT: notes `search`→`q` and LIC `{meta,plans}` unwrap + adapter; the LIC "404 in production" claim was stale
 
 **Context.** Phase 6's two app-side halves (DECISIONS 2026-08-11 "Phase 6 splits"). The LIC half
