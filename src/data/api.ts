@@ -1858,9 +1858,20 @@ export async function getAgentLocations(): Promise<AgentPin[]> {
   // map that is indistinguishable from genuine field telemetry: a manager could believe three
   // named people were out working when nobody was. Of every sample-data path in this app it
   // was the most misleading, because the map carries no other cue that it might be fake.
+  //
+  // PHASE 12. The roster came from admin-only `GET /profiles`, which 403s for a leader — so a
+  // leader (and any advisor) got an empty roster, no /attendance fan-out, and "0 on duty" on
+  // every dashboard. Read it from `GET /team/task-overview` instead: any staff may read it, the
+  // server scopes it per role (a leader's `?scope=all` is clamped to their team, NOT widened —
+  // verified in ../cgpe-backend-main/utils/scope.js `visibilityScope`; `?scope=all` is honoured
+  // only for admin/super_admin, preserving their org-wide breadth), and each member carries the
+  // `user_id`+`name` this pipeline needs. Same source getTeam() already trusts for the roster,
+  // so the on-duty numerator now matches the roster denominator. A task-overview outage reports
+  // under the existing `/attendance` health key, not a competing `/team/task-overview` row
+  // (getTaskOverview owns that one).
   if (!sessionReal || FORCE_DEMO) return unavailable('/attendance', [] as AgentPin[]);
-  const profiles = (await tryReal<any[]>('/profiles?limit=60', {}, isArr)) || [];
-  const people = profiles.filter((p) => p.user_id).slice(0, 20);
+  const overview = await tryReal<any>('/team/task-overview?scope=all', {}, (d) => d && Array.isArray(d.members), '/attendance');
+  const people = ((overview?.members || []) as any[]).filter((p) => p.user_id).slice(0, 20);
   const today = new Date().toISOString().slice(0, 10);
 
   // First pass: whoever has an attendance record dated *today* (real, current field status).
