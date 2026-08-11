@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**i18n `t()` widening — SCOPED, not built — 2026-08-11.** Board was editor-exhausted (Phase 16 self-view
+re-verified still backend-blocked: `routes/payroll.js:22-23` still `authorize('admin')`, no `my-earnings`,
+INBOX ask unanswered). At the user's direction, scoped the PHASES "Next 3" #3 item instead: six parallel
+read-only extraction passes over ~45 screens →  `docs/i18n/SCOPE.md` + `inventory/01–06*.md` (the full
+string list, screen · line · kind · English · proposed key). **Findings:** only **74 keys** wired via
+`t()` in 6 files (all partial); **~40 screens are 100% hardcoded English**; **~1,800 occurrences** →
+~1,200–1,400 unique keys. **Three prerequisites before any copy helps:** (1) `t()` has NO interpolation —
+~30% of strings are dynamic, need a `t(key,params)`+plural extension (no concatenation; Hindi/Gujarati
+word order); (2) a `common.*` dedup layer ("Try again" ×~30); (3) the parity test hard-codes
+`EN_KEYS.length===74` and its leak check rejects only `value===key`, **not** `value===English`, so a
+Gujarati entry left as English passes green — human copy is load-bearing. **Nothing built, no dictionary
+edited, no string translated, gates not re-run.** Committed local-only (push 403s). The next
+editor-buildable step (no backend, no translator) is the P0 `t()` extension + `common.*` layer. Full
+path: `docs/i18n/SCOPE.md`; DECISIONS 2026-08-11 (top); HANDOFF.
+
 **Phase 20 — Admin payroll roster (in-app). BUILT 2026-08-11.** Owner-directed scope change from
 Phase 16. Re-verified against `cgpe-api`'s **real code** (not tags — wrong 5×) that the Phase 16
 self-view is *still* blocked: the whole payroll router is admin-only (`routes/payroll.js:22-23` =
@@ -323,12 +338,14 @@ exercise.
    search against production, reminder cold-start persistence, and now the language-key cold-start).
    Phases 18/19 cover the web-reachable slice; the native-only remainder still needs a phone + a live
    backend. Not editor-buildable.
-3. **Widen `t()` coverage (newly surfaced by Phase 19, optional, app-side buildable).** Only the 74
-   `t()`-wired keys change with the language toggle; the Phase 19 per-language screenshots
-   (`e2e/artifacts/screens/languages/*`) show which screens are still hardcoded English (e.g. the
-   Settings body). If the user wants more of the app to actually translate, scope it from those
-   screenshots — but every new string needs **human-supplied** Hinglish/Gujlish copy, never a machine
-   guess (Phase 19 spec §4). Out of Phase 19's "verify + harden the existing toggle" scope.
+3. **Widen `t()` coverage — NOW SCOPED (2026-08-11), partly editor-buildable.** Full worklist +
+   plan in `docs/i18n/` (`SCOPE.md` + `inventory/01–06*.md`): only 74 keys wired across 6 files, ~40
+   screens 100% hardcoded, ~1,800 string occurrences. The **copy** still needs **human-supplied**
+   Hinglish/Gujlish/Hindi/Gujarati (~4,800 strings; no machine guess, Phase 19 §4) — but the **P0
+   prerequisites are buildable now with no copy:** the `t(key, params)` interpolation + count-plural
+   extension (~30% of strings are dynamic) and the `common.*` dedup layer. Do P0 first, then wire one
+   Tier-1 screen (SCOPE.md §5) and hand the owner its fill-in list. Trap: bump the parity test's hard
+   `EN_KEYS.length===74`, and note it won't catch an English string left in a non-English dict.
 
 > **Also still open:** the **device-verification backlog** — handset-only acceptance criteria carried
 > from Phases 1, 4, 5, 6, 7, 9, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the

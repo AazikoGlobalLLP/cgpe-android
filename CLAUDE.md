@@ -139,6 +139,15 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 - `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no
   longer describe an offline demo mode or a hand-editable localhost default. Keep them honest
   when `src/constants/config.ts`'s base-URL logic or the login path changes again.
+- **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** Only **74 keys** are wired through
+  `t()` across 6 files; ~40 screens are 100% hardcoded English (the full worklist + plan is scoped in
+  `docs/i18n/`, 2026-08-11). (1) `t()` is `t(key)=>string` with **NO interpolation** — dynamic strings
+  need a `t(key, params)`+plural extension first, never string concatenation (Hindi/Gujarati word order).
+  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes `EN_KEYS.length === 74` (bump
+  it deliberately when adding keys) **and** its leak check rejects only `value === key`, **not**
+  `value === English` — so a Gujarati entry left as the English string **passes the suite green**. The
+  test cannot certify translation happened; human copy is load-bearing and machine translation is
+  forbidden (PHASE-19 §4).
 
 ## Done means
 `npx tsc --noEmit` clean, `npm test` green, no new lint errors, and the affected rows of

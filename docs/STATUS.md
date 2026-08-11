@@ -1,15 +1,16 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-11
-**Working on right now:** Built a salary screen inside the app for managers — it shows each team member's pay for a chosen month, worked out by the server from their attendance.
+**Working on right now:** Planned out what it would take to translate the rest of the app into Gujarati and Hindi — the app today only translates a small part of its screens.
 
 **Done this week:**
-- Double-checked the server's salary work before building anything. The pay calculation is genuinely finished — but the server only lets an admin see it, not a regular team member. So the "everyone sees their own pay" screen still can't be built, but a manager-facing version can.
-- Built that manager version: an admin opens **More → Payroll**, picks a month, and sees the whole team's pay for it — each person's name, their pay type, days present, and the amount, plus the month's total. A regular team member can't open it, and if the data can't load the screen says so honestly instead of showing a fake ₹0.
-- Kept it safe: the screen shows salary figures only — no bank details, Aadhaar or PAN reach the phone. The app never does its own pay maths; it only displays the number the server calculated.
-- All automated checks pass (330 tests, up from 323). Also cleared one routine note from the server team about an attendance fix that doesn't affect our app.
+- Checked how much of the app actually changes when someone switches language. It turns out only a small core (the home dashboard, the tab names, and a couple of screens) translates — roughly forty screens still show English no matter which language is chosen.
+- Went through every one of those screens and listed the exact ~1,800 pieces of text that would need translating, screen by screen, so the work can be handed to someone to fill in the Gujarati/Hindi wording. This list is now saved with the project.
+- Flagged three things that have to be sorted before translation can start — mainly that some text has numbers or names inside it (like "3 of 10 leads") which needs a small technical change first, and that the automated check we rely on won't notice if a translation was accidentally left in English, so the human wording has to be done carefully.
+- Re-confirmed the "each person sees their own pay" screen still can't be built — the server team hasn't yet opened up that access.
 
 **Blocked on:**
-- The "each person sees their own pay" screen still needs the server team to allow a person to read their own figure (today only admins can). That request is still with them. The commissions screen is still waiting for its data too — unchanged.
-- Finished work still can't be uploaded to GitHub — the saved login on this machine lacks permission. Someone needs to grant access or swap the login. Everything is saved safely on this machine meanwhile.
+- The personal "my pay" screen still waits on the server team to allow a person to read their own figure. Unchanged.
+- The translation work needs someone to supply the correct Gujarati, Hindi and Roman-script wording — it can't be machine-guessed, or it will read badly to customers.
+- Finished work still can't be uploaded to GitHub — the saved login on this machine lacks permission. Everything is saved safely on this machine meanwhile.
 
-**Next:** Build the personal "my pay" screen the moment the server allows self-access. Otherwise, translate more of the app (needs someone to supply the correct Hinglish/Gujarati wording) or work through the checks that can only be done on a real phone — including a quick look at this new payroll screen on a handset.
+**Next:** Do the small technical groundwork that translation needs (no wording required for that part), then translate one important screen fully as a first example. Otherwise, the personal-pay screen the moment the server allows it.

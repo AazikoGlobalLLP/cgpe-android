@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — i18n `t()` widening: SCOPED, not built (board was blocked)
+
+**Context.** Phase 16 self-view stays backend-blocked (re-verified `routes/payroll.js:22-23` is still
+`authorize('admin')`, no `my-earnings` route, INBOX ask unanswered). Nothing else on the board was
+editor-buildable without an external input. At the user's "whatever you suggest", the lowest-risk useful
+move was the PHASES "Next 3" #3 item — widening the language toggle beyond its 74 wired keys.
+
+**Decision.** **Scoped it, did not build it.** Six parallel read-only extraction passes over ~45 screens
+produced `docs/i18n/SCOPE.md` + `inventory/01–06*.md` (screen · line · kind · English · proposed key).
+Widening `t()` genuinely needs **human-supplied** Hinglish/Gujlish/Hindi/Gujarati copy (~4,800 non-English
+strings) and PHASE-19 §4 forbids machine translation, so building it now would either fabricate copy or
+produce untested dead keys. The deliverable is a decision (which tier to wire, whether to do the `t()`
+extension first), not code.
+
+**Three prerequisites surfaced (all verified against real code), which is the substance of the decision:**
+1. **`t()` has no interpolation** (`t(key)=>string`). ~30% of extracted strings are dynamic; they need a
+   `t(key, params)` + count-plural extension and must NOT be string-concatenated (Hindi/Gujarati word
+   order differs). This is prerequisite engineering, buildable with no copy.
+2. **A `common.*` dedup layer** — "Try again" recurs ~30×, the outage body in ~8 variants; wiring shared
+   strings once takes ~1,800 occurrences down to ~1,200 unique keys.
+3. **The parity test (`src/i18n/__tests__/dictionaries.test.ts`) has a blind spot.** It hard-codes
+   `EN_KEYS.length === 74` (must be bumped deliberately) and its leak check rejects only `value === key`,
+   **not** `value === English` — so a Gujarati entry left as the English string passes the suite green.
+   The test cannot certify that translation happened; human copy is load-bearing.
+
+**Consequence.** `docs/i18n/` is the durable worklist and plan; nothing in `src/` changed, no dictionary
+edited, gates not re-run. The next editor-buildable step (independent of backend/translator) is P0: the
+`t(key, params)` interpolation + plural extension and the `common.*` layer. Committed local-only (push
+still 403s). Data-derived label maps (`src/data/labels.ts`) are a separate uncounted ~50–100-string surface.
+
 ## 2026-08-11 — Phase 20: built an admin-only in-app payroll roster (owner-directed scope change)
 
 **Context.** After the Phase 16 re-eval (below), the user (as product owner) was asked how to handle

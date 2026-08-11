@@ -1,86 +1,62 @@
-# HANDOFF — CGPE Connect (Android) — Phase 20: admin payroll roster (in-app) — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — i18n widening SCOPED (no build) — 2026-08-11
 
-Built an **admin-only payroll roster screen** in the app, at the owner's direction. This is a scope
-change from Phase 16, not the Phase 16 self-view — that stays blocked. First the salary state was
-re-verified against `cgpe-api`'s **real code** (the user believed "salary is done from the backend";
-it is built but deliberately admin-only, with no self-scoped read), then the admin screen was built on
-the endpoint that actually exists.
+Board was editor-exhausted: Phase 16 self-view is **still backend-blocked** and no other phase was
+unblocked. Re-verified the blocker against `cgpe-api`'s **real code** (not tags/INBOX), then — at the
+user's "whatever you suggest" — **scoped** the `t()` language-widening work into a decision-ready
+deliverable in `docs/i18n/`. **Nothing was built, no dictionary edited, no string translated.**
 
 ## Done
-- **Re-verified the salary blocker against the producer's real code** (not tags, not my earlier read).
-  The whole payroll router is admin-only: `routes/payroll.js:22-23` = `router.use(protect);
-  router.use(authorize('admin'))`, `middleware/auth.js:73` 403s any non-`admin`/`super_admin`, and a
-  whole-tree grep (`earnings|my-earnings|/payroll`) finds only the 8 admin routes — no self-scoped read
-  was ever built. So the Phase 16 self-view (every advisor sees their own pay) is genuinely still
-  blocked; the manager-facing admin surface is what exists.
-- **Built Phase 20 — an admin-only in-app payroll roster.** New route `src/app/payroll.tsx` on
-  `GET /api/payroll/compute?year=&month=` (admin/super_admin only). A 12-month strip (current first);
-  shows total payable, member count, and per-member name / pay segment / present-days / the
-  **server-computed** payable. Reached from **More → Payroll** (Admin group).
-  - **No PII on the phone** — `/compute` omits Aadhaar/PAN/bank (`routes/payroll.js:306`); those live
-    only on `/profiles` + `/export`, which this screen does not call.
-  - **The app never multiplies** — every `payable` is the server's; the sole on-device sum is the roster
-    total (an aggregate of computed figures). Pinned by a test.
-  - **Gated on the REAL role, not the tier** — mobile's `tierOf` folds `leader` into "admin" but the
-    backend 403s a leader, so the More row and the screen both gate on
-    `user.role === 'admin' || 'super_admin'`. A leader never fetches; a stale-role deep-link degrades to
-    "admin-only"/"could not load" (403 → `tryReal` null), never a false ₹0.
-- **Cleared the INBOX for this session (3 items).** (1) cgpe-api backend-**Phase 20** (attendance
-  `/calendar` + `/day/:date` ObjectId-join fix) — verified no-op (app calls neither; two greps zero),
-  replied underneath. (2) cgpe-api backend-**Phase 21** (legacy `/api/english-questions` router deleted,
-  BREAKING) — landed mid-session; verified no-op (`english-questions|EnglishQuestion|question-bank|
-  questions/study` → 0 in `src/`), replied underneath. (3) **Filed a new FYI** to cgpe-api + cgpe-admin:
-  mobile Phase 20 now consumes `GET /api/payroll/compute`, so a second consumer of that response shape is
-  on record and the panel knows the app duplicates a slice of its payroll surface. All boxes left unticked
-  (multi-recipient); all three replies grepped back after writing — they survived (INBOX gained a
-  concurrently-inserted item during the session, per the standing hazard).
+- **Re-confirmed Phase 16 is still blocked, three ways.** INBOX foot (the narrowed self-earnings ask,
+  `INBOX.md` ~line 3245–3290) has **no `cgpe-api` reply**; and the producer's live code still gates the
+  whole payroll router admin-only — `routes/payroll.js:22-23` = `router.use(protect); router.use(authorize('admin'))`,
+  routes are only `/profiles`, `/profiles/:userId`, `/compute`, `/export`, **no `my-earnings`**,
+  `req.user.user_id` appears only as a profile-write audit field. So the self-scoped read still does not exist.
+- **Scoped the `t()` widening** (PHASES "Next 3" #3) via six parallel read-only extraction passes over
+  ~45 screens. Produced `docs/i18n/SCOPE.md` (the plan) + `docs/i18n/inventory/01–06*.md` (the full
+  string list: screen · line · kind · English · proposed key). Observable facts now on record:
+  only **74 keys** are wired via `t()` in 6 files (all partial); **~40 screens are 100% hardcoded
+  English**; **~1,800 string occurrences** → ~1,200–1,400 unique keys after a `common.*` dedup.
+- **Surfaced three prerequisites** a future builder needs before any copy helps (see DECISIONS today):
+  (1) `t()` has **no interpolation** — ~30% of strings are dynamic and need a `t(key, params)` + plural
+  extension, must not be concatenated (Hindi/Gujarati word order); (2) a `common.*` shared layer
+  ("Try again" ×~30, the ~8-variant outage body); (3) the parity test hard-codes `EN_KEYS.length === 74`
+  **and** its leak check only rejects `value === key`, **not** `value === English` — so a Gujarati entry
+  left as English **passes silently**. Verified against the real test file.
 
 ## Files changed
-- `src/data/api.ts` — new `getPayrollRoster(year, month)` + `PayrollRow` / `PayrollMonth` types (after
-  `getAttendanceHistory`).
-- `src/app/payroll.tsx` — **new** screen (the admin payroll roster + `MonthStrip` / `MemberRow` /
-  `RosterSkeleton`).
-- `src/app/(tabs)/more.tsx` — one gated Payroll row in the Admin group (real-role gate).
-- `src/data/__tests__/api-payroll.test.ts` — **new**, 7 tests (request, envelope, payable passthrough,
-  empty roster, 403-is-answer, 503-is-outage, demo no-op).
-- `docs/spec/PHASE-20.md` (new), `docs/PHASES.md` (Now + board row 20 + Next-3 #1), `docs/DECISIONS.md`
-  (top entry), this file, `docs/STATUS.md` (manager-facing rewrite).
-- `CLAUDE.md` — appended to the `store/roles.ts` danger-zone bullet the leader-folds-into-admin-tier trap
-  (gate admin-only backend surfaces on the real `user.role`, not `caps`/tier).
-- `../contracts/INBOX.md` — three replies/notices (Phase-20 attendance, Phase-21 english-questions, the
-  new payroll-compute FYI). **Untracked disk; not in any commit.**
-
-## Gates
-- `npx tsc --noEmit` → exit 0.
-- `npm test` → **330 / 16 files** (+7). Was 323.
-- `npm run lint` → **0 errors, 12 warnings** — byte-identical baseline; none of the 12 are in the new
-  files.
+- `docs/i18n/SCOPE.md` — **new**: coverage map, volume, 3 prerequisites, priority tiers, how to supply copy.
+- `docs/i18n/inventory/01-home-account-auth.md … 06-attendance-team.md` — **new**: the full extracted worklist.
+- `docs/DECISIONS.md`, `docs/PHASES.md` (Now + Next-3 #3 + board), `docs/STATUS.md` (manager rewrite), this file.
+- `CLAUDE.md` — appended an i18n trap note (parity-test hard-count + `value===English` blind spot; `t()` no interpolation).
+- Memory: `i18n-widening-scope.md` (+ MEMORY.md pointer).
+- **No `src/` change. No contract/INBOX change** (app-side scoping only — no sibling notification needed).
 
 ## Decisions made
-- **Verified before building** — the user said the salary backend was done; it is, but admin-only, and
-  the self-read Phase 16 needs does not exist. Reported that with evidence rather than building against
-  the wrong assumption.
-- **Built a separate admin screen, not a Phase 16 re-scope** — the Phase 16 UI lock and its self-read
-  ask are untouched. This screen is a mobile slice of the `cgpe-admin` payroll surface (accepted
-  duplication, owner's call).
-- **Consumed `/compute` (no PII), gated on real role, never multiplied** — see `docs/spec/PHASE-20.md`
-  D-1…D-6 and DECISIONS 2026-08-11 (top).
+- **Scoped, did not build.** Widening `t()` needs human-supplied Hinglish/Gujlish/Hindi/Gujarati copy
+  (~4,800 non-English strings) — not a solo editor task, and PHASE-19 §4 forbids machine translation. So
+  the useful move was to turn ~1,800 raw strings into a plan + worklist that lets the owner decide.
+- **Fan-out extraction, then synthesise.** Six parallel read-only agents (not a Workflow) — proportionate
+  to a broad read across ~45 screens; results consolidated by hand into `docs/i18n/`.
 
 ## Known broken / deliberately skipped
-- **Phase 16 self-view still blocked** — on a self-scoped earnings read (`GET /api/payroll/my-earnings`,
-  `protect` only) that does not exist. Phase 20 does not unblock it.
+- **Phase 16 self-view — still blocked** on a self-scoped payroll read (`GET /api/payroll/my-earnings`,
+  `protect`-only) that does not exist. `docs/i18n/` does NOT touch it.
 - **Phase 6 commissions — unchanged, still blocked** (no product aggregate / no `target`).
-- **`git push` still 403s** — credential `reactjsaaziko` has no write access; commit is **local only**.
-- **Device check for `/payroll`** — renders on a real handset in light/dark; carried with the other
-  device-verification items (web/native slices).
+- **`t()` widening not built** — needs the P0 interpolation extension + human copy. Only scoped.
+- **Data-derived label maps not counted** — `src/data/labels.ts` / `tasks.ts` (STAGE_META, SEG_META,
+  CLAIM_STATUS…) are a separate ~50–100-string surface, excluded from the inventory by design.
+- **`git push` still 403s** — `docs/i18n/` committed **local only**; credential `reactjsaaziko` has no write access.
+- **Device-verification backlog** — unchanged, still needs a handset.
 
 ## Next session starts here
-- First command: `/boot`, then re-read `../contracts/INBOX.md` for a `cgpe-api` reply to the narrowed
-  self-earnings ask (still at the foot of the file, unanswered) before assuming Phase 16 is buildable.
-- If a self-scoped read landed: build the Phase 16 self-view per its preserved UI lock (do **not** point
+- **First command:** `/boot`, then re-read `../contracts/INBOX.md` foot for a `cgpe-api` reply to the
+  narrowed self-earnings ask before assuming Phase 16 is buildable.
+- **If a self-scoped read landed:** build the Phase 16 self-view per its preserved UI lock (do NOT point
   `payroll.tsx` at it — that's the admin roster).
-- Else editor-buildable work is: widen `t()` coverage (needs human-supplied Hinglish/Gujlish copy) or
-  the handset device backlog. Nothing else is unblocked.
-- Watch out for: the payroll surface is admin-only by the owner's deliberate decision — do not read the
-  existence of `/compute`/`/export` as "Phase 16 unblocked". Mobile's tier folds `leader` into "admin",
-  so any new payroll surface must gate on the real `user.role`, not `caps`.
+- **Else, the newly-unblocked editor work is the `t()` widening prerequisite** — build the `t(key, params)`
+  interpolation + plural extension and the `common.*` layer (needs **no** copy), per `docs/i18n/SCOPE.md`
+  §3. Then wire one Tier-1 screen and hand the owner its fill-in list. This is the one path that advances
+  without waiting on the backend or a translator.
+- **Watch out for:** the i18n parity test (`src/i18n/__tests__/dictionaries.test.ts`) — bump its hard
+  `EN_KEYS.length === 74` when adding keys, and remember its leak check will NOT catch an English string
+  left in a non-English dict, so real copy is load-bearing.
