@@ -1,86 +1,79 @@
-# HANDOFF — CGPE Connect (Android) — Phase 18 BUILT (watchable E2E harness) — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — Phase 19 BUILT (language toggle: verified + hardened) — 2026-08-11
 
-Phase 18 is built and green. The app now has a **watchable, A-to-Z, worst-case end-to-end test
-harness**: one command opens a real browser that drives every web-reachable screen while you watch,
-forces the worst backend states, hammers the forms with bad input, and records video + trace +
-per-screen screenshots. Everything is offline and synthetic — **zero production data**. The spec's
-headline risk (would the web build even boot?) is retired: it boots with **no app change**.
+Phase 19 is built and green. The five-language toggle (English, ગુજરાતી, हिन्दी, **Hinglish**,
+**Roman Gujarati/Gujlish**) now has a **permanent regression gate** for dictionary completeness, and
+a **per-language visual walk** on the Phase 18 harness that drives the real toggle and screenshots
+every screen in every language for a human naturalness/layout review. No dictionary was edited — the
+five shipped dictionaries were already complete; this phase **proves** that and makes it stay true.
 
 ## Done
-- **Phase 18 shipped, 33 Playwright tests green**, in a new `ANDROID/e2e/` tree kept outside `src/`:
-  - `00-smoke` — the Expo **web** build boots and `/(auth)/login` renders with no redbox. **No web
-    guard was needed** (`tracker.ts`/`biometricIdentity.ts`/`AppLock` already gate native modules).
-  - `01-signin` — the backbone: mocked `/auth/login` (with CORS preflight), the real login form
-    submits, home renders, and a deep-link re-boot restores the session from storage.
-  - `10-walk-normal` — signs in against a healthy mock backend and deep-links to **all 42
-    web-reachable screens**, asserting each renders (no redbox / not blank) with a per-screen
-    screenshot. **42/42 render, 0 page errors.**
-  - `30-worstcase` — **21 cases**: injects `500 / 503 / malformed / empty-200 / timeout / oversized`
-    on representative data screens (leads, clients, claims, notifications) and asserts the screen
-    still renders **and** the `<HealthBanner/>` obeys the data-health contract (an outage shows
-    "could not load", never a fake empty; an oversized 200 renders the flood with no banner).
-  - `40-forms` — **9 cases**: login bad-input (empty, whitespace-only, refused-credentials danger
-    banner, network-failure offline banner, hostile/injection/emoji/RTL/over-length text,
-    double-submit) + hostile input on search / task-new / claim-new (no crash, no redbox).
-- **Two app-side edits only, both gate-isolation** (no screen touched): `tsconfig.json` excludes
-  `e2e` (re-adding `node_modules` to the override), `eslint.config.js` ignores `e2e/**`.
-- **Gates green:** `npx tsc --noEmit` exit 0; `npm test` **305/305** (14 files, unchanged);
-  `npm run lint` **0 errors / 12 warnings** (Phase-15 baseline, unchanged).
-- **Cleared the one open INBOX item** for `cgpe-mobile`: backend Phase 19 deleted the legacy
-  `/api/users` identity store — grep-verified the app never called it, replied under the item
-  (box left unticked — multi-recipient), grep-confirmed the reply persisted.
+- **Dictionary parity is now a gate (`npm test`).** A new Vitest asserts all 5 dictionaries expose the
+  exact same 74-key set with **no blank, missing, or key-identical value**. It passes today: the
+  shipped dictionaries are already at full parity — no holes, no raw keys. This is the durable core
+  and the honest "buildable at a desk" half (DONE-1). `npm test` is now **323/323** (was 305).
+- **Every screen renders in every language, with no raw key leaking (DONE-2).** A new Playwright spec
+  drives the **real Settings toggle** into each of the 5 languages, confirms the switch takes effect
+  **live** and **survives a reload** (DONE-3, web slice), then deep-links all 42 web-reachable screens
+  and screenshots each into `e2e/artifacts/screens/languages/<code>/`. Result: **42/42 render in all
+  five languages, 0 raw key leaks anywhere.**
+- **Screenshots are now legible.** Fixed the Phase-18-flagged "pixel-clean screenshots" issue: the
+  walk waits for the animated Splash overlay to dismiss before the shot, so the per-language stills (and
+  the key-leak scan) show the real screen, not the logo. The user can now review `languages/hi-en/` and
+  `languages/gu-en/` for naturalness (DONE-4) and `languages/*` for layout (DONE-5).
+- **Gates green:** `npx tsc --noEmit` exit 0; `npm test` **323/323** (15 files, +18); `npm run lint`
+  **0 errors / 12 warnings** (Phase-15 baseline, unchanged).
 
 ## Files changed
-- **`e2e/` — new tree.** `playwright.config.ts` (headed by default, `HEADLESS=1` for CI; video +
-  trace + screenshot on; port 8090; auto-starts/reuses the web server; `globalTeardown`);
-  `tsconfig.json`; `tests/{00-smoke,01-signin,10-walk-normal,30-worstcase,40-forms}.spec.ts`;
-  `helpers/{mock,session,render,artifacts,teardown}.ts`; `README.md`; `WEB-LIMITS.md`.
-- **`tsconfig.json`** — added `exclude: ["node_modules","dist","e2e"]`.
-- **`eslint.config.js`** — added `"e2e/**"` to `ignores`.
-- **`.gitignore`** — ignore `e2e/artifacts/` (commit specs, ignore run output).
-- **`package.json`** — `-D @playwright/test`; scripts `e2e` + `e2e:report`.
-- **`../contracts/INBOX.md`** — one reply under the `/api/users`-deletion item (outside this git repo).
-- **Docs:** this file, `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md`; memory
-  `e2e-harness-phase18`.
+- **`src/i18n/index.tsx`** — one line: `export const DICT` (was private), so the parity test can reach
+  the five dictionaries. Nothing under `src/app` imports it; screens still read strings via `t()`.
+- **`src/i18n/__tests__/dictionaries.test.ts`** — new, 18 cases. The parity + value-quality gate.
+- **`e2e/tests/50-languages.spec.ts`** — new. One test per language: drive toggle → assert live +
+  persisted → walk 42 screens → screenshot per language → assert no key leak.
+- **`e2e/helpers/render.ts`** — `assertRenders` gains opt-in `{ settleSplash }` (default **off**, so
+  the other 3 specs are behaviourally unchanged) that waits out the Splash before body-read + shot.
+- **`e2e/helpers/teardown.ts`, `e2e/README.md`, `e2e/WEB-LIMITS.md`** — document the language walk, the
+  74-key coverage reality, and the real-cold-start persistence handset caveat.
+- **Docs:** this file, `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md`.
+- Commits: `433250c` (parity-test core), `2c599c5` (visual half). Both **local** — push still 403s.
 
-## Decisions made (full reasoning in DECISIONS 2026-08-11, top)
-- **Session mode is chosen by the login token prefix** — a `demo-` token runs the app fully offline
-  (degraded rendering), any other token makes the mocked calls "real" so faults apply.
-- **Healthy object/stat mocks are zero-FILLED, not `{}`** — several screens deref stat fields
-  unguarded and crash on a partial object. (The app guards `null` but not `{}`; that is a real
-  robustness class worth a future app fix, but it is out of scope for this test-infra phase.)
-- **Worst-case + bad-input run on a representative set, not all 47** — the `<HealthBanner/>` is
-  app-wide (mounted once, routed through `unavailable`/health), so the contract generalises. The
-  selection is stated in `e2e/README.md` (no silent cap).
-- **Detail-by-id reads 404** (a healthy backend has no record `e2e-1`) and synthetic ids are 24-hex
-  so `api.ts` `healthKey()` collapses them and no false banner leaks.
+## Decisions made
+- **Ship the parity test first, as its own green thing.** It depends on nothing and is a permanent
+  gate; the visual half rides Phase 18. Two commits, two units (spec §5 sequencing).
+- **Drive the real toggle, don't hand-seed the language key.** Clicking the Settings row exercises the
+  actual write + `refreshI18nUser` live-update + reboot-read — which *is* DONE-3 — and mirrors how
+  `session.ts` signs in via the form. Selected by the row's **English label** (rows are always English)
+  and confirmed by the `settings.language` heading, the one string distinct in all five languages.
+- **No dictionary was edited and nothing was machine-translated.** The parity test passed as-is; per
+  spec §4 a missing string would be a *finding to report*, never a gap to fill with a guess.
+- **`settleSplash` is opt-in, not a global change to `assertRenders`.** Keeps the other three specs
+  byte-identical in behaviour; only the language walk needs the real screen for its screenshots + scan.
 
 ## Known broken / deliberately skipped
-- **~12 screens show a count=1 outage banner under the healthy walk** — from the home-dashboard
-  widget prefetch that renders underneath a pushed stack screen on cold deep-links (all responses
-  200 and valid; a timing/fidelity artifact, not a render failure). All 42 render. Recorded as info,
-  not asserted. If Phase 19 wants pixel-clean healthy screenshots, this is the thread to pull.
-- **Native-only surfaces are NOT covered** — `e2e/WEB-LIMITS.md` lists them: haptics, the
-  AsyncStorage clock key + cold-start persistence, SecureStore biometric seal / `AppLock`, background
-  GPS (`tracker.ts`), the native `LeafletMap`, the native base-URL branch. A green web run is the web
-  slice, **not** "the whole app is verified." These stay on the handset backlog (Phases 1/4/5/6/7/9/
-  10/12/13).
+- **Only the 74 keys wired to `t()` change with the toggle.** Large parts of many screens (e.g. the
+  Settings body rows — "Biometric unlock", "Push notifications" — most screen chrome) are **hardcoded
+  English** and stay English in every language. This is the *current app*, not a toggle bug. Widening
+  `t()` coverage is separate, larger work; it is **not** what Phase 19 scoped ("verify + harden the
+  existing toggle"). Visible in `languages/*/settings.png`. Flag for the user to decide if they want it.
+- **Naturalness of Hinglish/Gujlish (DONE-4) is a human call** — the screenshots exist; a machine must
+  not (and by spec does not) fail the build on a transliteration guess. Awaiting the user's eyes.
+- **Real cold-start persistence (DONE-3 tail)** — a web `page.reload()` is a fresh boot from the same
+  localStorage, not the OS killing the process on a SecureStore handset. Carried to the device backlog
+  (`e2e/WEB-LIMITS.md`), like the clock-key check.
 - **Salary (Phase 16) & commissions (Phase 6) — still backend-blocked** (unchanged): waiting for the
-  backend to create a pay field + computed earnings endpoint and a commissions product aggregate.
+  backend pay field + computed earnings endpoint and the commissions product aggregate.
 - **`git push` still 403s** — credential `reactjsaaziko` has no write access to
-  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`. All commits this session are local and unpushed. Needs a
-  human to grant access or swap the credential.
+  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`. Both commits this session are local. Needs a human.
 
 ## Next session starts here
-- **Phase 19 — language toggle across all 5 languages (incl. Hinglish / Gujlish).** Two parts:
-  (1) the durable core — a **dictionary-parity Vitest** (all 5 dicts, same 74 keys, no blanks),
-  buildable now with no device; (2) the visual per-language pass, which **now rides the Phase 18
-  harness** — drive the language toggle in the browser and screenshot every screen per language
-  (extend `10-walk-normal` with a language parameter, or add `50-languages.spec.ts`). Full path:
-  `docs/spec/PHASE-19.md`.
-- **First command:** `/boot`, then `npm run e2e` to watch the current harness before extending it.
-- **Watch out for:** the language toggle is a per-user setting persisted at `cgpe.lang.<userId>`
-  (`src/i18n/index.tsx`); to switch language in the harness you may need to drive Settings' language
-  control (or seed the lang key) then reload — mirror how `session.ts` lets the app write its own
-  storage rather than hand-seeding. Do **not** machine-translate missing strings (Phase 19 spec): a
-  wrong Hinglish/Gujlish string is worse than an obvious English fallback — report gaps, don't guess.
+- **Phase 16 — "My earnings" salary + Phase 6 commissions — both backend-blocked.** Nothing app-side
+  until the backend creates the endpoints (re-verified real against `cgpe-api`'s code this week; filed
+  to INBOX). Deriving money on-device stays rejected. If still blocked, the next buildable item is the
+  **device-verification backlog** (handset-only acceptance from Phases 1/4/5/6/7/9/10/12/13) — or, if
+  the user wants it, **widening `t()` coverage** so more of the app actually translates (scoped from
+  what the language screenshots show is still English).
+- **First command:** `/boot`, then (optional) `npm run e2e -- -g "Hinglish"` to re-watch one language,
+  or open `e2e/artifacts/screens/languages/` to review the per-language stills.
+- **Watch out for:** the language walk is ~3 min/language (~15 min for all five) because of the
+  Splash-settle wait — run **one language at a time** with `-g "<Language>"` while iterating, not the
+  full matrix each time. And remember only `t()`-wired strings change: judge coverage from the
+  screenshots, not from the toggle "working."

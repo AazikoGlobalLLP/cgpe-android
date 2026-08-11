@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 19 built: 5-language toggle verified + hardened (parity gate + visual walk)
+
+**Context.** Phase 19 asked to verify + harden the *existing* 5-language toggle (English, Gujarati,
+Hindi, **Hinglish** = Hindi-in-Latin, **Roman Gujarati/Gujlish** = Gujarati-in-Latin), not build a
+new one. Cheapest durable core is a dictionary-parity test that needs no device; the visual pass rides
+the Phase 18 harness.
+
+**Decision.** Shipped in two units.
+- **Core: a parity Vitest (`src/i18n/__tests__/dictionaries.test.ts`), 18 cases.** Asserts the five
+  languages are exactly `[en, gu, hi, hi-en, gu-en]`, English carries the full **74-key** set, every
+  dictionary has every English key and no extras, and **no value is blank or identical to its own key**
+  (the raw-key-leak class DONE-2 names). TypeScript already owns key parity via
+  `Dict = Record<TKey, string>`; this owns the value-quality checks the type system cannot see, and is a
+  **permanent gate**. Required one app-side line: `export const DICT` (was module-private) so the test
+  can read the dictionaries — nothing under `src/app` imports it; screens still go through `t()`.
+- **No dictionary was edited and nothing was machine-translated.** The test passed as-is: the shipped
+  dictionaries are already at full parity. Per spec §4 a missing string is a *finding to report*, never
+  a gap to fill with a guess — a wrong Hinglish/Gujlish string is worse than an honest English fallback.
+- **Visual: `e2e/tests/50-languages.spec.ts`, one test per language.** Drives the **real** Settings
+  toggle (clicks the row by its stable **English** label — rows are always English — and confirms the
+  `settings.language` heading, the one string distinct in all five languages, both **live** and **after
+  a `page.reload()`**: DONE-3 on the web slice). Then walks all 42 screens, screenshots each into
+  `languages/<code>/`, and scans for a leaked key (`namespace.word` regex — tight enough that real prose
+  never matches). Result: **42/42 render in every language, 0 key leaks.** Drove the toggle rather than
+  hand-seeding `cgpe.lang.<user>` because that exercises the real write + `refreshI18nUser` bus +
+  reboot-read, which *is* the DONE-3 behaviour (same reasoning `session.ts` signs in via the form).
+- **`assertRenders` gained opt-in `{ settleSplash }` (default OFF).** Every `page.goto()` re-shows the
+  animated Splash for ~1900ms; without waiting it out, the screenshot AND the returned body the leak
+  scan reads were the logo, not the screen. The language walk waits for the Splash tagline to detach
+  first. Kept opt-in so the other three specs stay byte-identical — this is the "pixel-clean
+  screenshots" thread the Phase 18 handoff explicitly left for Phase 19.
+
+**Consequence.** Dictionary completeness is now a `npm test` gate (**323/323**, +18). The per-language
+screenshots exist for the user's naturalness (DONE-4) + layout (DONE-5) review. **Coverage reality,
+recorded so it isn't rediscovered:** only the **74 `t()`-wired keys** change with the toggle — much of
+the app (Settings body rows, most screen chrome) is **hardcoded English** and stays English in every
+language. That is the current app, not a toggle bug; widening `t()` is separate, larger work, out of
+this "verify + harden" phase's scope. Gates: `tsc` 0, `npm test` 323/323, `lint` 0 errors/12 warnings.
+Push still 403s (commits `433250c`, `2c599c5` local).
+
 ## 2026-08-11 — Phase 18 built: Playwright + Expo-web watchable E2E harness, offline & synthetic
 
 **Context.** Phase 18 asked for a *watchable*, A-to-Z, worst-case end-to-end test the user can sit and

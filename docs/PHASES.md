@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 19 — language toggle verified + hardened. BUILT 2026-08-11.** Verify + harden the *existing*
+5-language toggle (English, ગુજરાતી, हिन्दी, **Hinglish**, **Roman Gujarati/Gujlish**), not build a new
+one. Shipped in two units. **(1) The durable core:** a dictionary-parity Vitest
+(`src/i18n/__tests__/dictionaries.test.ts`, 18 cases) asserts all 5 dictionaries expose the exact same
+**74-key** set with **no blank / missing / key-identical** value — the value checks
+`Dict = Record<TKey, string>` cannot make at compile time. It **passes as-is**: the shipped dictionaries
+are already at full parity, so **no dictionary was edited and nothing was machine-translated** (spec §4:
+a gap is a finding to report, never a guess to fill). Needed one app line — `export const DICT` (was
+private) — so the test can read the dictionaries; screens still use `t()`. `npm test` **305 → 323**.
+**(2) The visual half rides Phase 18:** `e2e/tests/50-languages.spec.ts` (one test per language) drives
+the **real** Settings toggle into each language, asserts it applies **live** and **survives a reload**
+(DONE-3, web slice), then walks all 42 screens and screenshots each into `languages/<code>/` for a human
+naturalness (DONE-4) + layout (DONE-5) review, asserting **no raw key leaks** (DONE-2). Result:
+**42/42 render in all 5 languages, 0 key leaks.** `assertRenders` gained opt-in `{ settleSplash }`
+(default off — other specs unchanged) that waits out the animated Splash so the stills + leak scan see
+the real screen, not the logo (the Phase-18-flagged "pixel-clean screenshots" thread). **Coverage
+reality:** only the **74 `t()`-wired keys** change with the toggle — much of the app (Settings body,
+most chrome) is **hardcoded English** and stays English in every language; widening `t()` is separate,
+larger work, out of this "verify + harden" scope. Gates green: `tsc` 0, `npm test` **323/323**, `lint`
+0 errors/12 warnings. Push still 403s (commits `433250c`, `2c599c5` local). Full path:
+`docs/spec/PHASE-19.md`; DECISIONS 2026-08-11 (top); HANDOFF.
+
 **Phase 18 — watchable A-to-Z + worst-case E2E harness. BUILT 2026-08-11.** The spec's named
 risk (§2) is retired: **the Expo web build boots and renders `/(auth)/login` with no web guard** —
 `tracker.ts` / `biometricIdentity.ts` / `AppLock` already gate their native modules behind
@@ -237,17 +259,24 @@ exercise.
 
 ## Next 3
 
-1. **Phase 19 — language toggle: verify + harden all 5 languages (incl. Hinglish / Gujlish).** The
-   app already ships the 5 dictionaries; this verifies them. Its core — a dictionary-parity Vitest
-   (all 5 dicts, same 74 keys, no blanks) — **depends on nothing and is buildable today**; the visual
-   per-language pass now **rides the Phase 18 harness** (which is built and green): drive the language
-   toggle in the browser and screenshot every screen per language. Full path: `docs/spec/PHASE-19.md`.
-2. **Phase 16 salary + Phase 6 commissions — backend-blocked; waiting for the backend to create the
-   endpoints.** Re-verified real this session against `cgpe-api`'s code: no product aggregate / no
+1. **Phase 16 salary + Phase 6 commissions — backend-blocked; waiting for the backend to create the
+   endpoints.** Re-verified real 2026-08-11 against `cgpe-api`'s code: no product aggregate / no
    `target` in `routes/commissions.js` (Phase 6); no `salary`/`wage`/`per_day`/`ctc`/`pay_rate` field
    on any backend model or route (Phase 16) — only the role `payroll_staff` / department `payroll`.
    Backend Phase 18's real `/api/leaves` is leave data, not pay. Deriving money on-device stays
-   rejected. Filed to `cgpe-api` (INBOX) this session. Nothing app-side until the endpoints land.
+   rejected. Filed to `cgpe-api` (INBOX). Nothing app-side until the endpoints land.
+2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13**
+   (haptics, the AsyncStorage clock key, background GPS, the master route replay, airplane-mode
+   behaviour, a leader's true "On duty now" count, the offline map render, the LIC catalogue + notes
+   search against production, reminder cold-start persistence, and now the language-key cold-start).
+   Phases 18/19 cover the web-reachable slice; the native-only remainder still needs a phone + a live
+   backend. Not editor-buildable.
+3. **Widen `t()` coverage (newly surfaced by Phase 19, optional, app-side buildable).** Only the 74
+   `t()`-wired keys change with the language toggle; the Phase 19 per-language screenshots
+   (`e2e/artifacts/screens/languages/*`) show which screens are still hardcoded English (e.g. the
+   Settings body). If the user wants more of the app to actually translate, scope it from those
+   screenshots — but every new string needs **human-supplied** Hinglish/Gujlish copy, never a machine
+   guess (Phase 19 spec §4). Out of Phase 19's "verify + harden the existing toggle" scope.
 
 > **Also still open:** the **device-verification backlog** — handset-only acceptance criteria carried
 > from Phases 1, 4, 5, 6, 7, 9, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the
@@ -289,7 +318,7 @@ exercise.
 | 16 | "My earnings" salary section `[api]` | **Blocked** — waiting for the backend to create the endpoint (pay field + computed earnings); re-verified real 2026-08-11 |
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
 | 18 | Watchable A–Z + worst-case E2E test | **Built** 2026-08-11 — Playwright/Expo-web harness, 33 tests green (42 screens render + 21 worst-case + 9 bad-input); web boots with no guard; gates green |
-| 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Planned** 2026-08-11 — path laid (`docs/spec/PHASE-19.md`); dictionary-parity test buildable now |
+| 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Built** 2026-08-11 — parity Vitest (323/323, +18) + per-language E2E walk (42/42 render, 0 key leaks × 5 langs); dictionaries already complete; naturalness review outstanding |
 
 ---
 
