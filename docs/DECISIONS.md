@@ -723,3 +723,37 @@ positives on this tree and a permanently-red gate is worse. Do not re-enable the
 rewriting the flagged call sites (a structural change, not a lint pass), and do not silence `purity`
 — fix its hits at source. `CLAUDE.md`'s lint line was updated to record all of this so the next
 session does not re-diagnose why the rules are off.
+
+## 2026-08-11 — Phase 12 BUILT: read the agent roster from task-overview, not admin-only /profiles
+
+**Context.** `getAgentLocations()` enumerated the roster through admin-only `GET /api/profiles`
+(role ∈ {admin, super_admin, payroll_staff}, else 403). A leader (and any advisor) therefore got an
+empty roster → no `/attendance` fan-out → no pins → "0 on duty" on every dashboard and an empty agent
+map, even with the whole team clocked in. The spec-session (2026-08-11) had already found this and
+written `docs/spec/PHASE-12.md`; this session verified the one open assumption and built it.
+
+**Decision.** Swap the roster source in `getAgentLocations()` only, to
+`GET /api/team/task-overview?scope=all` — the same endpoint `getTeam()` already trusts, readable by
+any staff, whose `/attendance/user/:id` fan-out already has no role check. Validator `isArr` →
+`(d) => d && Array.isArray(d.members)`, roster read from `d.members`, outage reported under the
+existing `/attendance` health key rather than a competing `/team/task-overview` row (`getTaskOverview`
+owns that). No `cgpe-api` change — the `[api]` board tag was wrong (D-1). `getTeam` /
+`team/index.tsx` / `agent-map.tsx` untouched: the fix is upstream of all of them (D-4).
+
+**The `?scope=all` question, resolved against the producer's code, not the contract prose (D-2).**
+Read `../cgpe-backend-main/utils/scope.js` `visibilityScope` first. The `view==='all'` → `mode:'all'`
+return sits **inside** `if (canViewAll)`, and `canViewAll = isSuperAdmin(me) || me.role === 'admin'`.
+A leader is neither, so `?scope=all` is ignored and the leader falls through to the `me.role ===
+'leader'` branch → `{ mode:'team', userIds:[self,...team] }`. So `?scope=all` is not just safe, it is
+*required*: without it, an admin/super_admin defaults to `mode:'own'` and their agent map would show
+only themselves (the bare endpoint would silently narrow the master view). The param keeps
+admin/master org-wide while a leader stays clamped to their team. A test pins the request carries
+`?scope=all` so a later edit cannot quietly drop it and change admin/master breadth.
+
+**Consequence.** A leader's `clockedIn`, the Team screen's "On duty now" KPI, and the agent map are
+now correct at the wire; `npx tsc --noEmit` exit 0; `npm test` 281/11 (+10 in `api-agents.test.ts`);
+`npm run lint` 0 errors / 12 warnings. Committed `4507d6e` (code+test), `c8a4a79` (board).
+**The count against production still needs a handset** (spec criterion 6) — a leader token, a live
+backend, someone actually clocked in; none reachable from `npm test`. If a leader unexpectedly sees
+the whole company on the agent map after a backend change, the cause is `visibilityScope`'s
+`canViewAll` gating having changed so a leader's `?scope=all` widens — filed to `cgpe-api` in INBOX.

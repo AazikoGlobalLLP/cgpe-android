@@ -1,76 +1,84 @@
-# HANDOFF — CGPE Connect (Android) — Phase 12 (spec written, NOT built) — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — Phase 12 (BUILT) — 2026-08-11
 
-This was a **verification + spec** session. No `src/` code changed, no tests changed, nothing was
-committed until this handoff. Branch `Shivam`; `git push` still 403s (unchanged, needs a human —
-credential `reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`).
-Gates were not re-run because no code moved — last known green from Phase 15: `tsc` exit 0,
-`npm test` 271/10 files, `npm run lint` 0 errors / 12 warnings.
+Phase 12 is built, gated green, and committed locally on branch `Shivam`. `git push` still 403s
+(unchanged — credential `reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`;
+needs a human). Both commits are local only.
+
+Gates, all green after the change: `npx tsc --noEmit` exit 0; `npm test` **281 tests / 11 files**
+(was 271/10 — +10 in the new `api-agents.test.ts`, no regressions); `npm run lint` **0 errors /
+12 warnings** (the Phase-15 baseline, no new warnings).
 
 ## Done
 
-- **Confirmed which blocked phase is actually buildable, and why.** The handoff-flagged "re-check
-  whether cgpe-api shipped a Phase 6 / Phase 12 dependency" is done, using the Phase-4 method (read
-  the contract row → the producer's handler → our own code):
-  - **Phase 12 is fully app-side — its `[api]` tag is WRONG.** The only break is that
-    `getAgentLocations()` enumerates the roster through admin-only `GET /api/profiles` (403s for a
-    leader → empty on-duty). The correct source, `GET /api/team/task-overview`, is readable by any
-    staff, server-scoped per role, already trusted by `getTeam()`, and carries the two fields the
-    pipeline needs (`user_id`, `name`). The attendance fan-out it feeds (`/attendance/user/:id`) has
-    **no role check at all** (`api.md:544`), so it already works for a leader. No cgpe-api change.
-  - **Phase 6 is mostly app-side too, but the money third is genuinely backend-blocked.** Notes
-    search sends `search=` where the server reads `q=` (`api.md:880`); LIC plans expects `data` to be
-    an array but the server sends `{ meta, plans }` (`api.md:1192`) — both pure client conformance
-    bugs against stable documented shapes. **Commissions** wants a personal aggregate but
-    `GET /api/commissions` returns owner-scoped raw rows (`api.md:1163`), and `target` has no source
-    in them — that needs a server aggregate endpoint the **product owner confirmed is still pending**.
-- **Wrote `docs/spec/PHASE-12.md`** — the full, approvable spec (goal, verified-today section with
-  citations, five locked decisions, one-file diff plan, acceptance criteria, out-of-scope). It was
-  presented for approval; the user ran `/handoff` before saying "build", so **the build has not
-  started.**
+- **A leader's "On duty now" count is real at the wire, not hardcoded 0.** `getAgentLocations()` used
+  to enumerate the roster through admin-only `GET /api/profiles`, which 403s for anyone outside
+  `{admin, super_admin, payroll_staff}`. A leader (and any advisor) therefore got an empty roster →
+  no `/attendance` fan-out → no pins → "0 on duty" on every dashboard and an empty agent map, even with
+  the whole team clocked in. It now reads the roster from `GET /api/team/task-overview?scope=all` — the
+  same source `getTeam()` already trusts, readable by any staff, whose `/attendance/user/:id` fan-out
+  already has no role check. `getTeam` / `team/index.tsx` / `agent-map.tsx` needed **no change** — the
+  fix is upstream of them (spec D-4), so the leader's `clockedIn`, the Team screen's "On duty now" KPI,
+  and the agent map all become correct automatically.
+- **Confirmed the `[api]` tag was wrong — no `cgpe-api` change was needed (D-1).** All three endpoints
+  the leader path uses already exist and are correctly gated for a leader.
+- **Verified the `?scope=all` leader-clamp in the producer's own code before finalising the diff
+  (D-2).** `../cgpe-backend-main/utils/scope.js` `visibilityScope`: the `view==='all'` → `mode:'all'`
+  return is gated inside `if (canViewAll)`, `canViewAll = isSuperAdmin || role==='admin'`. A leader is
+  neither, so `?scope=all` is ignored and clamped to `{mode:'team', userIds:[self,...team]}`. The param
+  is *needed* to keep admin/master org-wide (the bare endpoint defaults them to `mode:'own'`, showing
+  only themselves on the map) — the opposite of what "drop the param" would do.
+- **Filed an INBOX notice** to `cgpe-api`/`cgpe-admin` ("shipped app-side, no API change, the `[api]`
+  tag was wrong; if the scope gating changes so a leader's `?scope=all` widens org-wide, tell us"),
+  grepped back and confirmed it survived a concurrent write.
 
 ## Files changed
 
-- `docs/spec/PHASE-12.md` — **new.** The Phase 12 spec. This is the only new content besides the
-  handoff docs below.
-- `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/PHASES.md` — this handoff (board row 12, `## Now`,
-  `## Next 3`, two DECISIONS entries).
-- **No `src/` file was touched. No test file was added yet.**
+- `src/data/api.ts` — `getAgentLocations()` only: roster source `GET /profiles?limit=60` →
+  `GET /team/task-overview?scope=all`, validator `isArr` → `(d) => d && Array.isArray(d.members)`,
+  roster read from `d.members`, outage reported under the existing `/attendance` health key (not a
+  competing `/team/task-overview` row `getTaskOverview` owns, D-3). ~4 functional lines + a doc comment.
+- `src/data/__tests__/api-agents.test.ts` — **new.** 10 cases pinning the wire contract: roster request
+  is `/team/task-overview` (never `/profiles`), `?scope=all` is present, envelope unwrap, the leader
+  path yields an `onDuty:true` pin, clocked-out → `onDuty:false`, no-coords/no-`user_id` → no pin, and a
+  task-overview outage lands on the `/attendance` health key.
+- `docs/PHASES.md` — board row 12 → **Done** (`4507d6e`), `[api]` struck through; `## Now`, the Phase 12
+  detail section (three result notes), and `## Next 3` (Phase 12 drops off) updated.
+- `docs/DECISIONS.md`, `docs/HANDOFF.md`, `docs/STATUS.md` — this handoff.
+- `../contracts/INBOX.md` — the shipped-app-side notice (that dir is untracked, so not committed).
 
 ## Decisions made
 
-- **Build Phase 12 next, not Phase 6.** Phase 12 is cleanly unblocked and needs no backend; Phase 6's
-  commissions third is backend-pending (user's call: skip/swap the `[api]` parts of Phase 6 for now).
-- **Phase 12 fix is a ~4-line swap in one function** (`getAgentLocations`): roster source
-  `/profiles?limit=60` → `/team/task-overview?scope=all`, validator `isArr` → `members`-array, read
-  `d.members`, report under the `/attendance` health key. `getTeam`, `team/index.tsx`,
-  `agent-map.tsx` need **no change** — the fix is upstream of all of them. Full rationale:
-  `docs/spec/PHASE-12.md` D-1…D-5, and DECISIONS 2026-08-11 (Phase 12).
+- **`?scope=all` stays on the request** rather than the bare endpoint, because it is what preserves
+  admin/master org-wide breadth while the server clamps a leader — verified in `visibilityScope`, not
+  assumed from contract prose. A test pins the param so a later edit can't silently drop it. See
+  DECISIONS 2026-08-11 (Phase 12 — built) below and spec D-2.
+- **`team/index.tsx` and `agent-map.tsx` left untouched** (D-4) — the fix is upstream; editing them
+  would be scope the DONE-WHEN doesn't ask for. `getTeam`'s double `task-overview` fetch (once for
+  members, once inside `getAgentLocations` for pins) is accepted as-is; collapsing it is a valid
+  optimisation left out to keep the diff to one function.
+- **`getTrackableMembers` left on `/profiles`** (D-5) — the master track-viewer's picker is a
+  master/super-admin surface by nature; its admin gate is correct, not a bug.
 
 ## Known broken / deliberately skipped
 
-- **Phase 12 is specced but NOT built** — no `getAgentLocations` edit, no test, gates not re-run.
-  Stopped at the approval gate.
-- **One open item to verify BEFORE finalising the Phase 12 diff (spec D-2):** confirm in
-  `../cgpe-backend-main/routes/team.js` + `utils/scope`'s `visibilityScope` that a **leader** passing
-  `?scope=all` on `/team/task-overview` is **clamped to their team, not widened org-wide**. If it is
-  NOT clamped, drop `?scope=all` and use the bare endpoint (a leader is still team-scoped by default).
-  This is the single thing that could change the diff.
-- **Phase 6 commissions/LIC/notes not started** — notes + LIC are buildable app-side but were not
-  bundled; commissions needs the pending server aggregate endpoint. Also unresolved: `api.ts:1966`
-  asserts `/api/lic-plans` **404s in production** while `api.md:1192` documents it live — a
-  contract-vs-deployment disagreement to settle (read the backend route / hit the live host) before
-  the LIC fix is worth shipping.
-- **`git push` still 403** — commit is local only; a human must grant write access or swap the
-  Windows-credential-manager credential.
-- **All handset-only criteria from Phases 1/4/5/7/10/13 remain unverified** — no device work here.
+- **Phase 12's DONE-WHEN proper needs a handset** — a real leader account on a live backend with at
+  least one team member clocked in, showing the true "On duty now" count instead of 0/N (spec
+  criterion 6). `npm test` covers the wire contract only. Carried, like Phases 1/4/5/7/10/13.
+- **`git push` still 403s** — both commits (`4507d6e`, `c8a4a79`) are local only. A human must grant
+  write access or swap the Windows-credential-manager credential. Did not retry (documented as
+  unfixable by retrying), did not touch the remote.
+- **Phase 6 (partial) not started** — notes (`search`→`q`) and LIC (`{meta,plans}` unwrap) are
+  buildable app-side; commissions needs a pending server aggregate endpoint. LIC also needs the
+  `api.ts:1966`-vs-`api.md:1192` 404-in-production-vs-live disagreement settled first.
+- **The 20-person fan-out cap** (`getAgentLocations` slices to 20) predates this phase and is unchanged
+  — a non-issue for a leader's team (<20), left as-is (spec §5).
 
 ## Next session starts here
 
-- **Phase 12:** build the `getAgentLocations` roster-source swap per `docs/spec/PHASE-12.md`, add
-  `src/data/__tests__/api-agents.test.ts` pinning the leader path, run the gates.
-- **First command:** read the backend clamp first — open
-  `../cgpe-backend-main/routes/team.js` and `../cgpe-backend-main/utils/scope*` and grep
-  `visibilityScope` to settle spec D-2 (`?scope=all` clamp for a leader). THEN edit `api.ts:1855-1863`.
-- **Watch out for:** the `?scope=all` clamp (D-2) is the one assumption that can be wrong — verify it
-  against the producer's code, don't trust the contract prose alone. And re-read `../contracts/INBOX.md`
-  fresh at boot; it is written concurrently.
+- **Phase 6 (partial):** build the two app-side envelope fixes — notes search `search`→`q`, and LIC
+  plans `{meta, plans}` unwrap + field adapter. Skip commissions (backend-blocked). Settle the LIC
+  404-vs-live disagreement first (read the live host / backend route).
+- **First command:** `/boot`
+- **Watch out for:** the LIC fix is worthless until you resolve whether `/api/lic-plans` actually 404s
+  in production (`api.ts:1966` asserts it does; `api.md:1192` documents it live) — verify against the
+  backend route or the live host before writing the unwrap, or you'll ship a fix for a dead endpoint.
