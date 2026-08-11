@@ -52,13 +52,16 @@ exercise.
 
 ## Next 3
 
-1. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
+1. **Phase 17** — warn on an out-of-bounds clock-out. Small, pure app-side, no `cgpe-api` change
+   needed — see below. Requested 2026-08-11, after Phase 8 closed.
+2. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
    string-matching a personal email address compiled into every APK.
-2. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
+3. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
    change needed, since the panel's nav controls already exist and just aren't read yet.
-3. **Phase 6** — the remaining envelope mismatches, if `cgpe-api` has un-shadowed
-   `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract row, read the
-   handler, then assert the envelope in a test that fails if the shape moves.
+
+> **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
+> has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
+> row, read the handler, then assert the envelope in a test that fails if the shape moves.
 
 > **Carried out of Phase 3, small and specified:** `src/screens/dashboards.tsx:292-297` renders the
 > Master KPI tiles as `snapshot?.total_clients ?? 0`, so a **partial** outage (roster loads, org
@@ -87,6 +90,7 @@ exercise.
 | 14 | Dead-code sweep | Not started |
 | 15 | Lint to green | Not started |
 | 16 | "My earnings" salary section `[api]` | **Blocked** — awaiting the salary formula *and* a backend pay field |
+| 17 | Warn on out-of-bounds clock-out | **NEW, requested 2026-08-11** — not started |
 
 ---
 
@@ -348,11 +352,51 @@ Full spec + the exact inputs still needed from the product owner: `docs/spec/PHA
 
 ---
 
+## Phase 17 — Warn on an out-of-bounds clock-out — NEW, requested 2026-08-11
+Show a non-blocking warning when someone clocks out outside the office fence. Requested directly
+(Hinglish: *"agar clock-out ke waqt woh location ke andar na ho toh warning dijiye"*).
+
+**What's already true, verified before writing this down:**
+- Clock-out is **deliberately never blocked** by the fence — Phase 7's decision, held on both
+  sides. `home.tsx:780-797` skips the client pre-check entirely on the clock-out path (`!clock.in`
+  guards it), and the server's own comment at `timeTracker.js:488-497` explains why: a field
+  agent's last call of the day is a client's home, and forcing a return to the office to end a
+  shift just moves the lie from "where" to "when". **This phase must not re-introduce blocking** —
+  it adds a warning, not a refusal.
+- The server already computes `out_of_bounds` / `distance_m` on every clock-out
+  (`timeTracker.js:498-518`, `checkClockGeofence` — the same function and the same global fence
+  clock-in uses, `timeTracker.js:319`) — but **never returns them**. `contracts/api.md:522`
+  already has this mapped: `LocationSchema` in `models/DayLog.js` only declares `lat`/`lng`/
+  `accuracy`, so `distance_m`/`out_of_bounds` are stripped from `endedSession` before
+  `res.json` sends it, and `/clock-out`'s response (`timeTracker.js:553-561`) is `{ session,
+  totalWorked, totalBreak }` — no fence verdict anywhere in it, persisted or not.
+- **Consequence: this does NOT need a `cgpe-api` change.** Re-deriving the same verdict
+  client-side, for display only, is exactly what `api.checkGeofence()` already does for clock-in
+  (Phase 7) — same fence, same math, same server-authority rule. Waiting on a backend contract
+  change here would be duplicating work the app can already do today.
+
+**Files:** `src/app/(tabs)/home.tsx` (call `api.checkGeofence()` on the clock-out path too, and
+show a warning `Banner`/`notice` after a successful clock-out when it says `!allowed` — never
+before, and never gating the write itself).
+
+**Done when:** clocking out from outside the fence still succeeds exactly as it does today, and
+additionally shows a warning stating the measured distance (same "no fence size stated" convention
+as Phase 7's D-5/D-6 — a quoted radius can disagree with the server, a measured distance cannot);
+clocking out from inside the fence shows no warning, unchanged from today.
+
+**Deliberately out of scope:** teaching the *server's* `/clock-out` response to return
+`out_of_bounds`/`distance_m` so the warning could be built from the write's own reply instead of a
+second `checkGeofence` call. That would be the more architecturally clean fix and is worth filing
+to `cgpe-api` regardless (the field is computed and thrown away every single clock-out), but it is
+not this phase's blocker — see the "does not need a `cgpe-api` change" note above.
+
+---
+
 ## Recommended session split
 
 | Session | Phases | Why |
 |---|---|---|
-| `cgpe-mobile` (this one) | 1 → 5, 7 → 11, 13 → 15 | Pure app-side. Phase 1 first, then 2 so everything after it is verifiable. |
+| `cgpe-mobile` (this one) | 1 → 5, 7 → 11, 13 → 15, **17** | Pure app-side. Phase 1 first, then 2 so everything after it is verifiable. |
 | `cgpe-mobile` + `cgpe-api` | 6, 9, 12, **16** | Need a backend change first. File the INBOX item, wait for the reply, then build. |
 | `cgpe-admin` | — | Phase 10 makes the panel's existing nav controls take effect; no panel change needed. Tell them when it ships. |
 

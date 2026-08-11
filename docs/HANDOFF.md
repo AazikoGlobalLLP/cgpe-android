@@ -89,17 +89,25 @@ Gates: `npx tsc --noEmit` exit 0 · `npm test` **258 passed / 9 files** · `npm 
 
 ## Next session starts here
 
-- Phase 11 is the recommended next pick — server-derived tier. `store/roles.ts` grants the top
-  privilege tier by string-matching a personal email address compiled into every APK; derive it
-  from the server's own role/claims instead.
-- **Files:** `src/store/roles.ts`, `src/store/auth.tsx`, `src/data/api.ts`, `src/app/(tabs)/more.tsx`.
-- **Done when:** no email address literal remains in `src/`, and the master experience survives
-  that person changing address.
-- Phase 10 (server-driven navigation) is pure app-side too and does not depend on 11 — either
-  order works; see `docs/PHASES.md`'s "Next 3" for the reasoning.
+- **Phase 17 is the recommended next pick** — requested 2026-08-11, right after this handoff:
+  warn (never block) when someone clocks out outside the office fence. Fully scoped already, no
+  code written yet. It needs no `cgpe-api` change: the server computes `out_of_bounds`/`distance_m`
+  on every clock-out but never returns them (`contracts/api.md:522`), so the plan is to re-derive
+  the same verdict client-side with `api.checkGeofence()` — the exact function Phase 7 already
+  built for clock-in, against the exact same fence. **Must not re-introduce a client-side refusal
+  on clock-out** — Phase 7 deliberately removed that; this is a warning, not a re-fencing.
+- **Files:** `src/app/(tabs)/home.tsx` only, per the current plan. Full writeup, the citations that
+  ground it, and what's deliberately out of scope: `docs/PHASES.md`'s Phase 17 section.
+- **Done when:** clocking out from outside the fence still succeeds exactly as today, plus a
+  warning naming the measured distance (never a quoted radius — same D-5/D-6 convention as Phase
+  7); clocking out from inside the fence shows nothing new.
+- Phase 11 (server-derived tier) is the next pick after that if Phase 17 is skipped — `store/
+  roles.ts` grants the top privilege tier by string-matching a personal email address compiled into
+  every APK.
 - First command: `npm test`.
 - Watch out for: **`../contracts/INBOX.md` deletes content, not just moves it** — re-read
   immediately before editing, anchor every edit on surrounding text rather than a line number, and
   grep your own reply back after you write it. Nothing is currently open against this session, but
   a sibling can add an item mid-session — Phase 8 touched no shared contract, so INBOX was not
-  re-checked mid-phase; re-read it fresh at the next boot regardless.
+  re-checked mid-phase; re-read it fresh at the next boot regardless. Phase 17 also touches no
+  shared contract, by design (see above) — no INBOX filing needed to build it.

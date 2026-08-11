@@ -6,6 +6,30 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — A clock-out fence warning is re-derived client-side, not read from the server (Phase 17, planning)
+
+**Context.** Requested: warn when someone clocks out outside the office fence. Phase 7 deliberately
+made clock-out un-blockable by the fence (`home.tsx:780-784`, `timeTracker.js:488-497`) — a field
+agent's last call is a client's home, and forcing a return to the office just moves the dishonesty
+from "where" to "when". The server already computes `out_of_bounds`/`distance_m` on every clock-out
+(`timeTracker.js:498-518`) but never returns them: `contracts/api.md:522` already has this mapped —
+`LocationSchema` doesn't declare those fields, so they are stripped before the response is built.
+
+**Decision.** Do not wait on a `cgpe-api` change to expose those fields. `api.checkGeofence()`
+already re-derives the identical verdict for clock-in, against the identical fence
+(`checkClockGeofence`, `timeTracker.js:319` and `:498` — same function, same global fence). Phase
+17 calls it a second time on the clock-out path, for display only, and shows a warning **after** a
+clock-out that already succeeded — never gating the write. The one thing this must not do is
+re-introduce a client-side refusal on clock-out; Phase 7 removed that on purpose and this request
+is explicitly for a warning, not a re-fencing.
+
+**Consequence.** Phase 17 is pure app-side, no `[api]` tag, no INBOX item to wait on. Filing the
+dead-field observation to `cgpe-api` (the fields ARE computed and thrown away every clock-out) is
+still worth doing, but it is not this phase's blocker and is deferred to whenever Phase 17 is
+actually built.
+
+---
+
 ## 2026-08-11 — Deleting a fabrication at the source, not just distrusting it at the call site (Phase 8)
 
 **Context.** `generateReport` invented a fixed ₹42,00,000 summary on any failure. Its one caller,
