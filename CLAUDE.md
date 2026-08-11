@@ -106,6 +106,11 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 - Provider order in `_layout.tsx`: `AppUiProvider` inside `AuthProvider`, `ToastProvider` inside
   `ConfirmProvider` (else `useToast()` is a silent no-op).
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
+- `store/roles.ts` `tierOf()` grants Master by `user.role === 'super_admin'` (Phase 11,
+  2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
+  `Profile.role` field. If Master unexpectedly reads as Admin/Team, that is a database row on the
+  `cgpe-api` side, not a client bug — check `Profile.role` in `staff_unified` before touching this
+  file. See `docs/spec/PHASE-11.md` D-4.
 - Dead, do not maintain: `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`,
   `hooks/use-color-scheme*.ts`, `constants/theme.ts`, `src/global.css`, `data/mock.ts`.
 - `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no
