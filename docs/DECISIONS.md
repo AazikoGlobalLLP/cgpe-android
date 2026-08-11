@@ -6,6 +6,35 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Vendor Leaflet by inlining a bundled string, and "renders offline" means the library, not the tiles (Phase 13, built)
+
+**Context.** `LeafletMap.tsx` built its whole map as one HTML string and handed it to a WebView as
+`source={{ html }}`, pulling `leaflet.js` + `leaflet.css` from `unpkg.com` at runtime with no SRI —
+so with the network blocked the `<script src>` failed, `onerror` fired, and the *entire* map
+rendered "The map could not open". The done-when was "the map renders with the network blocked after
+first load", and the Phase 10 handoff explicitly warned it could be misread as "fully offline tile
+imagery" and waste the phase.
+
+**Decision.** "Renders" means the Leaflet *library* runs offline (frame, gestures, pins, route,
+popups, controls) — **not** the tile imagery, which is the whole world's tiles and cannot be bundled
+into an APK. The library is vendored by *inlining* it: `leaflet@1.9.4` is a devDependency,
+`scripts/vendor-leaflet.mjs` generates `src/ui/vendor/leaflet-1.9.4.ts` (the dist JS/CSS as escaped
+string constants), and `buildHtml` inlines those as `<style>`/`<script>` in place of the two unpkg
+tags. Not an `assets/` file: `source={{ html }}` has no base URL, so a `file://`/relative asset can't
+resolve and enabling file-origin access is exactly the permission this phase is avoiding. Inlining
+also removes the SRI concern entirely — there is no remote fetch left to protect, which is stronger
+than a hash on a live request. Tiles stay on `basemaps.cartocdn.com` with the existing "tiles could
+not load" banner as the honest offline degrade; a test pins that they are *not* vendored so a later
+edit doesn't read "vendor Leaflet" as "vendor the map".
+
+**Consequence.** ~145 KB is added to the JS bundle (the library was that size over the wire anyway),
+in exchange for a map that no longer dies offline and no longer trusts an unpinned CDN script. The
+`failed` EmptyState is now only reachable via a WebView render-process crash, not a fetch, so its
+copy no longer blames the network. The offline-render itself is logically certain but device-only to
+observe — carried as an outstanding handset check like Phases 1/4/5/7. Full spec: `docs/spec/PHASE-13.md`.
+
+---
+
 ## 2026-08-11 — `more` is unconditional in the tab bar; `nav.more_sections` and `prospects`/`tickets`-as-tabs stay out (Phase 10, built)
 
 **Context.** `nav.tabs` (max 5, enum `home/tasks/clients/leads/claims/prospects/tickets/more`) and
