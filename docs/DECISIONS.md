@@ -612,3 +612,28 @@ destroyed.
 
 **Consequence.** `state` in `api.ts` is a write buffer for records the user just typed. Repopulating
 it re-introduces fabricated policyholders.
+
+---
+
+## 2026-08-11 — A dead-code sweep deletes only after proving a closed cluster (Phase 14)
+
+**Context.** Phase 14 removed six known-dead modules named in `CLAUDE.md`/`PROJECT_MAP.md` plus the
+"orphaned helpers" in `data/tasks.ts` / `data/team.ts`. `kit.tsx`'s own header docstring claimed
+"81 import sites across 39 screens" — the exact opposite of `PROJECT_MAP.md`'s "zero importers
+despite its docstring." Two authoritative-sounding sources disagreed.
+
+**Decision.** Delete nothing on a list's say-so. A precise `from '@/ui/kit'` grep across the whole
+tree returned zero import statements, and `grep`ing every candidate's specifier proved the seven
+files formed a *closed* cluster — each imported only by another member of the set or by nothing
+(`global.css ← constants/theme.ts ← use-theme.ts`; `use-color-scheme*.ts ← use-theme.ts`; `kit`,
+`characters`, `use-theme` unreferenced). `npx tsc --noEmit` exiting 0 is the final proof that no
+dangling import survived the deletion. "Orphaned helpers in `data/team.ts`" was read to include the
+`teamMembers`/`teamActivityFeed` runtime exports, not just the private date functions: both have
+zero consumers (every import site uses `import type`), so they are dead by the same test. Types and
+live label maps / `taskProgress` were kept because they *are* consumed.
+
+**Consequence.** A stale docstring is not evidence, and neither is a "dead" list — the grep is. The
+one file that looks orphaned but is NOT dead, `src/ui/vendor/leaflet-1.9.4.ts`, was left alone: it is
+imported by `LeafletMap.tsx` and only appears unreferenced because eslint ignores it. Lint dropped
+46→45 errors (the deleted files carried one), which is the measurable evidence the removed code was
+real, not phantom.
