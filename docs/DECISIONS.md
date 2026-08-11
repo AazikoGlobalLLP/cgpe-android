@@ -6,6 +6,35 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — `more` is unconditional in the tab bar; `nav.more_sections` and `prospects`/`tickets`-as-tabs stay out (Phase 10, built)
+
+**Context.** `nav.tabs` (max 5, enum `home/tasks/clients/leads/claims/prospects/tickets/more`) and
+`nav.hidden` were stored and served correctly but read by nothing on device — the documented
+`ADMIN_PANEL_SYNC.md` §9 gap. Wiring them raised three questions the phase text didn't answer:
+what happens if a config omits or hides `more`; what happens with `prospects`/`tickets`, which have
+no physical `Tabs.Screen` in this build; and whether `nav.more_sections` (title/grouping) should
+also drive the More screen's group structure.
+
+**Decision.** `more` always renders in the bar, immune to both `nav.tabs` and `nav.hidden` — it is
+the only way back to a module that lost its slot and the only place Sign Out lives, so honouring a
+config that hides it would strand the session. `prospects`/`tickets` are filtered out of the tab
+computation (`resolveTabs` in `appUi.tsx`) since neither route lives inside the `(tabs)` group
+today; a config naming either one for a bar slot degrades to "reachable from More" rather than
+crashing or silently doing nothing. `nav.more_sections` was not wired into `more.tsx` at all — only
+`nav.hidden`, which the contract itself calls "the ONLY control that makes a module unreachable",
+was implemented; the existing groups carry curated, role-conditional presentation a generic
+`{title, items}` renderer would have flattened for a benefit the phase's own DONE-WHEN never
+required.
+
+**Consequence.** Every real config in `ui_rbac_config.json` already lists `more` last, so the
+`more`-is-unconditional rule changes nothing for a well-formed document — it only guards a
+malformed or adversarial one. Moving `prospects`/`tickets` into the tab group, and wiring
+`nav.more_sections`, are both named as separate future mobile-only work in `docs/spec/PHASE-10.md`
+§5 and filed as informational (not blocking) to `cgpe-admin` via `contracts/INBOX.md`,
+2026-08-11 — no backend or panel change needed either way.
+
+---
+
 ## 2026-08-11 — Master tier ships without a live DB check that the role field is actually set (Phase 11, built)
 
 **Context.** `tierOf()` used to grant Master by matching `user.email` against a compiled-in

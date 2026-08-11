@@ -317,10 +317,10 @@
   ],
 
   "_KNOWN_GAP": {
-    "fields": ["nav.tabs", "nav.hidden", "nav.more_sections"],
-    "status": "Stored, validated and served correctly. NOT consumed by the mobile v1.8.0 build.",
-    "detail": "ANDROID/src/app/(tabs)/_layout.tsx does not read useAppUi(); the bottom bar is hard-coded to home/tasks/clients/claims/more by the module-level TAB_META and ORDER constants. The only consumer of useAppUi() in the mobile src tree is (tabs)/home.tsx.",
-    "consequence": "Reordering tabs, adding a sixth, or hiding a module changes nothing on device today. The Admin Panel should keep accepting these settings and label them 'stored, not yet live on device'.",
-    "fix_owner": "mobile — wire _layout.tsx to config.nav.tabs (spilling entries beyond five into More) and filter the More screen on config.nav.hidden. No backend or panel change needed when it ships."
+    "fields": ["nav.more_sections"],
+    "status": "RESOLVED for nav.tabs and nav.hidden as of mobile Phase 10 (2026-08-11). nav.more_sections remains stored, validated and served correctly but NOT consumed.",
+    "detail": "ANDROID/src/app/(tabs)/_layout.tsx now builds the bottom bar from useAppUi().tabs (a new resolveTabs() selector in ANDROID/src/store/appUi.tsx, ordered by nav.tabs and filtered by nav.hidden). ANDROID/src/app/(tabs)/more.tsx now drops any row or quick-action tile whose module key is in nav.hidden. Neither reads nav.more_sections — the panel's own group titles/ordering still have no effect on device; ANDROID/docs/spec/PHASE-10.md D-3 records why that was left out.",
+    "consequence": "Reordering tabs or hiding a module now changes what a device shows on its next cold start after config refresh. The Admin Panel's 'stored, not yet live on device' labelling (ADMIN_PANEL_SYNC.md §3.6.8) is now WRONG for nav.tabs/nav.hidden and should say so only for nav.more_sections. Filed to cgpe-admin via contracts/INBOX.md, 2026-08-11.",
+    "fix_owner": "mobile — nav.more_sections-driven grouping/ordering inside More, if ever wanted. No backend or panel change needed for that either."
   }
 }
