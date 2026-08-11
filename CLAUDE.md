@@ -128,7 +128,12 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
   `Profile.role` field. If Master unexpectedly reads as Admin/Team, that is a database row on the
   `cgpe-api` side, not a client bug — check `Profile.role` in `staff_unified` before touching this
-  file. See `docs/spec/PHASE-11.md` D-4.
+  file. See `docs/spec/PHASE-11.md` D-4. **`tierOf()` folds `leader` INTO the `admin` tier** (so
+  `caps.manageTeam` is true for a leader) — but several backend surfaces gated `authorize('admin')`
+  **403 a leader** (payroll is the live example: `routes/payroll.js:22-23`). So any mobile surface that
+  consumes an admin-only endpoint must gate on the **real** `user.role === 'admin'|'super_admin'`, never
+  on `caps`/the tier, or a leader reaches the fetch and gets a 403 blank. Phase 20 (`app/payroll.tsx`)
+  does exactly this; copy it. See `docs/spec/PHASE-20.md` D-3.
 - Dead, do not maintain: `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`,
   `hooks/use-color-scheme*.ts`, `constants/theme.ts`, `src/global.css`, `data/mock.ts`.
 - `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no

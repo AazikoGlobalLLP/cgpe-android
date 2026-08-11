@@ -25,10 +25,15 @@ the endpoint that actually exists.
     backend 403s a leader, so the More row and the screen both gate on
     `user.role === 'admin' || 'super_admin'`. A leader never fetches; a stale-role deep-link degrades to
     "admin-only"/"could not load" (403 → `tryReal` null), never a false ₹0.
-- **Answered one outstanding INBOX FYI** addressed to this session — cgpe-api **Phase 20** (attendance
-  `/calendar` + `/day/:date` ObjectId-join fix). Verified as a genuine no-op (the app calls neither
-  endpoint: two greps, both zero) and replied underneath (box left unticked — multi-recipient). Grepped
-  the reply back per the concurrent-write rule; it survived.
+- **Cleared the INBOX for this session (3 items).** (1) cgpe-api backend-**Phase 20** (attendance
+  `/calendar` + `/day/:date` ObjectId-join fix) — verified no-op (app calls neither; two greps zero),
+  replied underneath. (2) cgpe-api backend-**Phase 21** (legacy `/api/english-questions` router deleted,
+  BREAKING) — landed mid-session; verified no-op (`english-questions|EnglishQuestion|question-bank|
+  questions/study` → 0 in `src/`), replied underneath. (3) **Filed a new FYI** to cgpe-api + cgpe-admin:
+  mobile Phase 20 now consumes `GET /api/payroll/compute`, so a second consumer of that response shape is
+  on record and the panel knows the app duplicates a slice of its payroll surface. All boxes left unticked
+  (multi-recipient); all three replies grepped back after writing — they survived (INBOX gained a
+  concurrently-inserted item during the session, per the standing hazard).
 
 ## Files changed
 - `src/data/api.ts` — new `getPayrollRoster(year, month)` + `PayrollRow` / `PayrollMonth` types (after
@@ -40,7 +45,10 @@ the endpoint that actually exists.
   empty roster, 403-is-answer, 503-is-outage, demo no-op).
 - `docs/spec/PHASE-20.md` (new), `docs/PHASES.md` (Now + board row 20 + Next-3 #1), `docs/DECISIONS.md`
   (top entry), this file, `docs/STATUS.md` (manager-facing rewrite).
-- `../contracts/INBOX.md` — the Phase-20 attendance FYI reply (untracked disk; not in any commit).
+- `CLAUDE.md` — appended to the `store/roles.ts` danger-zone bullet the leader-folds-into-admin-tier trap
+  (gate admin-only backend surfaces on the real `user.role`, not `caps`/tier).
+- `../contracts/INBOX.md` — three replies/notices (Phase-20 attendance, Phase-21 english-questions, the
+  new payroll-compute FYI). **Untracked disk; not in any commit.**
 
 ## Gates
 - `npx tsc --noEmit` → exit 0.
