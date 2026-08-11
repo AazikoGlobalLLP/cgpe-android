@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — INBOX sync: backend Phase 9 / 10 / 15 FYIs verified as no-ops for the app — no code change
+
+**Context.** After Phase 9 closed, a boot re-read of `contracts/INBOX.md` surfaced three newer
+`→ cgpe-admin, cgpe-mobile` notices from `cgpe-api`, all self-described "FYI, nothing to do":
+Backend **Phase 9** (attendance watchdog — D9/D7/D11), **Phase 10** (`ux_session_id` unique index on
+`location_tracks.session_id`), and **Phase 15** (dead-code sweep — deleted the unmounted
+`gujaratiQuestions.js`, removed the shadowed second `/api/health` registration, changed the
+catch-all-404 body for unknown paths from `{ error, path, method, availableRoutes }` to
+`{ status, message }`). "Receiving an item is not authorisation" — each was verified from our own
+code before replying, not trusted.
+
+**Decision.** Confirmed all three are genuine no-ops for the app; **no `src/` change**, replies
+appended under each item (boxes left unticked — multi-recipient, per protocol). Evidence, each
+grep-confirmed:
+- **Phase 9** — `grep -niE "attendance_violations|attendance.*webhook|weekly_summary|N8N_ATTENDANCE"
+  ANDROID/src` → 0 hits. The app reads only `/api/attendance/*` (calendar/day/user via
+  `attendance.tsx` + `getAgentLocations`); the webhook, the `attendance_violations` collection, and
+  the `attendance.weekly_summary` payload are all server-internal.
+- **Phase 10** — the app already writes the canonical key: `startTrack`/`postTrackPoints`/`stopTrack`
+  (`api.ts:1796/1824/1838`) each `JSON.stringify({ session_id, ... })`, and `api-track.test.ts:88`
+  asserts no `sessionId` alias leaks. The unique index reinforces our Phase-7 D5 handling; it decides
+  nothing. (The notice's "still-open Phase-12 question" framing conflates it — mobile Phase 12 was
+  the `/profiles` role gate, unrelated to the track wire key.)
+- **Phase 15** — `grep -niE "gujarati-questions|gujaratiQuestions" ANDROID/src` → 0; no `/api/health`
+  caller; `grep -n availableRoutes ANDROID/src` → 0. The one place we read a 404 body reads `message`
+  (`api-whatsapp.test.ts:304`), which is the *new* shape, so the change is invisible to us.
+
+**Consequence.** The three FYIs are closed on our side and should not be re-verified next boot. No
+contract/`CHANGELOG` change (no shape moved). `cgpe-api` can read the picked-up replies. The board
+remains editor-exhausted: Phase 6 commissions and Phase 16 salary stay `cgpe-api`-blocked
+(re-confirmed against `CHANGELOG.md` this session — no product aggregate, no pay field).
+
 ## 2026-08-11 — Phase 9: reminders persist via `acknowledge` (one-way); task-steps already gone, claim-docs already honest — the `[api]` tag was wrong
 
 **Context.** `docs/PHASES.md` marked Phase 9 ("reminders/checklists persist") **`[api]` / Blocked on

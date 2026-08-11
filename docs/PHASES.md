@@ -14,6 +14,16 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**INBOX sync (no phase) — 2026-08-11.** A boot after Phase 9 found the board **editor-exhausted**
+and three newer `→ cgpe-admin, cgpe-mobile` FYIs from `cgpe-api` — Backend **Phase 9** (attendance
+watchdog), **Phase 10** (`ux_session_id` unique index on `location_tracks.session_id`), **Phase 15**
+(dead-code sweep). All three verified against our own code as genuine no-ops (0 grep hits for the
+attendance webhook/violations/summary; the app already sends `session_id` snake-case with no
+`sessionId` alias; no Gujarati/`/api/health` caller and nothing keys on the old 404 body) and
+answered underneath in `INBOX.md` (boxes left unticked — multi-recipient). **No `src/` change, no
+gate re-run.** Phase 6 commissions and Phase 16 salary re-confirmed still `cgpe-api`-blocked against
+`CHANGELOG.md`. DECISIONS 2026-08-11 (top). See `docs/HANDOFF.md`.
+
 **Phase 9 — reminders persist; `[api]` tag was wrong. Done.** Built 2026-08-11. The board marked
 Phase 9 "Blocked on cgpe-api", but `POST /reminders/:id/acknowledge` has existed all along
 (`routes/reminders.js:419`) — same stale-tag pattern as Phases 6/10/11/12. `toggleReminder` now POSTs
