@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useAuth } from '@/store/auth';
+import { useAppUi } from '@/store/appUi';
 import { motion, radius, spacing, useTheme } from '@/theme/theme';
 import { Grad, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
@@ -33,10 +34,10 @@ const TAB_META: Record<string, { icon: IconName; active: IconName }> = {
   home: { icon: 'home-outline', active: 'home' },
   tasks: { icon: 'checkbox-outline', active: 'checkbox' },
   clients: { icon: 'people-outline', active: 'people' },
+  leads: { icon: 'funnel-outline', active: 'funnel' },
   claims: { icon: 'shield-outline', active: 'shield' },
   more: { icon: 'ellipsis-horizontal', active: 'ellipsis-horizontal' },
 };
-const ORDER = ['home', 'tasks', 'clients', 'claims', 'more'];
 
 /** Indicator height. The icon is centred inside it, the label sits under it. */
 const PILL_H = 32;
@@ -51,16 +52,18 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const t = useT();
   const reduced = useReducedMotion();
+  const { tabs: order } = useAppUi();
 
-  // Routes are registered in file order and include ones that never appear in the bar
-  // (leads), so the bar builds its own ordered view and keeps each route's real index
-  // for the focus comparison.
+  // Routes are registered in file order and can include ones the resolved server config
+  // leaves out of the bar entirely (still reachable from More), so the bar builds its own
+  // ordered view — driven by `nav.tabs`/`nav.hidden` — and keeps each route's real index for
+  // the focus comparison.
   const items = useMemo(
     () => state.routes
       .map((route, index) => ({ route, index }))
-      .filter((r) => !!TAB_META[r.route.name])
-      .sort((a, b) => ORDER.indexOf(a.route.name) - ORDER.indexOf(b.route.name)),
-    [state.routes],
+      .filter((r) => order.includes(r.route.name))
+      .sort((a, b) => order.indexOf(a.route.name) - order.indexOf(b.route.name)),
+    [state.routes, order],
   );
 
   const slot = items.findIndex((r) => r.index === state.index);
@@ -181,7 +184,8 @@ export default function TabsLayout() {
       <Tabs.Screen name="clients" />
       <Tabs.Screen name="claims" />
       <Tabs.Screen name="more" />
-      {/* Registered but hidden from the bar — reachable from More */}
+      {/* In the bar only when the server config's nav.tabs names it; otherwise reachable
+          from More, same as clients/claims etc. would be if their tab slot were reassigned. */}
       <Tabs.Screen name="leads" />
     </Tabs>
   );

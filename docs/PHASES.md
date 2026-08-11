@@ -14,6 +14,14 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 10 — done.** Built 2026-08-11. `npm test` runs **266** tests across 9 files and exits 0 (8
+new, pinning the new `resolveTabs` selector); `npx tsc --noEmit` exits 0; `npm run lint` stays at
+the 46-error baseline. `(tabs)/_layout.tsx`'s bottom bar now renders from `config.nav.tabs` /
+`nav.hidden` instead of the hard-coded `ORDER` constant, and `more.tsx` drops any row (and quick-
+action tile) whose module is in `nav.hidden`. `nav.more_sections` grouping and moving
+`prospects`/`tickets` into the tab bar itself are deliberately out of scope — see
+`docs/spec/PHASE-10.md`.
+
 **Phase 11 — done.** Built 2026-08-11. `npm test` runs **258** tests across 9 files and exits 0
 (no new pure logic to pin — a single predicate swap in an already-untested function);
 `npx tsc --noEmit` exits 0; `npm run lint` stays at the 46-error baseline. `tierOf()` grants
@@ -64,11 +72,10 @@ exercise.
 
 ## Next 3
 
-1. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
-   change needed, since the panel's nav controls already exist and just aren't read yet.
-2. **Phase 13** — vendor Leaflet. Pure app-side; the map currently pulls from a CDN at runtime
+1. **Phase 13** — vendor Leaflet. Pure app-side; the map currently pulls from a CDN at runtime
    with no offline fallback.
-3. **Phase 14** — dead-code sweep. Pure app-side; six known-dead files plus orphaned helpers.
+2. **Phase 14** — dead-code sweep. Pure app-side; six known-dead files plus orphaned helpers.
+3. **Phase 15** — lint to green. Pure app-side; 46 errors on a clean tree today.
 
 > **Also queued, not in the top 3:** **Phase 6**, the remaining envelope mismatches, if `cgpe-api`
 > has un-shadowed `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract
@@ -94,7 +101,7 @@ exercise.
 | 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
 | 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
 | 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
-| 10 | Server-driven navigation (§9 gap) | Not started |
+| 10 | Server-driven navigation (§9 gap) | **Done** 2026-08-11 — 266 tests green |
 | 11 | Server-derived tier | **Done** 2026-08-11 — 258 tests green |
 | 12 | `/profiles` role gate `[api]` | Blocked on `cgpe-api` |
 | 13 | Vendor Leaflet | Not started |
@@ -304,13 +311,34 @@ than no tick.
 `src/app/claim/[id].tsx`
 **Done when:** a completed reminder is still complete after a cold start, or the control is gone.
 
-## Phase 10 — Wire server-driven navigation
+## Phase 10 — Wire server-driven navigation ✅ DONE 2026-08-11
 The documented known gap (`ADMIN_PANEL_SYNC.md` §9). `(tabs)/_layout.tsx` builds its bar from
 `useAppUi().config.nav.tabs` instead of the module `ORDER` constant, spilling entries beyond five
 into More; `more.tsx` filters on `nav.hidden` and groups by `nav.more_sections`.
 **Files:** `src/app/(tabs)/_layout.tsx`, `src/app/(tabs)/more.tsx`, `src/store/appUi.tsx`
 **Done when:** saving a tab order in the admin panel changes the bar on the next cold start, and a
 module in `nav.hidden` is unreachable.
+
+**Result.** 8 new tests, pinning the new `resolveTabs` selector. Two things turned out to be true
+that the phase text did not say:
+
+1. **Two of the eight values `nav.tabs`' own schema enum allows (`prospects`, `tickets`) have no
+   physical tab to become.** They live outside the `(tabs)` route group as flat stack screens;
+   turning them into real bottom tabs means moving those files, a bigger structural change than
+   this phase's three-file budget covers. `resolveTabs` filters `nav.tabs` down to the six routes
+   this build can render before computing bar order, so a config naming either one degrades to
+   "reachable from More" — exactly where they already were.
+2. **`more` had to become unconditional, not config-driven.** It is the only way back to a module
+   that lost its tab slot, and the only place Sign Out lives — so it renders in the bar and stays
+   reachable regardless of what `nav.tabs`/`nav.hidden` say. Every real config in
+   `ui_rbac_config.json` already lists it last, so this changes nothing for a well-formed document.
+3. **`nav.more_sections` grouping/ordering was deliberately left out.** Only `nav.hidden` — the
+   field the contract itself calls "the ONLY control that makes a module unreachable" — is wired
+   into `more.tsx`. The existing groups carry curated, role-conditional presentation (a live ticket
+   count, Master/Admin copy switches, the view-as sheet) that a generic `{title, items}` renderer
+   would have flattened for a benefit the DONE-WHEN criterion never asked for.
+
+Full spec, all five locked decisions and what was deliberately left out: `docs/spec/PHASE-10.md`.
 
 ## Phase 11 — Server-derived tier ✅ DONE 2026-08-11
 `store/roles.ts` grants the top privilege tier by string-matching a hardcoded personal email address

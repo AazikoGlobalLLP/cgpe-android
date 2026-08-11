@@ -17,6 +17,7 @@ import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
+import { useAppUi } from '@/store/appUi';
 import { capabilitiesOf, TIER_THEME } from '@/store/roles';
 import type { Tier } from '@/store/roles';
 import { APP } from '@/constants/config';
@@ -65,6 +66,8 @@ type Entry = {
   tone?: Tone;
   copyable?: boolean;
   numeric?: boolean;
+  /** `nav.hidden` module key (`ui_rbac_config.json`). Undefined = account chrome, never hidden. */
+  navKey?: string;
 };
 
 const TIER_TONE: Record<Tier, Tone> = { master: 'warning', admin: 'primary', team: 'accent' };
@@ -90,6 +93,7 @@ export default function More() {
   const realCaps = capabilitiesOf(user);
   const isAdmin = caps.manageTeam;
   const liveSession = api.isRealSession();
+  const { isHidden } = useAppUi();
 
   /* One live count, cancellable. `limit: 1` because only the meta block is wanted; the
      ticket rows themselves belong to /tickets, not to a directory page. */
@@ -158,7 +162,7 @@ export default function More() {
     );
   }
 
-  const groups: { title: string; items: Entry[] }[] = [
+  const rawGroups: { title: string; items: Entry[] }[] = [
     ...(isAdmin ? [{
       title: caps.tier === 'master' ? 'Master control' : 'Admin',
       items: [
@@ -167,24 +171,25 @@ export default function More() {
           label: caps.overseeAdmins ? 'All teams and admins' : 'Team members',
           value: 'Roster',
           href: '/team' as Href,
+          navKey: 'team',
         },
-        { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href },
+        { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href, navKey: 'agent-map' },
         ...(caps.tier === 'master'
-          ? [{ icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href }]
+          ? [{ icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' }]
           : []),
-        { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href },
-        { icon: 'paper-plane' as IconName, label: 'Campaigns', value: 'Bulk sends', href: '/campaigns' as Href },
-        { icon: 'megaphone' as IconName, label: 'Notify team', value: 'Send alert', href: '/notify' as Href },
+        { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href, navKey: 'analytics' },
+        { icon: 'paper-plane' as IconName, label: 'Campaigns', value: 'Bulk sends', href: '/campaigns' as Href, navKey: 'campaigns' },
+        { icon: 'megaphone' as IconName, label: 'Notify team', value: 'Send alert', href: '/notify' as Href, navKey: 'notify' },
       ] as Entry[],
     }] : []),
     {
       title: 'The book',
       items: [
-        { icon: 'funnel', label: 'Leads and pipeline', value: 'Stages', href: '/(tabs)/leads' },
-        { icon: 'pie-chart', label: 'Segments', value: 'Smart lists', href: '/segments' },
-        { icon: 'home', label: 'Families', value: 'Households', href: '/families' },
-        { icon: 'gift', label: 'Premium and greetings', value: 'Renewals', href: '/premium' },
-        { icon: 'person-add', label: 'Prospects', value: 'Recruitment', href: '/prospects' },
+        { icon: 'funnel', label: 'Leads and pipeline', value: 'Stages', href: '/(tabs)/leads', navKey: 'leads' },
+        { icon: 'pie-chart', label: 'Segments', value: 'Smart lists', href: '/segments', navKey: 'segments' },
+        { icon: 'home', label: 'Families', value: 'Households', href: '/families', navKey: 'families' },
+        { icon: 'gift', label: 'Premium and greetings', value: 'Renewals', href: '/premium', navKey: 'premium' },
+        { icon: 'person-add', label: 'Prospects', value: 'Recruitment', href: '/prospects', navKey: 'prospects' },
       ],
     },
     {
@@ -198,26 +203,27 @@ export default function More() {
           tone: openTickets > 0 ? 'primary' : undefined,
           numeric: openTickets > 0,
           href: '/tickets',
+          navKey: 'tickets',
         },
-        { icon: 'notifications', label: 'Reminders and follow-ups', value: 'Due dates', href: '/reminders' },
-        { icon: 'calendar', label: 'Calendar', value: 'Meetings', href: '/calendar' },
-        { icon: 'time', label: 'My attendance', value: 'GPS log', href: '/attendance' },
-        { icon: 'logo-whatsapp', label: 'WhatsApp Hub', value: 'Chats', href: '/whatsapp' },
+        { icon: 'notifications', label: 'Reminders and follow-ups', value: 'Due dates', href: '/reminders', navKey: 'reminders' },
+        { icon: 'calendar', label: 'Calendar', value: 'Meetings', href: '/calendar', navKey: 'calendar' },
+        { icon: 'time', label: 'My attendance', value: 'GPS log', href: '/attendance', navKey: 'attendance' },
+        { icon: 'logo-whatsapp', label: 'WhatsApp Hub', value: 'Chats', href: '/whatsapp', navKey: 'whatsapp' },
       ],
     },
     {
       title: 'Board',
       items: [
-        { icon: 'megaphone', label: 'Notice Board', value: 'From the firm', href: '/notice-board' },
-        { icon: 'journal', label: 'Notes', value: 'Private', href: '/notes' },
+        { icon: 'megaphone', label: 'Notice Board', value: 'From the firm', href: '/notice-board', navKey: 'notice-board' },
+        { icon: 'journal', label: 'Notes', value: 'Private', href: '/notes', navKey: 'notes' },
       ],
     },
     {
       title: 'Reference',
       items: [
-        { icon: 'library', label: 'Knowledge Base', value: 'Field guide', href: '/kb' },
-        { icon: 'calculator', label: 'LIC plans', value: 'Products', href: '/lic-plans' },
-        { icon: 'search', label: 'Global search', value: 'Everything', href: '/search' },
+        { icon: 'library', label: 'Knowledge Base', value: 'Field guide', href: '/kb', navKey: 'kb' },
+        { icon: 'calculator', label: 'LIC plans', value: 'Products', href: '/lic-plans', navKey: 'lic-plans' },
+        { icon: 'search', label: 'Global search', value: 'Everything', href: '/search', navKey: 'search' },
       ],
     },
     {
@@ -230,12 +236,25 @@ export default function More() {
           onPress: () => setViewSheet(true),
           right: viewAs ? <Pill label="Preview" tone="warning" small /> : undefined,
         }] : []),
-        { icon: 'person-circle', label: 'My profile', value: user.name, href: '/profile' },
-        { icon: 'settings', label: 'Settings', value: 'Security, language', href: '/settings' },
-        { icon: 'shield-checkmark', label: 'Account and privacy', value: 'Data and deletion', href: '/account' },
+        { icon: 'person-circle', label: 'My profile', value: user.name, href: '/profile', navKey: 'profile' },
+        { icon: 'settings', label: 'Settings', value: 'Security, language', href: '/settings', navKey: 'settings' },
+        { icon: 'shield-checkmark', label: 'Account and privacy', value: 'Data and deletion', href: '/account', navKey: 'account' },
       ],
     },
   ];
+  const groups = rawGroups
+    .map((g) => ({ ...g, items: g.items.filter((it) => !it.navKey || !isHidden(it.navKey)) }))
+    .filter((g) => g.items.length > 0);
+
+  // Fixed tileIndex per module (it selects the tile's colour), so hiding one tile does not
+  // shift the colour of the ones next to it.
+  const quickActions = ([
+    { icon: 'search', label: 'Search', href: '/search', navKey: 'search', tileIndex: 0 },
+    { icon: 'notifications', label: 'Reminders', href: '/reminders', navKey: 'reminders', tileIndex: 1 },
+    { icon: 'ticket', label: 'Tickets', href: '/tickets', navKey: 'tickets', tileIndex: 2 },
+    { icon: 'logo-whatsapp', label: 'WhatsApp', href: '/whatsapp', navKey: 'whatsapp', tileIndex: 3 },
+  ] as { icon: IconName; label: string; href: Href; navKey: string; tileIndex: number }[])
+    .filter((qa) => !isHidden(qa.navKey));
 
   const about: Entry[] = [
     { icon: 'cube-outline', label: 'Version', value: APP.version, numeric: true },
@@ -294,30 +313,27 @@ export default function More() {
           </Card>
         </Appear>
 
-        {/* The four destinations opened every day, in colour, above the fold. */}
-        <View style={{ gap: spacing.md }}>
-          <Eyebrow style={{ marginLeft: spacing.xs }}>Quick actions</Eyebrow>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <Appear index={0}>
-              <ActionTile icon="search" label="Search" tileIndex={0} onPress={() => router.push('/search')} />
-            </Appear>
-            <Appear index={1}>
-              <ActionTile icon="logo-whatsapp" label="WhatsApp" tileIndex={3} onPress={() => router.push('/whatsapp')} />
-            </Appear>
-            <Appear index={2}>
-              <ActionTile
-                icon="ticket"
-                label="Tickets"
-                tileIndex={2}
-                badge={openTickets}
-                onPress={() => router.push('/tickets')}
-              />
-            </Appear>
-            <Appear index={3}>
-              <ActionTile icon="notifications" label="Reminders" tileIndex={1} onPress={() => router.push('/reminders')} />
-            </Appear>
-          </Row>
-        </View>
+        {/* The four destinations opened every day, in colour, above the fold. A tile is
+            dropped rather than disabled when its module is in nav.hidden — a shortcut to a
+            "removed" module would make that setting dishonest. */}
+        {quickActions.length ? (
+          <View style={{ gap: spacing.md }}>
+            <Eyebrow style={{ marginLeft: spacing.xs }}>Quick actions</Eyebrow>
+            <Row style={{ justifyContent: 'space-between' }}>
+              {quickActions.map((qa, i) => (
+                <Appear key={qa.navKey} index={i}>
+                  <ActionTile
+                    icon={qa.icon}
+                    label={qa.label}
+                    tileIndex={qa.tileIndex}
+                    badge={qa.navKey === 'tickets' ? openTickets : undefined}
+                    onPress={() => router.push(qa.href)}
+                  />
+                </Appear>
+              ))}
+            </Row>
+          </View>
+        ) : null}
 
         {groups.map((g) => (
           <ListSection key={g.title} title={g.title}>

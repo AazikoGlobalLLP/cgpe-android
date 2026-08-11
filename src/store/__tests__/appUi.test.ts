@@ -19,7 +19,13 @@
  * DEFAULT_UI for every later case in this file.
  */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_UI, normalizeUiConfig } from '@/store/appUi';
+import { DEFAULT_UI, normalizeUiConfig, resolveTabs } from '@/store/appUi';
+import type { AppUiConfig } from '@/store/appUi';
+
+/** Minimal config builder — resolveTabs only ever reads config.nav. */
+function withNav(tabs: string[], hidden: string[] = []): AppUiConfig {
+  return { ...DEFAULT_UI, nav: { ...DEFAULT_UI.nav, tabs, hidden } };
+}
 
 /**
  * The schema's own per-feature defaults (appUi.tsx:67-83), restated here by hand.
@@ -290,6 +296,49 @@ describe('normalizeUiConfig — theme', () => {
   });
 });
 
+describe('resolveTabs — PHASE 10, the nav layer that decides what makes the bar', () => {
+  it('reproduces the current hard-coded order for the default config', () => {
+    expect(resolveTabs(DEFAULT_UI)).toEqual(['home', 'tasks', 'clients', 'claims', 'more']);
+  });
+
+  it('follows nav.tabs order, and lets leads take a bar slot', () => {
+    expect(resolveTabs(withNav(['home', 'tasks', 'leads', 'clients', 'more'])))
+      .toEqual(['home', 'tasks', 'leads', 'clients', 'more']);
+  });
+
+  it('drops entries nav.hidden names, without leaving a gap', () => {
+    expect(resolveTabs(withNav(['home', 'tasks', 'clients', 'claims', 'more'], ['clients'])))
+      .toEqual(['home', 'tasks', 'claims', 'more']);
+  });
+
+  it('drops tab keys this build cannot physically render (prospects, tickets), and unknown junk', () => {
+    // Valid per ui_rbac_config.json's nav.tabs enum, but neither route lives in the (tabs)
+    // group today — see appUi.tsx's KNOWN_TAB_ROUTES comment.
+    expect(resolveTabs(withNav(['home', 'prospects', 'tickets', 'tasks', 'made_up', 'more'])))
+      .toEqual(['home', 'tasks', 'more']);
+  });
+
+  it('dedupes, keeping the first occurrence', () => {
+    expect(resolveTabs(withNav(['home', 'tasks', 'home', 'more'])))
+      .toEqual(['home', 'tasks', 'more']);
+  });
+
+  it('always appends more last, even when nav.tabs omits it or puts it first', () => {
+    expect(resolveTabs(withNav(['home', 'tasks']))).toEqual(['home', 'tasks', 'more']);
+    expect(resolveTabs(withNav(['more', 'home', 'tasks']))).toEqual(['home', 'tasks', 'more']);
+  });
+
+  it('cannot be used to hide more — it is the only way back to a demoted module, and to sign out', () => {
+    expect(resolveTabs(withNav(['home', 'tasks'], ['more']))).toEqual(['home', 'tasks', 'more']);
+  });
+
+  it('falls back to the DEFAULT_UI order, filtered the same way, when nothing in nav.tabs survives', () => {
+    // All junk -> falls back to DEFAULT_UI.nav.tabs, which itself gets hidden filtered too.
+    expect(resolveTabs(withNav(['prospects', 'made_up'], ['claims'])))
+      .toEqual(['home', 'tasks', 'clients', 'more']);
+  });
+});
+
 describe('pinned known bugs — these must be updated deliberately when fixed', () => {
   it('lets an UNKNOWN widget key through, though the schema says drop it', () => {
     // normalizeWidget never consults WIDGET_KEYS. WIDGET_KEYS is exported and has zero runtime
@@ -314,9 +363,9 @@ describe('pinned known bugs — these must be updated deliberately when fixed', 
 
   it('does not truncate nav.tabs to five, and does not enum-check them', () => {
     // The non-truncation is DELIBERATE and explained at appUi.tsx:260-262 (the nav layer
-    // decides what spills into More). The missing enum check is not mentioned anywhere, and
-    // nothing consumes config.nav today at all — (tabs)/_layout.tsx hard-codes TAB_META and
-    // ORDER. docs/PHASES.md Phase 10 wires this up.
+    // decides what spills into More). normalizeUiConfig still does no enum-check or cap here —
+    // as of PHASE 10 that filtering happens one layer up, in resolveTabs (see the describe
+    // block above), which is what (tabs)/_layout.tsx actually renders from.
     const r = normalizeUiConfig({ nav: { tabs: ['a', 'b', 'c', 'd', 'e', 'f', 'g'] } })!;
     expect(r.nav.tabs).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
   });

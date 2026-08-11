@@ -288,6 +288,45 @@ function visibleWidgetsOf(config: AppUiConfig): UiWidget[] {
 }
 
 /**
+ * Bottom-tab routes this build can physically render, in the order `_layout.tsx` registers
+ * them as `<Tabs.Screen>`. `ui_rbac_config.json`'s `nav.tabs` enum also allows `prospects` and
+ * `tickets` — those live outside the `(tabs)` route group today, so a config naming them still
+ * reaches the user, just through the More tab rather than the bar (same as `leads` did before
+ * this phase). Moving them into the tab group is a bigger, separate change.
+ */
+const KNOWN_TAB_ROUTES = ['home', 'tasks', 'clients', 'leads', 'claims'] as const;
+
+/**
+ * Ordered, de-duplicated bottom-tab routes for this config: `nav.tabs` filtered to routes this
+ * build can render and with `nav.hidden` removed, falling back to `DEFAULT_UI`'s order if
+ * nothing survives. `more` is always appended last, regardless of `nav.tabs`/`nav.hidden` —
+ * it is the only way back to a module that lost its tab slot (and the only way to sign out),
+ * so hiding it would strand the session. Every sample config in the contract already lists it
+ * last, so this changes nothing for a well-formed document.
+ */
+export function resolveTabs(config: AppUiConfig): string[] {
+  const known = new Set<string>(KNOWN_TAB_ROUTES);
+  const hidden = new Set(config.nav.hidden);
+  const pick = (list: readonly string[]) => {
+    const out: string[] = [];
+    for (const key of list) {
+      if (!known.has(key) || hidden.has(key) || out.includes(key)) continue;
+      out.push(key);
+    }
+    return out;
+  };
+  const out = pick(config.nav.tabs);
+  if (!out.length) out.push(...pick(DEFAULT_UI.nav.tabs));
+  out.push('more');
+  return out;
+}
+
+/** Is this module removed from navigation entirely for this role? */
+function isModuleHidden(config: AppUiConfig, moduleKey: string): boolean {
+  return config.nav.hidden.includes(moduleKey);
+}
+
+/**
  * Does this widget belong on the dashboard?
  *
  * Not the same question as "may this user reach this module". A widget that is absent or
@@ -340,6 +379,10 @@ export type AppUiState = {
   can: (featureKey: string) => boolean;
   /** True while the built-in fallback is standing in for a server config. */
   usingFallback: boolean;
+  /** Ordered bottom-tab routes, see `resolveTabs`. Always ends with `more`. */
+  tabs: string[];
+  /** Is this module (a tab, or a More-tab entry) removed from navigation entirely? */
+  isHidden: (moduleKey: string) => boolean;
 };
 
 /**
@@ -354,6 +397,8 @@ const FALLBACK_STATE: AppUiState = {
   widgets: visibleWidgetsOf(DEFAULT_UI),
   can: (k) => canIn(DEFAULT_UI, k),
   usingFallback: true,
+  tabs: resolveTabs(DEFAULT_UI),
+  isHidden: (k) => isModuleHidden(DEFAULT_UI, k),
 };
 
 const AppUiContext = createContext<AppUiState>(FALLBACK_STATE);
@@ -418,6 +463,7 @@ export function AppUiProvider({ children }: { children: React.ReactNode }) {
   const ready = authReady && (userId === null || (last !== null && last.user === userId));
   const config = served ?? DEFAULT_UI;
   const widgets = useMemo(() => visibleWidgetsOf(config), [config]);
+  const tabs = useMemo(() => resolveTabs(config), [config]);
 
   const value = useMemo<AppUiState>(() => ({
     config,
@@ -427,7 +473,9 @@ export function AppUiProvider({ children }: { children: React.ReactNode }) {
     usingFallback: served === null,
     isVisible: (widgetKey: string) => isWidgetVisibleIn(config, widgetKey),
     can: (featureKey: string) => canIn(config, featureKey),
-  }), [config, served, ready, widgets, load]);
+    tabs,
+    isHidden: (moduleKey: string) => isModuleHidden(config, moduleKey),
+  }), [config, served, ready, widgets, tabs, load]);
   // `served`/`ready` are derived, so this memo re-runs exactly when one of them changes.
 
   return <AppUiContext.Provider value={value}>{children}</AppUiContext.Provider>;
