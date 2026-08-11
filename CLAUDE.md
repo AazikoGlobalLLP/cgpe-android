@@ -70,6 +70,16 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   three without rewriting the flagged call sites, and do **not** silence `react-hooks/purity` (kept
   on) — fix its hits at source, as Phase 15 did for the one `Date.now()`-in-render case in `home.tsx`
   (`useState(() => Date.now())`).
+- `npm run e2e` — **Phase 18 watchable E2E harness** (Playwright + Expo **web**, lives in `e2e/`,
+  outside `src/` so it is invisible to the three gates — `tsconfig` excludes it, eslint ignores
+  `e2e/**`, Vitest is scoped to `src/`, EAS never bundles it). Opens a real browser that walks all 42
+  web-reachable screens A-to-Z and stress-tests them (injected `500/503/malformed/empty/timeout/
+  oversized` + form bad-input), saving video+trace+screenshots to `e2e/artifacts/` (open
+  `OPEN-ME.md`). Headed by default (`HEADLESS=1` for CI). Auto-starts/reuses the web server on port
+  **8090** (not 8081). ALL traffic is synthetic Playwright mocking — never hits production. The Expo
+  web build **boots with no app guard** (native modules already gate themselves for web). Cannot test
+  native-only surfaces (haptics, background GPS, biometric lock, native map, cold-start persistence) —
+  see `e2e/WEB-LIMITS.md`. `npm run e2e:report` opens the HTML report.
 - `eas build -p android --profile preview` — the installable APK (`production` emits an AAB).
 - `npm run reset-project` — **NEVER RUN.** Deletes `src/` and `scripts/`.
 
