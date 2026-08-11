@@ -1,93 +1,82 @@
-# HANDOFF — CGPE Connect (Android) — Phase 6 (PARTIAL — BUILT) — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — Phase-3 carry-out (dashboards KPI tiles) — 2026-08-11
 
-Phase 6's two app-side halves (notes search, LIC plans) are built, gated green, and committed
-locally on branch `Shivam` as `7c11c82`. Its third — commissions — stays **backend-blocked** and was
-not touched. `git push` still 403s (unchanged — credential `reactjsaaziko` has no write access to
-`Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; needs a human). `7c11c82` and the two earlier Phase-12
-commits (`4507d6e`, `c8a4a79`) are all local only.
+Built and committed locally on branch `Shivam` as `3ef5539`. This closes the **last
+editor-buildable item on the board**: the carried-out Phase-3 partial-outage tile. `git push` still
+403s (unchanged — credential `reactjsaaziko` has no write access to
+`Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; needs a human). `3ef5539` and every earlier commit back
+through `7c11c82` / `4507d6e` / `c8a4a79` are all **local only**.
 
 Gates, all green after the change: `npx tsc --noEmit` exit 0; `npm test` **299 tests / 13 files**
-(was 281/11 — +18: 6 `adaptLicPlan` cases in `adapt.test.ts`, new `api-notes.test.ts` (5), new
-`api-lic.test.ts` (7); no regressions); `npm run lint` **0 errors / 12 warnings** (the Phase-15
-baseline, nothing new).
+(unchanged — presentational JSX change, no new pure logic to pin); `npm run lint` **0 errors / 12
+warnings** (the Phase-15 baseline, nothing new).
 
 ## Done
 
-- **Notes search actually filters now.** `getNotes` sent `/notice-board?search=<term>`, but the
-  handler reads **`q`** (`cgpe-backend-main/routes/noticeBoard.js:93`, filter at `:102-105`) and
-  ignored `search` — so every notes search this app ever ran came back as the caller's whole board,
-  unfiltered. One wire key (`search`→`q`); the app's internal `getNotes({ search })` signature is
-  unchanged, so `notes.tsx` needed no edit.
-- **LIC Plans renders real plans instead of a permanent empty state.** Two layers were wrong:
-  `getLicPlans` validated the unwrapped `data` envelope with an array check while the real body is
-  `{ success:true, data:{ meta, plans } }` (`routes/licPlans.js:62-71`), and the legacy LIC field
-  names (`plan_name`/`product_id`/`plan_table`/`category_label`/`riders`) never matched the app's
-  `LicPlan`. It now unwraps `data.plans` and maps each row through a new pure `adaptLicPlan`. Against
-  a healthy backend it also stops raising a **false outage** (the old `isArr` miss on a 200 body was
-  reported as a contract fault).
-- **The stale "`/api/lic-plans` 404s in production" claim is corrected, not just worked around.** It
-  is live — mounted at `app.js:461`, full CRUD behind `protect`. The two `api.ts` comments and the
-  `lic-plans.tsx` header + empty-state copy that asserted 404 were false and are fixed; the LIC empty
-  state now branches on `useDataHealth().degraded` like `kb.tsx` (outage vs genuinely-empty).
-- **Filed an INBOX notice** to `cgpe-api`/`cgpe-admin` (shipped app-side, no API change; the one open
-  question is whether `/api/lic-plans` is actually deployed on the **droplet** — I verified only the
-  working tree), grepped it back, confirmed it survived a concurrent write.
+- **A partial outage no longer lies on the Master/Admin dashboards.** With the roster loaded but the
+  org endpoints down (`getOrgSnapshot` returns `null`), the Master KPI grid and Admin KPI grid used
+  to render "0 clients · ₹0 claims paid" as fact. Every fabricating tile now shows `NO_VALUE` ("-")
+  when the snapshot is absent, exactly like the hero above them already did. A healthy backend
+  renders the real figures unchanged, and a genuine org `0` (present snapshot) still shows as `0`.
 
 ## Files changed
 
-- `src/data/api.ts` — `getNotes` (`search`→`q`, one key); `getLicPlans` (unwrap `data.plans`, validate
-  `Array.isArray(d.plans)`, map through `adaptLicPlan`); two stale "404 in production" comments
-  corrected (the `reportIfOutage` doc and the Phase-9 layer header).
-- `src/data/adapt.ts` — new `adaptLicPlan` (legacy LIC shape → `LicPlan`); `LicPlan` added to the
-  type import. Entry-age/term deliberately map to empty (the wire carries neither).
-- `src/app/lic-plans.tsx` — stale header comment rewritten; empty state branched on health; rider
-  pills relabelled "Sold for" → "Riders" (D-3).
-- `src/data/__tests__/adapt.test.ts` — 6 `adaptLicPlan` pure-mapping cases.
-- `src/data/__tests__/api-lic.test.ts` — **new.** 7 cases: GET path, `data.plans` unwrap, field
-  mapping through the public API, live-200-no-outage, and the failure classification (500 → outage,
-  404 → quiet, 200-with-no-plans → contract fault reported).
-- `src/data/__tests__/api-notes.test.ts` — **new.** 5 cases pinning the search term goes out as `q`,
-  never `search`, plus category passthrough and the `all` sentinel drop.
-- `docs/spec/PHASE-6.md` — **new.** Full spec, the five locked decisions, the field-mapping table.
-- `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md` — board row 6 → partial-done, `## Now` /
-  `## Next 3` / Phase-6 detail updated; the Phase 6 (built) decision; this handoff.
-- `../contracts/INBOX.md` — the shipped-app-side notice (that dir is untracked, so not committed).
+- `src/screens/dashboards.tsx` — 8 tile expressions: Master grid (5 of 6 tiles) and Admin grid (all
+  3) changed from `snapshot?.field ?? 0` to `snapshot ? <value> : NO_VALUE`. Master's "Open tasks"
+  tile left unchanged (its `tasks.filter(…).length` fallback is real loaded data, not a fabricated
+  zero). Two `WHY` comments added above the grids.
+- `docs/DECISIONS.md` — the decision entry (top, newest-first): why snapshot-presence, not the global
+  `degraded` flag.
+- `docs/PHASES.md` — new `## Now` entry; `## Next 3` #3 struck through as done; the Phase-3 carry-out
+  blockquote marked CLOSED.
+- `docs/PROJECT_MAP.md` — §5 Health-channel row: the remaining tile gap is now closed.
 
 ## Decisions made
 
-- **`adaptLicPlan` leaves entry-age and term empty rather than mining `worked_example`.** The legacy
-  round-trip carries no plan-level entry-age band and no plan-level term; the only `term` present is a
-  single illustrative value inside `worked_example.inputs` (one example, not the plan's range). Mining
-  it would fabricate a number the data does not assert — the exact class the no-mock-data contract
-  stops. See DECISIONS 2026-08-11 (Phase 6 — built) D-2, and the spec's mapping table.
-- **`riders` → `tags`, with the pill heading relabelled "Sold for" → "Riders" (D-3).** `tags` now
-  carries real rider names; the old "Sold for" heading would mislabel them as target segments. The wire
-  carries no "sold for" list, so relabelling is the honest fix.
-- **Commissions left untouched (D-5).** `GET /api/commissions` returns owner-scoped raw rows, not the
-  aggregate the screen wants, and `target` has no source. The product aggregate endpoint is still
-  pending (product-owner confirmed). Deriving money on-device is rejected (Phase 16 precedent).
+- **Gated the tiles on `snapshot`-presence, deliberately NOT on `useDataHealth().degraded`** (the
+  handoff suggested `degraded`). Two code-verified reasons: (1) snapshot-presence is what the hero at
+  `dashboards.tsx:266` and home's own analytics widget (`home.tsx:1682`, the app's canonical
+  org-snapshot pattern) already key on, so hero and tiles can never disagree on the same number; (2)
+  `health.degraded` is **global and sticky** (`health.ts:33` / `PHASE-3.md` L8), so gating tile
+  *values* on it would blank a tile whose data loaded fine whenever *any unrelated* endpoint failed.
+  The outage-vs-loading distinction `degraded` carries is already shown by the global `<HealthBanner/>`
+  and the hero's "Loading the organisation book" sub, so it does not belong in a tile's number. Full
+  rationale: DECISIONS 2026-08-11 (top entry).
+- **No test file, on purpose.** `dashboards.tsx` is presentational JSX with zero coverage and the
+  harness has no React-Native renderer (the `test/stubs/*` exist only for module resolution) — same
+  untestable-by-convention class as Phases 8/11/17. The change is two ternaries per tile.
+- **No INBOX/contracts entry** — nothing crosses a repo boundary; this is a purely app-side display
+  honesty fix.
 
 ## Known broken / deliberately skipped
 
-- **Phase 6's device DONE-WHEN needs a handset + live host** — the LIC catalogue rendering against
-  production and notes search narrowing the list. `npm test` covers the wire contract only. Carried,
-  like Phases 1/4/5/7/12/13.
-- **The `/api/lic-plans` droplet question is open** — I verified it is live in the backend working
-  tree, not on the production droplet. If the droplet runs older code where it 404s, the LIC fix is
-  inert (screen degrades honestly) until redeploy. Asked in the INBOX; only `cgpe-api` can answer.
-- **`git push` still 403s** — `7c11c82` (and `4507d6e`, `c8a4a79`) are local only. A human must grant
+- **`git push` still 403s** — `3ef5539` (and all earlier commits) are local only. A human must grant
   write access or swap the Windows-credential-manager credential. Did not retry; did not touch the remote.
-- **Commissions (Phase 6, third part) not started** — backend-blocked, above.
+- **Master's "Open tasks" tile and the Admin hero's `done/total`** still fall back to the loaded
+  `tasks` list when the snapshot is absent — left alone on purpose: that is **real** session data, not
+  a fabricated zero, and blanking it would exceed this fix's scope.
+- **The non-null *partial* snapshot edge is unchanged** — if one of the three org legs answers and
+  another fails, the snapshot is truthy and a failed leg's field is `0`. Fixing that per-field would
+  mean widening `OrgSnapshot` to nullable fields (a new empty shell), which the handoff explicitly
+  ruled out and which home's own analytics widget also does not do. The specified bug (all org legs
+  down → snapshot `null`) is fully fixed.
+- **Four 2026-08-11 backend FYI notices to `cgpe-mobile` are unticked in `INBOX.md`** — Phase 9
+  (attendance watchdog), Phase 10 (`location_tracks` unique index), Phase 14 (notifications/notices
+  now 5xx on error, not empty-200), Phase 15 (dead-code sweep). All reviewed; none affect the app.
+  Not ticked because they are multi-recipient (`cgpe-admin` + `cgpe-mobile`) and each says "no tick
+  needed unless you want the audit trail" — and editing `INBOX.md` for no functional reason invites
+  the documented concurrent-write data loss. Only **Phase 14** is worth a grep (see below).
 
 ## Next session starts here
 
-- **Phase 6 commissions is backend-blocked** — nothing app-side to build until `cgpe-api` exposes the
-  product aggregate endpoint. The genuinely-buildable next work is the **device-verification backlog**
-  (Phases 1/4/5/6/7/10/12/13 handset checks) or the small carried-out `dashboards.tsx:292-297`
-  partial-outage tile (`## Next 3` item 3 — a partial outage still renders "0 clients · ₹0 claims
-  paid" as fact on the Master KPI tiles; the hero above already uses `NO_VALUE`).
+- **No editor-buildable phase remains.** Phases 6 (commissions) / 9 / 16 are `cgpe-api`-blocked;
+  everything else on the board is a **handset-only** acceptance check (Phases 1/4/5/6/7/10/12/13).
+- **The one genuinely-buildable next item** is the INBOX Phase-14 grep: backend now returns **5xx**
+  (not `200 { data:[] }`) when `GET /api/notifications`, `/notifications/unread-count`, or
+  `/notices/unread` error. Confirm the app's `notifications.tsx` / notice reads route those through
+  `tryReal`/`unavailable` and do **not** paint an empty-200 as "nothing to show". If clean, tick the
+  Phase-14 item; if not, it's a small honesty fix in the same class as Phase 3.
 - **First command:** `/boot`
-- **Watch out for:** the `dashboards.tsx` tile is `snapshot?.total_clients ?? 0` at `:292-297` — the
-  fix is to give the tile grid the same `NO_VALUE` treatment the hero at `:266` already has, gated on
-  `useDataHealth().degraded`, **not** to widen types or invent a new empty shell. It is small and
-  specified; do not let it absorb the whole dashboard.
+- **Watch out for:** `health.degraded` is **global and sticky**, not per-endpoint. Gate empty-state
+  *copy* on it (as `lic-plans.tsx`/`kb.tsx` do), but gate an individual *value* on its own data's
+  presence — otherwise one unrelated failure blanks a surface whose data loaded fine. This is the
+  exact trap this session's tile fix was written to avoid.
