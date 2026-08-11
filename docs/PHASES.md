@@ -14,11 +14,11 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 17 — done.** Built 2026-08-11. `npm test` runs **258** tests across 9 files and exits 0
-(no new pure logic to pin — the change is entirely in the imperative `toggleClock` handler);
-`npx tsc --noEmit` exits 0; `npm run lint` stays at the 46-error baseline. Clocking out from
-outside the office fence still succeeds exactly as before and now shows a warning naming the
-measured distance; clocking out from inside the fence is unchanged.
+**Phase 17 — done.** Built 2026-08-11, commit `140d020`. `npm test` runs **258** tests across 9
+files and exits 0 (no new pure logic to pin — the change is entirely in the imperative
+`toggleClock` handler); `npx tsc --noEmit` exits 0; `npm run lint` stays at the 46-error baseline.
+Clocking out from outside the office fence still succeeds exactly as before and now shows a
+warning naming the measured distance; clocking out from inside the fence is unchanged.
 
 **Phase 8 — done.** Built 2026-08-11, commits `e5b57ef` (code + spec + docs) and `4e12688` (the
 review fix). `npm test` runs **258** tests across 9 files and exits 0; `npx tsc --noEmit` exits 0;
@@ -96,7 +96,7 @@ exercise.
 | 14 | Dead-code sweep | Not started |
 | 15 | Lint to green | Not started |
 | 16 | "My earnings" salary section `[api]` | **Blocked** — awaiting the salary formula *and* a backend pay field |
-| 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green |
+| 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
 
 ---
 
