@@ -6,6 +6,34 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Deleting a fabrication at the source, not just distrusting it at the call site (Phase 8)
+
+**Context.** `generateReport` invented a fixed ₹42,00,000 summary on any failure. Its one caller,
+`client/[id].tsx`, already had a `source !== 'demo'` guard and a comment explaining exactly why —
+proof the fabricated data had never reached a screen, but only because that one call site
+remembered to check. `getDashboardOverview` / `getClaimsSummary` (`api.ts`) were already written
+the honest way: return `tryReal`'s result directly, `null` on any failure, no invented fallback.
+
+**Decision.** The fix is at the source, not at the call site. `generateReport` now matches its two
+precedents exactly. The caller's now-permanently-true `source !== 'demo'` check and the `source`
+field it existed to read are both removed, rather than left in place as a defensive check with
+nothing left to defend against — a dead guard reads as "this could still happen" to the next
+person who touches the file.
+
+**Consequence.** A second caller of `generateReport` — a future screen, a test — can now trust
+`.ok` alone; there is no longer a second thing to remember to check. Same shape as Phase 7's D-2
+("an unknown fence is represented as unknown, not as a guess") and Phase 5's D-1 ("a 2xx is not a
+success; the body's own verdict is") — fabrication and mistrust of fabrication are both defects;
+only removing the fabrication closes the class.
+
+**Also decided:** the adversarial-review convention (Phase 4's rule, held through 5 and 7) scales
+down for a small phase. One skeptical pass, not a multi-lens panel, was proportionate here — and it
+still caught a real defect: rewriting `config.ts`'s "Backend base URL" paragraph while leaving its
+neighbouring numbered list saying the opposite thing 24 lines above. Reviewing scales with risk,
+not with habit; a phase this size still gets reviewed, just not at Phase 7's scale.
+
+---
+
 ## 2026-08-10 — An INBOX reply is not filed until you have read it back
 
 **Context.** `CLAUDE.md` already warned that `../contracts/INBOX.md` is written concurrently and

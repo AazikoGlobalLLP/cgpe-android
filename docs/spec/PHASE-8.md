@@ -193,3 +193,24 @@ below it stands on its own as a manual walkthrough.
   testing guide) are left as-is where they describe UI presence rather than a data source —
   re-verifying all 24 by hand is Phase 8's "Done means" device-walkthrough obligation from
   `CLAUDE.md`, not a rewrite obligation.
+
+---
+
+## 6. What the adversarial review found
+
+One independent pass over the committed diff (D-nothing new locked; this phase is small enough
+that one skeptical read, not a multi-lens panel, was proportionate). Five of six checks came
+back clean — `generateReport`'s new body matches its cited precedent exactly, nothing else in
+`src/` still references `.source` on a report or constructs the fabricated ₹42,00,000 shape, and
+`HOW_TO_RUN.md`/`TESTING_GUIDE.md` were verified line-by-line against `login.tsx`'s own
+`NetworkError` handling.
+
+**One real defect: `config.ts` was not internally consistent after its own rewrite.** The
+docstring's numbered list (originally lines 15-20, untouched by the first pass) still told a
+reader to "Set API_BASE_URL below" for native and described the web-same-origin case as
+resolving "the relative `/internal/api`" — both written before this phase's rewrite of the
+"Backend base URL" paragraph 24 lines below, which says the opposite: native always resolves to
+`PROD_API` with nothing to hand-edit, and the ternary never produces a relative URL, only the
+absolute `PROD_API` or an absolute `localhost` address. Rewriting one paragraph and leaving its
+neighbour's contradicting claim in place would have been the exact class of defect this phase
+exists to close, one paragraph later. Fixed; the file now agrees with itself end to end.

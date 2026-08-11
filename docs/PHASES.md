@@ -14,6 +14,13 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 8 — done.** Built 2026-08-11, commits `e5b57ef` (code + spec + docs) and `4e12688` (the
+review fix). `npm test` runs **258** tests across 9 files and exits 0; `npx tsc --noEmit` exits 0;
+`npm run lint` is byte-identical to the 46-error baseline. `generateReport` no longer invents a
+₹42,00,000 report on failure — it returns `null`, same shape as the other nullable single-object
+endpoints — and `HOW_TO_RUN.md`/`TESTING_GUIDE.md`/`config.ts` no longer describe an offline demo
+mode or a sample-data fallback that stopped existing phases ago.
+
 **Phase 7 — done.** Built 2026-08-10, commits `3e092ad` (code + spec + tests) and `fc09934` (the
 review fixes). `npm test` runs **258** tests across 9 files and exits 0; `npx tsc --noEmit` exits 0;
 `npm run lint` is byte-identical to the 46-error baseline. **INBOX D5 and D10 are both closed on
@@ -45,9 +52,10 @@ exercise.
 
 ## Next 3
 
-1. **Phase 8** — the last fabricated-data path (`generateReport`'s ₹42,00,000) and the stale docs.
-2. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
+1. **Phase 11** — server-derived tier. `store/roles.ts` still grants the top privilege tier by
    string-matching a personal email address compiled into every APK.
+2. **Phase 10** — wire server-driven navigation. Pure app-side; no `cgpe-api` or `cgpe-admin`
+   change needed, since the panel's nav controls already exist and just aren't read yet.
 3. **Phase 6** — the remaining envelope mismatches, if `cgpe-api` has un-shadowed
    `GET /api/commissions/team-summary`. Phase 4 proved the method: read the contract row, read the
    handler, then assert the envelope in a test that fails if the shape moves.
@@ -70,7 +78,7 @@ exercise.
 | 5 | WhatsApp send | **Done** 2026-08-10 — 219 tests green (`95f1ccb`); device checks outstanding |
 | 6 | Remaining envelope mismatches `[api]` | Blocked on `cgpe-api` |
 | 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
-| 8 | Last fabricated-data path + stale docs | Not started |
+| 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
 | 9 | Reminders/checklists persist `[api]` | Blocked on `cgpe-api` |
 | 10 | Server-driven navigation (§9 gap) | Not started |
 | 11 | Server-derived tier | Not started |
@@ -246,13 +254,32 @@ out: `docs/spec/PHASE-7.md`.
 > `api-renewals.test.ts:187` in Phase 3 and the two `adapt.test.ts` pins in Phase 4. The only
 > pinned-bug block left in the suite is `adapt.test.ts`'s `mapClaimStatus` pins.
 
-## Phase 8 — Delete the last fabricated-data path, and the stale docs
+## Phase 8 — Delete the last fabricated-data path, and the stale docs ✅ DONE 2026-08-11 (`e5b57ef`)
 `generateReport` returns `null` on failure instead of inventing ₹42,00,000 of cover.
 Correct `config.ts`'s five now-false comments, and `HOW_TO_RUN.md` / `TESTING_GUIDE.md`, which still
 describe an offline demo mode and a localhost default that no longer exist.
 **Files:** `src/data/api.ts`, `src/constants/config.ts`, `src/data/tasks.ts`, `src/data/team.ts`,
 `HOW_TO_RUN.md`, `TESTING_GUIDE.md`
 **Done when:** grep for `source: 'demo'` returns nothing, and no doc in the repo describes sample data.
+
+**Result.** No new tests — the fixed `generateReport` is a one-line `tryReal` passthrough, the
+same untested shape as its cited precedents `getDashboardOverview` / `getClaimsSummary`. Two
+things turned out to be true that the phase text did not say:
+
+1. **The fabrication was already distrusted, not merely unnoticed.** `client/[id].tsx`'s only
+   caller had a `source !== 'demo'` guard and a comment explaining why — proof the fabrication
+   had never reached a screen, but also proof it was surviving only because of one call site's
+   memory. A second caller checking only `.ok` would have shown an invented life-cover figure to
+   a real customer. Deleting it at the source, not just distrusting it at the call site, is what
+   makes that impossible rather than merely unlikely — same shape as Phase 7's D-2 and Phase 5's
+   D-1.
+2. **`config.ts`'s five comments were not independent of each other.** An adversarial review (one
+   pass, proportionate to the phase's size) caught that rewriting the "Backend base URL" paragraph
+   while leaving its neighbour — a numbered list 24 lines above, itself untouched by the phase
+   text's own count — still saying "Set API_BASE_URL below" for native produced a file that
+   contradicted itself one paragraph later. Fixed in `4e12688`.
+
+Full spec, the six locked decisions and what the review found: `docs/spec/PHASE-8.md`.
 
 ## Phase 9 — Make reminders and checklists persist `[api]`
 `toggleReminder`, `toggleTaskStep` and `toggleClaimDoc` make no network call and mutate buffers that
