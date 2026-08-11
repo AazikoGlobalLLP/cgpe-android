@@ -185,6 +185,20 @@ export async function installBackend(page: Page, mode: SessionMode): Promise<voi
   });
 }
 
+/**
+ * Overlay a login OUTCOME (registered after installBackend, so it wins for `/auth/login`):
+ * 'refused' = the server rejects the credentials (401 with its own message) → the login screen's
+ * danger "Sign in refused" banner; 'network' = the request never reaches the server → the neutral
+ * "offline" banner. Everything else keeps answering through the base backend.
+ */
+export async function installLoginOutcome(page: Page, outcome: 'refused' | 'network'): Promise<void> {
+  await page.route('**/api/auth/login', async (route) => {
+    if (route.request().method() === 'OPTIONS') { await route.fulfill({ status: 204, headers: CORS, body: '' }); return; }
+    if (outcome === 'network') { await route.abort('failed'); return; }
+    await route.fulfill({ status: 401, contentType: 'application/json', headers: CORS, body: JSON.stringify({ success: false, error: 'Invalid credentials. Please check and try again.' }) });
+  });
+}
+
 export type FaultKind =
   | 'status500' | 'status503' | 'empty' | 'malformed' | 'timeout' | 'oversized' | 'status400' | 'status403';
 

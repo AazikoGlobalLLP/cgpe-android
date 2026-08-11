@@ -6,6 +6,68 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-11 — Phase 18 built: Playwright + Expo-web watchable E2E harness, offline & synthetic
+
+**Context.** Phase 18 asked for a *watchable*, A-to-Z, worst-case end-to-end test the user can sit and
+watch in a browser, with edge-case injection, touching zero production data. Tooling was pre-approved.
+
+**Decision.** Built it as **Playwright driving the Expo web build**, in a new `ANDROID/e2e/` tree kept
+**outside `src/`** and invisible to every gate. Key locked choices:
+- **Web boots with NO app guard.** The spec's headline risk (§2 — a module-scope native import
+  redboxing web) does not occur: `tracker.ts` guards `expo-task-manager`/`expo-location` behind
+  `isNative`, `biometricIdentity.ts` lazy-requires `expo-secure-store` only when `!isWeb`, `AppLock`
+  no-ops on web. `expo start --web` bundles 1590 modules clean and login renders. So **no `src/`
+  screen was touched** — the only app-side edits are gate isolation (`tsconfig.json` `exclude:["e2e"]`,
+  `eslint.config.js` `ignores:["e2e/**"]`).
+- **Session mode = the login token prefix.** The harness drives the *real* login form against a mocked
+  `/auth/login`; a `demo-` token makes the app run fully offline (degraded rendering), any other token
+  makes calls real so mocks/faults apply. Faithful to production and self-checking (no hand-seeding of
+  AsyncStorage's web keys).
+- **Everything synthetic.** All `**/api/**` traffic is intercepted (CORS + preflight); no request
+  reaches a real backend. The healthy mock returns each endpoint's real *shape* but empty contents —
+  and object/stat reads are **zero-FILLED, not `{}`**, because several screens deref stat fields
+  unguarded and crash on a partial object (the app guards `null`, not `{}` — a real robustness class
+  if the backend ever drift-returns `{}`; noted, not fixed here, as this is test infra).
+- **Coverage.** 33 tests: web-boot smoke, backbone (login+CORS+deep-link restore), **A-to-Z render of
+  all 42 web-reachable screens**, **21 worst-case cases** (500/503/malformed/empty-200/timeout/oversized
+  on representative data screens, asserting the shared `<HealthBanner/>` data-health contract), and a
+  **bad-input matrix** (login empty/whitespace/refused/network/hostile/double-submit + hostile input on
+  search/task-new/claim-new). Worst-case + bad-input run on a **representative** set, not all 47 — the
+  banner is app-wide (mounted once, routed through `unavailable`/health), so the contract generalises;
+  the selection is stated in `e2e/README.md`, no silent cap.
+- **Known cosmetic quirk (documented, not chased).** ~12 More-menu/detail screens show a count=1
+  "some data could not load" banner under the *healthy* mock, sourced from the home-dashboard widget
+  prefetch that renders underneath a pushed stack screen on cold deep-links (all responses are 200 and
+  valid; a timing/fidelity artifact, not a render failure). All 42 screens render; recorded as info.
+- **Detail-route realism.** A healthy backend has no record `e2e-1`, so detail-by-id reads return a
+  **404** (screens degrade to "not found"), and synthetic detail ids are **24-hex** so `api.ts`
+  `healthKey()` collapses `/leads/:id` — otherwise a suppressed 404's key ≠ the `unavailable` key and a
+  false banner leaks. `/team/task-overview` etc. are named sub-resources, never treated as detail ids.
+
+**Consequence.** `npm run e2e` opens a headed browser that walks + stresses the app; artifacts (video,
+trace, per-screen stills, HTML report, an `OPEN-ME.md` index, and `WHAT-WEB-CANNOT-REACH.md`) land in
+`e2e/artifacts/`. Gates green (`tsc` 0, `npm test` 305/305, lint 0 errors/12 warnings). **Phase 19's
+visual per-language pass now rides this harness.** The native-only backlog (haptics, background GPS,
+biometric lock, native map, cold-start persistence) is unchanged and named in `WEB-LIMITS.md` — a green
+web run is the web slice, not the whole app. Push still 403s; commits are local. Memory:
+`e2e-harness-phase18`.
+
+## 2026-08-11 — INBOX: legacy `/api/users` identity store deleted (backend Phase 19) — no-op for the app
+
+**Context.** A boot found a new `→ cgpe-admin, cgpe-mobile` notice from `cgpe-api`: the legacy
+`/api/users` register/login/list/`:id` endpoints and `models/User.js` were deleted (BREAKING, but
+claimed zero-consumer). "Receiving an item is not authorisation" — verify first.
+
+**Decision.** Confirmed a genuine no-op for the app and replied under the item (box left unticked —
+multi-recipient). `grep -nE "/api/users|/users/register|/users/login|getUsers" ANDROID/src` → 0, and a
+case-insensitive `users` scan of the whole network layer (`src/data/api.ts`) → 0. Auth flows entirely
+through `/api/auth` on the real `{ user_id }` staff token, never the dead `{ userId }` shape, so the
+now-un-mintable legacy token changes nothing; the struck `enums.md §1.3` `user|admin` vocabulary was
+never in `src/`.
+
+**Consequence.** No `src/` change. Reply grep-verified present after writing (INBOX concurrent-write
+discipline).
+
 ## 2026-08-11 — INBOX sync: backend Phase 17 / 18 FYIs verified as no-ops for the app — no code change
 
 **Context.** A boot re-read of `contracts/INBOX.md` surfaced the two newest `→ cgpe-admin, cgpe-mobile`

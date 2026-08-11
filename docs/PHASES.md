@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 18 — watchable A-to-Z + worst-case E2E harness. BUILT 2026-08-11.** The spec's named
+risk (§2) is retired: **the Expo web build boots and renders `/(auth)/login` with no web guard** —
+`tracker.ts` / `biometricIdentity.ts` / `AppLock` already gate their native modules behind
+`isNative`/`!isWeb`. Built a Playwright harness in `ANDROID/e2e/` (outside `src/`, invisible to all
+gates) that drives the Expo **web** build in a real browser the user can watch, with video + trace +
+per-screen screenshots. **33 tests green:** the web boots (`00-smoke`); the backbone works
+(`01-signin` — mocked login + CORS, real form submit, deep-link session restore); an **A-to-Z walk
+renders all 42 web-reachable screens** (`10-walk-normal`, 0 page errors); **21 worst-case cases** inject
+500/503/malformed/empty-200/timeout/oversized on representative data screens and assert the screen
+still renders **and** the `<HealthBanner/>` obeys the data-health contract (`30-worstcase`); and a
+**bad-input matrix** covers login (empty/whitespace/refused/network/hostile/double-submit) + hostile
+input on search/task-new/claim-new (`40-forms`). Every response is synthetic Playwright mocking —
+**zero production data**. One command: `npm run e2e` (headed; `HEADLESS=1` for CI). Artifacts land in
+`e2e/artifacts/` with an `OPEN-ME.md` index + `WHAT-WEB-CANNOT-REACH.md` (the native-only backlog web
+can't verify: haptics, background GPS, biometric lock, native map, cold-start persistence). Gates
+green: `tsc` exit 0, `npm test` 305/305, `npm run lint` 0 errors/12 warnings. Two app-side edits only,
+both gate-isolation: `tsconfig.json` excludes `e2e`, `eslint.config.js` ignores `e2e/**`. Known
+cosmetic quirk documented: ~12 More-menu/detail screens show a count=1 outage banner under the healthy
+mock from the home-dashboard prefetch underlay on cold deep-links — not a render failure. Push still
+403s (commit local). Full path: `docs/spec/PHASE-18.md`; DECISIONS 2026-08-11 (top); memory
+`e2e-harness-phase18`.
+
 **Session close — two new phases planned, no build — 2026-08-11.** At the user's direction, this
 session re-verified the two remaining blockers against `cgpe-api`'s **real code** (not the tags —
 wrong before on Phases 6/9/10/11/12) and confirmed both still real: `routes/commissions.js` has no
@@ -215,17 +237,12 @@ exercise.
 
 ## Next 3
 
-1. **Phase 18 — watchable, A-to-Z, worst-case end-to-end test pass.** **Buildable app-side now**
-   (no handset for the web-reachable subset). Playwright drives the Expo **web** build in headed
-   Chromium so the user watches every action live and re-watches a video/trace; edge states
-   (500/503/empty/malformed/timeout/401/403/huge-list) are injected deterministically via network
-   mocking, touching zero production data. First task/risk: getting `expo start --web` to boot. Full
-   path: `docs/spec/PHASE-18.md`.
-2. **Phase 19 — language toggle: verify + harden all 5 languages (incl. Hinglish / Gujlish).** The
+1. **Phase 19 — language toggle: verify + harden all 5 languages (incl. Hinglish / Gujlish).** The
    app already ships the 5 dictionaries; this verifies them. Its core — a dictionary-parity Vitest
    (all 5 dicts, same 74 keys, no blanks) — **depends on nothing and is buildable today**; the visual
-   per-language pass rides the Phase 18 harness. Full path: `docs/spec/PHASE-19.md`.
-3. **Phase 16 salary + Phase 6 commissions — backend-blocked; waiting for the backend to create the
+   per-language pass now **rides the Phase 18 harness** (which is built and green): drive the language
+   toggle in the browser and screenshot every screen per language. Full path: `docs/spec/PHASE-19.md`.
+2. **Phase 16 salary + Phase 6 commissions — backend-blocked; waiting for the backend to create the
    endpoints.** Re-verified real this session against `cgpe-api`'s code: no product aggregate / no
    `target` in `routes/commissions.js` (Phase 6); no `salary`/`wage`/`per_day`/`ctc`/`pay_rate` field
    on any backend model or route (Phase 16) — only the role `payroll_staff` / department `payroll`.
@@ -271,7 +288,7 @@ exercise.
 | 15 | Lint to green | **Done** 2026-08-11 — `npm run lint` exits 0 (was 45 errors); 271 tests green (`292610b`) |
 | 16 | "My earnings" salary section `[api]` | **Blocked** — waiting for the backend to create the endpoint (pay field + computed earnings); re-verified real 2026-08-11 |
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
-| 18 | Watchable A–Z + worst-case E2E test | **Planned** 2026-08-11 — path laid (`docs/spec/PHASE-18.md`); buildable app-side (headed browser + edge-case injection) |
+| 18 | Watchable A–Z + worst-case E2E test | **Built** 2026-08-11 — Playwright/Expo-web harness, 33 tests green (42 screens render + 21 worst-case + 9 bad-input); web boots with no guard; gates green |
 | 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Planned** 2026-08-11 — path laid (`docs/spec/PHASE-19.md`); dictionary-parity test buildable now |
 
 ---

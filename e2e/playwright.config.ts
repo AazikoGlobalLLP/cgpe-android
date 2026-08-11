@@ -30,6 +30,8 @@ const PROJECT_ROOT = path.resolve(__dirname, '..');
 export default defineConfig({
   testDir: './tests',
   outputDir: './artifacts/test-results',
+  // After the whole run, make the artifact folder self-explanatory (index + web-limits note).
+  globalTeardown: './helpers/teardown.ts',
   // A-to-Z is one long guided walk; running specs in parallel would fight over the single
   // dev server and make the watched run jump around. One worker, in file order.
   fullyParallel: false,
