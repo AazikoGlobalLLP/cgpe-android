@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 28 — consume server-driven `theme` (accent + badge). BUILT 2026-08-12.** The owner-picked
+Phase-26 lever (c). `normalizeTheme` had parsed `theme` into `{accent,badge_label,density}` since before
+Phase 26 but **nothing read it**; this makes two of the three facets live. Owner-locked scope: consume
+**accent** + **badge_label** now, **defer density** (D-4 — `spacing`/`radius`/`font` are static consts in
+~81 files, so density needs a runtime-scale refactor, a separate phase); accent reaches **`primary` +
+`gradientBrand`** (D-2); badge renders in the **Home greeting header** (D-3). New pure
+`deriveBrandPalette(base, accent)` in **`src/theme/brand.ts`** — deterministic transform that overrides the
+brand primary family + signature gradient from the accent and returns the base palette **by reference** when
+there is no valid accent (fail-open, D-5). A new **`BrandTheme`** bridge in `_layout.tsx` sits **inside**
+`AppUiProvider` (so it can read `config.theme.accent`) and re-provides the accented palette via a new
+`PaletteProvider` — so the top-level tree is NOT reordered, keeping the base `ThemeProvider` above
+`Confirm`/`Toast` (D-1). Semantic colours + the teal `accent` token are deliberately untouched (accent =
+brand identity, not a status recolour). The Home badge uses the brand `primary` family, so a set accent
+tints it to match; renders only when `badge_label` is present. Accent intent is the panel's own
+(`ADMIN_PANEL_SYNC.md` §3.6.9: "swap `M.primary`"). Gates green: `tsc` 0, `npm test` **407/407** (+9,
+`src/theme/__tests__/brand.test.ts`), lint 0 errors / 12 warnings (baseline). Commit local (push still 403s).
+**No contract change** (theme is response-only/optional, consumed as documented). **Device check carried**
+(a seeded `theme.accent`+`badge_label` dept config, light/dark at 390 px; accent-less role stays azure) —
+not editor-buildable (no themed doc seeded yet). Full path: `docs/spec/PHASE-28.md`; DECISIONS 2026-08-12 (top).
+
 **Phase 27 — per-business-department app layouts (`resolveRoleKey` widening). FILED to `cgpe-api`, no
 mobile build — 2026-08-12.** The owner picked, of the three carried Phase-26 options, "spec the
 `resolveRoleKey` change." Verified in code: `resolveRoleKey` (`routes/rbac.js:396`) compares the RAW

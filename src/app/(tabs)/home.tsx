@@ -1759,7 +1759,25 @@ export default function Home() {
         {/* Top bar */}
         <View style={{ paddingTop: insets.top + 12, paddingHorizontal: spacing.lg, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <View style={{ flex: 1 }}>
-            <Txt size={font.sub} color={c.muted} numberOfLines={1}>{greet},</Txt>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+              <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{greet},</Txt>
+              {/* Department identity badge — server-driven `theme.badge_label` (≤12 chars), shown only
+                  when the role's config carries one. Its colours are the brand `primary` family, so a
+                  department accent (if set) tints the badge to match the rest of its layout; azure
+                  otherwise. Absent badge_label draws nothing. */}
+              {config.theme?.badge_label ? (
+                <View style={{
+                  paddingHorizontal: 7, paddingVertical: 2, borderRadius: radius.pill,
+                  backgroundColor: c.primarySoft,
+                  borderWidth: StyleSheet.hairlineWidth, borderColor: c.primary,
+                }}>
+                  <Txt size={9.5} weight="800" color={c.primaryDark} numberOfLines={1}
+                    style={{ letterSpacing: 0.6, textTransform: 'uppercase' }}>
+                    {config.theme.badge_label}
+                  </Txt>
+                </View>
+              ) : null}
+            </View>
             <Txt size={21} weight="900" numberOfLines={1} style={{ letterSpacing: -0.4, marginTop: 1 }}>
               {user?.name?.split(' ')[0] ?? 'Team'}
             </Txt>

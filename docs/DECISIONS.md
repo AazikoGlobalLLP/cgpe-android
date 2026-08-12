@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 28: consume server-driven `theme` (accent + badge); density deferred; brand bridge inside AppUiProvider
+
+**Context.** Phase 26 left three levers open; the owner picked lever (c), "finish consuming `theme`".
+`normalizeTheme` (`appUi.tsx:279-288`) has parsed `theme` into `{ accent, badge_label, density }`
+since before Phase 26, but nothing read it. The panel's own contract (`ADMIN_PANEL_SYNC.md` §3.6.9)
+documents the accent intent: "swap `M.primary` for the chosen accent." The obstacle: `ThemeProvider`
+sits **above** `AppUiProvider`, but the accent lives in the config that only exists inside it.
+
+**Decision.** Three facets, owner-locked before code: consume **accent** + **badge_label** now, **defer
+density**. Accent reaches **`primary` + `gradientBrand`** (not solid-primary-only); badge renders in the
+**Home greeting header**. Mechanism: a pure `deriveBrandPalette(base, accent)` in new `src/theme/brand.ts`
+(deterministic transform, returns base **by reference** when no valid accent — fail-open); a `BrandTheme`
+bridge mounted **inside** `AppUiProvider` re-provides the accented palette via a new `PaletteProvider`
+(raw `ThemeContext`), so the top-level tree is NOT reordered (which would un-theme Confirm/Toast). Semantic
+colours and the teal `accent` token are left untouched — accent is brand identity, not a status recolour.
+Density deferred because `spacing`/`radius`/`font` are static consts in ~81 files, so it needs a
+runtime-scale refactor (a separate phase). Gates: tsc 0, npm test **407/407** (+9 `brand.test.ts`), lint
+0 errors / 12 warnings (baseline). Commit local (push still 403s).
+
+**Consequence.** A themed department config now recolours brand primary + gradient and shows its
+`badge_label` on Home, in light and dark, on the next cold start with no APK. A config outage or an
+accent-less role renders the built-in azure/teal identity unchanged (fail-open by reference). Density is
+parsed-but-ignored until its own phase. No contract change; `ADMIN_PANEL_SYNC.md` §3.6.9's "if you ever
+add `theme.accent`" note is now satisfied on device. **Device check carried** (needs a seeded theme doc,
+light/dark at 390 px). Full path: `docs/spec/PHASE-28.md`.
+
 ## 2026-08-12 — Phase 27: `resolveRoleKey` widening filed to `cgpe-api` (owner-picked); a backend ask, ZERO mobile code
 
 **Context.** With the seed script delivered (Phase 26 follow-up), the owner picked, of the three

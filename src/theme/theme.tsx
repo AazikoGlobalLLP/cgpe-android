@@ -269,6 +269,25 @@ export function useTheme(): Palette {
   return useContext(ThemeContext);
 }
 
+/** Per-department accent overlay. Re-exported so app code has one theme entry point. */
+export { deriveBrandPalette } from './brand';
+
+/**
+ * Re-provide an already-computed palette to a subtree.
+ *
+ * The app-layer brand bridge (`app/_layout.tsx`) uses this to overlay the server-driven
+ * department accent on top of the OS light/dark palette WITHOUT reordering the provider tree:
+ * the base `ThemeProvider` stays at the top so the Confirm/Toast overlays are still themed, and a
+ * `PaletteProvider` sitting inside `AppUiProvider` swaps in the accented palette for every
+ * `useTheme()` consumer below it. Kept here because `ThemeContext` is private to this module.
+ */
+export function PaletteProvider({ value, children }: {
+  value: Palette;
+  children: React.ReactNode;
+}) {
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+}
+
 /** Azure-tinted depth. Neutral-grey shadows read cheap against a branded surface. */
 export const shadow = (c: Palette, level = 1) => ({
   shadowColor: c.scheme === 'dark' ? '#000' : '#0b3b6f',

@@ -16,13 +16,13 @@ import 'react-native-gesture-handler';
  * The import is cheap: the module body only defines the task and reads a flag.
  */
 import '@/lib/tracker';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { ThemeProvider, useTheme } from '@/theme/theme';
+import { ThemeProvider, useTheme, deriveBrandPalette, PaletteProvider } from '@/theme/theme';
 import { useAppFonts } from '@/theme/fonts';
 import { AuthProvider, useAuth } from '@/store/auth';
 import { I18nProvider } from '@/i18n';
@@ -31,11 +31,28 @@ import { ToastProvider } from '@/ui/feedback';
 import { Splash } from '@/ui/Splash';
 import { AppLock } from '@/ui/AppLock';
 import { JobsProvider } from '@/store/jobs';
-import { AppUiProvider } from '@/store/appUi';
+import { AppUiProvider, useAppUi } from '@/store/appUi';
 import { JobPill } from '@/ui/JobPill';
 import { HealthBanner } from '@/ui/health-banner';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/**
+ * Overlays the signed-in role's server-driven accent (`config.theme.accent`) onto the OS
+ * light/dark palette. It sits INSIDE `AppUiProvider` (so it can read the resolved config) and
+ * inside the base `ThemeProvider` (so it derives from the scheme-correct palette), then
+ * re-provides the branded palette to everything below via `PaletteProvider`. Doing it here rather
+ * than reordering the top-level tree keeps the base `ThemeProvider` above `Confirm`/`Toast` so
+ * their overlays stay themed. No accent → `deriveBrandPalette` returns the base palette unchanged,
+ * so the azure/teal identity is the fail-open default and a config outage never restyles the app.
+ */
+function BrandTheme({ children }: { children: React.ReactNode }) {
+  const base = useTheme();
+  const { config } = useAppUi();
+  const accent = config.theme?.accent;
+  const palette = useMemo(() => deriveBrandPalette(base, accent), [base, accent]);
+  return <PaletteProvider value={palette}>{children}</PaletteProvider>;
+}
 
 function RootNav() {
   const c = useTheme();
@@ -89,6 +106,9 @@ export default function RootLayout() {
                   re-fetches whenever the user id changes, which is what makes a shared
                   handset show the incoming user's layout rather than the outgoing one's. */}
               <AppUiProvider>
+              {/* Inside AppUiProvider so it can read config.theme.accent; re-provides the
+                  accented palette to everything below without moving the base ThemeProvider. */}
+              <BrandTheme>
               <JobsProvider>
                 <ConfirmProvider>
                   {/* Inside ConfirmProvider so a toast renders above its modal scrim.
@@ -99,6 +119,7 @@ export default function RootLayout() {
                   </ToastProvider>
                 </ConfirmProvider>
               </JobsProvider>
+              </BrandTheme>
               </AppUiProvider>
             </AuthProvider>
           </I18nProvider>
