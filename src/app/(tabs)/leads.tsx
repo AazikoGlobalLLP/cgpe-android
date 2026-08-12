@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { font, radius, spacing, useTheme } from '@/theme/theme';
+import { useTheme } from '@/theme/theme';
 import { Eyebrow, Header, Metric, Row, Screen, Txt } from '@/ui/base';
 import { Button, Chips, Fab, Field, SearchBar } from '@/ui/controls';
 import { Banner, EmptyState, Meter, Skeleton, useToast } from '@/ui/feedback';
@@ -69,8 +69,10 @@ const NEXT_STAGE: Partial<Record<LeadStage, LeadStage>> = {
 
 const isOpen = (s: LeadStage) => s !== 'policy_issued' && s !== 'lost';
 
-/** Avatar (44) + its 12pt gap + the row's 16pt gutter. */
-const SEP_INSET = spacing.lg + 44 + spacing.md;
+/** Left inset for a row separator: the row's gutter (`lg`) + the 44pt avatar + its gap (`md`),
+ *  computed from the ACTIVE density scale so separators stay aligned when `theme.density` tightens
+ *  the gutter. The avatar is a fixed 44pt touch target and does not scale with density. */
+const sepInset = (s: { lg: number; md: number }) => s.lg + 44 + s.md;
 
 /**
  * Commit a stage. Resolves to the server's own copy of the lead — the document `PUT` returns
@@ -83,6 +85,8 @@ async function commitStage(id: string, stage: LeadStage): Promise<Lead | null> {
 
 export default function Leads() {
   const c = useTheme();
+  // Phase 30: layout scale comes off the theme so `theme.density` can tighten it per department.
+  const { spacing, font } = c;
   const router = useRouter();
   const toast = useToast();
   const health = useDataHealth();
@@ -430,6 +434,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
   lead: Lead; busy: boolean; onOpen: () => void; onAdvance: () => void;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const t = useT();
   const st = STAGE_META[lead.stage];
   const next = NEXT_STAGE[lead.stage];
@@ -500,15 +505,17 @@ function Hairline({ top }: { top?: boolean }) {
 
 function RowSeparator() {
   const c = useTheme();
+  const inset = sepInset(c.spacing);
   return (
     <View style={{ backgroundColor: c.card }}>
-      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: SEP_INSET }} />
+      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: inset }} />
     </View>
   );
 }
 
 function ListFooter({ count }: { count: number }) {
   const c = useTheme();
+  const { spacing, font } = c;
   return (
     <View style={{
       backgroundColor: c.card, paddingVertical: spacing.md, alignItems: 'center',
@@ -538,6 +545,7 @@ function PipelineSheet({
   onPickStage: (s: StageFilter) => void;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
 
   return (
     <Sheet
@@ -594,6 +602,7 @@ function CloseOutSheet({ visible, lead, onClose, onConfirm }: {
   onConfirm: () => void;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   if (!lead) return null;
 
   return (
@@ -640,6 +649,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
   onClose: () => void;
   onAdded: (lead: Lead, confirmed: boolean, reason?: api.WriteFailure) => void;
 }) {
+  const { spacing } = useTheme();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [interest, setInterest] = useState('');
@@ -786,6 +796,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
  * ================================================================== */
 
 function SkeletonRow() {
+  const { spacing, radius } = useTheme();
   return (
     <View style={{
       flexDirection: 'row', alignItems: 'center', gap: spacing.md,
@@ -806,12 +817,13 @@ function SkeletonRow() {
 
 function PipelineSkeleton() {
   const c = useTheme();
+  const inset = sepInset(c.spacing);
   return (
     <View style={{ backgroundColor: c.card, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
       {Array.from({ length: 7 }, (_, i) => (
         <View key={i}>
           {i > 0 ? (
-            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: SEP_INSET }} />
+            <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: inset }} />
           ) : null}
           <SkeletonRow />
         </View>

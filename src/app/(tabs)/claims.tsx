@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { font, radius, spacing, useTheme } from '@/theme/theme';
+import { useTheme } from '@/theme/theme';
 import { Card, Header, Row, Screen, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
 import { Chips, Fab } from '@/ui/controls';
@@ -105,6 +105,7 @@ const EMPTY_COPY: Record<Filter, { icon: IconName; title: string; subtitle: stri
  * promise. */
 function ClaimsSkeleton() {
   const c = useTheme();
+  const { spacing, radius } = c;
   return (
     <View style={{ gap: spacing.lg }}>
       <Row style={{ gap: spacing.sm, paddingHorizontal: spacing.lg }}>
@@ -140,6 +141,8 @@ function ClaimsSkeleton() {
 
 export default function Claims() {
   const c = useTheme();
+  // Phase 30: layout scale comes off the theme so `theme.density` can tighten it per department.
+  const { spacing, font } = c;
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
@@ -350,6 +353,7 @@ export default function Claims() {
 
 function ClaimRow({ claim, index, onOpen }: { claim: Claim; index: number; onOpen: () => void }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const st = CLAIM_STATUS[claim.status] ?? CLAIM_STATUS.intake;
   const hasAmount = claim.amount > 0;
 
@@ -403,6 +407,7 @@ function Hairline() {
 
 function RowSeparator() {
   const c = useTheme();
+  const { spacing } = c;
   return (
     <View style={{ backgroundColor: c.card }}>
       {/* Inset to the icon column, so the rule reads as a list rather than as a table. */}

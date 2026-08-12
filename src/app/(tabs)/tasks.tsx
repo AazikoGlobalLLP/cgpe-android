@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { font, radius, spacing, useTheme } from '@/theme/theme';
+import { useTheme } from '@/theme/theme';
 import { Card, Eyebrow, Header, Metric, Row, Screen, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
 import { Fab, IconBtn, Segmented } from '@/ui/controls';
@@ -109,6 +109,7 @@ const EMPTY_COPY: Record<Filter, { icon: IconName; title: string; subtitle: stri
  * shift when the data lands, which a centred spinner cannot promise. */
 function TasksSkeleton() {
   const c = useTheme();
+  const { spacing, radius } = c;
   return (
     <View style={{ gap: spacing.lg }}>
       <Card>
@@ -148,6 +149,8 @@ function TasksSkeleton() {
 
 export default function Tasks() {
   const c = useTheme();
+  // Phase 30: layout scale comes off the theme so `theme.density` can tighten it per department.
+  const { spacing, font } = c;
   const t = useT();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -455,6 +458,7 @@ function HeroStat({ label, value, tint, active, onPress }: {
   label: string; value: number; tint: string; active: boolean; onPress: () => void;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   return (
     <Pressable
       onPress={onPress}
@@ -491,6 +495,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
   onReopen?: () => void;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const t = useT();
   const st = TASK_STATUS[task.status];
   const pr = TASK_PRIORITY[task.priority];
