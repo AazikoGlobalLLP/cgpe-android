@@ -393,25 +393,16 @@ exercise.
 
 ## Next 3
 
-1. **Phase 16 self-view salary — still backend-blocked; the admin slice shipped as Phase 20
-   (2026-08-11).** At the owner's direction, an **admin-only** payroll roster now exists in the app
-   (`src/app/payroll.tsx` on `GET /payroll/compute`, Phase 20) — but the Phase 16 goal, every advisor
-   seeing *their own* pay, is a **different** screen and stays blocked: `routes/payroll.js:22-23` gates
-   the whole surface `authorize('admin')` (a leader/advisor gets 403), and the self-scoped read
-   (`GET /api/payroll/my-earnings`) was never built (`grep -i earnings` over the backend = 0). Its UI
-   lock is untouched; the narrowed self-read ask stays filed with `cgpe-api`. Commissions (Phase 6)
-   unchanged. **Phase 16 salary + Phase 6 commissions — original context below.** Backend Phase 25
-   payroll cluster landed: the pay field (`payroll_profiles.salary_amount`)
-   and the server-side formula (`services/payrollEngine.js` `computeRangeSalary` → a `payable` number)
-   now **exist** — the two things Phase 16 asked to be built. But `routes/payroll.js:22-23` gates the
-   whole router `authorize('admin')` (`middleware/auth.js:73` 403s non-admin/super_admin), so an advisor
-   /leader cannot read their own pay; `?user_id=` is admin-only member selection, not a self-scope, and
-   `grep -i earnings` over the backend = 0 (no `my-earnings` route was built). What landed is the
-   *manager-views-salary* surface Phase 16 put OUT OF SCOPE — it is `cgpe-admin`'s. Ask **narrowed** to
-   one self-scoped read (`GET /api/payroll/my-earnings`, own records only) and re-filed to `cgpe-api`
-   (INBOX 2026-08-11). Commissions (Phase 6) unchanged: no product aggregate / no `target` in
-   `routes/commissions.js`. Deriving money on-device stays rejected. Nothing app-side until the self-read
-   lands. Full re-eval: `docs/spec/PHASE-16.md` §"UPDATE 2026-08-11".
+1. **Phase 16 self-view salary — BUILT 2026-08-12; only a device check remains.** The blocker cleared
+   (`cgpe-api` backend Phase 28 shipped `GET /api/payroll/my-earnings`, `protect`-only + self-scoped) and
+   `src/app/earnings.tsx` shipped against it the same session (commit `c77e1ad`). What's left is **not
+   editor-buildable**: reconcile ≥3 real people's months against the payroll sheet by hand on a handset,
+   and the light/dark 390 px render — plus **Phase 1 clock-in** stays the hard prerequisite. If the per-day
+   breakdown is wanted, re-file `breakdown[]` + the days split to `cgpe-api` (they offered — PHASE-16.md
+   D-1). **Commissions (Phase 6) is now the top *net-new* blocked item** and stays backend-blocked: no
+   product aggregate / no `target` source in `routes/commissions.js`; deriving money on-device stays
+   rejected. Nothing app-side on commissions until that aggregate lands. Full detail:
+   `docs/spec/PHASE-16.md` §"BUILT 2026-08-12" and `docs/spec/PHASE-6.md`.
 2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13**
    (haptics, the AsyncStorage clock key, background GPS, the master route replay, airplane-mode
    behaviour, a leader's true "On duty now" count, the offline map render, the LIC catalogue + notes
