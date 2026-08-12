@@ -623,14 +623,15 @@ exercise.
 
 ## Next 3
 
-**Top editor-buildable lever now → Phase 30, the density rollout.** Phase 29 (2026-08-12) shipped the
-`theme.density` mechanism + migrated `(tabs)/clients.tsx`; the remaining ~80 files still render comfortable
-until migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern: `const { spacing,
-radius, font } = c`, strip the static import (`tsc` flags any miss), watch for **module-scope** scale uses
-(they can't be destructured — make a helper, as `clients.tsx`'s `sepInset` did). Best next targets: the
-list tabs `tasks`/`leads`/`claims`, then the shared list primitives in `ui/data.tsx` + `ui/identity.tsx`
-(those lift density across many screens at once); migrate `home.tsx` (62 refs, a danger zone) on its own.
-No backend, no copy — buildable today. See `docs/spec/PHASE-29.md`.
+**Top editor-buildable lever now → Phase 31, the density rollout continues.** Phase 29 shipped the
+`theme.density` mechanism + migrated `(tabs)/clients.tsx`; **Phase 30 (2026-08-12) migrated the three
+other list tabs `tasks`/`leads`/`claims`** (commit `d70da17`). ~75 files still render comfortable until
+migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern: `const { spacing, radius,
+font } = c`, strip the static import (`tsc` flags any miss), watch for **module-scope** scale uses (they
+can't be destructured — make a helper, as `clients.tsx`/`leads.tsx`'s `sepInset` did). Best next targets:
+the shared list primitives in `ui/data.tsx` + `ui/identity.tsx` (those lift density across many screens at
+once — highest leverage), then `home.tsx` (62 refs, a danger zone) on its own. No backend, no copy —
+buildable today. See `docs/spec/PHASE-30.md` + `docs/spec/PHASE-29.md`.
 
 1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). FILED to `cgpe-api`
    2026-08-12; awaiting their reply.** A pure backend change (mobile has no resolver, renders any
