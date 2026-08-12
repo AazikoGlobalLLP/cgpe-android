@@ -105,11 +105,21 @@ empty config groups dropped, and the trailing catch-all (present when modules ar
 all are placed, and itself hidden-filtered). The `more.tsx` catalogue + JSX is the untested presentational
 class (Phases 8/11/17/24) — `tsc` + `lint` gate it, the device check validates it.
 
-## Not done (deliberate)
-- **Per-department doc seeding.** Making each dept actually *get* a distinct layout is admin-panel +
-  live-Mongo work (`cgpe-admin` writes `app_role_preferences` via `PUT /rbac/app-ui/:roleKey`) — not
-  buildable from this repo. This phase makes the app *consume* whatever the DB serves; seeding real
-  per-dept docs is the owner's/`cgpe-admin`'s next lever.
+## Not done here / handed off
+- **Per-department doc seeding — seed script DELIVERED (owner-directed follow-up, 2026-08-12), not yet
+  run.** Making each dept actually *get* a distinct layout is live-Mongo work, not buildable from this
+  (read-only) repo. Wrote a runnable seed script in the **backend** repo:
+  `cgpe-backend-main/scripts/seedAppRolePreferences.js` — upserts one `app_role_preferences` doc for each
+  of the 8 resolver keys (`sales operations admin advisor learn_advisor leader payroll_staff super_admin`),
+  writing **only `nav.more_sections` + a `label`** (dotted-path `$set` + `$setOnInsert`; never
+  `features`/`dashboard`/`tabs`/`hidden`, so no capability is touched). Dry-run by default, `--commit` to
+  write, env-only URI via `_mongoUri.js`, idempotent + non-destructive. The owner runs it in their env.
+  Layouts for sales/operations are grounded on the `ui_rbac_config.json` samples; the other six are
+  role-shaped defaults to **review/edit before `--commit`**. **Caveat filed for the owner:** the live
+  `resolveRoleKey` (`routes/rbac.js`) keys only `sales`/`operations` departments + roles — business
+  departments (HEALTH INSURANCE, TATA AIA, RECRUITMENT, …) resolve by role, so per-business-department
+  layouts would need a `resolveRoleKey` change first (a `cgpe-api` decision). The script is uncommitted in
+  the sibling repo (committing it there is the `cgpe-api` session's call).
 - **`theme` (accent/badge/density).** Still normalized-but-unconsumed. `accent` needs a provider-order
   change (`ThemeProvider` sits above `AppUiProvider`); density/badge are almost entirely device-verified.
   Out of this slice by owner choice.
