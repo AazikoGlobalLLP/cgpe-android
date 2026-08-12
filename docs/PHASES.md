@@ -603,6 +603,15 @@ exercise.
 
 ## Next 3
 
+**Top editor-buildable lever now → Phase 30, the density rollout.** Phase 29 (2026-08-12) shipped the
+`theme.density` mechanism + migrated `(tabs)/clients.tsx`; the remaining ~80 files still render comfortable
+until migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern: `const { spacing,
+radius, font } = c`, strip the static import (`tsc` flags any miss), watch for **module-scope** scale uses
+(they can't be destructured — make a helper, as `clients.tsx`'s `sepInset` did). Best next targets: the
+list tabs `tasks`/`leads`/`claims`, then the shared list primitives in `ui/data.tsx` + `ui/identity.tsx`
+(those lift density across many screens at once); migrate `home.tsx` (62 refs, a danger zone) on its own.
+No backend, no copy — buildable today. See `docs/spec/PHASE-29.md`.
+
 1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). FILED to `cgpe-api`
    2026-08-12; awaiting their reply.** A pure backend change (mobile has no resolver, renders any
    `role_key` fail-open — **nothing mobile-side to build**). Wrote `docs/spec/PHASE-27.md` + filed the
@@ -611,7 +620,8 @@ exercise.
    (`HEALTH INSURANCE→health_insurance`, …; `sales`/`operations` unchanged). **Next when they reply:**
    verify the shipped shape against their real code, confirm a new dept key renders, then widen the
    Phase-26 seed script to the new keys for the owner to run. See the `## Now` entry + DECISIONS
-   2026-08-12 (top). Until `cgpe-api` replies, nothing here is editor-buildable.
+   2026-08-12 (top). Until `cgpe-api` replies, nothing *on Phase 27* is editor-buildable — but the
+   density rollout above (Phase 30) is.
 
 2. **Phase 26 — More-tab grouping DB-driven (`nav.more_sections`). BUILT 2026-08-12 (part b); a device
    check + two other levers remain.** Owner picked, of the three Phase-26 parts, the app-side slice (b):

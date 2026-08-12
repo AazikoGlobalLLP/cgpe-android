@@ -126,8 +126,14 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   `AppUiProvider` and re-provides the department-accented palette via `PaletteProvider` (`theme.tsx`)
   to everything below; the base `ThemeProvider` MUST stay on top. Do **not** "simplify" by moving
   `ThemeProvider` below `AppUiProvider` — it would un-theme the Confirm/Toast overlays. Accent maths
-  is pure in `theme/brand.ts` (`deriveBrandPalette`, fail-open by reference); `theme.density` is
-  parsed-but-ignored (deferred, see `docs/spec/PHASE-28.md` D-4).
+  is pure in `theme/brand.ts` (`deriveBrandPalette`, fail-open by reference). **Phase 29:** `theme.density`
+  is now CONSUMED — pure `applyDensity` in `theme/density.ts` (fail-open by reference; `compact` =
+  spacing×0.85 / radius×0.90 / font×1.0) is applied by the bridge AFTER accent, and the layout scale now
+  lives ON the `Palette` (`useTheme().spacing`/`.radius`/`.font`). But **only MIGRATED screens react** (so
+  far `(tabs)/clients.tsx`); the static `spacing`/`radius`/`font` exports stay = comfortable for the ~80
+  unmigrated files. Migrate a screen by destructuring the scale off `c` (`const {spacing,radius,font}=c`),
+  stripping the static import, and turning any **module-scope** scale use into a helper — see
+  `docs/spec/PHASE-29.md` D-2. Do **not** describe `density` as "deferred" again.
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
 - `store/roles.ts` `tierOf()` grants Master by `user.role === 'super_admin'` (Phase 11,
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
