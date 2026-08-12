@@ -6,6 +6,34 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — INBOX sync (no build): app-UI closed-envelope verified; i18n paused on owner copy
+
+**Context.** Boot found the board editor-exhausted (the copy-free `common.*` work shipped the same day; entry
+below). One INBOX item was open and addressed to this session: **2026-08-12 · from cgpe-api** — backend Phase 11
+closed the `GET/PUT /api/rbac/app-ui` `data` envelope, dropping `_id` / `updated_at` / `updated_by`, and asked
+`cgpe-mobile` to confirm no code path reads those three fields.
+
+**Decision.**
+1. **Verified and answered the app-UI item — confirmed inert on our side.** Three checks: `getAppUiConfig`
+   (`src/data/api.ts:2516`) returns `env.data` wholesale, but its only consumer, `normalizeUiConfig`
+   (`src/store/appUi.tsx:213`), rebuilds a **fresh** object reading only `role_key`/`label`/`dashboard`/`nav`/
+   `features`/`theme` — it never references the three removed keys; the `AppUiConfig` type
+   (`src/data/api.ts:2489`) declares no audit field; and a tree-wide grep for `updated_at`/`updated_by` hits
+   only unrelated domains (notes, tasks, members, tickets). Replied underneath the item in `../contracts/INBOX.md`,
+   box left **unticked** (multi-recipient with `cgpe-admin`), and grepped the reply back per the concurrent-write
+   rule. No `src/` change, no gate re-run.
+2. **Handed the owner the bounded `common.*` fill-list and paused i18n at their direction.** The copy-free slice
+   is exhausted; every remaining net-new `common.*` key (`tryAgain` ×34, `clearSearch`, `refresh`, the outage
+   body, the a11y labels) needs human gu/hi/hi-en/gu-en copy (PHASE-19 §4 forbids inventing it). Presented the
+   ~16–18-key fill-table (§4.1 net-new set) and asked how to proceed; owner chose **pause** — no translator
+   available now. Nothing app-side is buildable until copy lands.
+3. **Corrected one stale doc line.** `docs/i18n/SCOPE.md` §4.1 still listed `common.today` under "still to add";
+   it shipped 2026-08-12 (parity 75). Removed from the to-add set.
+
+**Consequence.** Board stays editor-exhausted: Phase 22 (i18n P1 bulk) waits on owner copy; Phase 16 (self-view
+salary) and Phase 6 (commissions) stay backend-blocked (`my-earnings` reply still not landed at INBOX foot). The
+app-UI envelope change is a confirmed no-op for mobile. Push still 403s — commit local.
+
 ## 2026-08-12 — Phase 21 P1: `common.*` dedup — wired the copy-free slice only
 
 **Context.** P0 (`t(key, params?)`) shipped (entry below). P1 in `docs/i18n/SCOPE.md` §4.1 is the `common.*`

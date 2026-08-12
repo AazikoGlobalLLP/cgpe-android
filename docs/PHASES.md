@@ -14,6 +14,18 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**INBOX sync (no phase) — 2026-08-12 (2nd of the day).** A boot found the board editor-exhausted and one
+`→ cgpe-admin, cgpe-mobile` item open and addressed here: `cgpe-api` backend Phase 11 closed the
+`GET/PUT /api/rbac/app-ui` `data` envelope (dropped `_id`/`updated_at`/`updated_by`) and asked mobile to confirm
+it reads none of the three. **Verified inert:** `getAppUiConfig` (`api.ts:2516`) hands its response straight to
+`normalizeUiConfig` (`appUi.tsx:213`), which rebuilds a fresh object from only `role_key`/`label`/`dashboard`/
+`nav`/`features`/`theme`; the `AppUiConfig` type declares no audit field; tree-wide `updated_at`/`updated_by`
+grep hits only unrelated domains. Answered underneath in `INBOX.md` (box unticked — multi-recipient) and
+grepped the reply back. **No `src/` change, no gate re-run.** Then handed the owner the bounded `common.*`
+fill-list (SCOPE §4.1 net-new set) and **paused i18n at their direction** — no translator available now, so
+Phase 22's bulk (`tryAgain` ×34 etc.) stays blocked on human copy. Fixed one stale SCOPE §4.1 line
+(`common.today` was still listed as to-add; it shipped). DECISIONS 2026-08-12 (top).
+
 **Phase 21 P1 (i18n) — `common.*` dedup, the copy-free slice. BUILT 2026-08-12.** Owner-directed "full
 copy-free dedup". Routed the **already-translated** repeated labels to existing `common.*` keys across
 **16 screens** — `Call`→`common.call`, `Cancel`→`common.cancel`, `Delete`→`common.delete`,

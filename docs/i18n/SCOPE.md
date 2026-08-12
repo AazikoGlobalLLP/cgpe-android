@@ -101,7 +101,7 @@ Already in the dictionary (all wired 2026-08-12 where they were hardcoded):
 (`today` added 2026-08-12 by lifting `tab.home`/`tasks.today` copy — parity now 75).
 Still to add — **each needs human copy in gu/hi/hi-en/gu-en before it can be wired** (PHASE-19 §4):
 `common.tryAgain`, `common.clearSearch`, `common.clear`, `common.saving`, `common.uploading`,
-`common.refresh`, `common.loadMore`, `common.all`, `common.today`, `common.yesterday`, `common.done`,
+`common.refresh`, `common.loadMore`, `common.all`, `common.yesterday`, `common.done`,
 `common.mobile`, `common.onDuty`, `common.signedIn`, `common.continue`, `common.goToSignIn`,
 `common.showResults`, `common.whatsappGreeting` (`Namaste {name}`), `common.a11yCall` (`Call {name}`),
 `common.a11yWhatsapp` (`Open WhatsApp chat with {name}`). In the inventory these strings already carry
