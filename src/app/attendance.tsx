@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { font, radius, spacing, useTheme } from '@/theme/theme';
@@ -235,6 +236,23 @@ export default function Attendance() {
           />
         }
       >
+        {/* These same days drive your pay — one tap to the self-view earnings screen (Phase 16). */}
+        <Card onPress={() => router.push('/earnings' as Href)}>
+          <Row style={{ alignItems: 'center', gap: spacing.md }}>
+            <View style={{
+              width: 40, height: 40, borderRadius: radius.md, backgroundColor: c.cardAlt,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Ionicons name="wallet-outline" size={20} color={c.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt size={font.body} weight="700" numberOfLines={1}>My earnings</Txt>
+              <Txt size={font.sub} color={c.muted} numberOfLines={1}>Your pay for the month, from these days</Txt>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={c.faint} />
+          </Row>
+        </Card>
+
         {loading ? (
           <>
             <Card>

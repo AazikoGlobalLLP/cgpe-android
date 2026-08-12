@@ -243,6 +243,11 @@ export default function More() {
           right: viewAs ? <Pill label="Preview" tone="warning" small /> : undefined,
         }] : []),
         { icon: 'person-circle', label: 'My profile', value: user.name, href: '/profile', navKey: 'profile' },
+        // Self-view salary (Phase 16). Backed by the self-scoped `GET /payroll/my-earnings`, which is
+        // `protect`-only and forces `user_id` to the token — so EVERY signed-in member gets this row,
+        // no role gate (unlike the admin Payroll roster above). No navKey: a local feature, not part
+        // of the server nav schema. If the caller has no payroll profile, the screen says so.
+        { icon: 'wallet' as IconName, label: 'My earnings', value: 'Salary and days', href: '/earnings' as Href },
         { icon: 'settings', label: 'Settings', value: 'Security, language', href: '/settings', navKey: 'settings' },
         { icon: 'shield-checkmark', label: 'Account and privacy', value: 'Data and deletion', href: '/account', navKey: 'account' },
       ],

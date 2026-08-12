@@ -1805,6 +1805,49 @@ export async function getPayrollRoster(year: number, month: number): Promise<Pay
   return await tryReal<PayrollRow[]>(`/payroll/compute?year=${year}&month=${month}`, {}, isArr);
 }
 
+/**
+ * The caller's OWN earnings for one month — the mobile Phase 16 self-view.
+ * `GET /api/payroll/my-earnings?month=YYYY-MM` (`contracts/api.md` §`/api/payroll`, Phase 28).
+ *
+ * SELF-SCOPED, NO ROLE GATE. This is the ONE non-admin payroll route: `protect`-only, registered
+ * above `authorize('admin')`. The backend FORCES `user_id` to the token identity, so a caller can
+ * only ever read their own pay — we send NO `?user_id=`. It reuses the same `buildRoster()` + locked
+ * salary engine as the admin `/compute`, so the number is byte-identical to an admin's figure for
+ * this person. The app RENDERS `payable`; it never multiplies a rate (CLAUDE.md money rule).
+ *
+ * THREE OUTCOMES, told apart — the reason this uses `req()` and not `tryReal`, which would collapse
+ * a `data:null` body into the whole envelope via `json?.data ?? json`:
+ *   - `ok`    — a real `RosterRow` for the caller.
+ *   - `empty` — HTTP **200** with `data:null`: the caller has no payroll profile. An explicit empty
+ *               state, NOT an outage — the 200 already cleared health via `reportSuccess`, so no
+ *               banner is raised and the screen shows its "not configured" copy.
+ *   - `error` — a 5xx / dead network / 4.5 s abort / contract-shape miss. `reportIfOutage` raises the
+ *               banner (except the answer statuses 401/403/404/501, which it suppresses); the screen
+ *               shows its retryable error state. A well-formed `?month=` never draws the 400.
+ */
+export type MyEarnings =
+  | { status: 'ok'; row: PayrollRow }
+  | { status: 'empty' }
+  | { status: 'error' };
+
+export async function getMyEarnings(month: string): Promise<MyEarnings> {
+  if (FORCE_DEMO || !sessionReal) return { status: 'error' };   // no request attempted; screen shows could-not-load
+  const path = `/payroll/my-earnings?month=${month}`;
+  const key = healthKey(path);
+  try {
+    const { ok, status, json } = await req(path, {}, REQUEST_TIMEOUT, key);
+    if (!ok) { reportIfOutage(status, key); return { status: 'error' }; }
+    const data = json?.data;
+    if (data == null) return { status: 'empty' };                              // 200 + data:null — no profile
+    if (isObj(data) && Array.isArray(data.months)) return { status: 'ok', row: data as PayrollRow };
+    reportFailure(key);                                                        // 200 but the shape drifted
+    return { status: 'error' };
+  } catch {
+    reportFailure(key);                                                        // dead network or the abort
+    return { status: 'error' };
+  }
+}
+
 /* --------------------------------------------------- Movement tracking */
 export type TrackPoint = { lat: number; lng: number; at?: string | number; accuracy?: number; speed?: number; heading?: number; battery?: number };
 export type TrackSession = { session_id: string; date: string; started_at: string; ended_at: string | null; point_count: number; distance_m: number };
