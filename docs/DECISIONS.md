@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 26: the More tab's grouping/titles/order is now DB-driven (`nav.more_sections` consumed); admin oversight + personal rows stay fixed
+
+**Context.** Owner picked, from the three Phase-26 candidates, the app-side slice: consume
+`nav.more_sections` so each department's More-tab arrangement lives in the DB (closing Phase 10 D-3;
+`ui_rbac_config.json:320-324` names mobile the fix owner). The field was already normalised/served but
+no screen read it. Not chosen (owner): per-dept doc *seeding* (admin-panel + live-Mongo, not buildable
+here) and `theme` consumption (needs a provider-order change, device-verified). Full spec:
+`docs/spec/PHASE-26.md`.
+
+**Decision.**
+1. **Pure selector `arrangeMoreSections(sections, known, isHidden, leftoverTitle?)`** in `appUi.tsx`,
+   mirroring `resolveTabs`: filters each config group to catalogue modules that are known, not in
+   `nav.hidden`, and not already placed (first-wins dedupe), drops empty groups, and — per the contract's
+   **hard product rule** (`ui_rbac_config.json:18`: only `nav.hidden` hides) — appends ONE trailing
+   catch-all holding every known, non-hidden module the config left unplaced. Fail-open on
+   `undefined`/empty sections (everything → catch-all). Unit-tested (11 cases).
+2. **`more.tsx` renders three regions:** a FIXED admin oversight group (role-gated as before — `isAdmin`,
+   master-only movement paths, real-`admin`/`super_admin`-only Payroll), the CONFIG-DRIVEN content groups
+   (`MORE_CATALOGUE` maps each key → icon/label/href; `profile`→user name and `tickets`→live count are the
+   two dynamic values), and a FIXED "Personal" tail (Viewing-as, My earnings). Then About + Sign out.
+3. **Admin oversight (D-2) and the personal rows (D-3) are NOT config-driven** — admin/master docs carry
+   no `more_sections`, so config-driving those safety-sensitive tools would make them vanish; and identity/
+   money rows aren't server nav modules. A dept doc listing an admin key has no effect (not in the
+   catalogue). `nav.hidden` still filters each admin row.
+4. **`DEFAULT_UI.nav.more_sections` rewritten (D-4)** to a canonical grouping naming every one of the 22
+   catalogue modules once, because it is now the RENDERED layout for a config outage and for every role
+   whose doc omits `more_sections` (admin/master/unseeded) — so the catch-all is empty for the default and
+   nothing is orphaned. A test pins DEFAULT_UI's internal consistency (every module placed once, no
+   duplicates, no catch-all).
+5. **`collapsed_by_default` still not consumed (D-5)** — collapsible-group UI is a separate build; the
+   existing pinned drop (`appUi.test.ts:373`) stands.
+
+**Consequence.** Change a dept's `app_role_preferences` doc → its More tab regroups/reorders on next cold
+start, no APK. One visible layout shift vs before: My earnings (+ Payroll/Viewing-as when gated) now sit
+in a "Personal" tail rather than inside the old hand-authored "Account" group; profile/settings/account
+are config-placed content modules. Gates: `tsc` 0, `npm test` **398/398** (+11), lint baseline. Device
+check (light/dark at 390 px against ≥2 real dept configs) outstanding. `MORE_CATALOGUE` (more.tsx) and
+`DEFAULT_UI.nav.more_sections` (appUi.tsx) must be kept in step — a key in one but not the other is a menu
+bug (documented at both sites).
+
 ## 2026-08-12 — Finding (no code): the app layout IS server/DB-driven and per-department — it is a composable catalogue, not a free-form page builder
 
 **Context.** Owner asked whether the app's layout comes from the DB or is static, and whether each

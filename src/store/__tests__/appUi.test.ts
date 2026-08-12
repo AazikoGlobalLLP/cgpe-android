@@ -19,8 +19,11 @@
  * DEFAULT_UI for every later case in this file.
  */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_UI, normalizeUiConfig, resolveTabs } from '@/store/appUi';
+import { arrangeMoreSections, DEFAULT_UI, normalizeUiConfig, resolveTabs } from '@/store/appUi';
 import type { AppUiConfig } from '@/store/appUi';
+
+/** A hidden-predicate over a fixed set — the shape more.tsx passes from useAppUi().isHidden. */
+const hides = (...keys: string[]) => (k: string) => keys.includes(k);
 
 /** Minimal config builder — resolveTabs only ever reads config.nav. */
 function withNav(tabs: string[], hidden: string[] = []): AppUiConfig {
@@ -336,6 +339,84 @@ describe('resolveTabs — PHASE 10, the nav layer that decides what makes the ba
     // All junk -> falls back to DEFAULT_UI.nav.tabs, which itself gets hidden filtered too.
     expect(resolveTabs(withNav(['prospects', 'made_up'], ['claims'])))
       .toEqual(['home', 'tasks', 'clients', 'more']);
+  });
+});
+
+describe('arrangeMoreSections — PHASE 26, the More-tab grouping driven by nav.more_sections', () => {
+  it('renders config groups in order, then a trailing catch-all for unplaced known modules', () => {
+    // The config names the grouping/order; every known module it does NOT place still appears, in the
+    // trailing "More" group, because omission must never hide (ui_rbac_config.json:18).
+    expect(arrangeMoreSections([{ title: 'G1', items: ['a', 'b'] }], ['a', 'b', 'c', 'd'], hides()))
+      .toEqual([{ title: 'G1', keys: ['a', 'b'] }, { title: 'More', keys: ['c', 'd'] }]);
+  });
+
+  it('preserves config order WITHIN a group', () => {
+    expect(arrangeMoreSections([{ title: 'G', items: ['c', 'a', 'b'] }], ['a', 'b', 'c'], hides()))
+      .toEqual([{ title: 'G', keys: ['c', 'a', 'b'] }]);
+  });
+
+  it('dedupes across AND within groups, keeping the first placement', () => {
+    // A module listed in two groups (or twice in one) renders once, where it was first named — the
+    // same first-wins rule as resolveTabs, so the menu can never show a duplicate row.
+    expect(arrangeMoreSections(
+      [{ title: 'G1', items: ['a', 'a', 'b'] }, { title: 'G2', items: ['b', 'c'] }],
+      ['a', 'b', 'c'], hides(),
+    )).toEqual([{ title: 'G1', keys: ['a', 'b'] }, { title: 'G2', keys: ['c'] }]);
+  });
+
+  it('drops keys that are not in the catalogue (unknown/typo module keys)', () => {
+    // `known` is more.tsx's MORE_CATALOGUE keys; a config naming a module this build cannot render
+    // (or a typo) is silently dropped, never rendered as a dead row.
+    expect(arrangeMoreSections([{ title: 'G', items: ['a', 'zzz', 'b'] }], ['a', 'b'], hides()))
+      .toEqual([{ title: 'G', keys: ['a', 'b'] }]);
+  });
+
+  it('removes a hidden module from its named group AND from the catch-all', () => {
+    // nav.hidden is the ONE control that makes a module unreachable — it must bite everywhere.
+    expect(arrangeMoreSections([{ title: 'G', items: ['a', 'b'] }], ['a', 'b', 'c', 'd'], hides('b', 'd')))
+      .toEqual([{ title: 'G', keys: ['a'] }, { title: 'More', keys: ['c'] }]);
+  });
+
+  it('drops a group that ends up empty (all its items unknown or hidden)', () => {
+    expect(arrangeMoreSections(
+      [{ title: 'Empty', items: ['zzz'] }, { title: 'G', items: ['a', 'b'] }],
+      ['a', 'b'], hides(),
+    )).toEqual([{ title: 'G', keys: ['a', 'b'] }]);
+    // Every module hidden -> the group empties AND the catch-all is empty -> nothing renders.
+    expect(arrangeMoreSections([{ title: 'G', items: ['a'] }], ['a'], hides('a'))).toEqual([]);
+  });
+
+  it('omits the catch-all entirely when the config places every known module', () => {
+    expect(arrangeMoreSections([{ title: 'G', items: ['a', 'b'] }], ['a', 'b'], hides()))
+      .toEqual([{ title: 'G', keys: ['a', 'b'] }]);
+  });
+
+  it('orders the catch-all by the catalogue (`known`) order, not the config order', () => {
+    // Leftovers follow MORE_CATALOGUE's declaration order — a stable, intentional fallback ordering.
+    expect(arrangeMoreSections([{ title: 'G', items: ['c'] }], ['a', 'b', 'c'], hides()))
+      .toEqual([{ title: 'G', keys: ['c'] }, { title: 'More', keys: ['a', 'b'] }]);
+  });
+
+  it('is fail-open for an undefined or empty section list: everything falls to the catch-all', () => {
+    // config.nav.more_sections is always filled at runtime, but the type admits undefined; a missing
+    // menu must degrade to "everything reachable", never to a blank More tab.
+    expect(arrangeMoreSections(undefined, ['a', 'b'], hides())).toEqual([{ title: 'More', keys: ['a', 'b'] }]);
+    expect(arrangeMoreSections([], ['a', 'b'], hides())).toEqual([{ title: 'More', keys: ['a', 'b'] }]);
+  });
+
+  it('honours a custom leftover title', () => {
+    expect(arrangeMoreSections([], ['a'], hides(), 'Everything else'))
+      .toEqual([{ title: 'Everything else', keys: ['a'] }]);
+  });
+
+  it('DEFAULT_UI.nav.more_sections is internally consistent: every listed module placed once, no catch-all', () => {
+    // The default grouping is now RENDERED (it is the layout for admin/master/any unseeded role), so it
+    // must name every module exactly once with no duplicates. Arranged against its own flattened key
+    // set, it must reproduce itself — a duplicate key would collapse under dedupe and fail this.
+    const keys = DEFAULT_UI.nav.more_sections!.flatMap((s) => s.items);
+    const arranged = arrangeMoreSections(DEFAULT_UI.nav.more_sections, keys, hides());
+    expect(arranged.map((g) => g.title)).toEqual(DEFAULT_UI.nav.more_sections!.map((s) => s.title));
+    expect(arranged.flatMap((g) => g.keys)).toEqual(keys);
   });
 });
 

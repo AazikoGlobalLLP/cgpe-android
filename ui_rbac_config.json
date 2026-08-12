@@ -317,10 +317,10 @@
   ],
 
   "_KNOWN_GAP": {
-    "fields": ["nav.more_sections"],
-    "status": "RESOLVED for nav.tabs and nav.hidden as of mobile Phase 10 (2026-08-11). nav.more_sections remains stored, validated and served correctly but NOT consumed.",
-    "detail": "ANDROID/src/app/(tabs)/_layout.tsx now builds the bottom bar from useAppUi().tabs (a new resolveTabs() selector in ANDROID/src/store/appUi.tsx, ordered by nav.tabs and filtered by nav.hidden). ANDROID/src/app/(tabs)/more.tsx now drops any row or quick-action tile whose module key is in nav.hidden. Neither reads nav.more_sections — the panel's own group titles/ordering still have no effect on device; ANDROID/docs/spec/PHASE-10.md D-3 records why that was left out.",
-    "consequence": "Reordering tabs or hiding a module now changes what a device shows on its next cold start after config refresh. The Admin Panel's 'stored, not yet live on device' labelling (ADMIN_PANEL_SYNC.md §3.6.8) is now WRONG for nav.tabs/nav.hidden and should say so only for nav.more_sections. Filed to cgpe-admin via contracts/INBOX.md, 2026-08-11.",
-    "fix_owner": "mobile — nav.more_sections-driven grouping/ordering inside More, if ever wanted. No backend or panel change needed for that either."
+    "fields": [],
+    "status": "FULLY RESOLVED. nav.tabs + nav.hidden as of mobile Phase 10 (2026-08-11); nav.more_sections as of mobile Phase 26 (2026-08-12). All three nav fields are now consumed on device. The only sub-field still not consumed is nav.more_sections[].collapsed_by_default (needs collapsible-group UI; ANDROID/docs/spec/PHASE-26.md D-5).",
+    "detail": "ANDROID/src/app/(tabs)/_layout.tsx builds the bottom bar from useAppUi().tabs (resolveTabs() in ANDROID/src/store/appUi.tsx, ordered by nav.tabs, filtered by nav.hidden). ANDROID/src/app/(tabs)/more.tsx (Phase 26) renders its content-module groups from arrangeMoreSections(config.nav.more_sections, MORE_KEYS, isHidden) — so a role/department document's group titles, order and membership now drive the More tab. The admin oversight group and the personal rows (viewing-as/earnings) stay fixed by design (PHASE-26 D-2/D-3); nav.hidden still removes any module everywhere.",
+    "consequence": "Editing a department's app_role_preferences nav.more_sections now changes its More-tab grouping/titles/order on the next cold start, no APK. The Admin Panel's 'stored, not yet live on device' labelling (ADMIN_PANEL_SYNC.md §3.6.8) is now WRONG for nav.more_sections too and should be dropped for all three nav fields — heads-up filed to cgpe-admin via contracts/INBOX.md, 2026-08-12.",
+    "fix_owner": "none — closed. (Future: consume collapsed_by_default if collapsible More-groups are ever wanted; no backend or panel change needed for that either.)"
   }
 }

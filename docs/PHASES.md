@@ -14,6 +14,34 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 26 — More-tab grouping is now DB-driven (`nav.more_sections` consumed). BUILT 2026-08-12.** The
+owner-chosen slice of the "make per-department layout DB-editable" question, and the close of the last
+server-driven-nav gap (Phase 10 D-3; `ui_rbac_config.json:320-324` named mobile the fix owner). The field
+was normalised/served since before Phase 10 but **no screen read it** — now `src/app/(tabs)/more.tsx`'s
+content-module groups render from `config.nav.more_sections`, so a department's `app_role_preferences` doc
+controls the More tab's **groups, titles and order** (change the doc → regroups next cold start, no APK).
+New pure selector **`arrangeMoreSections(sections, known, isHidden, leftoverTitle?)`** in
+`src/store/appUi.tsx` mirrors Phase 10's `resolveTabs`: filters each config group to catalogue modules that
+are known + not in `nav.hidden` + not already placed (first-wins dedupe), drops empty groups, and — per the
+contract's **hard product rule** (`ui_rbac_config.json:18`: only `nav.hidden` hides) — appends ONE trailing
+"More" catch-all of every known, non-hidden module the config left unplaced, so **omission re-prioritises,
+never hides**. Fail-open on `undefined`/empty sections. `more.tsx` renders three regions: a **FIXED**
+role-gated **admin oversight** group (D-2 — admin/master docs carry no `more_sections`, and these
+safety-sensitive tools + `nav.hidden` filtering stay exactly as before; Payroll still gates on the REAL
+`admin`/`super_admin` role), the **config-driven** content groups (new `MORE_CATALOGUE` maps each key →
+icon/label/href; `profile`→user name and `tickets`→live open-count are the two dynamic values), and a
+**FIXED** "Personal" tail (Viewing-as, My earnings — D-3, not server nav modules). `DEFAULT_UI.nav.more_sections`
+was rewritten (D-4) to a canonical grouping naming every one of the 22 catalogue modules once, because it is
+now the RENDERED layout for a config outage and for every role whose doc omits `more_sections`
+(admin/master/unseeded) — so the catch-all is empty for the default and nothing is orphaned. `collapsed_by_default`
+still not consumed (D-5, separate collapsible-UI build; the pinned drop stands). Gates green: `tsc` 0,
+`npm test` **398/398** (+11 `arrangeMoreSections` cases in `appUi.test.ts`), lint 0 errors / 12 warnings
+(baseline). Commit local (push still 403s). One visible layout shift (My earnings/Payroll/Viewing-as → a
+"Personal" tail vs the old "Account" group) + the general regrouping need a **device check** (light/dark at
+390 px, ≥2 real dept configs) — not editor-buildable. `MORE_CATALOGUE` (more.tsx) and
+`DEFAULT_UI.nav.more_sections` (appUi.tsx) must be kept in step (documented at both sites). Full path:
+`docs/spec/PHASE-26.md`; DECISIONS 2026-08-12 (top).
+
 **Phase 25 — commissions EARNED aggregate. BUILT 2026-08-12.** The Phase-6 D-5 unblock. `cgpe-api` shipped
 `GET /api/commissions/my-summary` (Backend Phase 31) — the self-scoped earned aggregate mobile filed — and
 this phase consumes it. New `getCommissionSummary()` in `src/data/api.ts` uses low-level `req()` with a
@@ -507,17 +535,19 @@ exercise.
 
 ## Next 3
 
-1. **Phase 26 (proposed) — make per-department layout fully DB-editable.** Owner asked (2026-08-12) whether
-   each dept's layout can live in the DB and change there automatically. **Verified: it already does** for the
-   composable parts — `GET /api/rbac/app-ui` serves a per-role/department doc from the `app_role_preferences`
-   Mongo collection, deep-merged over defaults, fetched every cold start (`store/appUi.tsx`), edited via the
-   admin panel (`PUT /app-ui/:roleKey`). What's NOT yet DB-driven and is the buildable work: (a) seed/verify
-   real per-dept docs (many roles likely still run `from_defaults:true`), (b) **consume `nav.more_sections`**
-   in the app (closes Phase 10 D-3) so More-tab grouping/titles are DB-driven, (c) finish consuming `theme`
-   (accent/badge/density) for per-dept branding. All app-side + admin-panel; **no new backend endpoint**. The
-   internal layout of each screen stays static in the APK (the DB composes from a fixed catalogue — 20 widgets,
-   5 tab routes, 4 hero modes, 14 flags — not a free-form page builder). See DECISIONS 2026-08-12 (top) +
-   HANDOFF "LAYOUT QUESTION". **Owner to confirm scope before building.**
+1. **Phase 26 — More-tab grouping DB-driven (`nav.more_sections`). BUILT 2026-08-12 (part b); a device
+   check + two other levers remain.** Owner picked, of the three Phase-26 parts, the app-side slice (b):
+   consume `nav.more_sections`. **Shipped** — `arrangeMoreSections` selector + `MORE_CATALOGUE` +
+   config-driven `more.tsx` groups; `tsc` 0, `npm test` **398/398**, lint baseline. See the `## Now` entry +
+   DECISIONS 2026-08-12 (top) + `docs/spec/PHASE-26.md`. **Still open (the other two levers the owner did NOT
+   pick this round):** (a) **seed/verify real per-dept `app_role_preferences` docs** — admin-panel +
+   live-Mongo work (`cgpe-admin` writes them via `PUT /app-ui/:roleKey`), **not buildable from this repo**;
+   many roles likely still run `from_defaults:true`, so the new More-tab DB control has nothing dept-specific
+   to render until docs are seeded. (c) **finish consuming `theme`** (accent/badge/density) — needs a
+   provider-order change (`ThemeProvider` above `AppUiProvider`), almost entirely device-verified. Plus the
+   Phase-26 **device check** (light/dark 390 px, ≥2 real dept configs; the "Personal" tail layout shift).
+   The internal layout of each screen stays static in the APK (the DB composes from a fixed catalogue — 20
+   widgets, 5 tab routes, 4 hero modes, 14 flags — not a free-form page builder).
 
    **Phase 25 — commissions EARNED aggregate. BUILT 2026-08-12; only a device check remains.** `cgpe-api`
    shipped `GET /api/commissions/my-summary` (Backend Phase 31) and `getCommissionSummary()` + the wired
@@ -613,6 +643,7 @@ exercise.
 | 23 | MDRT tier-progress element on Commissions | **Built** 2026-08-12 — buildable slice of Phase-6 (option d). New `getMdrtTier` on the verified Phase-29 `GET /advisor/performance/:advisorId`; `MdrtTierProgress` card is a **separate** element (never the monthly meter), mounted above the ledger fork so it shows real data while the earned aggregate stays blocked. Role-gated advisor/learn_advisor, own id; no contract change. 373 tests green (+13); no PII, no on-device math. Device check outstanding |
 | 24 | Coverage score on Smart segments | **Built** 2026-08-12 — surfaced the response-only per-row `coverage_score` (backend Phase 30, P2-CL-01) landed additively on `GET /clients/segments`, which mobile already calls. One guarded `asNum` read in `segments.tsx`; shown as `· NN%` on the row + a labelled **Coverage** DataRow in the sheet (tone by the server's `100`⟺well_insured/`<100`⟺underinsured invariant). `null`→no line (never `0%`); real `0`→`0%`. No contract change, no INBOX ask, no on-device math. 373 tests green (unchanged); lint 0/12. Device check outstanding |
 | 25 | Commissions EARNED aggregate ~~`[api]`~~ | **Built** 2026-08-12 — Phase-6 D-5 unblock. New `getCommissionSummary()` on the shipped `GET /commissions/my-summary` (backend Phase 31, self-scoped, `protect`-only); two-outcome `req()` posture like `getMdrtTier` (200-zeros = ok/no-banner, 503 = error/banner). `commissions.tsx` renders the earned ledger (thisMonth/lastMonth/pending/ytd/history/recent); `target:0` (no source, never invented); no on-device math. Dead `getCommission`/`EMPTY_COMMISSION` removed. **387 tests green (+14, `api-commissions.test.ts`)**; lint 0/12. **INBOX Phase-31 box ticked. Phase 6 D-5 closed.** Device check outstanding |
+| 26 | More-tab grouping DB-driven (`nav.more_sections`) | **Built** 2026-08-12 — closes Phase 10 D-3 (the last server-driven-nav gap; contract named mobile the fix owner). New pure `arrangeMoreSections` selector in `appUi.tsx` (mirrors `resolveTabs`: known+not-hidden+first-wins dedupe, drops empty groups, trailing catch-all so omission re-prioritises never hides — `ui_rbac_config.json:18`). `more.tsx` renders fixed admin oversight + config-driven content groups (new `MORE_CATALOGUE`, `profile`/`tickets` dynamic values) + fixed "Personal" tail. `DEFAULT_UI.nav.more_sections` rewritten to name all 22 catalogue modules once. **398 tests green (+11, `arrangeMoreSections` in `appUi.test.ts`)**; tsc 0; lint 0/12. Owner-chosen slice (b); seeding (a) + theme (c) not built. Device check + "Personal" tail layout shift outstanding |
 
 ---
 

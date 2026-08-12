@@ -17,7 +17,7 @@ import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
-import { useAppUi } from '@/store/appUi';
+import { arrangeMoreSections, useAppUi } from '@/store/appUi';
 import { capabilitiesOf, TIER_THEME } from '@/store/roles';
 import type { Tier } from '@/store/roles';
 import { APP } from '@/constants/config';
@@ -79,6 +79,52 @@ const VIEW_OPTIONS: { tier: Tier; label: string; hint: string; icon: IconName }[
   { tier: 'team', label: 'Team member', hint: 'Own work only', icon: 'person' },
 ];
 
+/* ------------------------------------------------------------------ *
+ * The CONTENT-MODULE catalogue (Phase 26).
+ *
+ * Since Phase 26 the grouping, titles and order of the middle of this screen come from the server's
+ * `nav.more_sections` document, not a hard-coded list (closing Phase 10 D-3). This map is the OTHER
+ * half of that: it owns each module's icon / label / right-hand hint / route, keyed by the same module
+ * key the server's `nav.more_sections` and `nav.hidden` speak. `arrangeMoreSections` decides the
+ * arrangement; this decides the presentation. Keep it in step with `DEFAULT_UI.nav.more_sections` in
+ * `appUi.tsx` — a key in one but not the other is a menu bug (a catalogue module the default never
+ * groups falls to the trailing "More" catch-all; a default key with no catalogue entry is dropped).
+ *
+ * Declaration order is the fallback order for any module a config leaves unplaced. Two values are
+ * DYNAMIC and overridden at render — `profile` shows the user's name, `tickets` shows the live open
+ * count — so their `value` here is only the static fallback.
+ *
+ * NOT here on purpose: the admin oversight modules (team/agent-map/agent-track/analytics/campaigns/
+ * notify) and the personal local features (viewing-as/my-earnings/payroll). Those render in fixed,
+ * role-gated sections and must not be reorderable by a department document (PHASE-26 D-2/D-3).
+ */
+const MORE_CATALOGUE: Record<string, { icon: IconName; label: string; value: string; href: Href }> = {
+  leads:          { icon: 'funnel',          label: 'Leads and pipeline',       value: 'Stages',            href: '/(tabs)/leads' },
+  clients:        { icon: 'people',           label: 'Clients',                  value: 'Directory',         href: '/(tabs)/clients' },
+  segments:       { icon: 'pie-chart',        label: 'Segments',                 value: 'Smart lists',       href: '/segments' },
+  families:       { icon: 'home',             label: 'Families',                 value: 'Households',         href: '/families' },
+  premium:        { icon: 'gift',             label: 'Premium and greetings',    value: 'Renewals',          href: '/premium' },
+  prospects:      { icon: 'person-add',       label: 'Prospects',                value: 'Recruitment',       href: '/prospects' },
+  'lic-plans':    { icon: 'calculator',       label: 'LIC plans',                value: 'Products',          href: '/lic-plans' },
+  claims:         { icon: 'document-text',    label: 'Claims',                   value: 'Register',          href: '/(tabs)/claims' },
+  tickets:        { icon: 'ticket',           label: 'Tickets',                  value: 'Requests',          href: '/tickets' },
+  reminders:      { icon: 'notifications',    label: 'Reminders and follow-ups', value: 'Due dates',         href: '/reminders' },
+  calendar:       { icon: 'calendar',         label: 'Calendar',                 value: 'Meetings',          href: '/calendar' },
+  attendance:     { icon: 'time',             label: 'My attendance',            value: 'GPS log',           href: '/attendance' },
+  whatsapp:       { icon: 'logo-whatsapp',    label: 'WhatsApp Hub',             value: 'Chats',             href: '/whatsapp' },
+  commissions:    { icon: 'cash',             label: 'Commissions',              value: 'Earnings',          href: '/commissions' },
+  'notice-board': { icon: 'megaphone',        label: 'Notice Board',             value: 'From the firm',     href: '/notice-board' },
+  notes:          { icon: 'journal',          label: 'Notes',                    value: 'Private',           href: '/notes' },
+  kb:             { icon: 'library',          label: 'Knowledge Base',           value: 'Field guide',       href: '/kb' },
+  search:         { icon: 'search',           label: 'Global search',            value: 'Everything',        href: '/search' },
+  contests:       { icon: 'trophy',           label: 'Contests',                 value: 'Leaderboards',      href: '/contests' },
+  profile:        { icon: 'person-circle',    label: 'My profile',               value: '',                  href: '/profile' },
+  settings:       { icon: 'settings',         label: 'Settings',                 value: 'Security, language', href: '/settings' },
+  account:        { icon: 'shield-checkmark', label: 'Account and privacy',      value: 'Data and deletion', href: '/account' },
+};
+/** Catalogue keys in declaration order — the module universe `arrangeMoreSections` may place. */
+const MORE_KEYS = Object.keys(MORE_CATALOGUE);
+
 export default function More() {
   const c = useTheme();
   const router = useRouter();
@@ -93,7 +139,7 @@ export default function More() {
   const realCaps = capabilitiesOf(user);
   const isAdmin = caps.manageTeam;
   const liveSession = api.isRealSession();
-  const { isHidden } = useAppUi();
+  const { isHidden, config } = useAppUi();
 
   /* One live count, cancellable. `limit: 1` because only the meta block is wanted; the
      ticket rows themselves belong to /tickets, not to a directory page. */
@@ -162,100 +208,85 @@ export default function More() {
     );
   }
 
-  const rawGroups: { title: string; items: Entry[] }[] = [
-    ...(isAdmin ? [{
-      title: caps.tier === 'master' ? 'Master control' : 'Admin',
-      items: [
-        {
-          icon: 'people-circle' as IconName,
-          label: caps.overseeAdmins ? 'All teams and admins' : 'Team members',
-          value: 'Roster',
-          href: '/team' as Href,
-          navKey: 'team',
-        },
-        { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href, navKey: 'agent-map' },
-        ...(caps.tier === 'master'
-          ? [{ icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' }]
-          : []),
-        { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href, navKey: 'analytics' },
-        // Payroll reads the admin-only salary endpoint (`authorize('admin')`), which 403s a
-        // leader — but mobile's tier folds leader into "admin", so gate on the REAL role, not
-        // `isAdmin`/caps. No navKey: it is a local feature, not part of the server nav schema.
-        ...((user.role === 'admin' || user.role === 'super_admin')
-          ? [{ icon: 'cash' as IconName, label: 'Payroll', value: 'Salary roster', href: '/payroll' as Href }]
-          : []),
-        { icon: 'paper-plane' as IconName, label: 'Campaigns', value: 'Bulk sends', href: '/campaigns' as Href, navKey: 'campaigns' },
-        { icon: 'megaphone' as IconName, label: 'Notify team', value: 'Send alert', href: '/notify' as Href, navKey: 'notify' },
-      ] as Entry[],
-    }] : []),
-    {
-      title: 'The book',
-      items: [
-        { icon: 'funnel', label: 'Leads and pipeline', value: 'Stages', href: '/(tabs)/leads', navKey: 'leads' },
-        { icon: 'pie-chart', label: 'Segments', value: 'Smart lists', href: '/segments', navKey: 'segments' },
-        { icon: 'home', label: 'Families', value: 'Households', href: '/families', navKey: 'families' },
-        { icon: 'gift', label: 'Premium and greetings', value: 'Renewals', href: '/premium', navKey: 'premium' },
-        { icon: 'person-add', label: 'Prospects', value: 'Recruitment', href: '/prospects', navKey: 'prospects' },
-      ],
-    },
-    {
-      title: 'Day to day',
-      items: [
-        {
-          icon: 'ticket',
-          label: 'Tickets',
-          // Silence rather than a fabricated zero when the count did not come back.
-          value: openTickets > 0 ? `${openTickets} open` : 'Requests',
-          tone: openTickets > 0 ? 'primary' : undefined,
+  /* Admin oversight — FIXED and role-gated, NOT config-driven (PHASE-26 D-2). Admin/master configs
+     carry no more_sections, and these safety-sensitive tools must not be reorderable-away by a
+     department document; a leader is folded into "admin" by tierOf, so Payroll (an admin-only
+     endpoint that 403s a leader) still gates on the REAL role. `nav.hidden` still filters each row. */
+  const adminGroup: { title: string; items: Entry[] } | null = isAdmin ? {
+    title: caps.tier === 'master' ? 'Master control' : 'Admin',
+    items: ([
+      {
+        icon: 'people-circle' as IconName,
+        label: caps.overseeAdmins ? 'All teams and admins' : 'Team members',
+        value: 'Roster',
+        href: '/team' as Href,
+        navKey: 'team',
+      },
+      { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href, navKey: 'agent-map' },
+      ...(caps.tier === 'master'
+        ? [{ icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' }]
+        : []),
+      { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href, navKey: 'analytics' },
+      ...((user.role === 'admin' || user.role === 'super_admin')
+        ? [{ icon: 'cash' as IconName, label: 'Payroll', value: 'Salary roster', href: '/payroll' as Href }]
+        : []),
+      { icon: 'paper-plane' as IconName, label: 'Campaigns', value: 'Bulk sends', href: '/campaigns' as Href, navKey: 'campaigns' },
+      { icon: 'megaphone' as IconName, label: 'Notify team', value: 'Send alert', href: '/notify' as Href, navKey: 'notify' },
+    ] as Entry[]).filter((it) => !it.navKey || !isHidden(it.navKey)),
+  } : null;
+
+  /* The content modules — grouping, titles and ORDER now come from the server's nav.more_sections
+     (PHASE-26, closing Phase 10 D-3). `arrangeMoreSections` filters each group to catalogue modules
+     that are not in nav.hidden, dedupes across groups, and appends a trailing "More" group for any
+     module the config did not place, so nothing is ever stranded (ui_rbac_config.json:18). Each key
+     maps through MORE_CATALOGUE; `profile` and `tickets` get their dynamic value here. */
+  const moduleGroups: { title: string; items: Entry[] }[] = arrangeMoreSections(
+    config.nav.more_sections,
+    MORE_KEYS,
+    isHidden,
+  ).map((g) => ({
+    title: g.title,
+    items: g.keys.flatMap((key): Entry[] => {
+      const cat = MORE_CATALOGUE[key];
+      if (!cat) return [];   // key came from MORE_KEYS, so always defined; guarded for safety
+      if (key === 'profile') return [{ ...cat, value: user.name, navKey: key }];
+      if (key === 'tickets') {
+        // Silence rather than a fabricated zero when the count did not come back.
+        return [{
+          ...cat,
+          value: openTickets > 0 ? `${openTickets} open` : cat.value,
+          tone: openTickets > 0 ? ('primary' as Tone) : undefined,
           numeric: openTickets > 0,
-          href: '/tickets',
-          navKey: 'tickets',
-        },
-        { icon: 'notifications', label: 'Reminders and follow-ups', value: 'Due dates', href: '/reminders', navKey: 'reminders' },
-        { icon: 'calendar', label: 'Calendar', value: 'Meetings', href: '/calendar', navKey: 'calendar' },
-        { icon: 'time', label: 'My attendance', value: 'GPS log', href: '/attendance', navKey: 'attendance' },
-        { icon: 'logo-whatsapp', label: 'WhatsApp Hub', value: 'Chats', href: '/whatsapp', navKey: 'whatsapp' },
-      ],
-    },
-    {
-      title: 'Board',
-      items: [
-        { icon: 'megaphone', label: 'Notice Board', value: 'From the firm', href: '/notice-board', navKey: 'notice-board' },
-        { icon: 'journal', label: 'Notes', value: 'Private', href: '/notes', navKey: 'notes' },
-      ],
-    },
-    {
-      title: 'Reference',
-      items: [
-        { icon: 'library', label: 'Knowledge Base', value: 'Field guide', href: '/kb', navKey: 'kb' },
-        { icon: 'calculator', label: 'LIC plans', value: 'Products', href: '/lic-plans', navKey: 'lic-plans' },
-        { icon: 'search', label: 'Global search', value: 'Everything', href: '/search', navKey: 'search' },
-      ],
-    },
-    {
-      title: 'Account',
-      items: [
-        ...(realCaps.manageTeam ? [{
-          icon: 'swap-horizontal' as IconName,
-          label: 'Viewing as',
-          value: caps.label,
-          onPress: () => setViewSheet(true),
-          right: viewAs ? <Pill label="Preview" tone="warning" small /> : undefined,
-        }] : []),
-        { icon: 'person-circle', label: 'My profile', value: user.name, href: '/profile', navKey: 'profile' },
-        // Self-view salary (Phase 16). Backed by the self-scoped `GET /payroll/my-earnings`, which is
-        // `protect`-only and forces `user_id` to the token — so EVERY signed-in member gets this row,
-        // no role gate (unlike the admin Payroll roster above). No navKey: a local feature, not part
-        // of the server nav schema. If the caller has no payroll profile, the screen says so.
-        { icon: 'wallet' as IconName, label: 'My earnings', value: 'Salary and days', href: '/earnings' as Href },
-        { icon: 'settings', label: 'Settings', value: 'Security, language', href: '/settings', navKey: 'settings' },
-        { icon: 'shield-checkmark', label: 'Account and privacy', value: 'Data and deletion', href: '/account', navKey: 'account' },
-      ],
-    },
+          navKey: key,
+        }];
+      }
+      return [{ ...cat, navKey: key }];
+    }),
+  }));
+
+  /* Personal local features — FIXED (PHASE-26 D-3). Not server nav modules (no navKey, not in the
+     catalogue, never in nav.hidden), so each keeps its OWN gate. `My earnings` is self-scoped and
+     shown to every member (Phase 16); `Viewing as` needs the user's REAL manage-team capability so a
+     previewing admin cannot use it to climb back up. Payroll stays in the admin group above. */
+  const personalItems: Entry[] = [
+    ...(realCaps.manageTeam ? [{
+      icon: 'swap-horizontal' as IconName,
+      label: 'Viewing as',
+      value: caps.label,
+      onPress: () => setViewSheet(true),
+      right: viewAs ? <Pill label="Preview" tone="warning" small /> : undefined,
+    }] : []),
+    { icon: 'wallet' as IconName, label: 'My earnings', value: 'Salary and days', href: '/earnings' as Href },
   ];
-  const groups = rawGroups
-    .map((g) => ({ ...g, items: g.items.filter((it) => !it.navKey || !isHidden(it.navKey)) }))
-    .filter((g) => g.items.length > 0);
+
+  /* One ordered list of everything grouped: fixed admin first, then the config-driven content
+     groups, then the fixed personal group. Keyed by index because two config groups may share a
+     title (normalizeSections does not dedupe titles). */
+  const groups: { title: string; items: Entry[] }[] = [
+    ...(adminGroup ? [adminGroup] : []),
+    ...moduleGroups,
+    ...(personalItems.length ? [{ title: 'Personal', items: personalItems }] : []),
+  ];
 
   // Fixed tileIndex per module (it selects the tile's colour), so hiding one tile does not
   // shift the colour of the ones next to it.
@@ -346,8 +377,8 @@ export default function More() {
           </View>
         ) : null}
 
-        {groups.map((g) => (
-          <ListSection key={g.title} title={g.title}>
+        {groups.map((g, gi) => (
+          <ListSection key={`${g.title}-${gi}`} title={g.title}>
             {g.items.map(renderRow)}
           </ListSection>
         ))}

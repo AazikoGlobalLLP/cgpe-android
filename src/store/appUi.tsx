@@ -126,11 +126,18 @@ export const DEFAULT_UI: AppUiConfig = {
   },
   nav: {
     tabs: ['home', 'tasks', 'clients', 'claims', 'more'],
+    // Since Phase 26 this array is actually RENDERED (see arrangeMoreSections + more.tsx), not just
+    // a placeholder: it is the resolved layout for a config outage AND for every role whose document
+    // omits more_sections (admin/master samples do, and any unseeded department). So it must be a
+    // deliberate default that names EVERY content module in MORE_CATALOGUE — otherwise an unnamed
+    // module would land in the trailing catch-all rather than a chosen group. Keep it in step with
+    // more.tsx's catalogue: a module in one but not the other is a menu bug.
     more_sections: [
-      { title: 'The book', items: ['clients', 'segments', 'families', 'premium', 'lic-plans'] },
-      { title: 'Work', items: ['leads', 'prospects', 'claims', 'tickets', 'reminders', 'calendar', 'commissions'] },
-      { title: 'Reference', items: ['kb', 'notice-board', 'contests'] },
-      { title: 'You', items: ['profile', 'attendance', 'settings', 'account'] },
+      { title: 'The book', items: ['clients', 'leads', 'segments', 'families', 'premium', 'prospects', 'lic-plans'] },
+      { title: 'Day to day', items: ['tickets', 'claims', 'reminders', 'calendar', 'attendance', 'whatsapp', 'commissions'] },
+      { title: 'Board', items: ['notice-board', 'notes'] },
+      { title: 'Reference', items: ['kb', 'search', 'contests'] },
+      { title: 'You', items: ['profile', 'settings', 'account'] },
     ],
     hidden: [],
   },
@@ -318,6 +325,53 @@ export function resolveTabs(config: AppUiConfig): string[] {
   const out = pick(config.nav.tabs);
   if (!out.length) out.push(...pick(DEFAULT_UI.nav.tabs));
   out.push('more');
+  return out;
+}
+
+/**
+ * Arrange the More tab's CONTENT modules into ordered, titled groups from `nav.more_sections`.
+ *
+ * The config document names the grouping, titles and order; this turns that into concrete groups the
+ * screen renders. `known` is the set of module keys this build can render as a More row (more.tsx's
+ * `MORE_CATALOGUE` keys) — the admin oversight modules and the personal local-feature rows are NOT in
+ * it, because they render in fixed sections (see PHASE-26 D-2/D-3), so a config that names them here
+ * has no effect.
+ *
+ * Three rules, mirroring `resolveTabs`:
+ *  1. A group's items are filtered to keys that are KNOWN, NOT hidden, and NOT already placed by an
+ *     earlier group — first placement wins, so a double-listed module renders once. Empty groups drop.
+ *  2. HARD PRODUCT RULE (`ui_rbac_config.json:18`): omitting a module from `more_sections` must never
+ *     make it unreachable — only `nav.hidden` does that. So every known, non-hidden module the config
+ *     did not place is appended in ONE trailing `leftoverTitle` group. A minimal or half-written
+ *     document re-prioritises the menu; it can never empty it.
+ *  3. `nav.hidden` removes a module from EVERY group, including the catch-all — that is the one control
+ *     that makes a module vanish.
+ *
+ * Pure over strings (no React, no catalogue data), so it is unit-tested directly. Leftover order
+ * follows `known`'s order, which is the catalogue's declaration order.
+ */
+export function arrangeMoreSections(
+  sections: readonly { title: string; items: readonly string[] }[] | undefined,
+  known: readonly string[],
+  isHidden: (moduleKey: string) => boolean,
+  leftoverTitle = 'More',
+): { title: string; keys: string[] }[] {
+  const knownSet = new Set(known);
+  const placed = new Set<string>();
+  const out: { title: string; keys: string[] }[] = [];
+  // `undefined`/empty sections is fail-open, not a blank menu: with nothing placed, every known,
+  // non-hidden module falls to the trailing catch-all below (the hard product rule, defensively).
+  for (const section of sections ?? []) {
+    const keys: string[] = [];
+    for (const key of section.items) {
+      if (!knownSet.has(key) || isHidden(key) || placed.has(key)) continue;
+      placed.add(key);
+      keys.push(key);
+    }
+    if (keys.length) out.push({ title: section.title, keys });
+  }
+  const leftover = known.filter((k) => !isHidden(k) && !placed.has(k));
+  if (leftover.length) out.push({ title: leftoverTitle, keys: leftover });
   return out;
 }
 
