@@ -31,11 +31,11 @@ import { fmtDate, inr, inrShort } from '@/lib/format';
  * white on lifted azure fails contrast. The figure carries itself: Metric at display size,
  * tabular, negative tracking. The gradient stays rationed to the clock-in ring and the tab.
  *
- * EVERY FIELD IS DEFENDED AT THE BOUNDARY. `getCommission` falls back to a zeroed shell
- * whose shape does not match the `Commission` type at runtime: `history` and `recent` come
- * back undefined, so `data.history.map(...)` (what this screen used to do) crashed on the
- * exact failure path the fallback exists to serve. Everything below reads through `num` and
- * an Array.isArray check, and a section with nothing behind it is not rendered at all.
+ * EVERY FIELD IS DEFENDED AT THE BOUNDARY. `getCommissionSummary` returns `{status:'ok',summary}`
+ * or `{status:'error'}`; on error `data` is set to `null`, so `history`/`recent` read back undefined
+ * and `data.history.map(...)` (what this screen used to do) would crash on the exact failure path.
+ * Everything below reads through `num` and an Array.isArray check, and a section with nothing behind
+ * it is not rendered at all.
  *
  * NOTHING IS DERIVED THAT THE SERVER DID NOT SEND. No projected payout, no annualised run
  * rate, no "on track for" figure. Growth appears only when there is a real previous month to
@@ -83,9 +83,12 @@ export default function Commissions() {
    */
   const load = useCallback(async (opts: { refresh?: boolean; current?: () => boolean } = {}) => {
     if (opts.refresh) setRefreshing(true);
-    const d = await api.getCommission();
+    const r = await api.getCommissionSummary();
     if (!alive.current || (opts.current && !opts.current())) return;
-    setData(d ?? null);
+    // `ok` carries the earned aggregate (zeros included — the blank check below turns 200-zeros into
+    // the calm "none yet" state); `error` becomes null, and the global banner has already spoken, so
+    // `blank && health.degraded` shows "did not load" rather than a fabricated zero.
+    setData(r.status === 'ok' ? r.summary : null);
     setLoading(false);
     setRefreshing(false);
   }, []);

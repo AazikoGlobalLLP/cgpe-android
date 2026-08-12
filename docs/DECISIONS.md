@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 25: built the commissions EARNED aggregate against the shipped `GET /api/commissions/my-summary`
+
+**Context.** The Phase-6 D-5 blocker cleared mid-handoff: `cgpe-api` shipped `GET /api/commissions/my-summary`
+(Backend Phase 31) — the exact self-scoped earned aggregate mobile filed. `commissions.tsx` had never shown
+real earned data (the old `getCommission()` read `/api/commissions`' raw rows and collapsed to a zeroed shell,
+so the screen always rendered `blank`). This phase consumes the new endpoint. Shape verified against the
+LANDED INBOX item, `contracts/api.md` §`/api/commissions`, and `CHANGELOG.md` 2026-08-12 before writing code.
+
+**Decision.**
+1. **New `getCommissionSummary()` with a two-outcome `req()` posture, copied from `getMdrtTier` — not a
+   three-state one.** There is NO `data:null` empty on this endpoint: an advisor with no commissions gets a
+   200 with zeros + empty arrays. So the result is `{status:'ok',summary} | {status:'error'}`; the "empty" is
+   an `ok` carrying zeros, and the screen's existing blank check renders the calm "none yet" state. `ok` (200
+   object, zeros included) raises no banner; `error` is 503 (banner) / dead network / abort / shape-miss
+   (banner) / 401·403·404 (suppressed answer). Using `req()` not `tryReal` keeps a shape-miss reportable
+   instead of silently collapsing the envelope.
+2. **`target:0` always — never invented.** `/my-summary` carries no target, and `next_premium` (the MDRT tier
+   goal) is an annual cumulative-premium figure in a different unit than the screen's monthly meter (INBOX
+   2026-08-12), so it must not feed it. `target` stays 0 → the screen shows "no monthly target set", an honest
+   blank. Every ₹ is the server's summed rows; the app never multiplies (CLAUDE.md money rule), pinned by test.
+3. **Defensive mapping at the boundary.** `fin()` coerces figures, malformed `history` entries are dropped,
+   `recent` string fields default to `''` (a bonus/override row legitimately has no `client_id`). The screen
+   already re-defends every field, so this is defense in depth, not duplication.
+4. **Minimal screen change; MDRT tier untouched.** `load()` swaps `getCommission()` → `getCommissionSummary()`
+   and sets `data` to `summary`/`null`; all existing render defenses and the `blank`/`degraded` empty-state
+   fork are unchanged. `MdrtTierProgress` (Phase 23) stays a separate element on `/advisor/performance/:id`.
+5. **Removed dead code.** The now-orphaned `getCommission()` and its mis-shaped `EMPTY_COMMISSION` shell
+   (single caller, gone) were deleted — consistent with the Phase-14 sweep, and `EMPTY_COMMISSION` was a
+   fabricated shell of exactly the class the project removes.
+6. **Gates green.** tsc exit 0, `npm test` **387/387** (+14, `api-commissions.test.ts`), lint 0 errors / 12
+   warnings (baseline). INBOX Phase-31 box ticked.
+
+**Consequence.** Commissions finally shows real earned money — this month / last month / pending balance /
+YTD / a 6-month trend / recent credits — with three honest states (figures · calm "none yet" · retryable
+"did not load"), no fabricated zeros, and no on-device arithmetic. Phase 6 D-5 is closed. Commit local (push
+still 403s). Device check (a real advisor with booked policies against production, light/dark at 390 px)
+outstanding. Full spec: `docs/spec/PHASE-25.md`.
+
+---
+
 ## 2026-08-12 — Phase 24: surfaced the per-client `coverage_score` on Smart segments (the one fresh editor-buildable lever)
 
 **Context.** The board was editor-exhausted (commissions earned-aggregate backend-blocked, i18n P1

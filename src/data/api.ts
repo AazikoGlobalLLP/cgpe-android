@@ -245,14 +245,6 @@ async function tryReal<T>(
   }
 }
 
-/**
- * Zeroed commission shell for a failed `/commissions` fetch. Every figure is 0 so the
- * screen renders honest blanks under the outage banner rather than a fabricated payout.
- */
-const EMPTY_COMMISSION: Commission = {
-  total: 0, paid: 0, pending: 0, thisMonth: 0, lastMonth: 0, policies: 0, entries: [],
-} as unknown as Commission;
-
 const isArr = (d: any) => Array.isArray(d);
 const isObj = (d: any) => d && typeof d === 'object' && !Array.isArray(d);
 
@@ -1087,8 +1079,77 @@ export async function toggleReminder(id: string): Promise<boolean> {
 }
 
 /* ------------------------------------------------------------------- Misc */
-export async function getCommission(): Promise<Commission> {
-  return (await tryReal<Commission>('/commissions', {}, isObj)) ?? unavailable('/commissions', EMPTY_COMMISSION);
+/**
+ * The caller's OWN earned-commission aggregate — the commissions-screen ledger.
+ * `GET /api/commissions/my-summary` (`contracts/api.md` §`/api/commissions`, backend Phase 31).
+ *
+ * SELF-SCOPED BY THE SERVER, LIKE `/payroll/my-earnings`. `protect`-only; the backend FORCES the
+ * summary to the token identity and ignores any `?user_id=`/`?advisor_id=`, so a caller can only
+ * ever read their OWN commissions. We send NO query params — the windows are fixed to the server
+ * clock and bucketed on each commission's business period (`month`+`year`), NOT `created_at`, so a
+ * July commission counts as July regardless of when it was keyed in. `pending` is the approved-but-
+ * unpaid balance; `thisMonth`/`lastMonth`/`ytd`/`history` sum earned rows (every status except
+ * `cancelled`/`disputed`). Every ₹ is the server's own summed rows — the app never multiplies.
+ *
+ * WHAT IT DOES AND DOES NOT CARRY. It is exactly the EARNED money the `Commission` type needs
+ * (`thisMonth/lastMonth/pending/ytd/history/recent`) and nothing else. `tier` is intentionally
+ * OMITTED by the backend (re-deriving `total_premium` here would fork that figure), so the MDRT
+ * tier element stays on its own endpoint — `getMdrtTier` / Phase 23. `target` has no source at all,
+ * so it is left `0` and the screen shows "no monthly target set" — an honest blank, not a guess.
+ *
+ * TWO OUTCOMES, told apart — `req()` not `tryReal`, so a shape miss reports rather than silently
+ * collapsing the envelope. There is NO `data:null` empty here: an advisor with no commissions gets a
+ * 200 with zeros + empty arrays, which is an `ok` the screen renders as its calm "none yet" state.
+ *   - `ok`    — a 200 whose `data` is an object. Zeros included: 200-zeros is NOT an outage and
+ *               raises no banner; the screen's own blank check turns it into the empty state.
+ *   - `error` — a 503 (DB down; banner via `reportIfOutage`) OR a dead network / abort / contract-
+ *               shape miss. A 401/403/404 answer is suppressed (no banner). The screen shows its
+ *               "did not load" state and the global <HealthBanner/> speaks once for a real outage.
+ */
+export type CommissionSummaryResult = { status: 'ok'; summary: Commission } | { status: 'error' };
+
+export async function getCommissionSummary(): Promise<CommissionSummaryResult> {
+  if (FORCE_DEMO || !sessionReal) return { status: 'error' };   // no request attempted
+  const path = '/commissions/my-summary';
+  const key = healthKey(path);
+  try {
+    const { ok, status, json } = await req(path, {}, REQUEST_TIMEOUT, key);
+    if (!ok) { reportIfOutage(status, key); return { status: 'error' }; }
+    const data = json?.data;
+    if (!isObj(data)) { reportFailure(key); return { status: 'error' }; }      // 200 but the envelope drifted
+    const fin = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+    const history: Commission['history'] = Array.isArray(data.history)
+      ? data.history
+          .filter((m: any) => m && typeof m.month === 'string' && Number.isFinite(m.amount))
+          .map((m: any) => ({ month: m.month as string, amount: fin(m.amount) }))
+      : [];
+    const recent: Commission['recent'] = Array.isArray(data.recent)
+      ? data.recent
+          .filter((r: any) => r && typeof r === 'object')
+          .map((r: any) => ({
+            id: typeof r.id === 'string' ? r.id : '',
+            client: typeof r.client === 'string' ? r.client : '',
+            plan: typeof r.plan === 'string' ? r.plan : '',
+            amount: fin(r.amount),
+            date: typeof r.date === 'string' ? r.date : '',
+          }))
+      : [];
+    return {
+      status: 'ok',
+      summary: {
+        thisMonth: fin(data.thisMonth),
+        lastMonth: fin(data.lastMonth),
+        pending: fin(data.pending),
+        ytd: fin(data.ytd),
+        target: 0,                 // NOT carried by /my-summary — no source, so an honest blank
+        history,
+        recent,
+      },
+    };
+  } catch {
+    reportFailure(key);            // dead network or the 4.5 s abort
+    return { status: 'error' };
+  }
 }
 
 /**

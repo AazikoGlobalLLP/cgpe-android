@@ -14,6 +14,24 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 25 — commissions EARNED aggregate. BUILT 2026-08-12.** The Phase-6 D-5 unblock. `cgpe-api` shipped
+`GET /api/commissions/my-summary` (Backend Phase 31) — the self-scoped earned aggregate mobile filed — and
+this phase consumes it. New `getCommissionSummary()` in `src/data/api.ts` uses low-level `req()` with a
+two-outcome posture like `getMdrtTier`: `ok` (a 200 object; **200-zeros included raises no banner** — the
+screen's blank check renders the calm "none yet" state) / `error` (503 → banner; 401/403/404 suppressed as
+answers; dead network / abort / shape-miss → banner). Maps `{thisMonth,lastMonth,pending,ytd,history[],
+recent[]}` defensively (finite-coerced ₹, malformed history dropped, missing `recent` strings → `''`) and
+sets **`target:0`** — the endpoint carries no target and none is invented (the screen shows "no monthly
+target set"). Every ₹ is the server's; **the app never multiplies** (pinned by test). `commissions.tsx`'s
+`load()` swaps `getCommission()` → `getCommissionSummary()`; all existing render defenses + the
+`blank`/`degraded` empty-state fork are unchanged, so the three honest states fall out (figures · calm "none
+yet" · retryable "did not load"). MDRT tier (Phase 23) stays a **separate** element on
+`/advisor/performance/:id`, untouched. Dead `getCommission()` + mis-shaped `EMPTY_COMMISSION` shell removed
+(single caller, gone — Phase-14 hygiene). Gates green: `tsc` 0, `npm test` **387/387** (+14,
+`api-commissions.test.ts`), lint 0 errors / 12 warnings (baseline). Commit local (push still 403s). **INBOX
+Phase-31 box ticked.** **Phase 6 D-5 is now closed.** Device check (a real advisor with booked policies vs
+production, light/dark at 390 px) outstanding. Full path: `docs/spec/PHASE-25.md`; DECISIONS 2026-08-12 (top).
+
 **Commissions blocker CLEARED mid-handoff — 2026-08-12. Build queued as Phase 25 (no code yet).** During
 this session's handoff, a concurrent write landed `GET /api/commissions/my-summary` (Backend Phase 31) at the
 TOP of `contracts/INBOX.md` — the exact self-scoped EARNED aggregate mobile filed
@@ -565,7 +583,7 @@ exercise.
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
 | 4 | Leads contract | **Done** 2026-08-10 — 188 tests green (`5c08872`…`edc373c`); device checks outstanding |
 | 5 | WhatsApp send | **Done** 2026-08-10 — 219 tests green (`95f1ccb`); device checks outstanding |
-| 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint). **2026-08-12:** backend Phase 29 made MDRT `next_premium` a server-authoritative *target* source, but it doesn't unblock the screen (earned aggregate still unsourced; `next_premium` is an annual premium goal, not the monthly meter's unit) — filed `GET /commissions/my-summary` self-aggregate shape to `cgpe-api`, no build. **2026-08-12 (handoff): UNBLOCKED — `cgpe-api` SHIPPED `GET /api/commissions/my-summary` (Backend Phase 31), shape matches our filing; build queued as Phase 25 (next session), INBOX box left unticked until built** |
+| 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint). **2026-08-12:** backend Phase 29 made MDRT `next_premium` a server-authoritative *target* source, but it doesn't unblock the screen (earned aggregate still unsourced; `next_premium` is an annual premium goal, not the monthly meter's unit) — filed `GET /commissions/my-summary` self-aggregate shape to `cgpe-api`, no build. **2026-08-12 (handoff): UNBLOCKED — `cgpe-api` SHIPPED `GET /api/commissions/my-summary` (Backend Phase 31), shape matches our filing; build queued as Phase 25 (next session), INBOX box left unticked until built**. **2026-08-12 (Phase 25): BUILT & CLOSED — `getCommissionSummary()` consumes `/my-summary`, `commissions.tsx` renders the earned ledger, `api-commissions.test.ts` pins the envelope, INBOX box ticked. See row 25** |
 | 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
 | 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
 | 9 | Reminders/checklists persist ~~`[api]`~~ | **Done** 2026-08-11 — 305 tests green; `[api]` tag was wrong (reminders wired to existing `acknowledge`); device check outstanding |
@@ -584,6 +602,7 @@ exercise.
 | 22 | i18n P1 — `common.*` dedup (copy-free slice) | **Built** 2026-08-12 — routed `Call`/`Cancel`/`Delete`/`WhatsApp` → existing `common.*` across 16 screens + added `common.today` (lifted copy, parity 74→75); 350 tests green (unchanged), lint 0/12. Net-new `common.*` keys (`tryAgain` ×34 etc.) still blocked on human copy |
 | 23 | MDRT tier-progress element on Commissions | **Built** 2026-08-12 — buildable slice of Phase-6 (option d). New `getMdrtTier` on the verified Phase-29 `GET /advisor/performance/:advisorId`; `MdrtTierProgress` card is a **separate** element (never the monthly meter), mounted above the ledger fork so it shows real data while the earned aggregate stays blocked. Role-gated advisor/learn_advisor, own id; no contract change. 373 tests green (+13); no PII, no on-device math. Device check outstanding |
 | 24 | Coverage score on Smart segments | **Built** 2026-08-12 — surfaced the response-only per-row `coverage_score` (backend Phase 30, P2-CL-01) landed additively on `GET /clients/segments`, which mobile already calls. One guarded `asNum` read in `segments.tsx`; shown as `· NN%` on the row + a labelled **Coverage** DataRow in the sheet (tone by the server's `100`⟺well_insured/`<100`⟺underinsured invariant). `null`→no line (never `0%`); real `0`→`0%`. No contract change, no INBOX ask, no on-device math. 373 tests green (unchanged); lint 0/12. Device check outstanding |
+| 25 | Commissions EARNED aggregate ~~`[api]`~~ | **Built** 2026-08-12 — Phase-6 D-5 unblock. New `getCommissionSummary()` on the shipped `GET /commissions/my-summary` (backend Phase 31, self-scoped, `protect`-only); two-outcome `req()` posture like `getMdrtTier` (200-zeros = ok/no-banner, 503 = error/banner). `commissions.tsx` renders the earned ledger (thisMonth/lastMonth/pending/ytd/history/recent); `target:0` (no source, never invented); no on-device math. Dead `getCommission`/`EMPTY_COMMISSION` removed. **387 tests green (+14, `api-commissions.test.ts`)**; lint 0/12. **INBOX Phase-31 box ticked. Phase 6 D-5 closed.** Device check outstanding |
 
 ---
 
