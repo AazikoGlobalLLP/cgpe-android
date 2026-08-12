@@ -14,6 +14,22 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 24 — per-client coverage score on Smart segments. BUILT 2026-08-12.** The one fresh
+editor-buildable lever after the board went editor-exhausted: `cgpe-api` backend Phase 30 (P2-CL-01)
+landed a **response-only** per-row `coverage_score` on `GET /api/clients/segments` — an endpoint mobile
+already calls (`getClientSegments`, `api.ts:2480`). Additive, contract already carries it (`api.md`
+§`/segments` + `models.md` §`Client`), no backend dependency, no INBOX ask (the notice was `→ cgpe-admin`;
+mobile owed nothing). One guarded `asNum(o.coverage_score)` read added to `toRowView` in `segments.tsx`,
+rendered as `· NN%` on the row's cover readout and as a labelled **Coverage** `DataRow` in the detail
+sheet (`success` ≥100 / `warning` <100 — the server's own documented invariant, same tones as the
+existing underinsured/well_insured Pills). **`null` (no cover on file) draws no coverage line — never a
+fabricated `0%`; a floored real `0` (tiny cover) shows `0%`** (the file's own `asNum` doctrine keeps the
+two distinct). No rupee benchmark asserted on the row (mobile doesn't read `thresholds.coverage`). No
+on-device math. Gates green: `tsc` 0, `npm test` **373/373** (unchanged — guarded mapper passthrough +
+presentational JSX, the untested class of Phases 8/11/17), lint 0 errors / 12 warnings (baseline). Commit
+local (push still 403s). Device check (production data on a handset, light/dark at 390 px) outstanding.
+Full path: `docs/spec/PHASE-24.md`; DECISIONS 2026-08-12 (top).
+
 **INBOX sync (no phase) — 2026-08-12 (6th of the day). Answered cgpe-admin's RECRUITER_MASTER CC.** Boot
 found the board editor-exhausted and one fresh open item CC'ing this session: cgpe-admin filed a discovery
 question to `cgpe-api` (blocking their Phase 45) — how does the API expose `ca-data` rows with
@@ -547,6 +563,7 @@ exercise.
 | 21 | i18n P0 — `t(key, params?)` interpolation + plurals | **Built** 2026-08-11 (`a7a0979`) — named `{placeholder}` fill + CLDR `key_one`/`key_other` by active language; single-arg `t()` byte-identical; no dict key added (parity 74 untouched); 350 tests green (+20); pure engine only, no screen wired yet |
 | 22 | i18n P1 — `common.*` dedup (copy-free slice) | **Built** 2026-08-12 — routed `Call`/`Cancel`/`Delete`/`WhatsApp` → existing `common.*` across 16 screens + added `common.today` (lifted copy, parity 74→75); 350 tests green (unchanged), lint 0/12. Net-new `common.*` keys (`tryAgain` ×34 etc.) still blocked on human copy |
 | 23 | MDRT tier-progress element on Commissions | **Built** 2026-08-12 — buildable slice of Phase-6 (option d). New `getMdrtTier` on the verified Phase-29 `GET /advisor/performance/:advisorId`; `MdrtTierProgress` card is a **separate** element (never the monthly meter), mounted above the ledger fork so it shows real data while the earned aggregate stays blocked. Role-gated advisor/learn_advisor, own id; no contract change. 373 tests green (+13); no PII, no on-device math. Device check outstanding |
+| 24 | Coverage score on Smart segments | **Built** 2026-08-12 — surfaced the response-only per-row `coverage_score` (backend Phase 30, P2-CL-01) landed additively on `GET /clients/segments`, which mobile already calls. One guarded `asNum` read in `segments.tsx`; shown as `· NN%` on the row + a labelled **Coverage** DataRow in the sheet (tone by the server's `100`⟺well_insured/`<100`⟺underinsured invariant). `null`→no line (never `0%`); real `0`→`0%`. No contract change, no INBOX ask, no on-device math. 373 tests green (unchanged); lint 0/12. Device check outstanding |
 
 ---
 

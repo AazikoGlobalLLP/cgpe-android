@@ -6,6 +6,40 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 24: surfaced the per-client `coverage_score` on Smart segments (the one fresh editor-buildable lever)
+
+**Context.** The board was editor-exhausted (commissions earned-aggregate backend-blocked, i18n P1
+paused on owner copy, device checks need a handset). Boot found one genuinely NEW, editor-buildable
+thing since the last handoff: `cgpe-api` backend Phase 30 (P2-CL-01) had landed a **response-only**
+per-row `coverage_score` on `GET /api/clients/segments` — an endpoint mobile already calls via
+`getClientSegments` (`api.ts:2480`). The notice was addressed to `cgpe-admin`, not mobile, so mobile
+owed no reply — but it is additive, the contract already carries the shape, and nothing else on the
+board is buildable without a backend or a translator, so it was the right slice to build.
+
+**Decision.**
+1. **Rendered the score, verified against the contract first.** Confirmed the field in both
+   `contracts/api.md` §`/segments` and `models.md` §`Client`: integer `0..100` or `null`, `floor`-based,
+   invariant `100` ⟺ well_insured / `<100` ⟺ underinsured / `null` ⟺ no_coverage. Added one guarded
+   `asNum(o.coverage_score)` read to `toRowView`, shown as `· NN%` on the row's cover readout and as a
+   labelled "Coverage" `DataRow` in the detail sheet.
+2. **`null` hidden, real `0` shown.** `null` (no cover on file) draws no coverage line — never a
+   fabricated `0%`; the existing `no_coverage` flag already tells that story. A floored real `0` (tiny
+   positive cover) is legitimate low-coverage data and shows `0%`. `asNum` keeps the two distinct.
+3. **Tone = the server's invariant, not a client cutoff.** Sheet Coverage row is `success` at `>=100`,
+   `warning` below — exactly the documented invariant and the same tones the screen's
+   `underinsured`/`well_insured` flag Pills already use. No rupee benchmark asserted on the row (mobile
+   doesn't read `thresholds.coverage`; CLAUDE.md forbids inventing the number).
+4. **No new test; gates green.** Guarded mapper passthrough + presentational JSX — same untested class
+   as Phases 8/11/17 (`toRowView` is private to the screen; a screen import pulls RN in with no
+   renderer). tsc exit 0, `npm test` **373/373** (unchanged), lint 0 errors / 12 warnings (baseline).
+
+**Consequence.** The Smart segments screen — whose entire purpose is the underinsured/well-insured
+lens — now carries the server's own adequacy number, at a glance and in detail, with no on-device
+math and no fabricated zeros. No contract change, no INBOX ask. Commit local (push still 403s). Device
+check (production data on a handset, light/dark at 390 px) outstanding. Full spec: `docs/spec/PHASE-24.md`.
+
+---
+
 ## 2026-08-12 — INBOX sync (no phase): answered cgpe-admin's RECRUITER_MASTER CC by correcting its premise about mobile
 
 **Context.** Boot found the board editor-exhausted and one fresh open item CC'ing this session:

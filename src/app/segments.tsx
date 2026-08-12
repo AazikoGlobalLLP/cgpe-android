@@ -164,6 +164,10 @@ type RowView = {
   phone: string;
   flags: string[];
   cover: number | null;
+  /** Server-derived life cover as a percent of the ₹1cr benchmark: integer 0–100, or null
+   *  when no cover is on file. 100 ⟺ well insured, <100 ⟺ underinsured (api.md §/segments,
+   *  models.md §Client). Never rendered as 0% for a null — a null row shows no coverage line. */
+  coverageScore: number | null;
   premium: number | null;
   policyCount: number | null;
   memberCount: number | null;
@@ -219,6 +223,9 @@ function toRowView(raw: SegmentRow, i: number): RowView {
     phone,
     flags: asStrArr(o.flags),
     cover: kind === 'family' ? asNum(o.totalCoverage) : asNum(o.coverage),
+    // Response-only, same field name for both segments (models.md §Client). asNum keeps a
+    // real 0 (a tiny cover that floors to 0%) distinct from a null (no cover on file).
+    coverageScore: asNum(o.coverage_score),
     premium: kind === 'family' ? asNum(o.totalPremium) : asNum(o.premium),
     policyCount: asNum(o.policyCount),
     memberCount,
@@ -646,7 +653,7 @@ function SegRow({ row, defs, onOpen }: {
           </View>
           {hasCover ? (
             <Txt size={font.cap} weight="700" color={c.muted} numeric numberOfLines={1}>
-              {inrShort(row.cover ?? 0)} cover
+              {inrShort(row.cover ?? 0)} cover{row.coverageScore != null ? ` · ${row.coverageScore}%` : ''}
             </Txt>
           ) : null}
         </View>
@@ -726,6 +733,18 @@ function DetailSheet({ row, defs, onClose }: {
               : null}
             {row.cover != null
               ? <DataRow label="Life cover" value={inrShort(row.cover)} icon="shield-checkmark-outline" numeric />
+              : null}
+            {/* Derived coverage adequacy. Only drawn when the server sent a score; a null row
+                (no cover on file) shows nothing here — never a fabricated 0%. Tone follows the
+                server's own invariant: 100 ⟺ well insured, <100 ⟺ underinsured. */}
+            {row.coverageScore != null
+              ? <DataRow
+                  label="Coverage"
+                  value={`${row.coverageScore}%`}
+                  icon="pie-chart-outline"
+                  numeric
+                  tone={row.coverageScore >= 100 ? 'success' : 'warning'}
+                />
               : null}
             {row.premium != null
               ? <DataRow label="Yearly premium" value={inrShort(row.premium)} icon="cash-outline" numeric />
