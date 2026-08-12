@@ -14,6 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 29 — consume server-driven `theme.density` (mechanism + first screen). BUILT 2026-08-12.** The
+Phase-28 D-4 deferral, unblocked. `spacing`/`radius`/`font` were static module consts imported by ~81
+files (941 refs), so density needed a runtime-scale refactor; this phase builds that mechanism and
+migrates ONE proof screen, with the rest migrating incrementally later (owner-locked approach — not a
+big-bang). Two undefined-upstream things owner-locked via AskUserQuestion before code: the `compact`
+numbers (`density` is enum-only in `../contracts/` + `ui_rbac_config.json:158` + `ADMIN_PANEL_SYNC.md`)
+and the blast radius. **compact = spacing ×0.85, radius ×0.90, font ×1.0** (gentle, spacing-led — type
+sizes kept for legibility/≥44pt targets; D-3). Mechanism mirrors Phase 28's `deriveBrandPalette`: new pure
+`applyDensity(base, density)` in **`src/theme/density.ts`** — fail-open **by reference** for
+comfortable/absent (D-4), compact tightens `spacing`/`radius` (`Math.round`, `pill` preserved), font +
+every colour pass through. The layout scale now lives **on the `Palette`** (new `Spacing`/`Radius`/`Font`
+types) so `useTheme()` carries it (D-2); the static `spacing`/`radius`/`font` exports stay = comfortable, so
+the ~80 unmigrated importers are **non-regressive**. The **`BrandTheme`** bridge in `_layout.tsx` applies
+density **after** accent (`applyDensity(deriveBrandPalette(base, accent), density)`). Proof screen
+`(tabs)/clients.tsx` migrated by destructuring the scale off `c` (tiny per-screen diff for the rollout); its
+module-scope `SEP_INSET` became a `sepInset(spacing)` helper so separators stay aligned when the gutter
+tightens (the 44pt avatar doesn't scale). compact spacing `4→3·8→7·12→10·16→14·20→17·24→20·32→27`, radius
+`10→9·14→13·18→16·24→22·30→27·pill 999`. The numbers are a mobile decision, **not** a contract (D-5) — no
+contract change. Gates green: `tsc` 0, `npm test` **417/417** (+10, `src/theme/__tests__/density.test.ts`),
+lint 0 errors / 12 warnings (baseline). Commit local (push still 403s). **Device check carried** (a seeded
+`theme.density:"compact"` dept config showing a tighter Clients list, light/dark at 390 px; other screens
+stay comfortable until migrated) — not editor-buildable (no seeded compact doc yet). Full path:
+`docs/spec/PHASE-29.md`; DECISIONS 2026-08-12 (top).
+
 **Phase 28 — consume server-driven `theme` (accent + badge). BUILT 2026-08-12.** The owner-picked
 Phase-26 lever (c). `normalizeTheme` had parsed `theme` into `{accent,badge_label,density}` since before
 Phase 26 but **nothing read it**; this makes two of the three facets live. Owner-locked scope: consume

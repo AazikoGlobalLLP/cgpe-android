@@ -22,7 +22,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { ThemeProvider, useTheme, deriveBrandPalette, PaletteProvider } from '@/theme/theme';
+import { ThemeProvider, useTheme, deriveBrandPalette, applyDensity, PaletteProvider } from '@/theme/theme';
 import { useAppFonts } from '@/theme/fonts';
 import { AuthProvider, useAuth } from '@/store/auth';
 import { I18nProvider } from '@/i18n';
@@ -45,12 +45,21 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
  * than reordering the top-level tree keeps the base `ThemeProvider` above `Confirm`/`Toast` so
  * their overlays stay themed. No accent → `deriveBrandPalette` returns the base palette unchanged,
  * so the azure/teal identity is the fail-open default and a config outage never restyles the app.
+ *
+ * Phase 29: the same bridge also applies `config.theme.density`. `applyDensity` runs AFTER the
+ * accent (density scales spacing/radius, independent of colour) and, like `deriveBrandPalette`,
+ * returns the input palette by reference when density is comfortable/absent — so a role with
+ * neither accent nor a compact density gets the exact base palette and this memo never churns.
  */
 function BrandTheme({ children }: { children: React.ReactNode }) {
   const base = useTheme();
   const { config } = useAppUi();
   const accent = config.theme?.accent;
-  const palette = useMemo(() => deriveBrandPalette(base, accent), [base, accent]);
+  const density = config.theme?.density;
+  const palette = useMemo(
+    () => applyDensity(deriveBrandPalette(base, accent), density),
+    [base, accent, density],
+  );
   return <PaletteProvider value={palette}>{children}</PaletteProvider>;
 }
 

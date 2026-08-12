@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 29: consume `theme.density` — runtime scale mechanism + one screen; compact numbers owner-locked
+
+**Context.** Phase 28 deferred `density` (D-4) because `spacing`/`radius`/`font` were static module
+`const`s imported directly by ~81 files (941 references), so density needed a runtime-scale refactor.
+Two things the contract does **not** define block a build: (a) the numeric meaning of `compact` —
+upstream (`../contracts/`, `ui_rbac_config.json:158`, `ADMIN_PANEL_SYNC.md`) defines `density` only as
+the enum `{comfortable, compact}`, default `comfortable`; (b) the blast radius vs the ≤8-files/phase
+convention. Both were locked with the owner (AskUserQuestion) before any code.
+
+**Decision.** Owner-locked: ship the **mechanism + one screen**, not a big-bang (D-1); `compact =
+spacing ×0.85, radius ×0.90, font ×1.0` — gentle, spacing-led, type sizes kept for legibility/≥44pt
+targets (D-3). Mechanism (mirrors Phase 28's `deriveBrandPalette`): a pure `applyDensity(base, density)`
+in new `src/theme/density.ts` (fail-open by reference for comfortable/absent; compact tightens
+`spacing`/`radius`, `Math.round`, `pill` preserved). The layout scale now lives **on** the `Palette`
+so `useTheme()` carries it (D-2); the static `spacing`/`radius`/`font` exports stay = comfortable, so the
+~80 unmigrated files are non-regressive. The `BrandTheme` bridge applies density after accent. Proof
+screen `clients.tsx` migrated by destructuring the scale off `c` (tiny per-screen diff for the rollout);
+its module-scope `SEP_INSET` became a `sepInset(spacing)` helper so separators stay aligned when the
+gutter tightens. The multipliers are a mobile design decision, **not** a contract value (D-5). Gates:
+tsc 0, npm test **417/417** (+10 `density.test.ts`), lint 0 errors / 12 warnings (baseline).
+
+**Consequence.** A department whose config carries `theme.density: "compact"` now renders a visibly
+tighter **Clients** list (spacing/radius), type sizes and touch targets unchanged, light and dark, on the
+next cold start with no APK; a `comfortable`/absent role is unchanged (fail-open by reference). Every
+other screen still renders comfortable until migrated — each future migration is a ≤8-file phase using
+the D-2 destructure pattern (next targets: `tasks`/`leads`/`claims` and the shared `ui/data.tsx`/
+`ui/identity.tsx` list primitives; `home.tsx` deliberately on its own). No contract change. **Device
+check carried** (needs a seeded compact-density doc, light/dark at 390 px). Full path:
+`docs/spec/PHASE-29.md`.
+
 ## 2026-08-12 — Phase 28: consume server-driven `theme` (accent + badge); density deferred; brand bridge inside AppUiProvider
 
 **Context.** Phase 26 left three levers open; the owner picked lever (c), "finish consuming `theme`".

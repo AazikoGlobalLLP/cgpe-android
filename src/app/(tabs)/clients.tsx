@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { font, radius, spacing, useTheme } from '@/theme/theme';
+import { useTheme } from '@/theme/theme';
 import { Eyebrow, Header, Metric, Row, Screen, Txt } from '@/ui/base';
 import { Button, IconBtn, SearchBar } from '@/ui/controls';
 import { EmptyState, Skeleton } from '@/ui/feedback';
@@ -56,6 +56,8 @@ const countBy = (items: Client[], pred: (cl: Client) => boolean) => items.reduce
 
 export default function Clients() {
   const c = useTheme();
+  // Phase 29: layout scale comes off the theme so `theme.density` can tighten it per department.
+  const { spacing, radius, font } = c;
   const router = useRouter();
   const health = useDataHealth();
 
@@ -302,6 +304,7 @@ export default function Clients() {
 
 function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const t = useT();
   const p = client.policies[0];
   const hasPolicyNo = !!p?.number && p.number !== '—';
@@ -350,8 +353,10 @@ function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
 
 /* ---------- sheet furniture ---------- */
 
-/** Avatar (44) + its 12pt gap + the row's 16pt gutter. */
-const SEP_INSET = spacing.lg + 44 + spacing.md;
+/** Left inset for a row separator: the row's gutter (`lg`) + the 44pt avatar + its gap (`md`),
+ *  computed from the ACTIVE density scale so separators stay aligned when `theme.density` tightens
+ *  the gutter. The avatar is a fixed 44pt touch target and does not scale with density. */
+const sepInset = (s: { lg: number; md: number }) => s.lg + 44 + s.md;
 
 function Hairline({ top }: { top?: boolean }) {
   const c = useTheme();
@@ -360,9 +365,10 @@ function Hairline({ top }: { top?: boolean }) {
 
 function RowSeparator() {
   const c = useTheme();
+  const inset = sepInset(c.spacing);
   return (
     <View style={{ backgroundColor: c.card }}>
-      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: SEP_INSET }} />
+      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: inset }} />
     </View>
   );
 }
@@ -371,14 +377,16 @@ function ListFooter({ loadingMore, hasMore, count, onLoadMore }: {
   loadingMore: boolean; hasMore: boolean; count: number; onLoadMore: () => void;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
+  const inset = sepInset(spacing);
   if (count === 0) return null;
 
   if (loadingMore) {
     return (
       <View style={{ backgroundColor: c.card }}>
-        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: SEP_INSET }} />
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: inset }} />
         <SkeletonRow />
-        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: SEP_INSET }} />
+        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: inset }} />
         <SkeletonRow />
         <Hairline />
       </View>
@@ -401,6 +409,7 @@ function ListFooter({ loadingMore, hasMore, count, onLoadMore }: {
  * ================================================================== */
 
 function SkeletonRow() {
+  const { spacing, radius } = useTheme();
   return (
     <View style={{
       flexDirection: 'row', alignItems: 'center', gap: spacing.md,
@@ -421,11 +430,12 @@ function SkeletonRow() {
 
 function ClientListSkeleton() {
   const c = useTheme();
+  const inset = sepInset(c.spacing);
   return (
     <View style={{ backgroundColor: c.card, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border }}>
       {Array.from({ length: 8 }, (_, i) => (
         <View key={i}>
-          {i > 0 ? <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: SEP_INSET }} /> : null}
+          {i > 0 ? <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: inset }} /> : null}
           <SkeletonRow />
         </View>
       ))}

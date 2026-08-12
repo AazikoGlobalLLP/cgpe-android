@@ -73,6 +73,37 @@ export type Palette = {
   tiles: Tile[];
   avatarPalette: string[];
   overlay: string;
+  /** Layout scale (Phase 29): comfortable by default; density:'compact' tightens spacing/radius. */
+  spacing: Spacing;
+  radius: Radius;
+  font: Font;
+};
+
+/* ------------------------------------------------------------------ *
+ * Layout scale — spacing, radius, and font sizes.
+ *
+ * These are the COMFORTABLE (default) scale. They live ON the palette (above) so a subtree can be
+ * re-provided a density-scaled copy at runtime (Phase 29), while STILL being exported as module
+ * constants so the ~80 screens that import them directly keep rendering the comfortable scale until
+ * each is migrated to read `useTheme().spacing`. The `density:'compact'` scaling is a pure transform
+ * in `./density` (`applyDensity`), applied by the `BrandTheme` bridge in `app/_layout.tsx`.
+ * ------------------------------------------------------------------ */
+export type Spacing = { xs: number; sm: number; md: number; lg: number; xl: number; xxl: number; xxxl: number };
+export type Radius = { sm: number; md: number; lg: number; xl: number; xxl: number; pill: number };
+export type Font = { display: number; metric: number; h1: number; h2: number; h3: number; body: number; sub: number; cap: number; tiny: number };
+
+export const spacing: Spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 };
+export const radius: Radius = { sm: 10, md: 14, lg: 18, xl: 24, xxl: 30, pill: 999 };
+export const font: Font = {
+  display: 32,
+  metric: 26,
+  h1: 28,
+  h2: 22,
+  h3: 17,
+  body: 15,
+  sub: 13.5,
+  cap: 12,
+  tiny: 10.5,
 };
 
 const light: Palette = {
@@ -124,6 +155,8 @@ const light: Palette = {
   ],
   avatarPalette: ['#3182ed', '#1dd7bf', '#0ea5e9', '#16a249', '#f59f0a', '#6355d8', '#ec4899', '#0f9e8c'],
   overlay: 'rgba(9,17,28,0.45)',
+  // Layout scale is scheme-independent — both palettes share the comfortable scale by reference.
+  spacing, radius, font,
 };
 
 const dark: Palette = {
@@ -176,6 +209,7 @@ const dark: Palette = {
   ],
   avatarPalette: ['#5ba3f5', '#2ee6ce', '#38bdf8', '#3ecf72', '#f9b83e', '#8b83ff', '#f472b6', '#12b8a4'],
   overlay: 'rgba(0,0,0,0.62)',
+  spacing, radius, font,
 };
 
 /* ------------------------------------------------------------------ *
@@ -218,20 +252,6 @@ export const eyebrow: TextStyle = { ...type('600', 11), letterSpacing: 0.8, text
 /** Big numbers read tighter — Geist's personality shows in negative tracking at scale. */
 export const displayTracking = -0.8;
 
-export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 };
-export const radius = { sm: 10, md: 14, lg: 18, xl: 24, xxl: 30, pill: 999 };
-export const font = {
-  display: 32,
-  metric: 26,
-  h1: 28,
-  h2: 22,
-  h3: 17,
-  body: 15,
-  sub: 13.5,
-  cap: 12,
-  tiny: 10.5,
-};
-
 /**
  * Motion curves lifted verbatim from the panel's tailwind config so mobile and web
  * share a feel. Exported as raw beziers (not Reanimated `Easing`) to keep this module
@@ -271,6 +291,8 @@ export function useTheme(): Palette {
 
 /** Per-department accent overlay. Re-exported so app code has one theme entry point. */
 export { deriveBrandPalette } from './brand';
+/** Per-department layout density (Phase 29). Re-exported for the one theme entry point. */
+export { applyDensity } from './density';
 
 /**
  * Re-provide an already-computed palette to a subtree.
