@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 30: density rollout — migrate the list tabs (`tasks`/`leads`/`claims`) with the D-2 pattern
+
+**Context.** Phase 29 built the density mechanism and migrated one proof screen (`clients.tsx`); the
+remaining ~80 files still render **comfortable** regardless of `theme.density` until each is migrated by
+destructuring the scale off `useTheme()` (PHASE-29 D-2). The three other core list tabs were named the
+highest-value next targets (PHASE-29 §6). This is pure rollout — no mechanism, contract, or copy change.
+
+**Decision.** Migrate `tasks.tsx`, `leads.tsx`, `claims.tsx` with the D-2 pattern verbatim (D-1): strip
+the static `{ font, radius, spacing }` import, destructure **exactly** the scale each component uses off
+`c` (D-2 — precise, matching `clients.tsx`, to avoid `no-unused-vars` warnings), style bodies untouched.
+`leads.tsx`'s module-scope `SEP_INSET` const became a `sepInset(scale)` helper (D-3 — a module const
+captures the comfortable scale at load and can't react to density; the one non-mechanical case), and its
+`AddLeadSheet`/`SkeletonRow` — which had no `useTheme()` call at all — now read the scale off the theme.
+Kept to three files, deferring the shared `ui/data.tsx`/`ui/identity.tsx` primitives and `home.tsx` to
+later phases (D-4 — ≤8-files convention). No new test (presentational migration, no new pure logic; the
+density numbers are pinned by `density.test.ts`). Gates: tsc 0, npm test **417/417** (unchanged), lint 0
+errors / 12 warnings (baseline). Commit `d70da17` (local).
+
+**Consequence.** A department whose config carries `theme.density: "compact"` now renders tighter
+**Tasks / Leads / Claims** tabs (spacing/radius/corners) alongside Clients, type sizes and ≥44pt touch
+targets unchanged, light and dark, on the next cold start with no APK; a `comfortable`/absent role is
+unchanged. Four of the core tabs now react to density; `home.tsx`, the shared list primitives, and ~75
+other files still render comfortable until migrated. No contract change. **Device check carried** (needs a
+seeded compact-density doc, light/dark at 390 px — Phase-26/27 seeding backlog). Full path:
+`docs/spec/PHASE-30.md`.
+
 ## 2026-08-12 — Phase 29: consume `theme.density` — runtime scale mechanism + one screen; compact numbers owner-locked
 
 **Context.** Phase 28 deferred `density` (D-4) because `spacing`/`radius`/`font` were static module

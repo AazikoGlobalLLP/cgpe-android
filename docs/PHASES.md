@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 30 — density rollout: migrate the list tabs (`tasks`/`leads`/`claims`). BUILT 2026-08-12.** The
+top editor-buildable lever after Phase 29 (PHASE-29 §6): the mechanism was done and one proof screen
+(`clients.tsx`) migrated, so this rolls the same D-2 pattern onto the three other core list tabs — no
+mechanism change, no contract change, no new copy. Per screen: strip the static `{ font, radius, spacing }`
+import, destructure **exactly** the scale each component uses off `c` (`const { spacing, font } = c`),
+style bodies untouched; `tsc` proves completeness (a missed ref becomes a compile error once the static
+import is gone). `claims.tsx` and `tasks.tsx` had no module-scope scale use; `leads.tsx`'s module-scope
+`SEP_INSET` const became a `sepInset(scale)` helper (identical to `clients.tsx`'s) so row separators stay
+aligned when the gutter tightens, and its `AddLeadSheet`/`SkeletonRow` (which had no `useTheme()` call at
+all) now read the scale off the theme. A department with `theme.density:"compact"` now renders these three
+tabs tighter (spacing ×0.85 / radius ×0.90 / font ×1.0, applied by `applyDensity`) on the next cold start;
+unmigrated screens stay comfortable (static exports unchanged) — non-regressive. Gates green: `tsc` 0,
+`npm test` **417/417** (unchanged — presentational migration, no new pure logic; the density numbers are
+already pinned by `density.test.ts`), lint 0 errors / 12 warnings (baseline). Commit `d70da17` (local —
+push still 403s). **Device check carried** (a seeded `theme.density:"compact"` dept config showing tighter
+Tasks/Leads/Claims, light/dark at 390 px; other screens stay comfortable) — not editor-buildable (no
+seeded compact doc yet). Next density targets: the shared `ui/data.tsx`/`ui/identity.tsx` list primitives
+(lift many screens at once), then `home.tsx` (62 refs, danger zone) on its own. Full path:
+`docs/spec/PHASE-30.md`; DECISIONS 2026-08-12 (top).
+
 **Phase 29 — consume server-driven `theme.density` (mechanism + first screen). BUILT 2026-08-12.** The
 Phase-28 D-4 deferral, unblocked. `spacing`/`radius`/`font` were static module consts imported by ~81
 files (941 refs), so density needed a runtime-scale refactor; this phase builds that mechanism and
