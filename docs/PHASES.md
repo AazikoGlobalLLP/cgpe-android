@@ -463,9 +463,11 @@ exercise.
    fail to supply; (b) `next_premium` is an **annual cumulative-premium** tier goal, a different unit than the
    `thisMonth / target` **monthly** meter (`commissions.tsx:209`), so it must not be fed into it. Per owner
    direction, filed a self-scoped `GET /api/commissions/my-summary` shape (earned aggregate + optional `tier`
-   block) to `cgpe-api`. Nothing app-side on commissions until that aggregate lands; a standalone MDRT-tier-progress
-   view against `/api/advisor/performance/:advisorId` is buildable now if a shippable slice is wanted before then.
-   Full detail: `docs/spec/PHASE-16.md` §"BUILT 2026-08-12", `docs/spec/PHASE-6.md`, DECISIONS 2026-08-12 (top).
+   block) to `cgpe-api`. **2026-08-12 (Phase 23):** the standalone MDRT-tier-progress element against
+   `/api/advisor/performance/:advisorId` **is now BUILT** — it renders real tier data on the commissions screen
+   for advisor/learn_advisor. The **earned** figures (thisMonth/ytd/pending/history/recent) stay backend-blocked
+   until `/commissions/my-summary` is scoped; nothing more app-side on commissions until then.
+   Full detail: `docs/spec/PHASE-23.md`, `docs/spec/PHASE-16.md` §"BUILT 2026-08-12", `docs/spec/PHASE-6.md`, DECISIONS 2026-08-12 (top).
 2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13**
    (haptics, the AsyncStorage clock key, background GPS, the master route replay, airplane-mode
    behaviour, a leader's true "On duty now" count, the offline map render, the LIC catalogue + notes

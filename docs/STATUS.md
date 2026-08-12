@@ -1,16 +1,16 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-12
-**Working on right now:** Coordinating with the server team — checking that recent server changes don't quietly break the app, and answering their questions. No new screen this session; the last feature (the personal "My earnings" screen) is built and waiting for a hands-on check.
+**Working on right now:** Added a live "MDRT tier progress" section to the Commissions screen so advisors can see how close they are to their next achievement level, and confirmed how the app's screen layouts are controlled.
 
 **Done this week:**
-- Built the personal "My earnings" screen: each staff member can open the app and see their own pay for any of the last 12 months, worked out on the server from their attendance. The app only displays the figure, so the phone can't show a wrong number. It's honest in every case — says so plainly if someone has no pay profile yet, and shows a clear "couldn't load" instead of a made-up number if the server can't be reached.
-- Checked two recent server changes and confirmed neither breaks the app: the server now reads attendance from the live records (the app already handled this correctly, including days with more than one clock-in), and an old exam feature was removed that the app never used. Answered the server team's questions in our shared notes.
-- Earlier this week: made everyday buttons (Call, Cancel, Delete, "Today") show in Gujarati and Hindi across 16 screens.
+- Added a real, live section to the Commissions screen: an advisor now sees their first-year business total, the achievement tier they've reached (Quarter MDRT up to Top of the Table), and a progress bar to the next one. It shows correct figures straight from the server even though the "money earned" part of that screen is still waiting on a server change — so the screen is no longer empty for advisors. It only appears for the roles it makes sense for, and never shows a made-up number.
+- Answered the owner's question about how the app is laid out: the *structure* — which cards appear on the home dashboard, in what order, which tabs show, what's hidden, and what each role can do — is controlled by a per-role setting stored on the server and editable from the Admin Panel without shipping a new app. The *look of each screen* (the actual designs) is built into the app. If the server is unreachable, the app safely shows the full menu rather than a blank screen.
+- Built the personal "My earnings" screen earlier this week (each person sees their own pay for any of the last 12 months, worked out on the server).
 
 **Blocked on:**
-- Nothing to build for the pay screen. Before it's trusted widely it should be checked by hand on a real phone against the payroll sheet for a few people — the one thing automated tests can't do.
-- Someone to supply the correct Gujarati / Hindi / Roman-script wording for the remaining repeated labels (like "Try again"). That translation batch stays paused by choice until the wording arrives — it can't be machine-guessed without reading badly to customers.
-- The commissions screen still waits on a server change before it can show real figures.
+- The "money earned" figures on the Commissions screen still wait on a server change before they can show real numbers. (The new tier-progress section is not affected and is live.)
+- The two new screens (tier progress and pay) should be checked by hand on a real phone before being trusted widely — the one thing automated tests can't do.
+- Someone to supply the correct Gujarati / Hindi / Roman-script wording for the remaining repeated labels; that translation batch stays paused by choice until the wording arrives.
 - Finished work still can't be uploaded to GitHub — the saved login on this machine lacks permission. Everything is saved safely on this machine meanwhile.
 
-**Next:** Hand the pay screen to someone with a phone to check three real people's months against the payroll sheet. Otherwise the app is waiting on the wording for translations and a server change for commissions.
+**Next:** Hand the two new screens to someone with a phone for a real-world check, and wait on the server change for the Commissions "money earned" figures and on the wording for translations.
