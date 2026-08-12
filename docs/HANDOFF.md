@@ -1,59 +1,64 @@
-# HANDOFF — CGPE Connect (Android) — INBOX sync (no build) — 2026-08-12
+# HANDOFF — CGPE Connect (Android) — Phase 6 commissions re-eval + INBOX sync (no build) — 2026-08-12
 
-Board is editor-exhausted for net-new build (Phase 16 BUILT/device-check-only, Phase 6 backend-blocked,
-Phase 22 paused on human copy). This session answered the two open `cgpe-mobile` INBOX items and made
-**no `src/` change** — so no ANDROID commit for code and no gate re-run. Only `docs/` + `contracts/INBOX.md`
-were touched.
+Board is editor-exhausted for net-new build (Phase 16 BUILT/device-check-only, Phase 22 paused on human copy).
+This session found ONE fresh open `cgpe-mobile` INBOX item (backend Phase 29), verified it, and — at the owner's
+direction — **filed a self-scoped commissions-aggregate shape to `cgpe-api`**. **No `src/` change**, so no ANDROID
+code commit and no gate re-run. Only `docs/` + `contracts/INBOX.md` were touched.
 
 ## Done
-- Both open INBOX items addressed to `cgpe-mobile` are answered and grep-verified durable:
-  1. **Attendance → `daylogs` (backend Phase-20-tail FIX).** Verified in our own code that neither
-     re-pointed surface assumes one row per date, so the multi-session-per-day case `cgpe-api` flagged does
-     not break us: `attendance.tsx` draws each `/attendance/history` record as its own date-spine row
-     (grouped by month, React-keyed by index — a 2-session day shows 2 rows, each with its own in/out);
-     `getAgentLocations` (`/attendance/user/:id`) is array-aware (today-pass takes the latest session,
-     fallback sorts by date and takes the most recent). Answered their "flag if you want `/user/:id` scoped"
-     question: **leave it open** (scoping would empty our agent-map/on-duty fan-out).
-  2. **`/api/exams` deletion (backend Phase 22).** Grep of `exams|Exam|EnglishQuestion` over `ANDROID/src`
-     = **0 hits** — inert; confirmed underneath.
-- Recorded one honest nuance so it isn't read as a missed defect: `attendance.tsx`'s KPI counters
-  ("Days logged"/"Closed days") count sessions, not distinct dates, so a multi-session day inflates them —
-  but that math is byte-identical to the old `attendance` collection's per-session storage, i.e. **unchanged
-  by the fix**, not a regression it introduces. Left as-is.
+- **Verified backend Phase 29 in `cgpe-api`'s real code** (not the notice): `utils/mdrtTiers.js`
+  `classifyMdrtTier()` → `{current,next,next_premium,to_next}`, six thresholds ₹3.75L…₹90L confirmed;
+  `GET /api/advisor/performance/:advisorId` (`advisor.js:23`, `protect`-only) is **self-safe** — an `advisor`
+  reading any id but their own gets 403 (`:28`), a `leader` is team-scoped — and returns `performance.total_premium`
+  + `performance.mdrt_tier`.
+- **Established Phase 29 does NOT unblock `commissions.tsx`**, for two reasons recorded to `cgpe-api`:
+  1. The screen's real blocker is the **earned aggregate** — `{ thisMonth, lastMonth, pending, ytd, history[],
+     recent[] }` per the `Commission` type. `getCommission()` reads `/api/commissions`, which returns owner-scoped
+     **raw rows**, so `isObj` misses and the screen resolves the empty shell — it has never shown real data (Phase-6
+     D-5). Phase 29 ships **no** commissions aggregate.
+  2. `next_premium` is an **annual cumulative-FYC-premium** tier goal (≥ ₹3.75L); the screen's meter is
+     `thisMonth / target` labelled **"Monthly target"** (`commissions.tsx:209`) — a different unit. Feeding
+     `next_premium` in would read ~0% forever and mislabel a career goal as a monthly quota. Deliberately not done.
+- **Filed a concrete shape** (owner-directed) as a fresh top-of-queue `→ cgpe-api · 2026-08-12 · from cgpe-mobile`
+  item: `GET /api/commissions/my-summary`, `protect`-only, token-forced self-scope (same posture as the
+  `/payroll/my-earnings` that unblocked Phase 16). Body = the earned aggregate the `Commission` type needs, **plus
+  an OPTIONAL `tier` block** (`total_premium/next/next_premium/to_next` from `classifyMdrtTier`) that mobile would
+  render as a **separate** MDRT-tier-progress element — never the monthly meter. Flagged the earned aggregate as the
+  blocker and `tier` as a nice-to-have.
 
 ## Files changed
-- `../contracts/INBOX.md` — two `cgpe-mobile` replies (attendance-daylogs verification + exams not-affected),
-  both left **unticked** (multi-recipient — `cgpe-admin` also addressed) per the box convention, both grepped
-  back after writing (one survived a concurrent write that shifted the first item +16 lines mid-edit).
-  Disk-only/untracked — not committed.
-- `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/PHASES.md`, `docs/STATUS.md` — this handoff.
+- `../contracts/INBOX.md` — (1) the new `→ cgpe-api` filing at the queue top; (2) a reply under the Phase-29 box,
+  left **unticked** (multi-recipient — `cgpe-admin` also addressed). Both grepped back after writing (durable:
+  filing at line 36, reply at line 76). Disk-only/untracked — not committed.
+- `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/PHASES.md` — this session's record.
 
 ## Decisions made
-- **No `src/` change from either INBOX item.** Both were verified inert against our code, not propagated on
-  the strength of the notice (the "receiving an item is not authorisation to act" rule). The attendance
-  surfaces already handle N-sessions-per-day; the exam surface never existed here.
-- **Told `cgpe-api` to leave `/attendance/user/:userId` unscoped** (they asked). `getAgentLocations`
-  deliberately fans out across the whole roster to build the master agent-map + team on-duty count; a
-  per-caller owner scope would empty it. If they scope it later, gate on **role** (admin/leader/master reads
-  any; advisor reads self), not strict self-only, and ping us first.
+- **No `src/` change.** Phase 29 was verified inert-as-an-unblock, not propagated. The commissions screen stays
+  backend-blocked; the target source narrows Phase-6 D-5 but does not close it.
+- **Chose "file the aggregate" over building a tier-progress view now** (owner decision). A standalone tier view
+  against `/api/advisor/performance/:advisorId` is buildable and remains available, but it's a new/narrow surface
+  that would leave the commissions earned figures blank — so it was not built this session.
+- **Did not fold `next_premium` into the monthly-target meter** — unit mismatch (annual premium vs monthly
+  commission). If a tier element is later built, it must be labelled as a premium/tier goal, separate from the
+  monthly meter.
 
 ## Known broken / deliberately skipped
-- **Phase 16 device check — CARRIED** (highest-trust-cost). Reconcile ≥3 real people's months against the
-  payroll sheet by hand on a phone; light/dark at 390 px. `npm test`/web cannot do this. **Phase 1 clock-in
-  is the stated hard prerequisite.** Not editor-buildable.
+- **Phase 6 commissions — still backend-blocked.** Waiting on `cgpe-api` to scope `GET /api/commissions/my-summary`
+  (or at minimum the earned aggregate). `next_premium`/`to_next` now exist as a *target/tier* source but supply
+  neither the earned figures nor a monthly target.
+- **Phase 16 device check — CARRIED** (highest-trust-cost). Reconcile ≥3 real people's months against the payroll
+  sheet by hand on a phone; light/dark at 390 px. **Phase 1 clock-in is the stated hard prerequisite.** Not
+  editor-buildable.
 - **Phase 22 (i18n P1 bulk) — paused on human copy.** Net-new `common.*` keys (`tryAgain` ×34, etc.) need
   gu/hi/hi-en/gu-en; machine translation forbidden (PHASE-19 §4).
-- **Phase 6 (commissions) — backend-blocked.** No product aggregate, no `target` source in
-  `routes/commissions.js`. Unchanged.
 - **`git push` still 403s** — `reactjsaaziko` lacks write access; all prior commits local-only. Needs a human.
 
 ## Next session starts here
-- Phase <next>: board is editor-exhausted for net-new build. The concrete levers are **(a)** owner-supplied
-  i18n copy → unpauses Phase 22, **(b)** a handset → the Phase-16 device check + the carried device backlog,
-  or **(c)** re-file `breakdown[]` + the days split to `cgpe-api` if the per-day earnings view is wanted
-  (they offered — PHASE-16.md D-1). No net-new editor build is unblocked without one of these.
+- Phase <next>: board is editor-exhausted for net-new build. Concrete levers: **(a)** `cgpe-api` scopes
+  `/commissions/my-summary` → unblocks the Phase-6 commissions screen (watch the INBOX reply); **(b)** owner-supplied
+  i18n copy → unpauses Phase 22; **(c)** a handset → the Phase-16 device check + the carried device backlog; or
+  **(d)** build a standalone MDRT-tier-progress element against `/api/advisor/performance/:advisorId` if the owner
+  wants a shippable slice before the aggregate lands. No net-new editor build is otherwise unblocked.
 - First command: `/boot`
-- Watch out for: `../contracts/INBOX.md` shifts **mid-session** under concurrent writes — this session's
-  first edit failed with "file modified since read" and the target item moved +16 lines between two reads
-  minutes apart. Anchor every edit on surrounding text, never a line number, and **grep your reply back**
-  after writing.
+- Watch out for: `../contracts/INBOX.md` shifts **mid-session** under concurrent writes — anchor every edit on
+  surrounding text, never a line number, and **grep your reply back** after writing.

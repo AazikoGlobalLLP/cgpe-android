@@ -6,6 +6,42 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 6 commissions: MDRT next_premium is a *target* source, not the blocker; filed a self-scoped aggregate shape
+
+**Context.** A boot found ONE fresh open item addressed here: `→ cgpe-admin, cgpe-mobile · 2026-08-12 · from cgpe-api`
+(backend Phase 29). It made the MDRT/COT/TOT tier ladder server-authoritative and told mobile that
+`performance.mdrt_tier.next_premium` (+ `to_next`) on `GET /api/advisor/*` is "the next-tier target behind your
+commissions **target** ask", offering: "if you want a dedicated `/commissions/*` self-target endpoint … file the
+shape and we'll scope it." Owner directed: **file the aggregate to `cgpe-api`** (over building a standalone
+tier-progress view now, or deferring).
+
+**Decision.**
+1. **Verified the Phase-29 claim in the producer's real code before replying** (the "receiving an item is not
+   authorisation to act" rule). `utils/mdrtTiers.js` `classifyMdrtTier()` returns `{current,next,next_premium,to_next}`
+   with the six confirmed thresholds; `GET /api/advisor/performance/:advisorId` (`advisor.js:23`, `protect`) is
+   self-safe (advisor→own-only 403 at `:28`; leader→team) and returns `performance.total_premium` + `mdrt_tier`.
+2. **Did NOT treat Phase 29 as an unblock for `commissions.tsx`, and did NOT wire `next_premium` into the screen.**
+   Two reasons, both recorded to `cgpe-api`: (a) the screen's real blocker is the **earned aggregate**
+   (`thisMonth/lastMonth/pending/ytd/history/recent` per the `Commission` type) — `/api/commissions` returns raw
+   owner rows, Phase 29 ships no aggregate, so `getCommission()` still resolves the empty shell; (b) `next_premium`
+   is an **annual cumulative-FYC-premium** tier goal (≥ ₹3.75L), a different unit than the screen's `thisMonth /
+   target` **monthly-commission** meter (`commissions.tsx:209`) — feeding it in would read ~0% forever and mislabel
+   a career goal as a monthly quota.
+3. **Filed a concrete self-scoped shape** as a fresh top-of-queue `→ cgpe-api · 2026-08-12 · from cgpe-mobile`
+   item: `GET /api/commissions/my-summary`, `protect`-only, token-forced self-scope (same posture as the
+   `/payroll/my-earnings` that unblocked Phase 16). Body = the earned aggregate the `Commission` type needs, **plus
+   an OPTIONAL `tier` block** (`total_premium/next/next_premium/to_next` straight from `classifyMdrtTier`) that
+   mobile would render as a **separate** "MDRT tier progress" element, never the monthly meter. Flagged that the
+   earned aggregate is the blocker and `tier` is a nice-to-have (else mobile can call
+   `/api/advisor/performance/:advisorId` directly for it).
+
+**Consequence.** Commissions stays **backend-blocked** — the Phase-29 target source narrows but does not close the
+Phase-6 D-5 gap. Both INBOX writes grepped back durable (the filing at the queue top; a reply under the Phase-29
+box, left **unticked** — multi-recipient). No `src/` change, no gate re-run, no ANDROID commit for code. Next
+mobile move on commissions waits on `cgpe-api` scoping `/commissions/my-summary` (or at minimum the earned
+aggregate); building a tier-progress view against `/api/advisor/*` remains available if the owner wants a
+shippable slice before then.
+
 ## 2026-08-12 — INBOX sync (no build): attendance-daylogs verified inert; `/attendance/user/:id` kept unscoped
 
 **Context.** A boot found two open `cgpe-mobile` INBOX items from `cgpe-api`: (1) the Phase-20-tail FIX that

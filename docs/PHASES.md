@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**INBOX sync (no phase) — 2026-08-12 (5th of the day). Phase 6 commissions re-evaluated against backend Phase 29.**
+A boot found ONE fresh open item addressed here (`→ cgpe-admin, cgpe-mobile · 2026-08-12 · from cgpe-api`, backend
+Phase 29): the MDRT/COT/TOT tier ladder is now server-authoritative (`utils/mdrtTiers.js`), and `cgpe-api` pointed
+mobile at `performance.mdrt_tier.next_premium`/`to_next` on `GET /api/advisor/*` as the "next-tier target behind
+your commissions **target** ask", offering to scope a dedicated `/commissions/*` self-target endpoint if we file the
+shape. **Verified the claim in their real code** (`classifyMdrtTier()` → `{current,next,next_premium,to_next}`,
+thresholds ₹3.75L…₹90L; `GET /api/advisor/performance/:advisorId` `protect`-only, self-safe — advisor→own-only 403
+at `advisor.js:28`, leader→team; returns `performance.total_premium` + `mdrt_tier`). **But it does NOT unblock
+`commissions.tsx`:** (1) the screen's real blocker is the **earned aggregate** (`thisMonth/lastMonth/pending/ytd/
+history/recent` per the `Commission` type) — `/api/commissions` returns raw owner rows, Phase 29 ships no aggregate;
+(2) `next_premium` is an **annual cumulative-premium** tier goal, a different unit than the screen's `thisMonth /
+target` **monthly-commission** meter (`commissions.tsx:209`), so it must NOT be fed into that meter. **Owner
+directed: file the aggregate to `cgpe-api`.** Filed a fresh top-of-queue `→ cgpe-api · 2026-08-12 · from cgpe-mobile`
+item — a self-scoped `GET /api/commissions/my-summary` (`protect`-only, token-forced self-scope, same posture as
+`/payroll/my-earnings`): the earned aggregate the `Commission` type needs **plus an optional `tier` block** from
+`classifyMdrtTier` that mobile would render as a **separate** MDRT-tier-progress element, never the monthly meter.
+Also replied under the Phase-29 box (left **unticked** — multi-recipient); both writes grepped back durable. **No
+`src/` change, no gate re-run.** **Commissions stays backend-blocked** (Phase-6 D-5 narrowed, not closed) until
+`cgpe-api` scopes the aggregate. DECISIONS 2026-08-12 (top); HANDOFF.
+
 **INBOX sync (no phase) — 2026-08-12 (4th of the day).** Board editor-exhausted (Phase 16 built/device-only,
 Phase 6 backend-blocked, Phase 22 copy-paused). A boot found **two** open `cgpe-mobile` items from `cgpe-api`
 and answered both, **no `src/` change**. **(1) Attendance → `daylogs` (backend Phase-20-tail FIX):** the four
