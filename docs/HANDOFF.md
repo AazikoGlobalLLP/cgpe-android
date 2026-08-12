@@ -1,81 +1,65 @@
-# HANDOFF — CGPE Connect (Android) — Phase 25 — 2026-08-12
+# HANDOFF — CGPE Connect (Android) — Phase 26 — 2026-08-12
 
-Built the commissions EARNED aggregate against the just-shipped `GET /api/commissions/my-summary`
-(backend Phase 31), closing the long-standing Phase-6 D-5 blocker. Also verified, at the owner's
-request, whether the app's **layout comes from the DB or is static** — findings + a proposal below.
+Consumed `nav.more_sections` so the More tab's grouping is now DB-driven per department (closes the
+last server-driven-nav gap, Phase 10 D-3). Then, owner-directed, wrote a backend seed script so each
+department actually gets a distinct More layout — **not yet run** (needs live-Mongo access this repo
+does not have). One security flag below.
 
 ## Done
-- **The Commissions screen now shows real earned money.** This month / last month / pending payout /
-  year-to-date / a 6-month trend / recent credits — all from the caller's OWN commissions
-  (self-scoped by the server). Three honest states: real figures, a calm "no commission recorded yet"
-  (200-zeros, no banner), and a retryable "did not load" (503, banner). No fabricated zeros, no
-  on-device arithmetic — every ₹ is the server's. The MDRT tier element (Phase 23) is unchanged.
+- **The More tab's content groups — their titles, order and membership — now come from the DB.**
+  `more.tsx` renders them from the resolved `GET /api/rbac/app-ui` document's `nav.more_sections`.
+  Edit a department's `app_role_preferences` doc → its More tab regroups on the next cold start, no
+  APK. The admin oversight group and the personal rows (Viewing-as / My earnings) stay fixed; a
+  module omitted from `more_sections` is NOT hidden (only `nav.hidden` hides) — it falls to a
+  trailing "More" group.
+- **A backend seed script exists** (`cgpe-backend-main/scripts/seedAppRolePreferences.js`) that gives
+  each of the 8 resolver keys its own `nav.more_sections`. It writes **only** the More grouping +
+  label — never any capability/permission. Dry-run by default. **The owner runs it** in their env.
 
 ## Files changed
-- `src/data/api.ts` — new `getCommissionSummary(): {status:'ok';summary} | {status:'error'}` on
-  `GET /commissions/my-summary` (low-level `req()`, two-outcome posture like `getMdrtTier`;
-  200-zeros = ok/no-banner, 503 = error/banner, 401/403/404 suppressed). Defensive field mapping,
-  `target:0` (no source, never invented). Removed the now-dead `getCommission()` + mis-shaped
-  `EMPTY_COMMISSION` shell (single caller, gone).
-- `src/app/commissions.tsx` — `load()` calls `getCommissionSummary()`; every existing render defense
-  and the `blank`/`degraded` empty-state fork unchanged. Boundary comment updated (honesty of comments).
-- `src/data/__tests__/api-commissions.test.ts` — new, 14 cases pinning the wire contract.
-- `docs/spec/PHASE-25.md` (new), `docs/DECISIONS.md`, `docs/PHASES.md` (board row 25 + `## Now` +
-  `## Next 3`), `docs/STATUS.md` — updated.
-- `../contracts/INBOX.md` — Phase-31 box **ticked** (build done + verified); reply grepped back durable.
+- `src/store/appUi.tsx` — new pure exported `arrangeMoreSections()` selector (mirrors `resolveTabs`:
+  known + not-hidden + first-wins dedupe, drop empty groups, trailing catch-all); `DEFAULT_UI.nav.more_sections`
+  rewritten to name every one of the 22 catalogue modules once.
+- `src/app/(tabs)/more.tsx` — new `MORE_CATALOGUE` (module key → icon/label/href); content groups
+  render from config, admin group + "Personal" tail stay fixed; `profile`/`tickets` dynamic values.
+- `src/store/__tests__/appUi.test.ts` — +11 `arrangeMoreSections` cases (**398/398**).
+- `ui_rbac_config.json` — `_KNOWN_GAP` block updated to **FULLY RESOLVED**.
+- `docs/spec/PHASE-26.md` (new) · `docs/DECISIONS.md` · `docs/PHASES.md` · `docs/PROJECT_MAP.md` — updated.
+- `../contracts/INBOX.md` — heads-up filed to `cgpe-admin` (their "stored, not yet live" label for
+  `more_sections` is now stale) + to `cgpe-api` (seed script + the credential flag).
+- **SIBLING repo** `cgpe-backend-main/scripts/seedAppRolePreferences.js` (new, uncommitted) — the seed.
 
 ## Decisions made
-- **Two-outcome result, not three.** `/my-summary` has no `data:null` empty — an advisor with no
-  commissions gets a 200 with zeros. So the empty state is an `ok` carrying zeros, and the screen's
-  existing blank check renders it. `req()` (not `tryReal`) keeps a shape-miss reportable.
-- **`target:0` always.** The endpoint carries no monthly target and `next_premium` (MDRT) is a
-  different unit, so the meter stays "no monthly target set" — an honest blank, never a guess.
-- **Removed dead code** (`getCommission`/`EMPTY_COMMISSION`) rather than leave a fabricated shell —
-  Phase-14 hygiene. Single caller, verified.
-- Gates: `tsc` 0, `npm test` **387/387** (+14), lint 0 errors / 12 warnings (baseline). Commit
-  `039cf63` (local — push 403s).
-
-## LAYOUT QUESTION — verified (owner asked: is the layout from the DB, and can each dept's layout be DB-driven?)
-- **It is ALREADY DB-driven, and per-department.** `GET /api/rbac/app-ui` (`cgpe-backend-main/routes/rbac.js`)
-  reads a per-role/department document from the Mongo collection **`app_role_preferences`**, deep-merges
-  it over role defaults over global defaults, and returns the resolved layout. The app fetches it on
-  every cold start (`store/appUi.tsx`) and renders dashboard + nav + capabilities from it. The admin
-  panel writes it via `PUT /api/rbac/app-ui/:roleKey` (admin/leader/super_admin). **Change the DB doc →
-  every user in that dept picks it up on next cold start. No new APK.** Contract/schema:
-  `ANDROID/ui_rbac_config.json`.
-- **What the DB controls today:** which dashboard widgets show + their **order**, each widget's title
-  override / max items / visibility, the hero mode (4 options), the bottom **tabs** + order, hidden
-  modules, the 14 feature flags, and theme (accent/badge/density). Dept resolution:
-  `resolveRoleKey` → `sales`/`operations` use the **department**; everyone else uses the **role**.
-- **What is STATIC (the honest caveat):** the internal layout of each screen (its RN JSX/styling/fields)
-  is compiled into the APK. The DB **composes from a fixed catalogue** — 20 known widget keys, 5
-  renderable tab routes (`home/tasks/clients/leads/claims` + always `more`), 4 hero modes, 14 flags —
-  and drops anything outside it. So the DB can reorder/hide/retitle/limit and flip capabilities per dept,
-  but it is **not** a free-form drag-anywhere page builder, and a genuinely new widget/tab needs an app
-  code change first (then the DB can turn it on per dept). Known gaps: `nav.more_sections` grouping is
-  stored/served but **not yet consumed** by the app (Phase 10 D-3); `theme` only partially consumed;
-  `prospects`/`tickets` can't be physical tabs yet.
+- **Consume `more_sections`; admin oversight + personal rows stay fixed** (PHASE-26 D-2/D-3). Trailing
+  catch-all enforces the contract's hard rule "omission re-prioritises, never hides" (D-1).
+  `DEFAULT_UI.nav.more_sections` rewritten because it is now the rendered default (D-4).
+  `collapsed_by_default` still not consumed (D-5, needs collapsible UI).
+- **Seed writes only `nav.more_sections` + `label`** (dotted-path `$set` + `$setOnInsert`), never
+  `features`/`dashboard`/`tabs`/`hidden` — so it cannot change permissions, only menu arrangement.
+- Gates: `tsc` 0, `npm test` **398/398** (+11), lint 0 errors / 12 warnings. Commits `7d3a2d4`,
+  `2f9448d` (local — push still 403s).
 
 ## Known broken / deliberately skipped
-- **Device check for Phase 25** — a real advisor with booked policies vs production, light/dark at 390 px.
-  Not editor-buildable.
-- **i18n P1 (Phase 22 bulk)** — paused on human gu/hi/hi-en/gu-en copy; machine translation forbidden.
-- **Device-check backlog — CARRIED** (Phases 1/4/5/6/7/9/10/12/13/16/23/24/**25**). Phase-1 clock-in is
-  the stated hard prerequisite.
-- **`git push` still 403s** — `reactjsaaziko` lacks write on `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`. All
-  commits local (this session: `039cf63`). Needs a human to grant access or swap the credential.
-- **Per-dept `app_role_preferences` docs may not be seeded** — can't query the live DB from here. Many
-  roles likely still run on `from_defaults:true`. Seeding/verifying real per-dept docs is a proposal, not
-  done (see Next).
+- **⚠️ SECURITY — hardcoded prod Mongo credential in the seed script.** `seedAppRolePreferences.js:56`
+  was edited (after authoring) to add a live Atlas URI as an `|| '…'` fallback. It is a secret in
+  source AND unreachable dead code (`_mongoUri` exits first). **Remove that line before that file is
+  committed anywhere, and rotate the credential.** Not reverted (intentional edit) but flagged.
+- **Seed NOT yet run** — no DB access from this repo; the owner runs it (`--commit`). The 6 non-sample
+  role layouts (`admin/advisor/learn_advisor/leader/payroll_staff/super_admin`) are proposals to review.
+- **`resolveRoleKey` limits "departments."** It keys only `sales`/`operations` departments + roles, so
+  real business departments (HEALTH INSURANCE, TATA AIA, RECRUITMENT, MUTUAL FUNDS…) resolve by role
+  (usually `leader`) and don't get their own layout without a backend `resolveRoleKey` change (`cgpe-api`).
+- **Phase 26 device check** — light/dark at 390 px, ≥2 real dept configs, and the one visible shift
+  (My earnings/Payroll/Viewing-as now in a "Personal" tail vs the old "Account" group). Not editor-buildable.
+- **i18n P1** — still paused on human gu/hi/hi-en/gu-en copy. **Device-verification backlog** carried
+  (Phases 1/4/5/6/7/9/10/12/13/16/23/24/25/26).
+- **`git push` still 403s** — all commits local.
 
 ## Next session starts here
-- **Owner to choose.** If the owner wants to push the DB-driven layout further (their question points that
-  way), the natural next phase is **Phase 26 — make per-department layout fully DB-editable**: (a) seed/verify
-  the `app_role_preferences` docs per department via the admin panel, (b) consume `nav.more_sections` in the
-  app (closes Phase 10 D-3) so More-tab grouping is DB-driven, (c) finish consuming `theme` for per-dept
-  branding. All app-side + admin-panel; no new backend endpoint. Otherwise the board's other levers are:
-  owner-supplied i18n copy → unpauses Phase 22; a handset → the carried device checks (incl. Phase 25).
+- **Owner to choose:** (1) run the seed — dry-run then `--commit` (after removing the credential line
+  and reviewing the 6 proposed layouts); (2) spec the `resolveRoleKey` change so each real business
+  department gets its own layout; or (3) the Phase-26 device check on a handset.
 - **First command:** `/boot`
-- **Watch out for:** `../contracts/INBOX.md` shifts **mid-session** under concurrent writes — the Phase-31
-  item moved +13 lines between boot and handoff this session. Anchor every edit on surrounding text, never
-  a line number, and **grep your reply back** after writing (done this session — tick confirmed durable).
+- **Watch out for:** the hardcoded credential in the seed script (remove + rotate before sharing that
+  file), and `../contracts/INBOX.md` shifting mid-session under concurrent writes (anchor edits on
+  surrounding text, grep replies back).

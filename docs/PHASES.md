@@ -547,7 +547,15 @@ exercise.
    provider-order change (`ThemeProvider` above `AppUiProvider`), almost entirely device-verified. Plus the
    Phase-26 **device check** (light/dark 390 px, ≥2 real dept configs; the "Personal" tail layout shift).
    The internal layout of each screen stays static in the APK (the DB composes from a fixed catalogue — 20
-   widgets, 5 tab routes, 4 hero modes, 14 flags — not a free-form page builder).
+   widgets, 5 tab routes, 4 hero modes, 14 flags — not a free-form page builder). **Seeding update
+   (2026-08-12, owner-directed):** wrote a **backend seed script** `cgpe-backend-main/scripts/seedAppRolePreferences.js`
+   that upserts `nav.more_sections` for all 8 resolver keys (writes ONLY the More grouping + label, never
+   permissions; dry-run by default). **Not yet run** — needs live-Mongo access this repo lacks, so the owner
+   runs it. **⚠️ SECURITY:** that file's line 56 was edited to hardcode a live Atlas credential as an `||`
+   fallback (a secret-in-source AND dead code) — **remove + rotate before committing it anywhere**
+   (DECISIONS 2026-08-12 top; HANDOFF). **`resolveRoleKey` caveat:** business departments (HEALTH INSURANCE,
+   TATA AIA, RECRUITMENT…) resolve by role, not department name, so per-business-department layouts need a
+   backend `resolveRoleKey` change (`cgpe-api`) first — not built.
 
    **Phase 25 — commissions EARNED aggregate. BUILT 2026-08-12; only a device check remains.** `cgpe-api`
    shipped `GET /api/commissions/my-summary` (Backend Phase 31) and `getCommissionSummary()` + the wired

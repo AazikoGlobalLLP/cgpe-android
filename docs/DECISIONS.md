@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 26 follow-up: per-department seeding delivered as a backend script (owner-directed); writes only `nav.more_sections`; credential-in-source flagged
+
+**Context.** Phase 26 made the app *consume* `nav.more_sections`, but no `app_role_preferences` doc
+carries one yet (`GLOBAL_DEFAULTS.nav.more_sections = []`, `routes/rbac.js:267`), so every department
+still renders the built-in default grouping. Owner asked to "put the actual per-department data in the
+database now." Verified against `routes/rbac.js`: the collection is `app_role_preferences`; the write
+path is a `$set` upsert on `role_key` (rbac.js:484-506); `resolveRoleKey` (rbac.js:396-400) keys only
+`sales`/`operations` departments + roles. The mobile repo has **no DB access**, so a direct insert here
+is impossible.
+
+**Decision.**
+1. **Delivered a backend seed script** `cgpe-backend-main/scripts/seedAppRolePreferences.js` (owner chose
+   "backend seed script" + "all 8 role keys"). It upserts one doc per resolver key (`sales operations
+   admin advisor learn_advisor leader payroll_staff super_admin`) writing **ONLY** `nav.more_sections`
+   (dotted-path `$set`) + a `label` (`$setOnInsert`) + an audit stamp — **never `features`/`dashboard`/
+   `nav.tabs`/`nav.hidden`**, so it cannot alter any capability/permission, only the menu arrangement.
+   Dry-run by default (`--commit` to write), env-only URI via `_mongoUri.js`, idempotent, non-destructive.
+   The owner runs it; this session cannot (no live Mongo). Sales/operations layouts are grounded on the
+   `ui_rbac_config.json` samples; the other six are role-shaped proposals to review.
+2. **Scope caveat recorded:** business departments (HEALTH INSURANCE, TATA AIA, RECRUITMENT, MUTUAL
+   FUNDS…) resolve by ROLE today, not their department name, so they don't get a distinct layout without
+   a `resolveRoleKey` change — a `cgpe-api` decision, not built.
+
+**Consequence / SECURITY FLAG.** After authoring, `seedAppRolePreferences.js:56` was edited to add a
+**live production Atlas credential as an `|| '…'` fallback**. This is (a) a secret committed to source —
+the exact anti-pattern `_mongoUri.js` exists to prevent — and (b) unreachable dead code, because
+`_mongoUri('MONGO_URI')` calls `process.exit(1)` before the fallback evaluates. It was left in place (an
+intentional user edit, not reverted) but must be **removed before that file is committed/shared, and the
+credential rotated**. Flagged in HANDOFF, STATUS, and to `cgpe-api` via `contracts/INBOX.md`.
+
 ## 2026-08-12 — Phase 26: the More tab's grouping/titles/order is now DB-driven (`nav.more_sections` consumed); admin oversight + personal rows stay fixed
 
 **Context.** Owner picked, from the three Phase-26 candidates, the app-side slice: consume
