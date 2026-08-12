@@ -14,6 +14,16 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Commissions blocker CLEARED mid-handoff — 2026-08-12. Build queued as Phase 25 (no code yet).** During
+this session's handoff, a concurrent write landed `GET /api/commissions/my-summary` (Backend Phase 31) at the
+TOP of `contracts/INBOX.md` — the exact self-scoped EARNED aggregate mobile filed
+(`thisMonth/lastMonth/pending/ytd/history[{month,amount}]/recent[{id,client,plan,amount,date}]`, `protect`-only
++ token-forced self-scope, 200-zeros empty / 503 error; `tier` omitted by design — read from
+`/advisor/performance/:advisorId`, which Phase 23 already does). Verified the shape matches our filing and
+replied under the item, **left unticked** (build owed). Per `/handoff` no code was written. **Next session's
+first action is Phase 25**: `getCommissionSummary()` + wire `commissions.tsx`'s ledger + `api-commissions.test.ts`,
+then tick the box. The board is **no longer editor-exhausted**. See HANDOFF "Next session starts here".
+
 **Phase 24 — per-client coverage score on Smart segments. BUILT 2026-08-12.** The one fresh
 editor-buildable lever after the board went editor-exhausted: `cgpe-api` backend Phase 30 (P2-CL-01)
 landed a **response-only** per-row `coverage_score` on `GET /api/clients/segments` — an endpoint mobile
@@ -479,7 +489,16 @@ exercise.
 
 ## Next 3
 
-1. **Phase 16 self-view salary — BUILT 2026-08-12; only a device check remains.** The blocker cleared
+1. **Phase 25 — commissions EARNED aggregate. NOW BUILDABLE (blocker cleared 2026-08-12 handoff).**
+   `cgpe-api` shipped `GET /api/commissions/my-summary` (Backend Phase 31) — the self-scoped earned aggregate
+   (`thisMonth/lastMonth/pending/ytd/history/recent`) mobile filed, `protect`-only + token-forced, 200-zeros =
+   empty / 503 = error, `tier` omitted (read from `/advisor/performance/:advisorId`, already done in Phase 23).
+   Build `getCommissionSummary()` + wire `commissions.tsx`'s ledger + `api-commissions.test.ts`, then tick the
+   INBOX box. **This is the top net-new buildable item and next session's first action.** Full shape: the
+   Phase-31 item at the top of `contracts/INBOX.md`. (Historic context below — Phase 16 self-view salary was
+   BUILT 2026-08-12, device check only; the MDRT tier element was BUILT as Phase 23.)
+
+   **Phase 16 self-view salary — BUILT 2026-08-12; only a device check remains.** The blocker cleared
    (`cgpe-api` backend Phase 28 shipped `GET /api/payroll/my-earnings`, `protect`-only + self-scoped) and
    `src/app/earnings.tsx` shipped against it the same session (commit `c77e1ad`). What's left is **not
    editor-buildable**: reconcile ≥3 real people's months against the payroll sheet by hand on a handset,
@@ -498,12 +517,13 @@ exercise.
    for advisor/learn_advisor. The **earned** figures (thisMonth/ytd/pending/history/recent) stay backend-blocked
    until `/commissions/my-summary` is scoped; nothing more app-side on commissions until then.
    Full detail: `docs/spec/PHASE-23.md`, `docs/spec/PHASE-16.md` §"BUILT 2026-08-12", `docs/spec/PHASE-6.md`, DECISIONS 2026-08-12 (top).
-2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13**
+2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13/16/23/24**
    (haptics, the AsyncStorage clock key, background GPS, the master route replay, airplane-mode
    behaviour, a leader's true "On duty now" count, the offline map render, the LIC catalogue + notes
-   search against production, reminder cold-start persistence, and now the language-key cold-start).
-   Phases 18/19 cover the web-reachable slice; the native-only remainder still needs a phone + a live
-   backend. Not editor-buildable.
+   search against production, reminder cold-start persistence, the language-key cold-start, the Phase-16
+   earnings reconcile, the Phase-23 MDRT tier card, and now the Phase-24 coverage % against real
+   production data). Phases 18/19 cover the web-reachable slice; the native-only remainder still needs a
+   phone + a live backend. Not editor-buildable.
 3. **Widen `t()` coverage — SCOPED (2026-08-11); P0 now BUILT, P1 is the next copy-free step.** Full
    worklist + plan in `docs/i18n/` (`SCOPE.md` + `inventory/01–06*.md`): only 74 keys wired across 6
    files, ~40 screens 100% hardcoded, ~1,800 string occurrences. **P0 done (Phase 21, `a7a0979`):**
@@ -545,7 +565,7 @@ exercise.
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
 | 4 | Leads contract | **Done** 2026-08-10 — 188 tests green (`5c08872`…`edc373c`); device checks outstanding |
 | 5 | WhatsApp send | **Done** 2026-08-10 — 219 tests green (`95f1ccb`); device checks outstanding |
-| 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint). **2026-08-12:** backend Phase 29 made MDRT `next_premium` a server-authoritative *target* source, but it doesn't unblock the screen (earned aggregate still unsourced; `next_premium` is an annual premium goal, not the monthly meter's unit) — filed `GET /commissions/my-summary` self-aggregate shape to `cgpe-api`, no build |
+| 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint). **2026-08-12:** backend Phase 29 made MDRT `next_premium` a server-authoritative *target* source, but it doesn't unblock the screen (earned aggregate still unsourced; `next_premium` is an annual premium goal, not the monthly meter's unit) — filed `GET /commissions/my-summary` self-aggregate shape to `cgpe-api`, no build. **2026-08-12 (handoff): UNBLOCKED — `cgpe-api` SHIPPED `GET /api/commissions/my-summary` (Backend Phase 31), shape matches our filing; build queued as Phase 25 (next session), INBOX box left unticked until built** |
 | 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
 | 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
 | 9 | Reminders/checklists persist ~~`[api]`~~ | **Done** 2026-08-11 — 305 tests green; `[api]` tag was wrong (reminders wired to existing `acknowledge`); device check outstanding |
