@@ -6,6 +6,41 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 16 BUILT: "My earnings" self-view, scoped to the v1 aggregate the backend returned
+
+**Context.** The boot found the Phase-16 blocker **cleared**: `cgpe-api` shipped `GET /api/payroll/my-earnings`
+(backend Phase 28) — the `protect`-only, self-scoped read filed 2026-08-11 and nudged 2026-08-12. It forces
+`user_id` to the token, so any authenticated staff reads only their own pay. But the backend chose to return the
+**`/compute` RosterRow** (a monthly aggregate) rather than the richer per-day body the 2026-08-10 UI lock proposed
+("guarantees your self-view is byte-identical to the admin figure … file it and we'll add" — INBOX). That gap is
+the one thing that materially changed the build, so it was put to the owner.
+
+**Decision.**
+1. **Owner chose ship-now (v1 aggregate) over re-blocking on the richer body.** Built `src/app/earnings.tsx`
+   against what exists: headline `payable`, KPI strip, payable-days `<Meter>`, pay-basis card, 12-month strip,
+   provisional pill. Three forced deviations, all documented in `PHASE-16.md` D-1/D-2/D-3: **(D-1)** no per-day
+   `<Spine>` list — v1 carries no `breakdown[]`, and a per-day rupee figure would need the forbidden multiply;
+   **(D-2)** the locked "Overtime h" KPI → "Worked hours" (v1 has no overtime split); **(D-3)** `EmptyState` in
+   place of `characters.tsx`, which **Phase 14 deleted** — reconstructing 7 illustrations would be invented work,
+   and `EmptyState` is the app-wide idiom (payroll.tsx precedent).
+2. **`getMyEarnings` uses low-level `req()`, not `tryReal`.** `tryReal` does `json?.data ?? json`, which turns a
+   `data:null` body into the whole envelope — it cannot tell "no payroll profile" (200, an empty state) from a
+   real row. The three outcomes are a discriminated union `{status:'ok'|'empty'|'error'}`: `empty` raises **no
+   banner** (the 200 cleared health); `error` raises the banner **except** on 401/403/404/501 answer statuses.
+3. **No role gate — the row is ungated in `more.tsx`.** Unlike the admin Payroll roster (Phase 20, gated on the
+   real `admin`/`super_admin` role because the backend 403s a leader), `/my-earnings` is `protect`-only and
+   self-scoped, so every signed-in member gets the "My earnings" row. If they have no profile, the screen says so.
+4. **The app never multiplies (pinned).** Every ₹ figure is the server's, rendered via `inr()`. The only
+   on-device arithmetic is `absent = working_days − present_days` (days) and the meter ratio — no `*` on a rate.
+   A real profile with all-zero figures shows "No attendance recorded", **not ₹0**, gated so a `base`-segment flat
+   salary with no present days still shows its figure.
+
+**Consequence.** Phase 16 moves **Blocked → Built**. 6 files, commit `c77e1ad` (local — push 403s). Gates: `tsc`
+0, `npm test` **360/360** (+10), lint 0 errors/12 warnings. **Carried:** the device reconciliation (≥3 real people
+vs the payroll sheet — the highest-trust-cost bug), light/dark at 390 px, and **Phase 1 clock-in** as the stated
+hard prerequisite (a clock-in dropped on a bad connection under-states pay). If the per-day breakdown is wanted,
+re-file `breakdown[]` + the days split to `cgpe-api` — they offered to add it.
+
 ## 2026-08-12 — INBOX sync (no build): campaigns count endpoint verified inert; Phase-16 nudge re-filed
 
 **Context.** Third boot of the day, after the app-UI sync (entry below). Board editor-exhausted: Phase 22

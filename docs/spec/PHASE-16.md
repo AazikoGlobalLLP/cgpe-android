@@ -1,8 +1,69 @@
 # SPEC LOCK — Phase 16: "My earnings" (attendance-derived salary)
 
-Requested 2026-08-10. Status: **STILL BLOCKED — but the blocker shrank to one endpoint.**
-The UI is locked below and can be approved now. The number it displays cannot be read by a
-non-admin yet.
+Requested 2026-08-10. Status: **BUILT 2026-08-12 (v1, self-scoped).** The backend blocker cleared —
+`GET /api/payroll/my-earnings` shipped (backend Phase 28) — and the self-view screen is now live.
+
+---
+
+## BUILT 2026-08-12 — against the shipped `GET /api/payroll/my-earnings`
+
+`cgpe-api` shipped the one thing this phase was blocked on (backend Phase 28, `contracts/api.md`
+§`/api/payroll`, INBOX 2026-08-12 `→ cgpe-mobile`): a **`protect`-only, self-scoped** read that forces
+`user_id` to the token identity. Every user this spec targets (advisor/learn_advisor/leader/payroll_staff)
+can now read **their own** pay; nobody can read anyone else's. Built the self-view against it.
+
+**Files (6):** `src/data/api.ts` (+`getMyEarnings` + `MyEarnings` type; reuses the Phase-20 `PayrollRow`/
+`PayrollMonth`), `src/app/earnings.tsx` (new route), `src/app/(tabs)/more.tsx` (+1 ungated "My earnings"
+row in the Account group), `src/app/attendance.tsx` (+1 link card to `/earnings`), new
+`src/data/__tests__/api-earnings.test.ts` (10 cases). `src/ui/characters.tsx` — see D-3.
+
+**Gates:** `tsc` 0, `npm test` **360/360** (+10), lint pending/at baseline. Device check carried (below).
+
+**The app never multiplies (verified).** Every money figure — `payable`, `per_day_rate`,
+`salary_amount` — is the server's, rendered verbatim via `inr()`. The only on-device arithmetic is
+`absent = working_days − present_days` (a subtraction of **days**, not money) and the payable-days ratio
+for the progress meter. `grep -n '\*' src/app/earnings.tsx` finds no `*` on a rate. AC met.
+
+### Deviations from the 2026-08-10 UI lock — all forced, none cosmetic
+
+- **D-1 — v1 is the `/compute` aggregate, not the richer proposed body.** The backend returned the same
+  `RosterRow` shape as the admin `/compute` (a **monthly aggregate**: `payable`, `salary_amount`,
+  `per_day_rate`, `office_hours`, and one `months[]` entry `{working_days, present_days, worked_hours,
+  per_day_rate, payable_precise}`), **not** the `days.{present,half,absent,holiday,weekly_off}` +
+  `breakdown[]` + `provisional`/`as_of` body proposed in §"Proposed backend contract". They chose this
+  deliberately ("guarantees your self-view is byte-identical to the admin figure … file it and we'll add"
+  — INBOX). **Consequence:** the locked **per-day `<Spine>` list** (UI-lock #5 + interaction (d), "tap a
+  day to see its in/out times and contribution") has **no v1 data source** and is **not built** — v1
+  carries no per-day rows, and a per-day rupee figure would require the forbidden multiply. The owner
+  chose (2026-08-12) to **ship the v1 aggregate now** rather than re-block on the richer body. If the
+  per-day breakdown is wanted later, re-file `breakdown[]` + the days split to `cgpe-api`.
+- **D-2 — KPI strip: "Overtime h" → "Worked hours".** UI-lock #4 locked four chips: Present · Payable
+  days · Absent · **Overtime h**. v1 returns no overtime split (only total `worked_hours`), so the fourth
+  chip shows **Worked hours** instead. Present/Payable-days/Absent are unchanged (Absent is the day
+  subtraction above). The "so far this month" **provisional pill** (UI-lock, state matrix) IS built —
+  inferred client-side when the selected month is the current one (index 0), not from an `as_of` field.
+- **D-3 — expressive states use `EmptyState`, not `characters.tsx`.** UI-lock #10 said "revive
+  `src/ui/characters.tsx`" — but that file was **deleted in Phase 14's dead-code sweep** (it no longer
+  exists). Rather than reconstruct 7 illustrations from scratch (invented work), the empty/error/
+  month-empty states use the app-wide `EmptyState`, exactly as `payroll.tsx` (Phase 20) does — the
+  consistent idiom. The locked "concerned pose only after the 2nd retry" nuance was tied to the
+  character; with `EmptyState` the error shows on first failure, matching every other screen.
+
+### Three response states, told apart (the honesty core)
+
+`getMyEarnings` uses low-level `req()` (not `tryReal`, which would collapse a `data:null` body into the
+whole envelope): **`ok`** (a real row) · **`empty`** (HTTP 200 `data:null` → "no pay profile yet", **no
+banner** — an explicit empty state, not an outage) · **`error`** (5xx/network/shape → retryable error +
+`<HealthBanner/>`, except the 401/403/404/501 answer statuses which raise no banner). A month with a real
+profile but all-zero figures shows "No attendance recorded for <month>", **not ₹0** — gated on
+`payable === 0 && present === 0 && worked === 0` so a `base`-segment flat salary with no present days
+still shows its real figure. All four pinned in `api-earnings.test.ts`.
+
+### Still carried (device-only, per §ACCEPTANCE + §RISKS)
+Reconcile ≥3 real people's months against the payroll sheet by hand before wide trust (highest-trust-cost
+bug). Light/dark + 390 px render on a handset. **Phase 1 clock-in** remains the stated hard prerequisite
+(handset-verification still outstanding) — a clock-in silently dropped on a bad connection would
+under-count present days and thus under-state pay.
 
 ---
 

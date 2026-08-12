@@ -14,6 +14,25 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 16 — "My earnings" self-view. BUILT 2026-08-12.** The blocker cleared: `cgpe-api` shipped
+`GET /api/payroll/my-earnings` (backend Phase 28) — a **`protect`-only, self-scoped** read that forces
+`user_id` to the token, so every user this phase targets (advisor/learn_advisor/leader/payroll_staff)
+reads **their own** pay and nobody else's. Built the self-view against it. New route `src/app/earnings.tsx`:
+headline `payable` (server-computed, rendered via `inr()`), KPI strip (Present · Payable days · Absent ·
+Worked hours), payable-days `<Meter>`, pay-basis card, 12-month strip, and a "so far this month"
+provisional pill on the current month. Reached from an **ungated** row in `more.tsx`'s Account group
+(self-scoped — every member, unlike the admin-only Payroll roster) and a link card on `attendance.tsx`.
+`getMyEarnings` uses low-level `req()` (not `tryReal`, which collapses `data:null`) so the **three states
+stay distinct**: `ok` / `empty` (200 `data:null` → "no pay profile", no banner) / `error` (5xx/network →
+banner + Retry). **The app never multiplies** — every ₹ figure is the server's; the only on-device math is
+`absent = working_days − present_days` (days, not money). **Scoped to the v1 aggregate** the endpoint
+returns, not the richer per-day body the UI lock proposed (owner chose ship-now over re-block): no per-day
+spine, "Overtime h" KPI → "Worked hours", `EmptyState` in place of the Phase-14-deleted `characters.tsx` —
+`docs/spec/PHASE-16.md` D-1/D-2/D-3. Gates green: `tsc` 0, `npm test` **360/360** (+10, `api-earnings.test.ts`),
+lint 0 errors/12 warnings (baseline). Commit `c77e1ad` (local — push still 403s). **Device check carried**
+(reconcile ≥3 real people vs the payroll sheet; light/dark at 390 px; Phase-1 clock-in is the stated hard
+prerequisite). DECISIONS 2026-08-12 (top); HANDOFF.
+
 **INBOX sync (no phase) — 2026-08-12 (3rd of the day).** Board editor-exhausted (Phase 22 paused on owner
 copy, Phase 16 backend-blocked). The one upstream change dated today — `cgpe-api` Phase 27's PII-free
 `GET /api/campaigns/audience/count` — was verified a **no-op for mobile**: `getCampaignAudience`
@@ -450,7 +469,7 @@ exercise.
 | 13 | Vendor Leaflet | **Done** 2026-08-11 — 271 tests green; device check outstanding |
 | 14 | Dead-code sweep | **Done** 2026-08-11 — 271 tests green (`1a37144`); lint 46→45 |
 | 15 | Lint to green | **Done** 2026-08-11 — `npm run lint` exits 0 (was 45 errors); 271 tests green (`292610b`) |
-| 16 | "My earnings" salary section `[api]` | **Blocked (narrowed)** 2026-08-11 — backend Phase 25 payroll cluster landed, so the pay field + server-side formula now EXIST (`payroll_profiles.salary_amount`, `computeRangeSalary`), but `routes/payroll.js:22-23` gates the whole surface `authorize('admin')` → advisor/leader get 403. Ask narrowed to ONE self-scoped read (`GET /api/payroll/my-earnings`); filed to INBOX |
+| 16 | "My earnings" salary section ~~`[api]`~~ | **Built** 2026-08-12 — blocker cleared (backend Phase 28: `GET /api/payroll/my-earnings`, `protect`-only, self-scoped). New `src/app/earnings.tsx` self-view; 360 tests green (+10, `api-earnings.test.ts`); no PII, no on-device math, no role gate (self-scoped). Scoped to the v1 aggregate (D-1/D-2/D-3). Commit `c77e1ad`; device check + Phase-1 clock-in prerequisite outstanding |
 | 17 | Warn on out-of-bounds clock-out | **Done** 2026-08-11 — 258 tests green (`140d020`) |
 | 18 | Watchable A–Z + worst-case E2E test | **Built** 2026-08-11 — Playwright/Expo-web harness, 33 tests green (42 screens render + 21 worst-case + 9 bad-input); web boots with no guard; gates green |
 | 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Built** 2026-08-11 — parity Vitest (323/323, +18) + per-language E2E walk (42/42 render, 0 key leaks × 5 langs); dictionaries already complete; naturalness review outstanding |
