@@ -1090,6 +1090,74 @@ export async function toggleReminder(id: string): Promise<boolean> {
 export async function getCommission(): Promise<Commission> {
   return (await tryReal<Commission>('/commissions', {}, isObj)) ?? unavailable('/commissions', EMPTY_COMMISSION);
 }
+
+/**
+ * The caller's OWN MDRT/COT/TOT achievement tier — the commissions-screen tier-progress element.
+ * `GET /api/advisor/performance/:advisorId` (`contracts/api.md` §`/api/advisor`, backend Phase 29).
+ *
+ * WHY THIS EXISTS, AND WHY IT IS NOT THE COMMISSIONS METER. Commissions is still blocked on an
+ * earned aggregate (`/commissions/my-summary`, filed to `cgpe-api`, unscoped). This is a SEPARATE,
+ * real datum we can already show: the server-authoritative tier ladder derived from an advisor's
+ * FYC `total_premium` (`utils/mdrtTiers.js`, six owner-confirmed thresholds ₹3.75L…₹90L). It is an
+ * ANNUAL cumulative-premium goal, a different unit than the screen's monthly-commission meter — so
+ * it renders as its own element and is NEVER fed into that meter (INBOX 2026-08-12).
+ *
+ * SELF-SCOPED BY CALLER, NOT BY THE SERVER. This route has no forced self-scope like `/my-earnings`;
+ * the screen passes the signed-in user's OWN id. For `role === 'advisor'` the backend 403s any id but
+ * their own (`advisor.js:28`), and a `leader` is team-scoped (403 on their own id — no self team row),
+ * so the caller must be an advisor-track role reading themselves. The screen gates the call to
+ * `advisor`/`learn_advisor` before it reaches here; a 403 is still handled as an answer, not an outage.
+ *
+ * TWO OUTCOMES, told apart — `req()` not `tryReal`, so a shape miss reports rather than silently
+ * collapsing the envelope:
+ *   - `ok`    — a valid `performance.mdrt_tier` + numeric `total_premium`; every ₹ is the server's.
+ *   - `error` — a 5xx/network/abort (banner via `reportIfOutage`) OR a 401/403/404 answer (suppressed,
+ *               no banner). The tier card renders nothing on error — it is a bonus element, and a real
+ *               outage is already announced once by the global `<HealthBanner/>`.
+ */
+export type MdrtTier = {
+  /** Highest tier reached, `null` below Quarter MDRT (₹3.75L). Rendered verbatim — no acronym invented. */
+  current: string | null;
+  /** The next tier up, `null` at TOT (the top). */
+  next: string | null;
+  /** Rupee FYC target for `next`, `null` at TOT. */
+  nextPremium: number | null;
+  /** `max(0, nextPremium − totalPremium)`; `0` at TOT. */
+  toNext: number;
+  /** Cumulative FYC premium the tier is bucketed from (rupees). */
+  totalPremium: number;
+};
+export type MdrtTierResult = { status: 'ok'; tier: MdrtTier } | { status: 'error' };
+
+export async function getMdrtTier(advisorId: string): Promise<MdrtTierResult> {
+  if (FORCE_DEMO || !sessionReal || !advisorId) return { status: 'error' };   // no request attempted
+  const path = `/advisor/performance/${encodeURIComponent(advisorId)}`;
+  const key = '/advisor/performance/:id';   // stable banner key regardless of the id's form
+  try {
+    const { ok, status, json } = await req(path, {}, REQUEST_TIMEOUT, key);
+    if (!ok) { reportIfOutage(status, key); return { status: 'error' }; }
+    const perf = json?.data?.performance;
+    const mt = perf?.mdrt_tier;
+    if (isObj(perf) && isObj(mt) && typeof perf.total_premium === 'number' && Number.isFinite(perf.total_premium)) {
+      const fin = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+      return {
+        status: 'ok',
+        tier: {
+          current: typeof mt.current === 'string' ? mt.current : null,
+          next: typeof mt.next === 'string' ? mt.next : null,
+          nextPremium: typeof mt.next_premium === 'number' && Number.isFinite(mt.next_premium) ? mt.next_premium : null,
+          toNext: fin(mt.to_next),
+          totalPremium: fin(perf.total_premium),
+        },
+      };
+    }
+    reportFailure(key);                                                        // 200 but the shape drifted
+    return { status: 'error' };
+  } catch {
+    reportFailure(key);                                                        // dead network or the abort
+    return { status: 'error' };
+  }
+}
 const waThreadCache = new Map<string, WaThread>();
 
 /**

@@ -6,6 +6,39 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 23: built the MDRT tier-progress element on Commissions (option d), the buildable slice while the earned aggregate stays blocked
+
+**Context.** The board was editor-exhausted; the owner picked HANDOFF option (d) — build the
+standalone MDRT-tier-progress element against the already-verified backend Phase-29 endpoint — over
+waiting on the `/commissions/my-summary` reply, supplying i18n copy, or standing down. The earned
+aggregate remains backend-blocked and untouched by this.
+
+**Decision.**
+1. **Consumed the existing endpoint; no contract change, no new INBOX ask.** New `getMdrtTier(advisorId)`
+   reads `GET /api/advisor/performance/:advisorId` (`data.performance.{total_premium, mdrt_tier}`),
+   verified in `routes/advisor.js` + `contracts/api.md` §`/api/advisor` before writing. The
+   `/commissions/my-summary` filing stands as the earned-aggregate blocker.
+2. **A SEPARATE element, above the ledger fork.** `next_premium` (annual FYC premium) is a different
+   unit than the `thisMonth / target` monthly meter, so it is NEVER fed into that meter (INBOX
+   2026-08-12); it gets its own card + meter (`total_premium / next_premium`). Because `getCommission`
+   still resolves the empty shell (screen is always `blank`), the tier card is mounted ABOVE the
+   loading/blank fork so it shows real data while the ledger is blank — the point of the slice.
+3. **Role-gated to `advisor`/`learn_advisor`, reading own id.** Backend 403s an advisor for any other
+   id, team-scopes a leader (403 on self), and gives an admin/payroll a meaningless ₹0 tier — so the
+   element only mounts for the advisor-track roles it means something for. A 403 is an answer
+   (suppressed, no banner); a stale-role deep-link degrades to a silent no-card, never a false ₹0.
+4. **`req()` three-state posture (copied from Phase 16's `getMyEarnings`), silent on error.** `ok` vs
+   `error` (5xx/network → banner; 401/403/404 → suppressed). On error the bonus element renders
+   nothing — the global `<HealthBanner/>` already speaks once for a real outage. Stable health key
+   `/advisor/performance/:id`. Every ₹ is the server's; tier names rendered verbatim (no acronym
+   invented). TOT top state shows "the highest tier", no meter.
+
+**Consequence.** Commissions now shows one real, server-authoritative datum (tier progress) for
+advisors even while the earned aggregate stays blocked. Gates green: `tsc` 0, `npm test` **373/373**
+(+13, `api-mdrt.test.ts`), lint 0 errors / 12 warnings (baseline). Commit local (push still 403s).
+Device check (a real advisor with sales, light/dark at 390 px) outstanding. Full spec:
+`docs/spec/PHASE-23.md`.
+
 ## 2026-08-12 — Phase 6 commissions: MDRT next_premium is a *target* source, not the blocker; filed a self-scoped aggregate shape
 
 **Context.** A boot found ONE fresh open item addressed here: `→ cgpe-admin, cgpe-mobile · 2026-08-12 · from cgpe-api`

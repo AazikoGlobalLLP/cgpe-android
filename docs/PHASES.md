@@ -14,6 +14,24 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 23 — MDRT tier-progress element on Commissions. BUILT 2026-08-12.** The buildable slice of the
+Phase-6-blocked commissions screen (HANDOFF option d). Commissions itself stays backend-blocked on the earned
+aggregate (`GET /api/commissions/my-summary`, filed to `cgpe-api`, unscoped) — this ships the ONE real datum the
+screen can already show: the caller's own **MDRT/COT/TOT tier progress**, as a **separate** element (never the
+monthly meter). New `getMdrtTier(advisorId)` reads the already-verified backend Phase-29 endpoint
+`GET /api/advisor/performance/:advisorId` (`data.performance.{total_premium, mdrt_tier:{current,next,next_premium,
+to_next}}`) — **no contract change, no new INBOX ask**. New `MdrtTierProgress` card on `commissions.tsx`: FYC-premium
+headline, "current tier reached" pill, and a `total_premium / next_premium` `<Meter>` to the next tier (TOT shows
+"the highest tier", no meter). **Mounted ABOVE the ledger's loading/blank fork** because `getCommission` still
+resolves the empty shell (screen is always `blank`), so the tier shows real data while the ledger is blank — the
+point of the slice. **Role-gated to `advisor`/`learn_advisor` reading own id** (backend 403s an advisor for any
+other id, team-scopes a leader on self, gives admin/payroll a meaningless ₹0); a 403 is an answer (suppressed, no
+banner). `req()` three-state posture copied from Phase 16's `getMyEarnings`; silent on error (the global
+`<HealthBanner/>` speaks once); every ₹ is the server's; tier names verbatim. Gates green: `tsc` 0, `npm test`
+**373/373** (+13, `api-mdrt.test.ts`), lint 0 errors / 12 warnings (baseline). Commit local (push still 403s).
+**Commissions earned aggregate stays blocked** (the `/commissions/my-summary` filing stands). Device check (a real
+advisor with sales, light/dark at 390 px) outstanding. Full path: `docs/spec/PHASE-23.md`; DECISIONS 2026-08-12 (top).
+
 **INBOX sync (no phase) — 2026-08-12 (5th of the day). Phase 6 commissions re-evaluated against backend Phase 29.**
 A boot found ONE fresh open item addressed here (`→ cgpe-admin, cgpe-mobile · 2026-08-12 · from cgpe-api`, backend
 Phase 29): the MDRT/COT/TOT tier ladder is now server-authoritative (`utils/mdrtTiers.js`), and `cgpe-api` pointed
@@ -512,6 +530,7 @@ exercise.
 | 20 | Admin payroll roster (in-app) | **Built** 2026-08-11 — owner-directed; `src/app/payroll.tsx` on admin-only `GET /payroll/compute`, 330 tests green (+7); no PII, no on-device math, gated on real role. Phase 16 self-view still blocked; device check outstanding |
 | 21 | i18n P0 — `t(key, params?)` interpolation + plurals | **Built** 2026-08-11 (`a7a0979`) — named `{placeholder}` fill + CLDR `key_one`/`key_other` by active language; single-arg `t()` byte-identical; no dict key added (parity 74 untouched); 350 tests green (+20); pure engine only, no screen wired yet |
 | 22 | i18n P1 — `common.*` dedup (copy-free slice) | **Built** 2026-08-12 — routed `Call`/`Cancel`/`Delete`/`WhatsApp` → existing `common.*` across 16 screens + added `common.today` (lifted copy, parity 74→75); 350 tests green (unchanged), lint 0/12. Net-new `common.*` keys (`tryAgain` ×34 etc.) still blocked on human copy |
+| 23 | MDRT tier-progress element on Commissions | **Built** 2026-08-12 — buildable slice of Phase-6 (option d). New `getMdrtTier` on the verified Phase-29 `GET /advisor/performance/:advisorId`; `MdrtTierProgress` card is a **separate** element (never the monthly meter), mounted above the ledger fork so it shows real data while the earned aggregate stays blocked. Role-gated advisor/learn_advisor, own id; no contract change. 373 tests green (+13); no PII, no on-device math. Device check outstanding |
 
 ---
 

@@ -13,7 +13,9 @@ import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 
 import * as api from '@/data/api';
+import type { MdrtTier } from '@/data/api';
 import type { Commission } from '@/data/types';
+import { useAuth } from '@/store/auth';
 import { fmtDate, inr, inrShort } from '@/lib/format';
 
 /* ------------------------------------------------------------------ *
@@ -55,6 +57,13 @@ export default function Commissions() {
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
+  const { user } = useAuth();
+
+  // The MDRT tier ladder is an advisor-track achievement (FYC premium). Only advisor / learn_advisor
+  // read their OWN performance cleanly: the backend 403s any other id for an `advisor`, team-scopes a
+  // `leader` (403 on self), and a total_premium of ₹0 for an admin/payroll is a meaningless "0% to
+  // Quarter MDRT". So the tier element is gated to the roles it means something for, reading own id.
+  const tierAdvisorId = user?.id && (user.role === 'advisor' || user.role === 'learn_advisor') ? user.id : null;
 
   const [data, setData] = useState<Commission | null>(null);
   const [loading, setLoading] = useState(true);
@@ -156,6 +165,10 @@ export default function Commissions() {
           />
         }
       >
+        {/* Tier progress is its own element on its own endpoint — it shows real data even while the
+            earned ledger stays backend-blocked, so it lives ABOVE the ledger's loading/blank fork. */}
+        {tierAdvisorId ? <MdrtTierProgress advisorId={tierAdvisorId} /> : null}
+
         {loading ? (
           <LedgerSkeleton />
         ) : blank ? (
@@ -337,6 +350,118 @@ export default function Commissions() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/* ================================================================== *
+ * MDRT tier progress — a SEPARATE element from the monthly meter above.
+ *
+ * The ladder is server-authoritative (`utils/mdrtTiers.js`, six owner-confirmed thresholds) and
+ * bucketed from the advisor's cumulative FYC premium — an ANNUAL goal, a different unit than the
+ * "Monthly target" meter, so its figure is NEVER fed into that meter (INBOX 2026-08-12).
+ *
+ * Its own endpoint (`GET /advisor/performance/:advisorId`) is independent of the earned ledger, so
+ * this shows real data even while commissions stays backend-blocked. It is a BONUS element: on any
+ * error it renders nothing rather than a second error box — the global HealthBanner already speaks
+ * for a real outage, and a 403/404 answer is suppressed and silent. Every ₹ is the server's.
+ * ================================================================== */
+
+function MdrtTierProgress({ advisorId }: { advisorId: string }) {
+  const c = useTheme();
+  const [tier, setTier] = useState<MdrtTier | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
+
+  const load = useCallback(async (current?: () => boolean) => {
+    const r = await api.getMdrtTier(advisorId);
+    if (!alive.current || (current && !current())) return;
+    setTier(r.status === 'ok' ? r.tier : null);
+    setLoading(false);
+  }, [advisorId]);
+
+  // Refetched on focus, like the ledger: FYC premium moves as policies are approved elsewhere.
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void load(() => active);
+    return () => { active = false; };
+  }, [load]));
+
+  if (loading) return <TierSkeleton />;
+  if (!tier) return null;   // 5xx/network/403 — silent; the global banner covers a genuine outage
+
+  const { current, next, nextPremium, toNext, totalPremium } = tier;
+  const atTop = next == null || nextPremium == null;      // TOT — nothing above
+  const progress = !atTop && (nextPremium as number) > 0 ? totalPremium / (nextPremium as number) : 0;
+
+  return (
+    <Appear index={0}>
+      <View>
+        <SectionHeader title="MDRT tier" />
+        <Card>
+          <Eyebrow>First-year premium</Eyebrow>
+          <Metric value={inr(totalPremium)} size={font.h2} style={{ marginTop: 2 }} />
+
+          <View style={{ marginTop: spacing.md }}>
+            {current ? (
+              <Pill label={`${current} reached`} tone="success" icon="ribbon" small />
+            ) : (
+              <Txt size={font.cap} color={c.faint} numberOfLines={2}>
+                {`Not at the first tier yet — ${next ?? 'Quarter MDRT'} begins at ${inrShort(nextPremium ?? 0)} of first-year premium.`}
+              </Txt>
+            )}
+          </View>
+
+          <View style={{
+            marginTop: spacing.lg,
+            paddingTop: spacing.md,
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: c.hairline,
+          }}>
+            {atTop ? (
+              <Txt size={font.sub} weight="600" color={c.text} numberOfLines={2}>
+                {`You've reached ${current ?? 'the top'} — the highest tier.`}
+              </Txt>
+            ) : (
+              <>
+                <Meter
+                  label={`Next: ${next}`}
+                  value={progress}
+                  valueLabel={`${inrShort(totalPremium)} of ${inrShort(nextPremium ?? 0)}`}
+                  tone="primary"
+                />
+                <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.sm }}>
+                  {`${inr(toNext)} more to reach ${next}.`}
+                </Txt>
+              </>
+            )}
+          </View>
+        </Card>
+      </View>
+    </Appear>
+  );
+}
+
+function TierSkeleton() {
+  const c = useTheme();
+  return (
+    <View>
+      <SectionHeader title="MDRT tier" />
+      <View style={{
+        backgroundColor: c.card,
+        borderRadius: radius.lg,
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: c.border,
+        padding: spacing.lg,
+        gap: spacing.md,
+      }}>
+        <Skeleton width={110} height={10} />
+        <Skeleton width="46%" height={24} />
+        <Skeleton width={150} height={20} radius={radius.pill} />
+        <Skeleton width="100%" height={10} radius={radius.pill} style={{ marginTop: spacing.sm }} />
+      </View>
+    </View>
   );
 }
 
