@@ -1,84 +1,64 @@
-# HANDOFF — CGPE Connect (Android) — Phase 21 P1 (i18n common.* dedup, copy-free slice) BUILT — 2026-08-12
+# HANDOFF — CGPE Connect (Android) — Phase 22 (i18n P1) — paused on owner copy + INBOX sync — 2026-08-12
 
-Owner directed "full copy-free dedup" for the `common.*` layer. Built the slice that needs **zero** new
-human copy: routed the already-translated repeated labels to existing `common.*` keys across **16 screens**,
-and added **one** net-new key (`common.today`) by **lifting** existing human copy. The copy-dependent bulk of
-P1 (`Try again` ×34, `Clear search`, `Refresh`, the outage body, a11y labels) is untouched and still waits on
-the owner. Phase 16 self-view is **still backend-blocked** (INBOX `my-earnings` ask still unanswered — the last
-`cgpe-mobile` entry, ~line 3352–3397, has no `cgpe-api` reply).
+Short session. The board was editor-exhausted at boot (the copy-free `common.*` slice shipped earlier the same
+day). One INBOX item was open and addressed here — verified it's a no-op for mobile and answered it. Then handed
+the owner the bounded `common.*` fill-list; owner chose to **pause** i18n (no translator available now). No
+`src/` changed, no gate re-run. Docs committed local-only (`3f2eb4a`, push still 403s).
 
 ## Done
-- **Routed existing-key repeats across 16 screens** to `t('common.*')`: `Call`→`common.call`,
-  `Cancel`→`common.cancel`, `Delete`→`common.delete`, `WhatsApp`→`common.whatsapp`. `Call`/`Cancel`/`Delete`
-  now translate in Gujarati/Hindi where they were hardcoded English. `WhatsApp` is a trade noun (English in
-  all 5) → **centralization only, no visible change**, kept so button rows are consistent.
-- **Added `common.today`** — the only net-new key added, by **lifting** the identical human copy already in
-  `tab.home`/`tasks.today` (`આજે`/`आज`/`Aaj`/`Aaje`). **Dedup of approved copy, not machine translation.**
-  Parity bumped **74→75** in `dictionaries.test.ts` (deliberate). Wired the standalone `Today` eyebrows
-  (`home` ×2, `attendance`) and the `reminders` "Today" section title; also routed the sibling
-  `reminders` titles `Overdue`→`tasks.overdue` and `Upcoming`→`tasks.upcoming` (existing keys) so the group
-  is not half-translated.
-- **Gates green:** `npx tsc --noEmit` exit 0; `npm test` **350/350** (unchanged — no new pure logic, the
-  parity assertion just moved 74→75); `npm run lint` **0 errors / 12 warnings** (baseline, no new issues).
+- **Answered the one open INBOX item** (2026-08-12 · from `cgpe-api`): backend Phase 11 closed the
+  `GET/PUT /api/rbac/app-ui` `data` envelope, dropping `_id` / `updated_at` / `updated_by`, and asked mobile to
+  confirm it reads none of the three. **Verified inert on our side and replied.** The app reads none of them:
+  `getAppUiConfig` (`src/data/api.ts:2516`) hands its response straight to `normalizeUiConfig`
+  (`src/store/appUi.tsx:213`), which rebuilds a **fresh** object from only `role_key`/`label`/`dashboard`/
+  `nav`/`features`/`theme`; the `AppUiConfig` type (`src/data/api.ts:2489`) declares no audit field; a tree-wide
+  `updated_at`/`updated_by` grep hits only unrelated domains (notes, tasks, members, tickets). Reply written
+  under the item in `../contracts/INBOX.md`, box left **unticked** (multi-recipient with `cgpe-admin`), and
+  grepped back per the concurrent-write rule (survived).
+- **Handed the owner the bounded `common.*` fill-list** (SCOPE §4.1 net-new set — `tryAgain` ×34, `clearSearch`,
+  `refresh`, the outage body, the a11y labels) and asked how to proceed. Owner chose **pause i18n** — nothing
+  app-side is buildable until human gu/hi/hi-en/gu-en copy lands (PHASE-19 §4 forbids machine translation).
 
-## Files changed (18 src + 4 docs)
-- **i18n core:** `src/i18n/index.tsx` (+`common.today` in all 5 dicts), `src/i18n/__tests__/dictionaries.test.ts`
-  (parity 74→75 + note).
-- **16 screens:** `(tabs)/home.tsx`, `(tabs)/leads.tsx`, `(tabs)/clients.tsx`, `(tabs)/tasks.tsx`,
-  `attendance.tsx`, `calendar.tsx`, `families.tsx`, `notes.tsx`, `notify.tsx`, `prospects.tsx`, `reminders.tsx`,
-  `segments.tsx`, `task/[id].tsx`, `team/[id].tsx`, `tickets/index.tsx`, `whatsapp/index.tsx`. Each added
-  `import { useT }` + `const t = useT()` (or `tr` where a local `t` existed) in the relevant component.
-- **Docs:** `docs/DECISIONS.md` (top entry, 2026-08-12), `docs/i18n/SCOPE.md` (§3 P1 / §4.1 / §8),
-  `docs/PHASES.md` (new `## Now` entry, board row 22, Next-3 #3), `CLAUDE.md` (i18n trap refreshed: 75 keys,
-  `=== 75`, `tr` naming note, do-not-wire-net-new-without-copy warning).
-- Commit: local only (push 403s, credential `reactjsaaziko` has no write access — human fix needed).
-- Note: `.claude/settings.json` shows modified but is a **pre-existing** unrelated change from session start —
-  **not** part of this work and **not** in the commit.
+## Files changed
+- `docs/DECISIONS.md` — new top entry (2026-08-12, 2nd): the INBOX verification + the pause decision.
+- `docs/PHASES.md` — new `## Now` note ("INBOX sync (no phase) — 2026-08-12 (2nd)"); Next-3 #3 tagged paused.
+- `docs/STATUS.md` — refreshed for a manager: waiting on translation copy; app-UI change confirmed harmless.
+- `docs/i18n/SCOPE.md` — §4.1 fix: removed `common.today` from the "still to add" set (it shipped 2026-08-12).
+- `docs/HANDOFF.md` — this file.
+- `../contracts/INBOX.md` — reply under the 2026-08-12 app-UI item (outside the ANDROID repo, untracked — not
+  in the commit; lives only on disk, as all INBOX replies do).
+- **Not** `.claude/settings.json` — it shows modified but is a pre-existing unrelated change from before this
+  session; deliberately left out of the commit.
 
 ## Decisions made
-- **Only the copy-free slice was built.** Every other net-new `common.*` key (`tryAgain` ×34 — the biggest
-  single win, `clearSearch`, `clear`, `saving`, `uploading`, `refresh`, `loadMore`, `all`, `yesterday`,
-  `done`, `mobile`, `onDuty`, `signedIn`, `continue`, `goToSignIn`, `showResults`, the a11y `Call {name}` /
-  `Open WhatsApp chat` labels) needs human gu/hi/hi-en/gu-en copy. Machine translation is forbidden
-  (PHASE-19 §4), so these stay blocked on the owner. This is the bulk of P1's occurrence count.
-- **`common.today` by lifting, not translating.** It is the only net-new label whose four non-English strings
-  already existed under another key, so it is dedup, not a guess. No other net-new key qualifies.
-- **Skipped the 4 module-level date helpers** (`calendar.dayTitle`, `reminders.timeFor`,
-  `notifications.dayLabel`, `whatsapp/[id].dayLabel`) — each returns `Today`/`Yesterday`/weekday/date from one
-  function; `t` isn't reachable and wiring only `Today` while `Yesterday`/weekdays (no keys, need copy) stay
-  English would be half-done. Skipped whole.
-- **Skipped `task-new`'s "Today" picker option** (siblings `Tomorrow`/… have no keys) and **`more.tsx`'s
-  nav-tile "WhatsApp"** (feature/screen-name surface, separate).
-- **`tr` vs `t`.** `tickets/index.tsx` (`const t = typeMeta(...)`) and `notes.tsx` (`setTotal((t)=>…)`) already
-  use `t` locally, so the translator is bound to `tr` there to avoid shadowing; every other screen uses `t`.
+- **The app-UI envelope removal is a confirmed no-op for mobile** — the response is rebuilt by
+  `normalizeUiConfig` from documented keys only, so `_id`/`updated_at`/`updated_by` were never reachable by a
+  screen. No code change, no gate re-run.
+- **Paused i18n at the owner's direction** rather than push a partial wire — the copy-free `common.*` work is
+  exhausted, and inventing translation copy is forbidden. Building against invented copy would ship text that
+  reads badly to customers and passes the parity test silently (its leak check only rejects `value === key`,
+  not `value === English`).
 
 ## Known broken / deliberately skipped
-- **The copy-free `common.*` work is exhausted.** Nothing more on P1 (or any Tier-1 screen wiring) is
-  buildable without owner-supplied copy. The fill-list is the net-new `common.*` set in `docs/i18n/SCOPE.md`
-  §4.1 — for each key, supply Gujarati / Hindi / Hinglish / Roman-Gujarati (English is the extracted string).
-- **The parity test still can't catch English-in-a-non-English dict** (it rejects only `value === key`). When
-  net-new keys land with real copy, consider the §6(b) leak-guard test so an English placeholder turns the
-  suite red.
-- **Phase 16 self-view — still backend-blocked.** `routes/payroll.js:22-23` still `authorize('admin')`, no
-  `GET /api/payroll/my-earnings`, INBOX ask (~line 3352–3397) still unanswered by `cgpe-api`. Do not build the
-  earnings screen against a non-existent endpoint. Phase 20 admin roster is the only payroll surface in the app.
-- **Phase 6 commissions — unchanged, still blocked** (no product aggregate / no `target`).
-- **`git push` still 403s** — both this and prior commits are **local only**. Needs a human to fix the
-  credential (Windows Credential Manager) or grant `Dev-Shivam-05/CGPE-ANDROID-APPLICATION` write access.
-- **Device-verification backlog** — unchanged; the `common.*` label toggle (renders + switches language on a
-  real handset, light/dark) joins the handset-only checks. `npm test` covers pure logic only; JSX label
-  changes aren't exercised by the suite.
+- **Phase 22 (i18n P1 bulk) — blocked on human copy.** The net-new `common.*` keys need gu/hi/hi-en/gu-en. The
+  fill-list is `docs/i18n/SCOPE.md` §4.1; per-screen strings are in `docs/i18n/inventory/01–06*.md`. Anchor
+  every wiring edit on the English literal (grep), never a line number.
+- **Phase 16 (self-view salary) — still backend-blocked.** `routes/payroll.js:22-23` still `authorize('admin')`;
+  `GET /api/payroll/my-earnings` still does not exist; the INBOX ask at the file foot (~line 3396–3474) is
+  **still unanswered** by `cgpe-api`. Do not build the earnings screen against a non-existent endpoint.
+- **Phase 6 (commissions) — still backend-blocked.** No product aggregate, no `target` source.
+- **`git push` still 403s** — this commit (`3f2eb4a`) and all prior are local-only. Needs a human to fix the
+  Windows-Credential-Manager credential (`reactjsaaziko` has no write access) or grant
+  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION` write.
+- **Device-verification backlog** — unchanged; handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13.
 
 ## Next session starts here
-- **If the owner has supplied `common.*` copy:** add the net-new keys to all 5 dicts (bump parity per key),
-  wire the repeats they cover (`Try again` ×34 first — biggest win; then `Clear search`, `Refresh`, unify the
-  ~8-variant outage body), and add the §6(b) leak-guard test. Recon map of every hardcoded occurrence is in
-  `docs/i18n/inventory/01–06*.md` (anchor edits on the English literal, not line numbers).
-- **If no copy yet:** hand the owner the fill-list (`docs/i18n/SCOPE.md` §4.1 net-new set) and pick which
-  Tier-1 screen (SCOPE §5) to translate first so the copy request is bounded. Do **not** wire anything needing
-  a translation you'd have to invent.
-- **If a `cgpe-api` reply to `my-earnings` has landed:** build the Phase 16 self-view per its preserved UI
-  lock (do **not** point `payroll.tsx` at it — that's the admin roster).
-- **First command:** `/boot`, then re-read `../contracts/INBOX.md` foot (~line 3352) for a `cgpe-api` reply.
-- **Watch out for:** adding real keys bumps the parity test's hard `EN_KEYS.length === 75`; and the leak check
-  still won't flag an English string left in `gu`/`hi` — human copy is load-bearing.
+- Phase 22 (i18n P1 bulk): **if the owner has supplied `common.*` copy**, add the net-new keys to all 5 dicts
+  (bump the `EN_KEYS.length` parity gate per key), wire `tryAgain` ×34 first, then the rest, and add the §6(b)
+  leak-guard test so an English-left-in-`gu` value turns the suite red. **If no copy yet**, the board is
+  editor-exhausted — re-check the INBOX foot for a `cgpe-api` `my-earnings` reply (unblocks Phase 16); otherwise
+  there is nothing app-side to build.
+- First command: `/boot`, then `grep -n "my-earnings\|from cgpe-api" ../contracts/INBOX.md | tail -20` to check
+  whether the Phase-16 self-read reply has landed.
+- Watch out for: adding real i18n keys bumps the hard `EN_KEYS.length === 75` parity gate (bump deliberately per
+  key), and that gate **cannot** catch an English string left in a non-English dict — human copy is load-bearing.

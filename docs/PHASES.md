@@ -398,7 +398,8 @@ exercise.
    `common.*` work is now exhausted** — everything remaining (the net-new `common.*` keys: `tryAgain` ×34,
    `clearSearch`, `refresh`, the outage body, the a11y labels; then any Tier-1 screen, SCOPE.md §5) needs
    **human-supplied** Hinglish/Gujlish/Hindi/Gujarati (~4,800 strings; no machine guess, Phase 19 §4). The
-   fill-list is the net-new `common.*` set in SCOPE.md §4.1. Trap: adding real keys bumps the parity test's
+   fill-list is the net-new `common.*` set in SCOPE.md §4.1. **Owner paused this 2026-08-12** (no translator
+   available now) — resume the moment copy lands. Trap: adding real keys bumps the parity test's
    hard count (now `=== 75`), and it won't catch an English string left in a non-English dict.
 
 > **Also still open:** the **device-verification backlog** — handset-only acceptance criteria carried
