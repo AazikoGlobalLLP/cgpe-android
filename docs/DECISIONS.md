@@ -6,6 +6,40 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Finding (no code): the app layout IS server/DB-driven and per-department — it is a composable catalogue, not a free-form page builder
+
+**Context.** Owner asked whether the app's layout comes from the DB or is static, and whether each
+department's layout could be defined in the DB and changed there to update automatically. Verified
+against the real code both sides before answering — do not re-litigate this.
+
+**Finding.**
+1. **Already DB-driven, per role/department.** `GET /api/rbac/app-ui` (`cgpe-backend-main/routes/rbac.js`)
+   reads a per-key document from the Mongo collection **`app_role_preferences`**, deep-merges it over
+   `ROLE_DEFAULTS` over `GLOBAL_DEFAULTS`, and returns the resolved layout. The app fetches it on every
+   cold start (`store/appUi.tsx` → `api.getAppUiConfig`) and renders dashboard/nav/capabilities from it.
+   `resolveRoleKey(user)`: `department` when it is `sales`/`operations`, else the `role`. Edited via
+   `PUT /api/rbac/app-ui/:roleKey` (admin/leader/super_admin). Change the DB doc → every user in that
+   dept picks it up next cold start, **no new APK**. Schema/contract: `ANDROID/ui_rbac_config.json`.
+2. **DB controls:** which dashboard widgets show + **order**, each widget's title/max_items/visibility,
+   hero mode (4), bottom **tabs** + order, hidden modules, 14 feature flags, theme (accent/badge/density).
+   Server re-asserts mandatory widgets and caps tabs at 5 on both read and write (fail-open).
+3. **STATIC (the caveat):** each screen's internal RN layout is compiled into the APK. The DB composes
+   from a FIXED catalogue — 20 known widget keys (`KNOWN_WIDGETS`), 5 renderable tab routes
+   (`KNOWN_TAB_ROUTES` = home/tasks/clients/leads/claims, + always `more`), 4 hero modes, 14 flags — and
+   drops anything outside it. So per-dept reorder/hide/retitle/limit + capability flips are fully
+   DB-driven **today**; a genuinely new widget/tab requires an app code change first, then the DB turns
+   it on. Known gaps: `nav.more_sections` grouping is stored/served but **not consumed** by the app
+   (Phase 10 D-3); `theme` only partially consumed; `prospects`/`tickets` can't be physical tabs yet.
+
+**Decision/answer.** Yes — the owner's model ("define each dept's layout in the DB, change it there,
+it updates automatically") is exactly what the existing system does for the composable parts, live and
+per-department. It is a **curated catalogue**, not a drag-anywhere builder. To push it further without
+new backend work: seed/verify per-dept `app_role_preferences` docs (many roles likely still run on
+`from_defaults:true`), consume `nav.more_sections`, and finish `theme` — proposed as Phase 26. No code
+written this session for this; verification only.
+
+---
+
 ## 2026-08-12 — Phase 25: built the commissions EARNED aggregate against the shipped `GET /api/commissions/my-summary`
 
 **Context.** The Phase-6 D-5 blocker cleared mid-handoff: `cgpe-api` shipped `GET /api/commissions/my-summary`

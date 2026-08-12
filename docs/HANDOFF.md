@@ -1,68 +1,81 @@
-# HANDOFF — CGPE Connect (Android) — Phase 24 — 2026-08-12
+# HANDOFF — CGPE Connect (Android) — Phase 25 — 2026-08-12
 
-Built the one fresh editor-buildable lever after the board went editor-exhausted: surfaced the
-backend's new response-only per-client `coverage_score` on the Smart segments screen. `src/` changed;
-all three gates re-run green; commit local (push still 403s).
+Built the commissions EARNED aggregate against the just-shipped `GET /api/commissions/my-summary`
+(backend Phase 31), closing the long-standing Phase-6 D-5 blocker. Also verified, at the owner's
+request, whether the app's **layout comes from the DB or is static** — findings + a proposal below.
 
 ## Done
-- **Smart segments now shows each client's/household's coverage adequacy as a percentage.** A row whose
-  server record carries `coverage_score` shows `· NN%` beside the ₹ cover (e.g. `₹5L cover · 62%`); the
-  detail sheet shows a labelled **Coverage** row (`NN%`), toned green at 100 and amber below — the
-  server's own `100 ⟺ well_insured / <100 ⟺ underinsured` invariant, the same tones as the existing
-  underinsured/well_insured flag Pills. A `null` (no cover on file) shows **no** coverage line — never a
-  fabricated `0%`; a floored real `0` (a tiny cover) correctly shows `0%`.
+- **The Commissions screen now shows real earned money.** This month / last month / pending payout /
+  year-to-date / a 6-month trend / recent credits — all from the caller's OWN commissions
+  (self-scoped by the server). Three honest states: real figures, a calm "no commission recorded yet"
+  (200-zeros, no banner), and a retryable "did not load" (503, banner). No fabricated zeros, no
+  on-device arithmetic — every ₹ is the server's. The MDRT tier element (Phase 23) is unchanged.
 
 ## Files changed
-- `src/app/segments.tsx` — added `coverageScore` to `RowView` + a guarded `asNum(o.coverage_score)` read
-  in `toRowView`; appended `· NN%` to the row cover readout; added a **Coverage** `DataRow` to the detail
-  sheet's `ListSection`. All four edits guarded, no on-device math, no rupee benchmark asserted.
-- `docs/spec/PHASE-24.md` — new spec (goal, source-of-truth cites, the 5 decisions, deliberate cuts).
-- `docs/DECISIONS.md` — appended the 2026-08-12 Phase-24 entry (top).
-- `docs/PHASES.md` — `## Now` entry + board row 24 + `## Next 3` #2 (device backlog now includes Phase 24).
-- `contracts/INBOX.md` — two writes, both grepped back durable: (1) **replied under the fresh `cgpe-api`
-  Phase-31 landing** that shipped `GET /api/commissions/my-summary` — verified the shape matches our filing,
-  left **unticked** (build owed next session); (2) filed a brief "second consumer on record" FYI to `cgpe-api`
-  that mobile now renders `coverage_score`. No contract/CHANGELOG change — mobile only reads already-shipped,
-  already-documented fields.
+- `src/data/api.ts` — new `getCommissionSummary(): {status:'ok';summary} | {status:'error'}` on
+  `GET /commissions/my-summary` (low-level `req()`, two-outcome posture like `getMdrtTier`;
+  200-zeros = ok/no-banner, 503 = error/banner, 401/403/404 suppressed). Defensive field mapping,
+  `target:0` (no source, never invented). Removed the now-dead `getCommission()` + mis-shaped
+  `EMPTY_COMMISSION` shell (single caller, gone).
+- `src/app/commissions.tsx` — `load()` calls `getCommissionSummary()`; every existing render defense
+  and the `blank`/`degraded` empty-state fork unchanged. Boundary comment updated (honesty of comments).
+- `src/data/__tests__/api-commissions.test.ts` — new, 14 cases pinning the wire contract.
+- `docs/spec/PHASE-25.md` (new), `docs/DECISIONS.md`, `docs/PHASES.md` (board row 25 + `## Now` +
+  `## Next 3`), `docs/STATUS.md` — updated.
+- `../contracts/INBOX.md` — Phase-31 box **ticked** (build done + verified); reply grepped back durable.
 
 ## Decisions made
-- **`null` hidden, real `0` shown.** The contract's `null` = "no cover on file" (already told by the
-  `no_coverage` flag), so a `null` draws no coverage line — never `0%`. A floored real `0` is legitimate
-  low-coverage data and shows `0%`. `asNum` keeps the two distinct (the file's own doctrine).
-- **Tone = the server's invariant, not a client cutoff.** `success` ≥100 / `warning` <100 is exactly the
-  documented invariant; no threshold invented. No rupee benchmark ("of ₹1cr") on the row — mobile doesn't
-  read `thresholds.coverage`, and CLAUDE.md forbids asserting a number that isn't in front of us.
-- **No new test; gates green.** Guarded mapper passthrough + presentational JSX — the untested class of
-  Phases 8/11/17 (`toRowView` is private to the screen; a screen import pulls RN in with no renderer).
-  tsc 0, `npm test` **373/373** (unchanged), lint 0 errors / 12 warnings (baseline). Commit local.
+- **Two-outcome result, not three.** `/my-summary` has no `data:null` empty — an advisor with no
+  commissions gets a 200 with zeros. So the empty state is an `ok` carrying zeros, and the screen's
+  existing blank check renders it. `req()` (not `tryReal`) keeps a shape-miss reportable.
+- **`target:0` always.** The endpoint carries no monthly target and `next_premium` (MDRT) is a
+  different unit, so the meter stays "no monthly target set" — an honest blank, never a guess.
+- **Removed dead code** (`getCommission`/`EMPTY_COMMISSION`) rather than leave a fabricated shell —
+  Phase-14 hygiene. Single caller, verified.
+- Gates: `tsc` 0, `npm test` **387/387** (+14), lint 0 errors / 12 warnings (baseline). Commit
+  `039cf63` (local — push 403s).
+
+## LAYOUT QUESTION — verified (owner asked: is the layout from the DB, and can each dept's layout be DB-driven?)
+- **It is ALREADY DB-driven, and per-department.** `GET /api/rbac/app-ui` (`cgpe-backend-main/routes/rbac.js`)
+  reads a per-role/department document from the Mongo collection **`app_role_preferences`**, deep-merges
+  it over role defaults over global defaults, and returns the resolved layout. The app fetches it on
+  every cold start (`store/appUi.tsx`) and renders dashboard + nav + capabilities from it. The admin
+  panel writes it via `PUT /api/rbac/app-ui/:roleKey` (admin/leader/super_admin). **Change the DB doc →
+  every user in that dept picks it up on next cold start. No new APK.** Contract/schema:
+  `ANDROID/ui_rbac_config.json`.
+- **What the DB controls today:** which dashboard widgets show + their **order**, each widget's title
+  override / max items / visibility, the hero mode (4 options), the bottom **tabs** + order, hidden
+  modules, the 14 feature flags, and theme (accent/badge/density). Dept resolution:
+  `resolveRoleKey` → `sales`/`operations` use the **department**; everyone else uses the **role**.
+- **What is STATIC (the honest caveat):** the internal layout of each screen (its RN JSX/styling/fields)
+  is compiled into the APK. The DB **composes from a fixed catalogue** — 20 known widget keys, 5
+  renderable tab routes (`home/tasks/clients/leads/claims` + always `more`), 4 hero modes, 14 flags —
+  and drops anything outside it. So the DB can reorder/hide/retitle/limit and flip capabilities per dept,
+  but it is **not** a free-form drag-anywhere page builder, and a genuinely new widget/tab needs an app
+  code change first (then the DB can turn it on per dept). Known gaps: `nav.more_sections` grouping is
+  stored/served but **not yet consumed** by the app (Phase 10 D-3); `theme` only partially consumed;
+  `prospects`/`tickets` can't be physical tabs yet.
 
 ## Known broken / deliberately skipped
-- **Commissions earned aggregate — UNBLOCKED mid-handoff; build owed.** A concurrent write landed
-  `GET /api/commissions/my-summary` (Backend Phase 31) while this session ran — the exact self-scoped earned
-  aggregate mobile filed (`thisMonth/lastMonth/pending/ytd/history/recent`; `tier` omitted by design, read
-  from `/advisor/performance/:advisorId` as Phase 23 already does). Shape verified against the shipped item;
-  INBOX box left unticked. **This is next session's Phase 25** (see below) — no code written this session
-  (handoff, no new work). `commissions.tsx` still renders `blank` until then.
-- **i18n P1 (Phase 22 bulk) — paused on human copy.** Net-new `common.*` keys (`tryAgain` ×34, etc.) need
-  gu/hi/hi-en/gu-en; machine translation forbidden (PHASE-19 §4).
-- **Device-check backlog — CARRIED** (Phases 1/4/5/6/7/9/10/12/13/16/23/**24**). Phase-24 coverage % against
-  real production data, light/dark at 390 px. Phase-1 clock-in remains the stated hard prerequisite. Not
-  editor-buildable.
+- **Device check for Phase 25** — a real advisor with booked policies vs production, light/dark at 390 px.
+  Not editor-buildable.
+- **i18n P1 (Phase 22 bulk)** — paused on human gu/hi/hi-en/gu-en copy; machine translation forbidden.
+- **Device-check backlog — CARRIED** (Phases 1/4/5/6/7/9/10/12/13/16/23/24/**25**). Phase-1 clock-in is
+  the stated hard prerequisite.
 - **`git push` still 403s** — `reactjsaaziko` lacks write on `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`. All
-  commits local (this session: `7785d8a`). Needs a human to grant access or swap the credential.
+  commits local (this session: `039cf63`). Needs a human to grant access or swap the credential.
+- **Per-dept `app_role_preferences` docs may not be seeded** — can't query the live DB from here. Many
+  roles likely still run on `from_defaults:true`. Seeding/verifying real per-dept docs is a proposal, not
+  done (see Next).
 
 ## Next session starts here
-- **Phase 25 — build the commissions EARNED aggregate against the just-landed `GET /api/commissions/my-summary`
-  (Backend Phase 31).** The board is no longer editor-exhausted: this is a real, buildable, no-blocker phase.
-  Add `getCommissionSummary()` in `src/data/api.ts` (low-level `req()`, three-state posture copied from
-  `getMyEarnings`/`getMdrtTier`: 200-zeros = empty/no-banner, 503 = error+banner), wire it into
-  `commissions.tsx`'s ledger (`thisMonth/lastMonth/pending/ytd/history/recent`), add `api-commissions.test.ts`
-  pinning the envelope, then **tick the INBOX box**. `tier` is NOT in this endpoint — leave Phase 23's
-  `getMdrtTier` element as-is (it reads `/advisor/performance/:advisorId`). Full shape: the `→ cgpe-mobile ·
-  from cgpe-api` Phase-31 item at the TOP of `contracts/INBOX.md`; spec context `docs/spec/PHASE-6.md` D-5.
-- Other levers if Phase 25 stalls: owner-supplied i18n copy → unpauses Phase 22; a handset → the carried
-  device checks (now incl. Phase 24 coverage %).
-- First command: `/boot`
-- Watch out for: `../contracts/INBOX.md` shifts **mid-session** under concurrent writes — this session proved
-  it, the Phase-31 landing appeared between boot and handoff. Anchor every edit on surrounding text, never a
-  line number, and **grep your reply back** after writing (done this session — both replies confirmed durable).
+- **Owner to choose.** If the owner wants to push the DB-driven layout further (their question points that
+  way), the natural next phase is **Phase 26 — make per-department layout fully DB-editable**: (a) seed/verify
+  the `app_role_preferences` docs per department via the admin panel, (b) consume `nav.more_sections` in the
+  app (closes Phase 10 D-3) so More-tab grouping is DB-driven, (c) finish consuming `theme` for per-dept
+  branding. All app-side + admin-panel; no new backend endpoint. Otherwise the board's other levers are:
+  owner-supplied i18n copy → unpauses Phase 22; a handset → the carried device checks (incl. Phase 25).
+- **First command:** `/boot`
+- **Watch out for:** `../contracts/INBOX.md` shifts **mid-session** under concurrent writes — the Phase-31
+  item moved +13 lines between boot and handoff this session. Anchor every edit on surrounding text, never
+  a line number, and **grep your reply back** after writing (done this session — tick confirmed durable).

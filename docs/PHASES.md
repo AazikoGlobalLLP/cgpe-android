@@ -507,14 +507,24 @@ exercise.
 
 ## Next 3
 
-1. **Phase 25 — commissions EARNED aggregate. NOW BUILDABLE (blocker cleared 2026-08-12 handoff).**
-   `cgpe-api` shipped `GET /api/commissions/my-summary` (Backend Phase 31) — the self-scoped earned aggregate
-   (`thisMonth/lastMonth/pending/ytd/history/recent`) mobile filed, `protect`-only + token-forced, 200-zeros =
-   empty / 503 = error, `tier` omitted (read from `/advisor/performance/:advisorId`, already done in Phase 23).
-   Build `getCommissionSummary()` + wire `commissions.tsx`'s ledger + `api-commissions.test.ts`, then tick the
-   INBOX box. **This is the top net-new buildable item and next session's first action.** Full shape: the
-   Phase-31 item at the top of `contracts/INBOX.md`. (Historic context below — Phase 16 self-view salary was
-   BUILT 2026-08-12, device check only; the MDRT tier element was BUILT as Phase 23.)
+1. **Phase 26 (proposed) — make per-department layout fully DB-editable.** Owner asked (2026-08-12) whether
+   each dept's layout can live in the DB and change there automatically. **Verified: it already does** for the
+   composable parts — `GET /api/rbac/app-ui` serves a per-role/department doc from the `app_role_preferences`
+   Mongo collection, deep-merged over defaults, fetched every cold start (`store/appUi.tsx`), edited via the
+   admin panel (`PUT /app-ui/:roleKey`). What's NOT yet DB-driven and is the buildable work: (a) seed/verify
+   real per-dept docs (many roles likely still run `from_defaults:true`), (b) **consume `nav.more_sections`**
+   in the app (closes Phase 10 D-3) so More-tab grouping/titles are DB-driven, (c) finish consuming `theme`
+   (accent/badge/density) for per-dept branding. All app-side + admin-panel; **no new backend endpoint**. The
+   internal layout of each screen stays static in the APK (the DB composes from a fixed catalogue — 20 widgets,
+   5 tab routes, 4 hero modes, 14 flags — not a free-form page builder). See DECISIONS 2026-08-12 (top) +
+   HANDOFF "LAYOUT QUESTION". **Owner to confirm scope before building.**
+
+   **Phase 25 — commissions EARNED aggregate. BUILT 2026-08-12; only a device check remains.** `cgpe-api`
+   shipped `GET /api/commissions/my-summary` (Backend Phase 31) and `getCommissionSummary()` + the wired
+   `commissions.tsx` ledger + `api-commissions.test.ts` shipped against it the same session (commit `039cf63`,
+   387/387). Phase 6 D-5 is closed. What's left is **not editor-buildable**: a real advisor with booked policies
+   vs production, light/dark at 390 px. (Historic context below — Phase 16 self-view salary BUILT 2026-08-12,
+   device check only; the MDRT tier element BUILT as Phase 23.)
 
    **Phase 16 self-view salary — BUILT 2026-08-12; only a device check remains.** The blocker cleared
    (`cgpe-api` backend Phase 28 shipped `GET /api/payroll/my-earnings`, `protect`-only + self-scoped) and
