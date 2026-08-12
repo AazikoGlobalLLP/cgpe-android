@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 31: density rollout — migrate the shared list primitives (`ui/data.tsx` + `ui/identity.tsx`) with the D-2 pattern
+
+**Context.** Phases 29/30 migrated four screens (`clients`/`tasks`/`leads`/`claims`) to consume
+`theme.density`; both named the **shared list primitives** as the highest-leverage next target (PHASE-29
+§6), because migrating them lifts density onto the ELEMENTS they render across every screen at once rather
+than one screen per phase. Pure rollout — no mechanism, contract, or copy change.
+
+**Decision.** Migrate `ui/data.tsx` and `ui/identity.tsx` with the D-2 pattern verbatim (D-1): strip the
+static `{ font, radius, spacing }` import, destructure **exactly** the scale each component uses off `c`
+(D-2 — precise, to avoid `no-unused-vars`), style bodies untouched. Two non-mechanical cases handled as
+helpers/hooks rather than literals (D-3): `data.tsx`'s module-scope `PILL_FS` const → a `pillFs(font)`
+helper (a module const captures the comfortable scale at load and can't react to context; font is ×1.0 so
+the value is stable, but it is still **read** off the scale, never hard-coded — same treatment as
+`clients.tsx`/`leads.tsx`'s `sepInset`), and `KpiStrip` — which had **no `useTheme()` call at all** — gains
+one before its `items.length===0` early return (Rules of Hooks). `Sparkline`/`Label`/`Avatar`/`AvatarStack`
+use no scale tokens and are untouched. Kept to two files, deferring the remaining primitives
+(`base`/`controls`/`feedback`/`sheet`) and `home.tsx` to later phases (D-4 — ≤8-files convention). No new
+test (presentational migration, no new pure logic; the density numbers are pinned by `density.test.ts`).
+Gates: tsc 0, npm test **417/417** (unchanged), lint 0 errors / 12 warnings (baseline). Commit `2dd37fe`
+(local).
+
+**Consequence.** Under `theme.density: "compact"`, the primitives' rendered elements —
+`Pill`/`StatCard`/`MetricTile`/`DataRow`/`ListSection`/`KpiStrip`/`ActionTile` and `PersonRow`/`Avatar` —
+now tighten (spacing ×0.85 / radius ×0.90 / font ×1.0) on **every** screen that renders them, type sizes
+and ≥44pt targets unchanged, light/dark, next cold start, no APK. **Nuance recorded, not overclaimed
+(D-5):** a not-yet-migrated screen's **own** outer layout (its container padding/gaps, computed from the
+static exports) stays comfortable until that screen is migrated too — so this widens density's reach
+substantially without making any single unmigrated screen fully compact. ~73 files still render their own
+layout comfortable. No contract change. **Device check carried** (needs a seeded compact-density doc,
+light/dark at 390 px — Phase-26/27 seeding backlog). Full path: `docs/spec/PHASE-31.md`.
+
 ## 2026-08-12 — Phase 30: density rollout — migrate the list tabs (`tasks`/`leads`/`claims`) with the D-2 pattern
 
 **Context.** Phase 29 built the density mechanism and migrated one proof screen (`clients.tsx`); the

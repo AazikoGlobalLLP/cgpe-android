@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 31 — density rollout: migrate the shared list primitives (`ui/data.tsx` + `ui/identity.tsx`).
+BUILT 2026-08-12.** The highest-leverage lever after the list tabs (PHASE-29 §6, PHASE-30 "Next density
+targets"): rather than one screen per phase, migrating the two shared primitive modules lifts
+`theme.density:"compact"` onto the ELEMENTS they render — `Pill`/`StatCard`/`MetricTile`/`DataRow`/
+`ListSection`/`KpiStrip`/`ActionTile` (`data.tsx`) and `PersonRow`/`Avatar` (`identity.tsx`) — on **every**
+screen that renders them at once. Same D-2 pattern, no mechanism/contract/copy change: strip the static
+`{ font, radius, spacing }` import from each file, destructure **exactly** the scale each component uses off
+`c`; `tsc` proves completeness. Two non-mechanical cases handled as helpers/hooks, not literals (D-3):
+`data.tsx`'s module-scope `PILL_FS` const → a `pillFs(font)` helper (like `clients.tsx`/`leads.tsx`'s
+`sepInset`), and `KpiStrip` — which had **no `useTheme()` call at all** — gains one before its early return.
+`Sparkline`/`Label`/`Avatar`/`AvatarStack` use no scale tokens and are untouched. A department with
+`theme.density:"compact"` now renders those elements tighter (spacing ×0.85 / radius ×0.90 / font ×1.0,
+applied by `applyDensity`) wherever they appear, on the next cold start; an unmigrated screen's own outer
+layout stays comfortable until that screen is migrated too (static exports unchanged) — non-regressive.
+Gates green: `tsc` 0, `npm test` **417/417** (unchanged — presentational migration, no new pure logic; the
+density numbers are already pinned by `density.test.ts`), lint 0 errors / 12 warnings (baseline). Commit
+`2dd37fe` (local — push still 403s). **Device check carried** (a seeded `theme.density:"compact"` dept
+config showing tighter primitives, light/dark at 390 px; other screens' own layout stays comfortable) — not
+editor-buildable (no seeded compact doc yet). Next density targets: the remaining primitives
+(`base.tsx`/`controls.tsx`/`feedback.tsx`/`sheet.tsx`), then `home.tsx` (62 refs, danger zone) on its own.
+Full path: `docs/spec/PHASE-31.md`; DECISIONS 2026-08-12 (top).
+
 **Phase 30 — density rollout: migrate the list tabs (`tasks`/`leads`/`claims`). BUILT 2026-08-12.** The
 top editor-buildable lever after Phase 29 (PHASE-29 §6): the mechanism was done and one proof screen
 (`clients.tsx`) migrated, so this rolls the same D-2 pattern onto the three other core list tabs — no
@@ -623,15 +645,17 @@ exercise.
 
 ## Next 3
 
-**Top editor-buildable lever now → Phase 31, the density rollout continues.** Phase 29 shipped the
-`theme.density` mechanism + migrated `(tabs)/clients.tsx`; **Phase 30 (2026-08-12) migrated the three
-other list tabs `tasks`/`leads`/`claims`** (commit `d70da17`). ~75 files still render comfortable until
-migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern: `const { spacing, radius,
+**Top editor-buildable lever now → Phase 32, the density rollout continues.** Phase 29 shipped the
+`theme.density` mechanism + migrated `(tabs)/clients.tsx`; Phase 30 migrated the three other list tabs
+`tasks`/`leads`/`claims` (commit `d70da17`); **Phase 31 (2026-08-12) migrated the shared list primitives
+`ui/data.tsx` + `ui/identity.tsx`** (commit `2dd37fe`) — so `Pill`/`StatCard`/`MetricTile`/`DataRow`/
+`ListSection`/`KpiStrip`/`ActionTile` + `PersonRow`/`Avatar` now tighten wherever they render. ~73 files
+still render their own outer layout comfortable until migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern: `const { spacing, radius,
 font } = c`, strip the static import (`tsc` flags any miss), watch for **module-scope** scale uses (they
-can't be destructured — make a helper, as `clients.tsx`/`leads.tsx`'s `sepInset` did). Best next targets:
-the shared list primitives in `ui/data.tsx` + `ui/identity.tsx` (those lift density across many screens at
-once — highest leverage), then `home.tsx` (62 refs, a danger zone) on its own. No backend, no copy —
-buildable today. See `docs/spec/PHASE-30.md` + `docs/spec/PHASE-29.md`.
+can't be destructured — make a helper, as `clients.tsx`/`leads.tsx`'s `sepInset` did) and for components with **no `useTheme()` call at all** (add the hook, as `KpiStrip` needed). Best next
+targets: the remaining shared primitives `ui/base.tsx` / `ui/controls.tsx` / `ui/feedback.tsx` /
+`ui/sheet.tsx`, then `home.tsx` (62 refs, a danger zone) on its own. No backend, no copy —
+buildable today. See `docs/spec/PHASE-31.md` + `docs/spec/PHASE-29.md`.
 
 1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). FILED to `cgpe-api`
    2026-08-12; awaiting their reply.** A pure backend change (mobile has no resolver, renders any

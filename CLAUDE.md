@@ -129,12 +129,16 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   is pure in `theme/brand.ts` (`deriveBrandPalette`, fail-open by reference). **Phase 29:** `theme.density`
   is now CONSUMED — pure `applyDensity` in `theme/density.ts` (fail-open by reference; `compact` =
   spacing×0.85 / radius×0.90 / font×1.0) is applied by the bridge AFTER accent, and the layout scale now
-  lives ON the `Palette` (`useTheme().spacing`/`.radius`/`.font`). But **only MIGRATED screens react**
-  (Phase 29: `(tabs)/clients.tsx`; **Phase 30: `(tabs)/tasks.tsx`, `(tabs)/leads.tsx`, `(tabs)/claims.tsx`**);
-  the static `spacing`/`radius`/`font` exports stay = comfortable for the ~75 remaining
-  unmigrated files. Migrate a screen by destructuring the scale off `c` (`const {spacing,radius,font}=c`),
-  stripping the static import, and turning any **module-scope** scale use into a helper — see
-  `docs/spec/PHASE-29.md` D-2. Do **not** describe `density` as "deferred" again.
+  lives ON the `Palette` (`useTheme().spacing`/`.radius`/`.font`). But **only MIGRATED code reacts**
+  (Phase 29: `(tabs)/clients.tsx`; Phase 30: `(tabs)/tasks.tsx`, `(tabs)/leads.tsx`, `(tabs)/claims.tsx`;
+  **Phase 31: the shared list primitives `ui/data.tsx` + `ui/identity.tsx`** — Pill/StatCard/MetricTile/
+  DataRow/ListSection/KpiStrip/ActionTile + PersonRow, so those ELEMENTS now tighten on every screen that
+  renders them, though a not-yet-migrated screen's OWN layout — its outer padding/gaps — stays comfortable
+  until that screen is migrated too); the static `spacing`/`radius`/`font` exports stay = comfortable for
+  the ~73 remaining unmigrated files. Migrate by destructuring the scale off `c`
+  (`const {spacing,radius,font}=c`), stripping the static import, and turning any **module-scope** scale use
+  into a helper (as `data.tsx`'s `PILL_FS`→`pillFs(font)` and `clients.tsx`/`leads.tsx`'s `sepInset` did) —
+  see `docs/spec/PHASE-29.md` D-2. Do **not** describe `density` as "deferred" again.
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
 - `store/roles.ts` `tierOf()` grants Master by `user.role === 'super_admin'` (Phase 11,
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
