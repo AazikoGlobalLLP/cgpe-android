@@ -1,16 +1,17 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-12
-**Working on right now:** Asking the backend team to let each business area (Health Insurance, Tata AIA, Recruitment, the Sales sub-teams, and Others) have its own in-app menu — today only the plain Sales and Operations teams can.
+**Working on right now:** Letting each department show its own colour and name tag inside the app, so a Health Insurance user's app can look different from a Sales user's — all controlled centrally, with no new app version.
 
 **Done this week:**
-- Wrote up exactly what the backend needs to change so every business area can get its own menu layout, and sent that request to the backend team. The app side already supports it and needs no change — it will simply show the new menu once the backend is updated.
-- Each department's "More" menu already takes its groups, titles and order from a central setting: change it there and staff see the new menu next time they open the app, no new app version needed.
-- Prepared a one-time setup step that gives each department and staff role its own menu layout.
-- Earlier this week: staff can now see their real commission earnings, and their own salary-and-days summary.
+- The app can now take a department's chosen brand colour from the central settings and use it throughout — buttons, highlights and the sign-in dial all switch to that colour. If a department sets no colour, it keeps the standard blue-teal look, so nothing breaks.
+- A small department name tag (for example "SALES") now appears at the top of the home screen when the central settings provide one.
+- Each department's "More" menu already takes its groups, titles and order from the central settings: change it there and staff see the new menu next time they open the app.
+- Wrote up and sent the backend team the change needed so every business area — not just plain Sales and Operations — can get its own menu and look.
+- Earlier this week: staff can see their real commission earnings and their own salary-and-days summary.
 
 **Blocked on:**
-- The backend team needs to make their change before any of the new business-area menus can appear. The request is now in their queue.
-- The one-time menu setup still has to be run by someone with database access. Before it runs, a database password that was pasted into the setup file must be removed and changed, and each proposed menu should be given a quick review.
+- The colours and name tags only appear once someone with database access enters them for each department. Before that setup runs, a database password that was pasted into the setup file must be removed and changed.
+- The backend team still needs to make its change before the new per-business-area menus can appear. That request is in their queue.
 - The app still cannot be uploaded to the shared code store (an access issue for the developer's account) — all work is saved locally.
 
-**Next:** Wait for the backend team's reply, then confirm the new menus show up correctly, remove the pasted password, run the one-time setup, and check everything on a real phone.
+**Next:** Check the new colours and name tags on a real phone, wait for the backend team's reply, remove the pasted password, and run the one-time department setup.

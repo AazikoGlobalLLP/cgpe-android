@@ -597,8 +597,11 @@ exercise.
    pick this round):** (a) **seed/verify real per-dept `app_role_preferences` docs** — admin-panel +
    live-Mongo work (`cgpe-admin` writes them via `PUT /app-ui/:roleKey`), **not buildable from this repo**;
    many roles likely still run `from_defaults:true`, so the new More-tab DB control has nothing dept-specific
-   to render until docs are seeded. (c) **finish consuming `theme`** (accent/badge/density) — needs a
-   provider-order change (`ThemeProvider` above `AppUiProvider`), almost entirely device-verified. Plus the
+   to render until docs are seeded. (c) **finish consuming `theme`** — **BUILT as Phase 28 (2026-08-12):**
+   `theme.accent` (recolours brand `primary` + `gradientBrand`) and `theme.badge_label` (Home header badge)
+   are live via a `BrandTheme` bridge inside `AppUiProvider` (no top-level reorder) + pure
+   `deriveBrandPalette` in `src/theme/brand.ts`; **`density` deferred** (Phase 29 — static spacing/radius/font
+   consts in ~81 files need a runtime-scale refactor). See the `## Now` Phase-28 entry. Plus the
    Phase-26 **device check** (light/dark 390 px, ≥2 real dept configs; the "Personal" tail layout shift).
    The internal layout of each screen stays static in the APK (the DB composes from a fixed catalogue — 20
    widgets, 5 tab routes, 4 hero modes, 14 flags — not a free-form page builder). **Seeding update

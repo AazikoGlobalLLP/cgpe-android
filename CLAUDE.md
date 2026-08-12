@@ -122,7 +122,12 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 - `src/app/_layout.tsx:18` `import '@/lib/tracker'` is load-bearing; removing it kills background GPS
   on headless wakeups while foreground testing still passes.
 - Provider order in `_layout.tsx`: `AppUiProvider` inside `AuthProvider`, `ToastProvider` inside
-  `ConfirmProvider` (else `useToast()` is a silent no-op).
+  `ConfirmProvider` (else `useToast()` is a silent no-op). **Phase 28:** `BrandTheme` sits inside
+  `AppUiProvider` and re-provides the department-accented palette via `PaletteProvider` (`theme.tsx`)
+  to everything below; the base `ThemeProvider` MUST stay on top. Do **not** "simplify" by moving
+  `ThemeProvider` below `AppUiProvider` — it would un-theme the Confirm/Toast overlays. Accent maths
+  is pure in `theme/brand.ts` (`deriveBrandPalette`, fail-open by reference); `theme.density` is
+  parsed-but-ignored (deferred, see `docs/spec/PHASE-28.md` D-4).
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
 - `store/roles.ts` `tierOf()` grants Master by `user.role === 'super_admin'` (Phase 11,
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
