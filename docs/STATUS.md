@@ -1,15 +1,15 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-12
-**Working on right now:** Waiting for someone to supply the Gujarati/Hindi wording for the app's most repeated buttons so the translation work can carry on — and confirmed a server-team change didn't break anything on our side.
+**Working on right now:** Chasing the server team to add the one small piece needed before a person can see their own pay in the app, and confirming a change they made this week doesn't affect us.
 
 **Done this week:**
-- Made the app's everyday buttons — Call, Cancel, Delete, and the word "Today" — show in Gujarati and Hindi from one shared place, across 16 screens, without inventing any wording (only labels already translated were reused). All automated checks still pass.
-- Checked a change the server team just made (they tidied up how a settings response is sent) and confirmed it changes nothing for our app — replied to them to close it out.
-- Prepared a short, exact list of the remaining common labels (like "Try again") that need proper Gujarati/Hindi wording, so the translation request is small and clear.
+- Re-sent a short, clear request to the server team for the single missing piece the personal "my pay" screen needs — a safe way for a person to read only their own pay figure. Put it at the top of the shared to-do list so it stops getting overlooked at the bottom of a long file.
+- Checked a change the server team made this week — a new, more privacy-friendly way to count how many people a campaign would reach — and confirmed it changes nothing for our app, because our campaign screens already show the recipient list on purpose. Nothing to switch over.
+- Earlier this week: made the app's everyday buttons (Call, Cancel, Delete, and the word "Today") show in Gujarati and Hindi from one shared place across 16 screens, reusing only wording that was already translated.
 
 **Blocked on:**
-- Someone to supply the correct Gujarati, Hindi and Roman-script wording for the remaining repeated labels. Until that arrives, the next batch can't be switched on — it can't be machine-guessed without reading badly to customers. Paused here by choice.
-- The personal "my pay" screen still waits on the server team to let a person read their own figure. Unchanged.
+- The server team to add the "read your own pay" feature. Until then the personal pay screen can't be built honestly, so it's on hold.
+- Someone to supply the correct Gujarati, Hindi and Roman-script wording for the remaining repeated labels (like "Try again"). The next batch of translation is paused by choice until that arrives — it can't be machine-guessed without reading badly to customers.
 - Finished work still can't be uploaded to GitHub — the saved login on this machine lacks permission. Everything is saved safely on this machine meanwhile.
 
-**Next:** As soon as the Gujarati/Hindi words come back, switch the shared labels on (starting with "Try again") and translate one full screen end-to-end as the first complete example.
+**Next:** As soon as either the pay feature or the translation wording arrives, build that piece. Nothing else in the app is buildable right now without one of the two.

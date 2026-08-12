@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — INBOX sync (no build): campaigns count endpoint verified inert; Phase-16 nudge re-filed
+
+**Context.** Third boot of the day, after the app-UI sync (entry below). Board editor-exhausted: Phase 22
+(i18n P1 bulk) paused on owner copy, Phase 16 (self-view salary) and Phase 6 (commissions) backend-blocked.
+One upstream change was dated today — `cgpe-api` Phase 27 added a PII-free `GET /api/campaigns/audience/count`
+and flagged that `cgpe-admin` ships client names+phones to the browser purely to render a count. The item was
+addressed `→ cgpe-admin` only. At the owner's direction, the session's single action was to nudge the standing
+Phase-16 backend ask.
+
+**Decision.**
+1. **Verified the campaigns-count change is a no-op for mobile — did not wire it.** Mobile's
+   `getCampaignAudience` (`src/data/api.ts:2013`) is consumed by `campaigns.tsx`, `premium.tsx` and `jobs.tsx`,
+   all of which **deliberately render the sample names/messages** as the core campaign-preview feature
+   (`src/app/campaigns.tsx:34-41` documents this explicitly). Mobile has no filter-driven auto-refresh-count
+   surface that would ship PII merely to display a number — that was the panel-only problem. So mobile
+   legitimately needs `/audience` with its sample and gains nothing from the count-only endpoint. Correctly
+   addressed `→ cgpe-admin` only; verified against our real call sites, not assumed from the item text.
+2. **Re-filed the Phase-16 self-earnings ask as a fresh top-of-queue nudge — not a re-scope.** The 2026-08-11
+   ask is already correct and narrow (one self-scoped read of the `payable` `computeRangeSalary()` already
+   produces); the only failure was visibility — buried at the foot of a 260 KB file, stale-dated, unanswered.
+   Added a self-contained 2026-08-12 `→ cgpe-api` item at the top of `../contracts/INBOX.md` restating the one
+   ask + two-option minimal spec (`GET /api/payroll/my-earnings`, or a `req.user.user_id`-forced `buildRoster()`
+   path lifted out from under `authorize('admin')`) + the "strictly safer than the admin `/compute`" argument,
+   pointing to the old foot item + `PHASE-16.md` for full detail. Left **unticked** (outgoing). Grepped back per
+   the concurrent-write rule — survived (1 occurrence, top of queue).
+
+**Consequence.** No `src/` change, no gate re-run. Board unchanged: Phase 22 waits on owner copy, Phase 16 on
+`cgpe-api` building the self-scoped route (the nudge is now current-dated and visible at the top), Phase 6 on
+the commissions aggregate. The campaigns endpoint is a confirmed no-op for mobile. Push still 403s — the INBOX
+nudge lives only on disk (`contracts/` untracked), not in any commit.
+
 ## 2026-08-12 — INBOX sync (no build): app-UI closed-envelope verified; i18n paused on owner copy
 
 **Context.** Boot found the board editor-exhausted (the copy-free `common.*` work shipped the same day; entry

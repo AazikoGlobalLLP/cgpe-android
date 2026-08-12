@@ -14,6 +14,17 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**INBOX sync (no phase) — 2026-08-12 (3rd of the day).** Board editor-exhausted (Phase 22 paused on owner
+copy, Phase 16 backend-blocked). The one upstream change dated today — `cgpe-api` Phase 27's PII-free
+`GET /api/campaigns/audience/count` — was verified a **no-op for mobile**: `getCampaignAudience`
+(`api.ts:2013`) feeds `campaigns.tsx`/`premium.tsx`/`jobs.tsx`, all of which render the audience **sample**
+on purpose (the campaign preview), and mobile has no count-only surface that would ship PII for a number, so
+the item was correctly `→ cgpe-admin` only. At the owner's direction, **re-filed the standing Phase-16
+self-earnings ask as a fresh, self-contained top-of-queue nudge** (2026-08-12 `→ cgpe-api`) so it stops being
+buried at the foot of a 260 KB file — one narrowed ask (a self-scoped read of the `payable`
+`computeRangeSalary()` already produces), unticked, grepped back (survived). **No `src/` change, no gate
+re-run.** DECISIONS 2026-08-12 (top).
+
 **INBOX sync (no phase) — 2026-08-12 (2nd of the day).** A boot found the board editor-exhausted and one
 `→ cgpe-admin, cgpe-mobile` item open and addressed here: `cgpe-api` backend Phase 11 closed the
 `GET/PUT /api/rbac/app-ui` `data` envelope (dropped `_id`/`updated_at`/`updated_by`) and asked mobile to confirm
