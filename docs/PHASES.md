@@ -437,10 +437,17 @@ exercise.
    editor-buildable**: reconcile ≥3 real people's months against the payroll sheet by hand on a handset,
    and the light/dark 390 px render — plus **Phase 1 clock-in** stays the hard prerequisite. If the per-day
    breakdown is wanted, re-file `breakdown[]` + the days split to `cgpe-api` (they offered — PHASE-16.md
-   D-1). **Commissions (Phase 6) is now the top *net-new* blocked item** and stays backend-blocked: no
-   product aggregate / no `target` source in `routes/commissions.js`; deriving money on-device stays
-   rejected. Nothing app-side on commissions until that aggregate lands. Full detail:
-   `docs/spec/PHASE-16.md` §"BUILT 2026-08-12" and `docs/spec/PHASE-6.md`.
+   D-1). **Commissions (Phase 6) is the top *net-new* blocked item** and stays backend-blocked. **2026-08-12
+   update:** backend Phase 29 made the MDRT tier ladder server-authoritative, so a *target* source now exists
+   (`performance.mdrt_tier.next_premium`/`to_next` on `GET /api/advisor/*`, verified in `utils/mdrtTiers.js`).
+   But it does **not** unblock `commissions.tsx`: (a) the screen's real blocker is the **earned aggregate**
+   (`thisMonth/lastMonth/pending/ytd/history/recent`), which `/api/commissions` (raw rows) and Phase 29 both
+   fail to supply; (b) `next_premium` is an **annual cumulative-premium** tier goal, a different unit than the
+   `thisMonth / target` **monthly** meter (`commissions.tsx:209`), so it must not be fed into it. Per owner
+   direction, filed a self-scoped `GET /api/commissions/my-summary` shape (earned aggregate + optional `tier`
+   block) to `cgpe-api`. Nothing app-side on commissions until that aggregate lands; a standalone MDRT-tier-progress
+   view against `/api/advisor/performance/:advisorId` is buildable now if a shippable slice is wanted before then.
+   Full detail: `docs/spec/PHASE-16.md` §"BUILT 2026-08-12", `docs/spec/PHASE-6.md`, DECISIONS 2026-08-12 (top).
 2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13**
    (haptics, the AsyncStorage clock key, background GPS, the master route replay, airplane-mode
    behaviour, a leader's true "On duty now" count, the offline map render, the LIC catalogue + notes
@@ -488,7 +495,7 @@ exercise.
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
 | 4 | Leads contract | **Done** 2026-08-10 — 188 tests green (`5c08872`…`edc373c`); device checks outstanding |
 | 5 | WhatsApp send | **Done** 2026-08-10 — 219 tests green (`95f1ccb`); device checks outstanding |
-| 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint) |
+| 6 | Remaining envelope mismatches ~~`[api]`~~ | **Partial — done** 2026-08-11 — notes + LIC shipped app-side, 299 tests green; **commissions still blocked on `cgpe-api`** (no aggregate endpoint). **2026-08-12:** backend Phase 29 made MDRT `next_premium` a server-authoritative *target* source, but it doesn't unblock the screen (earned aggregate still unsourced; `next_premium` is an annual premium goal, not the monthly meter's unit) — filed `GET /commissions/my-summary` self-aggregate shape to `cgpe-api`, no build |
 | 7 | Geofence + tracking (INBOX D5, D10) | **Done** 2026-08-10 — 258 tests green (`3e092ad`, `fc09934`); device checks outstanding |
 | 8 | Last fabricated-data path + stale docs | **Done** 2026-08-11 — 258 tests green (`e5b57ef`, `4e12688`) |
 | 9 | Reminders/checklists persist ~~`[api]`~~ | **Done** 2026-08-11 — 305 tests green; `[api]` tag was wrong (reminders wired to existing `acknowledge`); device check outstanding |
