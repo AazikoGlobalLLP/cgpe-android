@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 27: `resolveRoleKey` widening filed to `cgpe-api` (owner-picked); a backend ask, ZERO mobile code
+
+**Context.** With the seed script delivered (Phase 26 follow-up), the owner picked, of the three
+carried options, "spec the `resolveRoleKey` change so each real business department gets its own
+layout." Verified in code (2026-08-12): `resolveRoleKey` (`routes/rbac.js:396`) compares the RAW
+lowercased department and only special-cases `sales`/`operations`, so 7 of the 9 canonical departments
+(`enums.md` §2.1) — incl. the 3 SALES sub-departments — resolve by role and can never point at a
+department doc. Mobile has **no resolver** (`grep resolveRoleKey ANDROID/src` = 0); `normalizeUiConfig`
+renders any `role_key` fail-open. `canonicalizeDepartment()` (`utils/rbac.js:130`) already normalizes
+the free-string department into one of 9 and is exported; `buildConfig` is fail-open on an unknown key.
+
+**Decision.** Wrote `docs/spec/PHASE-27.md` and filed a `→ cgpe-api` ask in `contracts/INBOX.md`
+(grep-verified durable). Recommended a **non-regressive candidate-key chain** (`[deptKey, roleKey,
+'advisor']`, first-with-a-doc wins) over an unconditional dept key, plus a canonical-name→lowercase-slug
+`DEPT_KEY` map (`HEALTH INSURANCE→health_insurance`, etc.; `sales`/`operations` unchanged for
+back-compat). Mobile requires only four mechanism-agnostic guarantees (back-compat, non-regression,
+lowercase keys, collision-free); the final mechanism is `cgpe-api`'s. This is **not a mobile build** —
+the app already renders any key with no code change, so there is nothing to build and no gate to re-run
+in this repo (D-1 in the spec).
+
+**Consequence.** Per-business-department layouts are live only when THREE things exist: the resolver
+change (cgpe-api), seeded docs for the new keys (the Phase-26 seed script widened + owner-run), and the
+device confirmation. The `resolveRoleKey` widening is necessary-but-not-sufficient. Two items flagged
+not decided: the seed must gain the new keys, and whether the new Sales-family keys should inherit
+`MANDATORY_BY_ROLE`'s Sales widgets is a backend product call.
+
 ## 2026-08-12 — Phase 26 follow-up: per-department seeding delivered as a backend script (owner-directed); writes only `nav.more_sections`; credential-in-source flagged
 
 **Context.** Phase 26 made the app *consume* `nav.more_sections`, but no `app_role_preferences` doc

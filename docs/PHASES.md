@@ -14,6 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 27 — per-business-department app layouts (`resolveRoleKey` widening). FILED to `cgpe-api`, no
+mobile build — 2026-08-12.** The owner picked, of the three carried Phase-26 options, "spec the
+`resolveRoleKey` change." Verified in code: `resolveRoleKey` (`routes/rbac.js:396`) compares the RAW
+lowercased department and only special-cases `sales`/`operations`, so 7 of the 9 canonical departments
+(`enums.md` §2.1) — including the 3 SALES sub-departments (`SALES-CGPE_Tree`/`RENEWALS & LIC`/`MUTUAL
+FUNDS & WEALTH`, which lowercase to `sales-cgpe_tree` ≠ `sales`) — resolve by role and can never point at
+a department doc, however much the panel/seed writes. **This is a pure BACKEND change: mobile has no
+resolver** (`grep resolveRoleKey ANDROID/src` = 0) and `normalizeUiConfig` renders any `role_key`
+fail-open, so the app already shows a new department's layout with **zero `src/` change** the moment the
+backend emits the key and a doc exists. Wrote `docs/spec/PHASE-27.md` and filed a `→ cgpe-api` ask in
+`contracts/INBOX.md` (grep-verified durable, 2 hits) — the follow-up the Phase-26 seed heads-up
+pre-promised, now that the owner has confirmed. **Recommended** (mechanism is cgpe-api's call): derive
+keys via the already-exported `canonicalizeDepartment()` (`utils/rbac.js:130`) → a `DEPT_KEY` map
+(`HEALTH INSURANCE→health_insurance`, `TATA AIA→tata_aia`, … ; `sales`/`operations` unchanged for
+back-compat), and use a **non-regressive candidate-key chain** (`[deptKey, roleKey, 'advisor']`,
+first-with-a-doc wins) so a department peels off onto its own layout only when seeded — no big-bang, no
+blank dashboards. Mobile requires only four mechanism-agnostic guarantees (back-compat / non-regression /
+lowercase keys / collision-free — no `dept:` namespace needed). **Nothing built here, no gate re-run**
+(there is nothing mobile-side to build — D-1). Necessary-but-not-sufficient: per-department layouts are
+live only when the resolver change (cgpe-api), seeded docs (Phase-26 seed script widened + owner-run),
+and a device check all exist. Two items flagged not decided: the seed must gain the new keys, and whether
+the new Sales-family keys should inherit `MANDATORY_BY_ROLE`'s Sales widgets (a backend product call).
+Full path: `docs/spec/PHASE-27.md`; DECISIONS 2026-08-12 (top).
+
 **Phase 26 — More-tab grouping is now DB-driven (`nav.more_sections` consumed). BUILT 2026-08-12.** The
 owner-chosen slice of the "make per-department layout DB-editable" question, and the close of the last
 server-driven-nav gap (Phase 10 D-3; `ui_rbac_config.json:320-324` named mobile the fix owner). The field
