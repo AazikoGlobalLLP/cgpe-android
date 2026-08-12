@@ -14,6 +14,29 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 21 P1 (i18n) — `common.*` dedup, the copy-free slice. BUILT 2026-08-12.** Owner-directed "full
+copy-free dedup". Routed the **already-translated** repeated labels to existing `common.*` keys across
+**16 screens** — `Call`→`common.call`, `Cancel`→`common.cancel`, `Delete`→`common.delete`,
+`WhatsApp`→`common.whatsapp` (a trade noun, so English in all 5 langs → **centralization only, no visible
+change**, kept for button-row consistency). `Call`/`Cancel`/`Delete` now render in Gujarati/Hindi where they
+were hardcoded English. Added **one** net-new key, **`common.today`**, by **lifting** the existing
+`tab.home`/`tasks.today` human copy (identical `આજે`/`आज`/`Aaj`/`Aaje`) — **dedup of approved copy, NOT machine
+translation** — so parity moved **74→75** (bumped deliberately in `dictionaries.test.ts`); wired the standalone
+`Today` eyebrows (`home` ×2, `attendance`) and the `reminders` "Today"/"Overdue"/"Upcoming" section titles
+(the last two reuse existing `tasks.overdue`/`tasks.upcoming` — translating only "Today" of the three would look
+half-done). **Deliberately NOT wired** (needs copy or would be half-done): every other net-new `common.*` key —
+`tryAgain` (×34, the biggest single win), `clearSearch`, `refresh`, the ~8-variant **outage body**, the a11y
+`Call {name}`/`Open WhatsApp chat` labels — all need human gu/hi/hi-en/gu-en copy (PHASE-19 §4 forbids machine
+translation); the four module-level date helpers (`calendar.dayTitle`, `reminders.timeFor`,
+`notifications.dayLabel`, `whatsapp/[id].dayLabel`) which mix `Today`/`Yesterday`/weekdays in one function;
+the `task-new` "Today" picker option; and `more.tsx`'s nav-tile "WhatsApp". Naming: `tickets/index.tsx`
+(`t = typeMeta`) and `notes.tsx` (`setTotal((t)=>…)`) bind the translator to `tr` to avoid shadowing; every
+other screen uses `t = useT()`. Gates green: `tsc` 0, `npm test` **350/350** (unchanged — no new pure logic,
+parity assertion moved 74→75), `lint` 0 errors/12 warnings (baseline). Push still 403s (commit local). **The
+copy-free `common.*` work is now exhausted** — further P1 and any Tier-1 wiring wait on **owner-supplied copy**
+(fill-list = the net-new `common.*` set in `docs/i18n/SCOPE.md` §4.1). Full path: `docs/i18n/SCOPE.md` §3/§4.1/§8;
+DECISIONS 2026-08-12 (top); HANDOFF.
+
 **Phase 21 (i18n P0) — `t()` extended to `t(key, params?)`. BUILT 2026-08-11 (`a7a0979`).** The one
 copy-free, backend-free step off the scoped i18n worklist (`docs/i18n/SCOPE.md` §3 P0). `t` gained (1)
 named `{placeholder}` interpolation — an unmatched token is left **verbatim** (`{name}`), a visible bug
@@ -357,11 +380,14 @@ exercise.
    worklist + plan in `docs/i18n/` (`SCOPE.md` + `inventory/01–06*.md`): only 74 keys wired across 6
    files, ~40 screens 100% hardcoded, ~1,800 string occurrences. **P0 done (Phase 21, `a7a0979`):**
    `t(key, params?)` interpolation + count-plural extension now exists and is tested — dynamic strings can
-   be wired without concatenation. **Still buildable with no copy:** P1, the `common.*` dedup layer
-   (~1,800 occurrences → ~1,200 unique keys). The **copy itself** still needs **human-supplied**
-   Hinglish/Gujlish/Hindi/Gujarati (~4,800 strings; no machine guess, Phase 19 §4). After P1, wire one
-   Tier-1 screen (SCOPE.md §5) and hand the owner its fill-in list. Trap: adding real keys bumps the
-   parity test's hard `EN_KEYS.length===74`, and it won't catch an English string left in a non-English dict.
+   be wired without concatenation. **P1 copy-free slice done (Phase 21 P1, 2026-08-12):** the
+   already-translated repeats (`Call`/`Cancel`/`Delete`/`WhatsApp`) are routed to existing `common.*` keys
+   across 16 screens, and `common.today` was added by lifting existing copy (parity **75**). **The copy-free
+   `common.*` work is now exhausted** — everything remaining (the net-new `common.*` keys: `tryAgain` ×34,
+   `clearSearch`, `refresh`, the outage body, the a11y labels; then any Tier-1 screen, SCOPE.md §5) needs
+   **human-supplied** Hinglish/Gujlish/Hindi/Gujarati (~4,800 strings; no machine guess, Phase 19 §4). The
+   fill-list is the net-new `common.*` set in SCOPE.md §4.1. Trap: adding real keys bumps the parity test's
+   hard count (now `=== 75`), and it won't catch an English string left in a non-English dict.
 
 > **Also still open:** the **device-verification backlog** — handset-only acceptance criteria carried
 > from Phases 1, 4, 5, 6, 7, 9, 10, 12, 13 (haptics, the AsyncStorage clock key, background GPS, the
@@ -406,6 +432,7 @@ exercise.
 | 19 | Language toggle (5 langs incl. Hinglish/Gujlish) | **Built** 2026-08-11 — parity Vitest (323/323, +18) + per-language E2E walk (42/42 render, 0 key leaks × 5 langs); dictionaries already complete; naturalness review outstanding |
 | 20 | Admin payroll roster (in-app) | **Built** 2026-08-11 — owner-directed; `src/app/payroll.tsx` on admin-only `GET /payroll/compute`, 330 tests green (+7); no PII, no on-device math, gated on real role. Phase 16 self-view still blocked; device check outstanding |
 | 21 | i18n P0 — `t(key, params?)` interpolation + plurals | **Built** 2026-08-11 (`a7a0979`) — named `{placeholder}` fill + CLDR `key_one`/`key_other` by active language; single-arg `t()` byte-identical; no dict key added (parity 74 untouched); 350 tests green (+20); pure engine only, no screen wired yet |
+| 22 | i18n P1 — `common.*` dedup (copy-free slice) | **Built** 2026-08-12 — routed `Call`/`Cancel`/`Delete`/`WhatsApp` → existing `common.*` across 16 screens + added `common.today` (lifted copy, parity 74→75); 350 tests green (unchanged), lint 0/12. Net-new `common.*` keys (`tryAgain` ×34 etc.) still blocked on human copy |
 
 ---
 

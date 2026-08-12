@@ -62,7 +62,17 @@ possessive/verb placement flips elsewhere), so `t('a') + count + t('b')` produce
   and testable in `src/i18n/`. This is the first unit of work ("Phase 21a") before any dynamic string
   can be translated.
 
-### P1. A `common.*` shared layer — wire the repeats once.
+### P1. A `common.*` shared layer — wire the repeats once. — ◐ COPY-FREE SLICE BUILT 2026-08-12
+**Partly done.** The slice needing **zero** new copy shipped (Phase 21 P1): the already-translated repeats were
+routed to existing `common.*` keys across **16 screens** — `Call`→`common.call`, `Cancel`→`common.cancel`,
+`Delete`→`common.delete`, `WhatsApp`→`common.whatsapp` (a trade noun, English in all 5 → centralization only).
+One net-new key, **`common.today`**, was added by **lifting** the existing `tab.home`/`tasks.today` human copy
+(dedup, not translation) → parity **74→75**; the standalone `Today` eyebrows (`home` ×2, `attendance`) and the
+`reminders` "Today"/"Overdue"/"Upcoming" section titles now translate. **Still blocked on human copy:** every
+other net-new `common.*` key — `tryAgain` (×34, the biggest single win), `clearSearch`, `refresh`, the ~8-variant
+**outage body**, the a11y `Call {name}` / `Open WhatsApp chat` labels — cannot be wired until the four non-English
+strings are supplied (PHASE-19 §4 forbids machine translation). See DECISIONS 2026-08-12. Original problem below.
+
 ~25 labels recur across many screens (`Try again` appears **~30 times**; `Call`, `WhatsApp`,
 `Clear search`, `Refresh`, `Load more`, `Try again`, `Mobile`, `On duty`, `Today`/`Yesterday`, the
 `Namaste {name}` prefill, the `Call {name}` / `Open WhatsApp chat with {name}` a11y labels). Wiring these
@@ -86,8 +96,11 @@ appears in ~8 slight variants across screens; unify those during wiring. Propose
 ## 4. Scope decisions to confirm
 
 ### 4.1 Proposed `common.*` keys (dedup layer)
-Already in the dictionary: `common.signIn/signOut/cancel/send/call/whatsapp/seeAll/search/pipeline/delete/save`.
-Add: `common.tryAgain`, `common.clearSearch`, `common.clear`, `common.saving`, `common.uploading`,
+Already in the dictionary (all wired 2026-08-12 where they were hardcoded):
+`common.signIn/signOut/cancel/send/call/whatsapp/seeAll/search/pipeline/delete/save/today`
+(`today` added 2026-08-12 by lifting `tab.home`/`tasks.today` copy — parity now 75).
+Still to add — **each needs human copy in gu/hi/hi-en/gu-en before it can be wired** (PHASE-19 §4):
+`common.tryAgain`, `common.clearSearch`, `common.clear`, `common.saving`, `common.uploading`,
 `common.refresh`, `common.loadMore`, `common.all`, `common.today`, `common.yesterday`, `common.done`,
 `common.mobile`, `common.onDuty`, `common.signedIn`, `common.continue`, `common.goToSignIn`,
 `common.showResults`, `common.whatsappGreeting` (`Namaste {name}`), `common.a11yCall` (`Call {name}`),
@@ -145,7 +158,11 @@ time (a `grep` for the English literal is the reliable handle).
 
 ## 8. Status
 **P0 built (2026-08-11, `a7a0979`)** — the `t(key, params?)` interpolation + plural extension exists and is
-tested; see §3 P0. **Still scoping-only for everything else:** no dictionary touched, no string translated,
-no tier wired. The open decision is unchanged: **which tier (if any) to wire, and whether to do P1 (the
-`common.*` dedup layer, also copy-free) next** before any human copy is supplied. See `inventory/` for the
-full string list.
+tested; see §3 P0. **P1 copy-free slice built (2026-08-12)** — the already-translated repeats (`Call`, `Cancel`,
+`Delete`, `WhatsApp`) are routed to existing `common.*` keys across 16 screens, and `common.today` was added by
+lifting existing copy (parity 74→75); see §3 P1 + DECISIONS 2026-08-12. Gates green (`tsc` 0, `npm test` 350/350,
+`lint` 0 errors/12 warnings). **The copy-free work on `common.*` is now exhausted.** Everything remaining —
+the net-new `common.*` keys (`tryAgain` ×34, `clearSearch`, `refresh`, the outage body, the a11y labels) and
+any Tier-1 screen wiring — **waits on human-supplied gu/hi/hi-en/gu-en copy** (no machine translation, PHASE-19
+§4). The open decision is now: **which tier to translate first, and who supplies the copy.** The fill-list is the
+net-new `common.*` set in §4.1; see `inventory/` for the full per-screen string list.

@@ -20,6 +20,7 @@ import * as api from '@/data/api';
 import type { Prospect } from '@/data/api';
 import { fmtDate } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Recruitment prospects — a schema-agnostic pool, read defensively.
@@ -207,6 +208,7 @@ function RosterSkeleton() {
 
 function ProspectRow({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
   const c = useTheme();
+  const t = useT();
   const name = nameOf(p);
   const phone = phoneOf(p);
   const stage = stageOf(p).toLowerCase();
@@ -219,9 +221,9 @@ function ProspectRow({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
       : sub === 'No number on record' ? 'alert-circle-outline' : 'location-outline';
 
   const actions: SwipeAction[] = phone ? [
-    { icon: 'call', label: 'Call', tone: 'primary', onPress: () => { haptics.tap(); call(phone); } },
+    { icon: 'call', label: t('common.call'), tone: 'primary', onPress: () => { haptics.tap(); call(phone); } },
     {
-      icon: 'logo-whatsapp', label: 'WhatsApp', tone: 'whatsapp',
+      icon: 'logo-whatsapp', label: t('common.whatsapp'), tone: 'whatsapp',
       onPress: () => { haptics.tap(); whatsapp(phone, `Namaste ${name}`); },
     },
   ] : [];
@@ -258,6 +260,7 @@ type Action = 'connect' | 'note' | 'respond';
 
 export default function Prospects() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const toast = useToast();
@@ -706,14 +709,14 @@ export default function Prospects() {
           {selectedPhone ? (
             <Row>
               <Button
-                label="Call"
+                label={t('common.call')}
                 icon="call"
                 variant="outline"
                 style={{ flex: 1 }}
                 onPress={() => { if (selected) { haptics.tap(); call(selectedPhone); } }}
               />
               <Button
-                label="WhatsApp"
+                label={t('common.whatsapp')}
                 icon="logo-whatsapp"
                 variant="whatsapp"
                 style={{ flex: 1 }}

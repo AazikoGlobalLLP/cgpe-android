@@ -16,6 +16,7 @@ import * as api from '@/data/api';
 import type { WaThread } from '@/data/types';
 import { timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * The WhatsApp inbox.
@@ -279,6 +280,7 @@ export default function WhatsAppHub() {
 
 function ThreadRow({ thread, onOpen }: { thread: WaThread; onOpen: () => void }) {
   const c = useTheme();
+  const t = useT();
   const when = whenLabel(thread.lastAt);
   const hasUnread = thread.unread > 0;
 
@@ -288,13 +290,13 @@ function ThreadRow({ thread, onOpen }: { thread: WaThread; onOpen: () => void })
   if (thread.phone) {
     actions.push({
       icon: 'logo-whatsapp',
-      label: 'WhatsApp',
+      label: t('common.whatsapp'),
       tone: 'whatsapp',
       onPress: () => { haptics.tap(); whatsapp(thread.phone); },
     });
     actions.push({
       icon: 'call',
-      label: 'Call',
+      label: t('common.call'),
       tone: 'primary',
       onPress: () => { haptics.tap(); call(thread.phone); },
     });

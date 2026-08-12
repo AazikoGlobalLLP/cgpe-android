@@ -18,6 +18,7 @@ import { useDataHealth } from '@/ui/health-banner';
 import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
 import { timeAgo } from '@/lib/format';
+import { useT } from '@/i18n';
 import { getHealth } from '@/data/health';
 import * as api from '@/data/api';
 import type { BoardNote, NotesPage } from '@/data/api';
@@ -92,6 +93,7 @@ function bumpFacet(rows: { label: string; value: number }[], label: string, by: 
 
 export default function Notes() {
   const c = useTheme();
+  const tr = useT(); // `t` is used as a setState accumulator below; translator is `tr`
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -247,7 +249,7 @@ export default function Notes() {
     const ok = await confirm({
       title: 'Delete this note?',
       message: 'It leaves your board for good. Nobody else can see it, and it cannot be brought back.',
-      confirmText: 'Delete',
+      confirmText: tr('common.delete'),
       cancelText: 'Keep it',
       destructive: true,
       icon: 'trash-outline',
@@ -273,7 +275,7 @@ export default function Notes() {
       statuses: bumpFacet(f.statuses, note.status || 'active', -1),
     }));
     toast('Note deleted.', 'success');
-  }, [confirm, toast]);
+  }, [confirm, toast, tr]);
 
   const toggleReveal = useCallback((id: string) => {
     haptics.select();
@@ -499,6 +501,7 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
   onDelete: () => void;
 }) {
   const c = useTheme();
+  const tr = useT();
   const meta = catMeta(note.category);
   const isVoice = note.sourceType === 'voice';
 
@@ -524,7 +527,7 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
       tone: 'primary',
       onPress: onPin,
     },
-    { icon: 'trash', label: 'Delete', tone: 'danger', onPress: onDelete },
+    { icon: 'trash', label: tr('common.delete'), tone: 'danger', onPress: onDelete },
   ];
 
   return (
@@ -632,6 +635,7 @@ function Composer({
   onSave: () => void;
 }) {
   const c = useTheme();
+  const tr = useT();
 
   return (
     <View style={{
@@ -660,7 +664,7 @@ function Composer({
             onChange={onCategory}
           />
           <Row>
-            <Button label="Cancel" variant="ghost" onPress={onCancel} />
+            <Button label={tr('common.cancel')} variant="ghost" onPress={onCancel} />
             <Button
               label="Save note"
               icon="checkmark"

@@ -19,6 +19,7 @@ import * as api from '@/data/api';
 import type { SegmentRow } from '@/data/api';
 import { fmtDay, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Smart segments — the advisor's working list.
@@ -666,6 +667,7 @@ function DetailSheet({ row, defs, onClose }: {
   row: RowView | null; defs: Map<string, FlagDef>; onClose: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
 
   const birthday = inDays(row?.birthdayIn ?? null);
   const renewal = inDays(row?.renewalIn ?? null);
@@ -682,14 +684,14 @@ function DetailSheet({ row, defs, onClose }: {
       footer={row && row.kind === 'individual' && row.phone ? (
         <Row>
           <Button
-            label="Call"
+            label={t('common.call')}
             icon="call"
             full
             style={{ flex: 1 }}
             onPress={() => { haptics.tap(); call(row.phone); }}
           />
           <Button
-            label="WhatsApp"
+            label={t('common.whatsapp')}
             icon="logo-whatsapp"
             variant="whatsapp"
             full

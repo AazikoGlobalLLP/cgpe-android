@@ -491,6 +491,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
   onReopen?: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const st = TASK_STATUS[task.status];
   const pr = TASK_PRIORITY[task.priority];
   const prog = taskProgress(task);
@@ -502,7 +503,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
   const actions: SwipeAction[] = [];
   if (!isDone && onDone) actions.push({ icon: 'checkmark-done', label: 'Done', tone: 'success', onPress: onDone });
   if (!isDone && task.clientPhone) {
-    actions.push({ icon: 'call', label: 'Call', tone: 'primary', onPress: () => { haptics.tap(); call(task.clientPhone!); } });
+    actions.push({ icon: 'call', label: t('common.call'), tone: 'primary', onPress: () => { haptics.tap(); call(task.clientPhone!); } });
   }
   if (isDone && onReopen) actions.push({ icon: 'arrow-undo', label: 'Reopen', tone: 'warning', onPress: onReopen });
 

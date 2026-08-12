@@ -19,6 +19,7 @@ import type { Lead, LeadStage } from '@/data/types';
 import { STAGE_META } from '@/data/labels';
 import { inr, inrShort, timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * The lead pipeline.
@@ -429,6 +430,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
   lead: Lead; busy: boolean; onOpen: () => void; onAdvance: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const st = STAGE_META[lead.stage];
   const next = NEXT_STAGE[lead.stage];
 
@@ -452,7 +454,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
   if (lead.phone) {
     actions.push({
       icon: 'logo-whatsapp',
-      label: 'WhatsApp',
+      label: t('common.whatsapp'),
       tone: 'whatsapp',
       onPress: () => { haptics.tap(); whatsapp(lead.phone, `Namaste ${lead.name}`); },
     });
@@ -460,7 +462,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
   if (actions.length < 2 && lead.phone) {
     actions.unshift({
       icon: 'call',
-      label: 'Call',
+      label: t('common.call'),
       tone: 'primary',
       onPress: () => { haptics.tap(); call(lead.phone); },
     });

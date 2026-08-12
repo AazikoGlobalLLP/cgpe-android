@@ -19,6 +19,7 @@ import type { Client } from '@/data/types';
 import { SEG_META } from '@/data/labels';
 import { daysUntil, fmtDay, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * The client book — thousands of rows, one page of 100 at a time.
@@ -301,6 +302,7 @@ export default function Clients() {
 
 function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
   const c = useTheme();
+  const t = useT();
   const p = client.policies[0];
   const hasPolicyNo = !!p?.number && p.number !== '—';
   const due = p?.nextRenewal ? daysUntil(p.nextRenewal) : NaN;
@@ -318,11 +320,11 @@ function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
 
   const actions: SwipeAction[] = client.phone ? [
     {
-      icon: 'call', label: 'Call', tone: 'primary',
+      icon: 'call', label: t('common.call'), tone: 'primary',
       onPress: () => { haptics.tap(); call(client.phone); },
     },
     {
-      icon: 'logo-whatsapp', label: 'WhatsApp', tone: 'whatsapp',
+      icon: 'logo-whatsapp', label: t('common.whatsapp'), tone: 'whatsapp',
       onPress: () => { haptics.tap(); whatsapp(client.phone, `Namaste ${client.name}`); },
     },
   ] : [];

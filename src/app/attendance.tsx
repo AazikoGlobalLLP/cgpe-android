@@ -18,6 +18,7 @@ import { haptics } from '@/lib/haptics';
 
 import * as api from '@/data/api';
 import { fmtDay, fmtTime } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * My attendance — the clock-in history.
@@ -130,6 +131,7 @@ function SpineSkeleton() {
 
 export default function Attendance() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const health = useDataHealth();
 
@@ -266,7 +268,7 @@ export default function Attendance() {
                   </View>
 
                   <View style={{ flex: 1 }}>
-                    <Eyebrow>Today</Eyebrow>
+                    <Eyebrow>{t('common.today')}</Eyebrow>
                     {today?.in && clockedAt ? (
                       <Metric value={clockedAt} size={font.h2} style={{ marginTop: 2 }} />
                     ) : (

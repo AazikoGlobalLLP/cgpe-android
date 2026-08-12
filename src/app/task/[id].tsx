@@ -23,6 +23,7 @@ import type { TeamMember } from '@/data/team';
 import type { Client } from '@/data/types';
 import { fmtDate, fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Task detail — the workflow screen.
@@ -125,6 +126,7 @@ function DetailSkeleton() {
 
 export default function TaskDetail() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -363,9 +365,9 @@ export default function TaskDetail() {
 
             {task.clientPhone ? (
               <Row style={{ marginTop: 16, gap: spacing.md }}>
-                <Button label="Call" icon="call" variant="secondary" style={{ flex: 1 }}
+                <Button label={t('common.call')} icon="call" variant="secondary" style={{ flex: 1 }}
                   onPress={() => { haptics.tap(); call(task.clientPhone!); }} />
-                <Button label="WhatsApp" icon="logo-whatsapp" variant="whatsapp" style={{ flex: 1 }}
+                <Button label={t('common.whatsapp')} icon="logo-whatsapp" variant="whatsapp" style={{ flex: 1 }}
                   onPress={() => { haptics.tap(); whatsapp(task.clientPhone!); }} />
               </Row>
             ) : task.client ? (
@@ -599,9 +601,9 @@ export default function TaskDetail() {
         <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
           {contact?.phone ? (
             <>
-              <Button label="Call" icon="call" size="lg" full
+              <Button label={t('common.call')} icon="call" size="lg" full
                 onPress={() => { haptics.tap(); setContactOpen(false); call(contact.phone); }} />
-              <Button label="WhatsApp" icon="logo-whatsapp" variant="whatsapp" size="lg" full
+              <Button label={t('common.whatsapp')} icon="logo-whatsapp" variant="whatsapp" size="lg" full
                 onPress={() => { haptics.tap(); setContactOpen(false); whatsapp(contact.phone); }} />
             </>
           ) : null}

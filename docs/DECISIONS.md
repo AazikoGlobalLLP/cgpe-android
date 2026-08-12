@@ -6,6 +6,51 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — Phase 21 P1: `common.*` dedup — wired the copy-free slice only
+
+**Context.** P0 (`t(key, params?)`) shipped (entry below). P1 in `docs/i18n/SCOPE.md` §4.1 is the `common.*`
+dedup layer — routing ~25 repeated labels through shared keys so ~1,800 occurrences collapse toward ~1,200.
+But its highest-value keys (`Try again` ×34, `Clear search`, `Refresh`, the ~8-variant outage body) are
+**net-new** and need human Gujarati/Hindi/Hinglish/Gujlish copy, which PHASE-19 §4 forbids inventing. Phase 16
+self-view is still backend-blocked (INBOX `my-earnings` unanswered). At the owner's direction ("full copy-free
+dedup"), built the slice that needs **zero** new copy.
+
+**Decision.**
+1. **Routed the already-translated labels to existing `common.*` keys across 16 screens** — `Call`→`common.call`,
+   `Cancel`→`common.cancel`, `Delete`→`common.delete`, `WhatsApp`→`common.whatsapp`. `Call`/`Cancel`/`Delete`
+   now render in Gujarati/Hindi where they were hardcoded English; `WhatsApp` is a trade noun (English in all 5),
+   so its wiring is **centralization only, no visible change** — kept for button-row consistency.
+2. **Added `common.today`** (parity **74 → 75**, bumped deliberately in `dictionaries.test.ts`) by **lifting the
+   existing human copy** from `tab.home`/`tasks.today` (identical `આજે`/`आज`/`Aaj`/`Aaje` in all 5 dicts). This is
+   **dedup of already-approved copy, NOT machine translation** — the only net-new `common.*` key whose four
+   non-English values already existed under another key. Wired the standalone `Today` eyebrows (`home` ×2,
+   `attendance`) and the `reminders` "Today" section title to it.
+3. **Wired the `reminders` sibling section titles too** — `Overdue`→`tasks.overdue`, `Upcoming`→`tasks.upcoming`
+   (both existing keys) alongside `Today`. Translating only "Today" of the three would leave a visibly
+   half-translated group; all three are copy-free.
+
+**What was deliberately NOT wired (needs copy, or would be half-done).**
+- **All net-new `common.*` keys** — `tryAgain`, `clearSearch`, `clear`, `saving`, `uploading`, `refresh`,
+  `loadMore`, `all`, `yesterday`, `done`, `mobile`, `onDuty`, `signedIn`, `continue`, `goToSignIn`,
+  `showResults`, the a11y `Call {name}` / `Open WhatsApp chat with {name}` — need human copy. Deferred to the
+  owner; this is the bulk of P1's occurrence count and stays blocked exactly as scoped.
+- **The four module-level date helpers** (`calendar.dayTitle`, `reminders.timeFor`, `notifications.dayLabel`,
+  `whatsapp/[id].dayLabel`) return `Today`/`Yesterday`/weekday/formatted-date from one function; `t` is not
+  reachable there and wiring only the `Today` branch while `Yesterday`/weekdays (no keys, need copy) stay
+  English would be half-done. Skipped whole.
+- **`task-new` due-date picker "Today"** — one option in a `Today`/`Tomorrow`/… set whose siblings have no keys.
+- **`more.tsx` nav-tile "WhatsApp"** — the feature/screen name in the More nav-label set, a separate surface.
+
+**Naming.** In `tickets/index.tsx` (`const t = typeMeta(...)`) and `notes.tsx` (`setTotal((t) => …)`) the local
+`t` was already taken, so the translator is bound to **`tr`** there to avoid shadowing; every other screen uses
+the app-standard `t = useT()`.
+
+**Consequence.** 16 screens + `src/i18n/index.tsx` + the parity test. Gates: `tsc` 0, `npm test` **350/350**
+(unchanged — no new pure logic; parity assertion moved 74→75), `lint` 0 errors/12 warnings (baseline). No dictionary string was
+translated by machine; the one added key reuses existing human copy. Push still 403s (commit local). Next
+copy-free step is exhausted for `common.*`; further P1 and any Tier-1 wiring now wait on **owner-supplied copy**
+— the fill-list is the net-new `common.*` set above.
+
 ## 2026-08-11 — Phase 21 P0: extended `t()` to `t(key, params?)` — interpolation + plurals, no copy
 
 **Context.** The i18n widening was scoped (entry below) but not built; its P0 prerequisite — `t()` has no

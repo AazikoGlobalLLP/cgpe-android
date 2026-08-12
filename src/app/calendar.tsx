@@ -15,6 +15,7 @@ import type { Reminder, ReminderType } from '@/data/types';
 import { REMINDER_ICON } from '@/data/labels';
 import { daysUntil, fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * The 14-day agenda.
@@ -227,6 +228,7 @@ function DayCell({ wd, date, count, active, label, onPress }: {
  * ================================================================== */
 
 function EventRow({ r, index, last }: { r: Reminder; index: number; last: boolean }) {
+  const t = useT();
   const hasPhone = !!r.phone;
   return (
     <SpineRow
@@ -242,14 +244,14 @@ function EventRow({ r, index, last }: { r: Reminder; index: number; last: boolea
       {hasPhone && !r.done ? (
         <Row style={{ gap: spacing.sm }}>
           <Button
-            label="Call"
+            label={t('common.call')}
             icon="call"
             variant="secondary"
             size="sm"
             onPress={() => { haptics.tap(); call(r.phone as string); }}
           />
           <Button
-            label="WhatsApp"
+            label={t('common.whatsapp')}
             icon="logo-whatsapp"
             variant="whatsapp"
             size="sm"

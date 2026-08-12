@@ -1845,7 +1845,7 @@ export default function Home() {
                             accessible
                             accessibilityLabel={`Today, ${day.todayDone} of ${day.todayAll.length} tasks done`}
                           >
-                            <Eyebrow>Today</Eyebrow>
+                            <Eyebrow>{t('common.today')}</Eyebrow>
                             <Row style={{ alignItems: 'flex-end', gap: 6, marginTop: 3 }}>
                               <Metric value={String(shownDone)} size={font.display} />
                               <Txt size={font.h3} weight="700" color={c.muted} numeric style={{ marginBottom: 5 }}>
@@ -1862,7 +1862,7 @@ export default function Home() {
                           </View>
                         ) : (
                           <View style={{ flex: 1 }}>
-                            <Eyebrow>Today</Eyebrow>
+                            <Eyebrow>{t('common.today')}</Eyebrow>
                             <Txt size={font.h3} weight="800" style={{ marginTop: 4 }} numberOfLines={2}>
                               {unconfirmed ? 'Not confirmed' : 'Nothing scheduled'}
                             </Txt>

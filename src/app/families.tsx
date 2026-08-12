@@ -17,6 +17,7 @@ import * as api from '@/data/api';
 import type { Family } from '@/data/api';
 import { inrShort } from '@/lib/format';
 import { call } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Families — the book, read as households.
@@ -407,6 +408,7 @@ function FamilyRow({ family, onOpen }: { family: FamilyView; onOpen: () => void 
 
 function FamilySheet({ family, onClose }: { family: FamilyView | null; onClose: () => void }) {
   const c = useTheme();
+  const t = useT();
   const id = family?.id ?? null;
 
   /**
@@ -515,7 +517,7 @@ function FamilySheet({ family, onClose }: { family: FamilyView | null; onClose: 
                         m.cover != null && m.cover > 0
                           ? <Metric value={inrShort(m.cover)} size={font.sub} />
                           : m.phone
-                            ? <Pill label="Call" tone="primary" small icon="call" />
+                            ? <Pill label={t('common.call')} tone="primary" small icon="call" />
                             : undefined
                       }
                     />

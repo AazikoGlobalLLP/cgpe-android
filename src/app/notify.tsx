@@ -30,6 +30,7 @@ import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
 import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
+import { useT } from '@/i18n';
 
 type Audience = 'all' | 'selected';
 type Priority = 'low' | 'medium' | 'high';
@@ -51,6 +52,7 @@ const MESSAGE_MAX = 1000;
 
 export default function NotifyScreen() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const toast = useToast();
   const { user, viewAs } = useAuth();
@@ -356,7 +358,7 @@ export default function NotifyScreen() {
           </ListSection>
           <Row style={{ gap: spacing.sm }}>
             <Button
-              label="Cancel"
+              label={t('common.cancel')}
               variant="ghost"
               onPress={() => { haptics.tap(); setPendingConfirm(null); }}
               style={{ flex: 1 }}

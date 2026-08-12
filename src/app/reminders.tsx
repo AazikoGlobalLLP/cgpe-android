@@ -22,6 +22,7 @@ import type { Reminder } from '@/data/types';
 import { REMINDER_ICON } from '@/data/labels';
 import { daysUntil, fmtDay } from '@/lib/format';
 import { whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Reminders — the follow-up spine.
@@ -147,6 +148,7 @@ function RemindersSkeleton() {
 
 export default function Reminders() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
 
@@ -277,13 +279,13 @@ export default function Reminders() {
         ) : (
           <>
             {groups.overdue.length > 0 ? (
-              <Group index={0} title="Overdue" items={groups.overdue} onToggle={toggle} />
+              <Group index={0} title={t('tasks.overdue')} items={groups.overdue} onToggle={toggle} />
             ) : null}
             {groups.today.length > 0 ? (
-              <Group index={1} title="Today" items={groups.today} onToggle={toggle} />
+              <Group index={1} title={t('common.today')} items={groups.today} onToggle={toggle} />
             ) : null}
             {groups.upcoming.length > 0 ? (
-              <Group index={2} title="Upcoming" items={groups.upcoming} onToggle={toggle} />
+              <Group index={2} title={t('tasks.upcoming')} items={groups.upcoming} onToggle={toggle} />
             ) : null}
             {groups.done.length > 0 ? (
               <Group index={3} title="Completed" items={groups.done} onToggle={toggle} />
@@ -322,6 +324,7 @@ function Group({ title, items, onToggle, index = 0 }: {
   index?: number;
 }) {
   const c = useTheme();
+  const t = useT();
 
   return (
     <Appear index={index}>
@@ -338,7 +341,7 @@ function Group({ title, items, onToggle, index = 0 }: {
                 if (r.phone) {
                   actions.push({
                     icon: 'logo-whatsapp',
-                    label: 'WhatsApp',
+                    label: t('common.whatsapp'),
                     tone: 'whatsapp',
                     onPress: () => { haptics.tap(); whatsapp(r.phone!, `Namaste ${r.clientName || ''}`); },
                   });

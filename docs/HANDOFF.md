@@ -1,67 +1,84 @@
-# HANDOFF — CGPE Connect (Android) — Phase 21 (i18n P0) BUILT — 2026-08-11
+# HANDOFF — CGPE Connect (Android) — Phase 21 P1 (i18n common.* dedup, copy-free slice) BUILT — 2026-08-12
 
-Phase 16 self-view is **still backend-blocked** (INBOX `my-earnings` ask unanswered — re-verified below),
-so the board's editor-buildable path was the i18n widening's P0 prerequisite: extend `t()` to support
-interpolation + plurals. That is now **built, tested, and committed local** (push still 403s). It adds only
-the mechanism — **no screen wired, no string translated, no dictionary key added.**
+Owner directed "full copy-free dedup" for the `common.*` layer. Built the slice that needs **zero** new
+human copy: routed the already-translated repeated labels to existing `common.*` keys across **16 screens**,
+and added **one** net-new key (`common.today`) by **lifting** existing human copy. The copy-dependent bulk of
+P1 (`Try again` ×34, `Clear search`, `Refresh`, the outage body, a11y labels) is untouched and still waits on
+the owner. Phase 16 self-view is **still backend-blocked** (INBOX `my-earnings` ask still unanswered — the last
+`cgpe-mobile` entry, ~line 3352–3397, has no `cgpe-api` reply).
 
 ## Done
-- **`t()` now takes params.** `t(key, params?)` fills named `{placeholder}` tokens (an unmatched token is
-  left **verbatim** — a visible gap, never a silent blank or `"undefined"`) and does **count-aware plurals**:
-  `params.count` (a number) selects `key_one`/`key_other` by the CLDR cardinal rule for the **active
-  language** (English: only 1 is `one`; Hindi & Gujarati and their Roman pair: **both 0 and 1** are `one`),
-  falling back to the base key when no variant exists. **No string concatenation.**
-- **Single-arg `t(key)` is byte-identical** to before (language → English → key), so all 74 existing keys
-  and every current call site are unchanged, and the hard `EN_KEYS.length === 74` parity gate is untouched.
-- **Gates green:** `npx tsc --noEmit` exit 0; `npm test` **350/350** (+20); `npm run lint` 0 errors/12 warnings.
+- **Routed existing-key repeats across 16 screens** to `t('common.*')`: `Call`→`common.call`,
+  `Cancel`→`common.cancel`, `Delete`→`common.delete`, `WhatsApp`→`common.whatsapp`. `Call`/`Cancel`/`Delete`
+  now translate in Gujarati/Hindi where they were hardcoded English. `WhatsApp` is a trade noun (English in
+  all 5) → **centralization only, no visible change**, kept so button rows are consistent.
+- **Added `common.today`** — the only net-new key added, by **lifting** the identical human copy already in
+  `tab.home`/`tasks.today` (`આજે`/`आज`/`Aaj`/`Aaje`). **Dedup of approved copy, not machine translation.**
+  Parity bumped **74→75** in `dictionaries.test.ts` (deliberate). Wired the standalone `Today` eyebrows
+  (`home` ×2, `attendance`) and the `reminders` "Today" section title; also routed the sibling
+  `reminders` titles `Overdue`→`tasks.overdue` and `Upcoming`→`tasks.upcoming` (existing keys) so the group
+  is not half-translated.
+- **Gates green:** `npx tsc --noEmit` exit 0; `npm test` **350/350** (unchanged — no new pure logic, the
+  parity assertion just moved 74→75); `npm run lint` **0 errors / 12 warnings** (baseline, no new issues).
 
-## Files changed
-- `src/i18n/index.tsx` — extended `t` to `t(key, params?)`; added three pure exported seams
-  (`pluralCategory`, `interpolate`, `translate(lang, key, params?, lookup?)`); header doc updated. The
-  `lookup` param is injected **only** so tests can pin plural/interpolation against a controlled dictionary
-  without adding a real key.
-- `src/i18n/__tests__/format.test.ts` — **new**, 20 cases pinning interpolation, per-language CLDR plurals,
-  the composed `translate` (via injected lookup), and `translate` against the real shipped dictionaries.
-- `docs/PHASES.md` — new `## Now` entry, Next-3 #3 rewritten (P0 done), status board row 21.
-- `docs/DECISIONS.md` — top entry (per-language-plural rationale + the testability seam).
-- `docs/i18n/SCOPE.md` — §3 P0 marked BUILT, §8 status updated.
-- `CLAUDE.md` — i18n trap (1) refreshed: `t()` is now `t(key, params?)`.
-- Commits (local only, push 403s): `a7a0979` (code+tests), `42985a2` (docs).
+## Files changed (18 src + 4 docs)
+- **i18n core:** `src/i18n/index.tsx` (+`common.today` in all 5 dicts), `src/i18n/__tests__/dictionaries.test.ts`
+  (parity 74→75 + note).
+- **16 screens:** `(tabs)/home.tsx`, `(tabs)/leads.tsx`, `(tabs)/clients.tsx`, `(tabs)/tasks.tsx`,
+  `attendance.tsx`, `calendar.tsx`, `families.tsx`, `notes.tsx`, `notify.tsx`, `prospects.tsx`, `reminders.tsx`,
+  `segments.tsx`, `task/[id].tsx`, `team/[id].tsx`, `tickets/index.tsx`, `whatsapp/index.tsx`. Each added
+  `import { useT }` + `const t = useT()` (or `tr` where a local `t` existed) in the relevant component.
+- **Docs:** `docs/DECISIONS.md` (top entry, 2026-08-12), `docs/i18n/SCOPE.md` (§3 P1 / §4.1 / §8),
+  `docs/PHASES.md` (new `## Now` entry, board row 22, Next-3 #3), `CLAUDE.md` (i18n trap refreshed: 75 keys,
+  `=== 75`, `tr` naming note, do-not-wire-net-new-without-copy warning).
+- Commit: local only (push 403s, credential `reactjsaaziko` has no write access — human fix needed).
+- Note: `.claude/settings.json` shows modified but is a **pre-existing** unrelated change from session start —
+  **not** part of this work and **not** in the commit.
 
 ## Decisions made
-- **Built P0 only, not P1 or any wiring.** P0 (`t()` extension) is the single part of the i18n widening
-  buildable with **no** human copy, no backend, and no new dictionary keys. Wiring screens or translating
-  copy needs the human-supplied Hinglish/Gujlish/Hindi/Gujarati (PHASE-19 §4 forbids machine translation).
-- **Per-language plural rules, not English-only.** Rendering "0 kaam" with the English `_other` form is
-  grammatically wrong in Hindi/Gujarati (they take the singular at 0). Category is computed from the display
-  language — the standard i18next/CLDR behaviour, and the boring-correct one.
-- **Unmatched placeholder left verbatim** (`{name}`), not dropped or rendered `"undefined"` — a visible bug
-  is honest; a silent blank is the exact i18n failure mode this project polices elsewhere.
-- **Injected `lookup` seam over adding demo keys.** Testing plural/interpolation end-to-end needs a
-  dictionary with `_one`/`_other` and `{placeholder}` strings; adding those to the real dicts would bump the
-  74-key parity count and demand copy in 4 languages. A defaulted `lookup` param (production callers never
-  pass it) keeps the real dictionaries at 74 keys while pinning every branch.
+- **Only the copy-free slice was built.** Every other net-new `common.*` key (`tryAgain` ×34 — the biggest
+  single win, `clearSearch`, `clear`, `saving`, `uploading`, `refresh`, `loadMore`, `all`, `yesterday`,
+  `done`, `mobile`, `onDuty`, `signedIn`, `continue`, `goToSignIn`, `showResults`, the a11y `Call {name}` /
+  `Open WhatsApp chat` labels) needs human gu/hi/hi-en/gu-en copy. Machine translation is forbidden
+  (PHASE-19 §4), so these stay blocked on the owner. This is the bulk of P1's occurrence count.
+- **`common.today` by lifting, not translating.** It is the only net-new label whose four non-English strings
+  already existed under another key, so it is dedup, not a guess. No other net-new key qualifies.
+- **Skipped the 4 module-level date helpers** (`calendar.dayTitle`, `reminders.timeFor`,
+  `notifications.dayLabel`, `whatsapp/[id].dayLabel`) — each returns `Today`/`Yesterday`/weekday/date from one
+  function; `t` isn't reachable and wiring only `Today` while `Yesterday`/weekdays (no keys, need copy) stay
+  English would be half-done. Skipped whole.
+- **Skipped `task-new`'s "Today" picker option** (siblings `Tomorrow`/… have no keys) and **`more.tsx`'s
+  nav-tile "WhatsApp"** (feature/screen-name surface, separate).
+- **`tr` vs `t`.** `tickets/index.tsx` (`const t = typeMeta(...)`) and `notes.tsx` (`setTotal((t)=>…)`) already
+  use `t` locally, so the translator is bound to `tr` there to avoid shadowing; every other screen uses `t`.
 
 ## Known broken / deliberately skipped
-- **No screen wired, no string translated.** This phase is the mechanism only. Next copy-free step is P1
-  (the `common.*` dedup layer). Wiring a Tier-1 screen still waits on human copy.
-- **Phase 16 self-view — still backend-blocked.** `routes/payroll.js:22-23` is still `authorize('admin')`;
-  no `GET /api/payroll/my-earnings`; the narrowed self-earnings ask (INBOX ~line 3311–3356) has **no
-  `cgpe-api` reply**. Do not build the earnings screen against a non-existent endpoint.
+- **The copy-free `common.*` work is exhausted.** Nothing more on P1 (or any Tier-1 screen wiring) is
+  buildable without owner-supplied copy. The fill-list is the net-new `common.*` set in `docs/i18n/SCOPE.md`
+  §4.1 — for each key, supply Gujarati / Hindi / Hinglish / Roman-Gujarati (English is the extracted string).
+- **The parity test still can't catch English-in-a-non-English dict** (it rejects only `value === key`). When
+  net-new keys land with real copy, consider the §6(b) leak-guard test so an English placeholder turns the
+  suite red.
+- **Phase 16 self-view — still backend-blocked.** `routes/payroll.js:22-23` still `authorize('admin')`, no
+  `GET /api/payroll/my-earnings`, INBOX ask (~line 3352–3397) still unanswered by `cgpe-api`. Do not build the
+  earnings screen against a non-existent endpoint. Phase 20 admin roster is the only payroll surface in the app.
 - **Phase 6 commissions — unchanged, still blocked** (no product aggregate / no `target`).
-- **`git push` still 403s** — credential `reactjsaaziko` has no write access; both commits are **local
-  only**. Needs a human to fix the credential (Windows Credential Manager) or grant access.
-- **Device-verification backlog** — unchanged; still needs a handset.
+- **`git push` still 403s** — both this and prior commits are **local only**. Needs a human to fix the
+  credential (Windows Credential Manager) or grant `Dev-Shivam-05/CGPE-ANDROID-APPLICATION` write access.
+- **Device-verification backlog** — unchanged; the `common.*` label toggle (renders + switches language on a
+  real handset, light/dark) joins the handset-only checks. `npm test` covers pure logic only; JSX label
+  changes aren't exercised by the suite.
 
 ## Next session starts here
-- **Phase 21 P1 (i18n):** build the `common.*` dedup layer — wire the ~25 repeated labels ("Try again" ×~30,
-  the ~8-variant outage body) to shared `common.*` keys once, per `docs/i18n/SCOPE.md` §4.1. Still **copy-free**
-  (the `common.*` keys not already present need copy — check §4.1 against the current dict; only the *net-new*
-  keys need translation). If instead a `cgpe-api` reply to the `my-earnings` ask has landed, build the Phase
-  16 self-view per its preserved UI lock (do **not** point `payroll.tsx` at it — that's the admin roster).
-- **First command:** `/boot`, then re-read `../contracts/INBOX.md` foot (~line 3356) for a `cgpe-api` reply
-  before assuming Phase 16 is buildable.
-- **Watch out for:** adding real keys (P1 or any wiring) **bumps** the parity test's hard
-  `EN_KEYS.length === 74` — update it deliberately — and its leak check will **not** catch an English string
-  left in a non-English dict, so a `common.*` key filled with English in `gu`/`hi` passes the suite green.
-  Human copy is load-bearing.
+- **If the owner has supplied `common.*` copy:** add the net-new keys to all 5 dicts (bump parity per key),
+  wire the repeats they cover (`Try again` ×34 first — biggest win; then `Clear search`, `Refresh`, unify the
+  ~8-variant outage body), and add the §6(b) leak-guard test. Recon map of every hardcoded occurrence is in
+  `docs/i18n/inventory/01–06*.md` (anchor edits on the English literal, not line numbers).
+- **If no copy yet:** hand the owner the fill-list (`docs/i18n/SCOPE.md` §4.1 net-new set) and pick which
+  Tier-1 screen (SCOPE §5) to translate first so the copy request is bounded. Do **not** wire anything needing
+  a translation you'd have to invent.
+- **If a `cgpe-api` reply to `my-earnings` has landed:** build the Phase 16 self-view per its preserved UI
+  lock (do **not** point `payroll.tsx` at it — that's the admin roster).
+- **First command:** `/boot`, then re-read `../contracts/INBOX.md` foot (~line 3352) for a `cgpe-api` reply.
+- **Watch out for:** adding real keys bumps the parity test's hard `EN_KEYS.length === 75`; and the leak check
+  still won't flag an English string left in `gu`/`hi` — human copy is load-bearing.

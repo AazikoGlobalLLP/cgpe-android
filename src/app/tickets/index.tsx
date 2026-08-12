@@ -19,6 +19,7 @@ import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import { timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * The request inbox — every ticket the WhatsApp bot, AI-Ops or an admin raised.
@@ -408,6 +409,7 @@ export default function TicketsInbox() {
 
 function TicketRow({ ticket, onOpen }: { ticket: api.Ticket; onOpen: () => void }) {
   const c = useTheme();
+  const tr = useT(); // `t` below is ticket type-meta; the translator is `tr` here
   const t = typeMeta(ticket.type);
   const rail = priorityColor(c, ticket.priority);
   const zone = zoneTone(ticket.zone);
@@ -425,10 +427,10 @@ function TicketRow({ ticket, onOpen }: { ticket: api.Ticket; onOpen: () => void 
   ].filter(Boolean).join(' · ');
 
   const actions: SwipeAction[] = phone ? [
-    { icon: 'call', label: 'Call', tone: 'primary', onPress: () => { haptics.tap(); call(phone); } },
+    { icon: 'call', label: tr('common.call'), tone: 'primary', onPress: () => { haptics.tap(); call(phone); } },
     {
       icon: 'logo-whatsapp',
-      label: 'WhatsApp',
+      label: tr('common.whatsapp'),
       tone: 'whatsapp',
       onPress: () => { haptics.tap(); whatsapp(phone, `Namaste ${name}`); },
     },

@@ -18,6 +18,7 @@ import * as api from '@/data/api';
 import type { TeamMember } from '@/data/team';
 import { inrShort, timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * One team member.
@@ -32,6 +33,7 @@ import { call, whatsapp } from '@/lib/actions';
 
 export default function TeamMemberDetail() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -205,7 +207,7 @@ export default function TeamMemberDetail() {
           accessibilityLabel={`Call ${m.name}`}
         />
         <Button
-          label="WhatsApp"
+          label={t('common.whatsapp')}
           icon="logo-whatsapp"
           variant="whatsapp"
           full
