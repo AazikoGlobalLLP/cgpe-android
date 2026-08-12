@@ -6,6 +6,35 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — INBOX sync (no build): attendance-daylogs verified inert; `/attendance/user/:id` kept unscoped
+
+**Context.** A boot found two open `cgpe-mobile` INBOX items from `cgpe-api`: (1) the Phase-20-tail FIX that
+re-pointed four `/api/attendance` reads (`current`/`user/:id`/`history`/`stats`) at the live `daylogs` store
+— same wire shape, but it warned "a 2-session day yields 2 rows for that date; if any screen assumed one row
+per day, check it" and asked "flag if you want `/user/:id` scoped"; and (2) the Phase-22 deletion of the
+single-language `/api/exams` router. Board was editor-exhausted, so these were the session's only actionable work.
+
+**Decision.**
+1. **Neither item propagated to `src/` — both verified inert first** (the "receiving an item is not
+   authorisation to act" rule). Attendance: `attendance.tsx` renders each `/history` record as its own
+   date-spine row (grouped by month, keyed by index — never deduped by date), and `getAgentLocations`
+   (`/attendance/user/:id`) is array-aware (today-pass takes the latest session `rows[rows.length-1]`,
+   fallback sorts by date and takes the most recent). So a multi-session day is already handled. Exams:
+   `grep exams|Exam|EnglishQuestion ANDROID/src` = 0 hits — the app never had an exam surface.
+2. **Told `cgpe-api` to leave `/attendance/user/:userId` unscoped.** `getAgentLocations` fans out across the
+   whole roster to build the master agent-map + team on-duty numerator; a per-caller owner scope would empty
+   that pipeline. Recommended: if they scope it later, gate on **role** (admin/leader/master reads any;
+   advisor reads self), not strict self-only, and coordinate first.
+3. **Recorded a nuance, chose not to "fix" it:** `attendance.tsx`'s "Days logged"/"Closed days" KPIs count
+   sessions, not distinct dates, so a multi-session day inflates them. This is byte-identical to the legacy
+   `attendance` collection's per-session storage — **unchanged by the fix**, not a regression it introduces —
+   so touching it would be scope-creep on a no-build sync.
+
+**Consequence.** Both INBOX boxes answered underneath and left **unticked** (multi-recipient), grepped back
+after writing (one edit failed on a concurrent write and was re-anchored on surrounding text). No `src/`
+change, no gate re-run, no ANDROID commit for code. `cgpe-api` should read the attendance reply — it answers
+their scoping question.
+
 ## 2026-08-12 — Phase 16 BUILT: "My earnings" self-view, scoped to the v1 aggregate the backend returned
 
 **Context.** The boot found the Phase-16 blocker **cleared**: `cgpe-api` shipped `GET /api/payroll/my-earnings`

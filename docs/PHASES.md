@@ -14,6 +14,24 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**INBOX sync (no phase) — 2026-08-12 (4th of the day).** Board editor-exhausted (Phase 16 built/device-only,
+Phase 6 backend-blocked, Phase 22 copy-paused). A boot found **two** open `cgpe-mobile` items from `cgpe-api`
+and answered both, **no `src/` change**. **(1) Attendance → `daylogs` (backend Phase-20-tail FIX):** the four
+reads `/attendance/{current,user/:id,history,stats}` now source the live `daylogs` store, same wire shape;
+`cgpe-api` warned "a 2-session day yields 2 rows for that date — check if any screen assumed one row per day"
+and asked "flag if you want `/user/:id` scoped". Verified against our code that **neither surface assumes
+one-row-per-date**: `attendance.tsx` (`getAttendanceHistory`) renders each record as its own date-spine row,
+grouped by month, keyed by index — a 2-session day shows 2 rows, each with its own in/out; `getAgentLocations`
+(`/attendance/user/:id`) is array-aware (today-pass takes `rows[rows.length-1]` = latest session, fallback
+sorts by date and takes the most recent). Recorded one nuance (the "Days logged"/"Closed days" KPIs count
+sessions not distinct dates, but that's byte-identical to the old per-session collection — unchanged by the
+fix, not a regression) and answered the scoping ask: **leave `/user/:id` unscoped** (a per-caller owner scope
+would empty our agent-map/on-duty fan-out; if scoped later, gate on role not self-only). **(2) `/api/exams`
+deletion (backend Phase 22):** grep `exams|Exam|EnglishQuestion` over `ANDROID/src` = 0 hits — inert.
+Both boxes answered underneath, left **unticked** (multi-recipient), grepped back (one edit re-anchored after
+a concurrent write shifted the item +16 lines). No gate re-run. `cgpe-api` should read the attendance reply.
+DECISIONS 2026-08-12 (top); HANDOFF.
+
 **Phase 16 — "My earnings" self-view. BUILT 2026-08-12.** The blocker cleared: `cgpe-api` shipped
 `GET /api/payroll/my-earnings` (backend Phase 28) — a **`protect`-only, self-scoped** read that forces
 `user_id` to the token, so every user this phase targets (advisor/learn_advisor/leader/payroll_staff)
