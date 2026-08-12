@@ -1,65 +1,64 @@
-# HANDOFF — CGPE Connect (Android) — Phase 26 — 2026-08-12
+# HANDOFF — CGPE Connect (Android) — Phase 27 — 2026-08-12
 
-Consumed `nav.more_sections` so the More tab's grouping is now DB-driven per department (closes the
-last server-driven-nav gap, Phase 10 D-3). Then, owner-directed, wrote a backend seed script so each
-department actually gets a distinct More layout — **not yet run** (needs live-Mongo access this repo
-does not have). One security flag below.
+Owner picked, of the three carried Phase-26 options, "spec the `resolveRoleKey` change so each real
+business department gets its own layout." This session **specced it and filed the ask to `cgpe-api`**.
+It is a **pure backend change** — the mobile app has no role-key resolver and renders any `role_key`
+fail-open, so there was **nothing to build in `src/`** and no gate to re-run. Docs-only session.
 
 ## Done
-- **The More tab's content groups — their titles, order and membership — now come from the DB.**
-  `more.tsx` renders them from the resolved `GET /api/rbac/app-ui` document's `nav.more_sections`.
-  Edit a department's `app_role_preferences` doc → its More tab regroups on the next cold start, no
-  APK. The admin oversight group and the personal rows (Viewing-as / My earnings) stay fixed; a
-  module omitted from `more_sections` is NOT hidden (only `nav.hidden` hides) — it falls to a
-  trailing "More" group.
-- **A backend seed script exists** (`cgpe-backend-main/scripts/seedAppRolePreferences.js`) that gives
-  each of the 8 resolver keys its own `nav.more_sections`. It writes **only** the More grouping +
-  label — never any capability/permission. Dry-run by default. **The owner runs it** in their env.
+- **A written, verified proposal now exists** for letting each of the 7 business departments that
+  currently can't (`HEALTH INSURANCE`, `TATA AIA`, `RECRUITMENT & CALLING`, the 3 SALES
+  sub-departments, `OTHERS`) get their own in-app menu/layout — and the request is on `cgpe-api`'s
+  queue. When they ship it and a doc is seeded, that department's More tab / tabs / dashboard change
+  on the next cold start with **no APK and no mobile code**.
+- **Confirmed mobile owes zero code:** `grep resolveRoleKey ANDROID/src` = 0; `normalizeUiConfig`
+  accepts any `role_key`; `arrangeMoreSections`/`resolveTabs` render whatever arrives, fail-open to
+  `DEFAULT_UI`. So this is entirely a `cgpe-api` deliverable.
 
 ## Files changed
-- `src/store/appUi.tsx` — new pure exported `arrangeMoreSections()` selector (mirrors `resolveTabs`:
-  known + not-hidden + first-wins dedupe, drop empty groups, trailing catch-all); `DEFAULT_UI.nav.more_sections`
-  rewritten to name every one of the 22 catalogue modules once.
-- `src/app/(tabs)/more.tsx` — new `MORE_CATALOGUE` (module key → icon/label/href); content groups
-  render from config, admin group + "Personal" tail stay fixed; `profile`/`tickets` dynamic values.
-- `src/store/__tests__/appUi.test.ts` — +11 `arrangeMoreSections` cases (**398/398**).
-- `ui_rbac_config.json` — `_KNOWN_GAP` block updated to **FULLY RESOLVED**.
-- `docs/spec/PHASE-26.md` (new) · `docs/DECISIONS.md` · `docs/PHASES.md` · `docs/PROJECT_MAP.md` — updated.
-- `../contracts/INBOX.md` — heads-up filed to `cgpe-admin` (their "stored, not yet live" label for
-  `more_sections` is now stale) + to `cgpe-api` (seed script + the credential flag).
-- **SIBLING repo** `cgpe-backend-main/scripts/seedAppRolePreferences.js` (new, uncommitted) — the seed.
+- `docs/spec/PHASE-27.md` (new) — the ask: verified source-of-truth (9 canonical departments from
+  `enums.md` §2.1; `resolveRoleKey` at `routes/rbac.js:396` uses *raw* lowercase; `canonicalizeDepartment()`
+  at `utils/rbac.js:130` already normalizes and is exported; `buildConfig` fail-open), a recommended
+  non-regressive candidate-key chain + `DEPT_KEY` map, and the 4 mechanism-agnostic guarantees. D-1..D-5.
+- `docs/DECISIONS.md` — appended the Phase-27 decision (top).
+- `docs/PHASES.md` — `## Now` gained the Phase-27 entry; `## Next 3` re-led with Phase 27.
+- `../contracts/INBOX.md` (**outside this repo**) — `→ cgpe-api` ask filed at top of queue,
+  grep-verified durable (2 hits). The follow-up the Phase-26 seed heads-up pre-promised.
+- Commit `3f67784` (3 docs files, local — push still 403s). `.claude/settings.json` left as-is
+  (it was already modified before this session).
 
 ## Decisions made
-- **Consume `more_sections`; admin oversight + personal rows stay fixed** (PHASE-26 D-2/D-3). Trailing
-  catch-all enforces the contract's hard rule "omission re-prioritises, never hides" (D-1).
-  `DEFAULT_UI.nav.more_sections` rewritten because it is now the rendered default (D-4).
-  `collapsed_by_default` still not consumed (D-5, needs collapsible UI).
-- **Seed writes only `nav.more_sections` + `label`** (dotted-path `$set` + `$setOnInsert`), never
-  `features`/`dashboard`/`tabs`/`hidden` — so it cannot change permissions, only menu arrangement.
-- Gates: `tsc` 0, `npm test` **398/398** (+11), lint 0 errors / 12 warnings. Commits `7d3a2d4`,
-  `2f9448d` (local — push still 403s).
+- **This is a backend ask, not a mobile build (spec D-1).** The resolver lives only in `cgpe-api`;
+  building a client-side department map would duplicate server logic and break the server-driven-UI
+  contract. Phase-27's mobile deliverable is the spec + the contract ask; the box stays open until
+  `cgpe-api` replies.
+- **Recommend a non-regressive candidate-key chain** (`[deptKey, roleKey, 'advisor']`, first-with-a-doc
+  wins) over an unconditional dept key — so a `HEALTH INSURANCE` leader keeps their `leader` layout
+  until a `health_insurance` doc is seeded (no big-bang, no blank dashboards). Final mechanism is
+  `cgpe-api`'s; mobile requires only 4 guarantees (back-compat for `sales`/`operations`, non-regression,
+  lowercase keys, collision-free).
+- **Derive keys via `canonicalizeDepartment`, not raw slugging** (D-4) — normalizes free-string
+  department variants and, as a bonus, fixes `"Sales Team"`-type misses the current raw resolver has.
 
 ## Known broken / deliberately skipped
-- **⚠️ SECURITY — hardcoded prod Mongo credential in the seed script.** `seedAppRolePreferences.js:56`
-  was edited (after authoring) to add a live Atlas URI as an `|| '…'` fallback. It is a secret in
-  source AND unreachable dead code (`_mongoUri` exits first). **Remove that line before that file is
-  committed anywhere, and rotate the credential.** Not reverted (intentional edit) but flagged.
-- **Seed NOT yet run** — no DB access from this repo; the owner runs it (`--commit`). The 6 non-sample
-  role layouts (`admin/advisor/learn_advisor/leader/payroll_staff/super_admin`) are proposals to review.
-- **`resolveRoleKey` limits "departments."** It keys only `sales`/`operations` departments + roles, so
-  real business departments (HEALTH INSURANCE, TATA AIA, RECRUITMENT, MUTUAL FUNDS…) resolve by role
-  (usually `leader`) and don't get their own layout without a backend `resolveRoleKey` change (`cgpe-api`).
-- **Phase 26 device check** — light/dark at 390 px, ≥2 real dept configs, and the one visible shift
-  (My earnings/Payroll/Viewing-as now in a "Personal" tail vs the old "Account" group). Not editor-buildable.
-- **i18n P1** — still paused on human gu/hi/hi-en/gu-en copy. **Device-verification backlog** carried
-  (Phases 1/4/5/6/7/9/10/12/13/16/23/24/25/26).
+- **The backend change itself is not done** — it is `cgpe-api`'s to build (filed, box open).
+- **Necessary-but-not-sufficient:** new keys still need **seeded docs** — the Phase-26 seed script
+  (`cgpe-backend-main/scripts/seedAppRolePreferences.js`) must gain the new keys and be **owner-run**;
+  else they fail open to defaults. Per-department layouts are live only when resolver + docs + a device
+  check all exist.
+- **⚠️ SECURITY (carried, unchanged):** `seedAppRolePreferences.js:56` still hardcodes a live Atlas
+  credential as an `||` fallback (secret-in-source AND dead code) — **remove + rotate before that file
+  is committed anywhere.** Not touched this session (sibling repo, intentional prior edit).
+- **`MANDATORY_BY_ROLE` for new Sales-family keys** — raised in the ask, not decided (backend product
+  call): a `sales_cgpe_tree` doc would not inherit the Sales mandatory widgets today.
+- **Device-verification backlog** carried (Phases 1/4/5/6/7/9/10/12/13/16/23/24/25/26).
 - **`git push` still 403s** — all commits local.
 
 ## Next session starts here
-- **Owner to choose:** (1) run the seed — dry-run then `--commit` (after removing the credential line
-  and reviewing the 6 proposed layouts); (2) spec the `resolveRoleKey` change so each real business
-  department gets its own layout; or (3) the Phase-26 device check on a handset.
+- **Phase 28 (or continue 27):** if `cgpe-api` has replied to the `resolveRoleKey` ask, verify their
+  shipped shape against their real code and confirm the app renders a new dept key; otherwise the board
+  is editor-exhausted and every remaining lever is owner-run, backend-dependent, or handset-only.
 - **First command:** `/boot`
-- **Watch out for:** the hardcoded credential in the seed script (remove + rotate before sharing that
-  file), and `../contracts/INBOX.md` shifting mid-session under concurrent writes (anchor edits on
-  surrounding text, grep replies back).
+- **Watch out for:** `../contracts/INBOX.md` shifting under concurrent writes (anchor edits on
+  surrounding text, grep replies back) — and the still-live hardcoded credential in the sibling seed
+  script (remove + rotate before it is shared).

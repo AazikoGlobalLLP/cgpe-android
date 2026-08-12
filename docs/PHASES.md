@@ -559,7 +559,17 @@ exercise.
 
 ## Next 3
 
-1. **Phase 26 — More-tab grouping DB-driven (`nav.more_sections`). BUILT 2026-08-12 (part b); a device
+1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). FILED to `cgpe-api`
+   2026-08-12; awaiting their reply.** A pure backend change (mobile has no resolver, renders any
+   `role_key` fail-open — **nothing mobile-side to build**). Wrote `docs/spec/PHASE-27.md` + filed the
+   `→ cgpe-api` ask (grep-verified durable). Recommended a non-regressive candidate-key chain
+   (`[deptKey, roleKey, 'advisor']`) + a `canonicalizeDepartment`-derived `DEPT_KEY` map
+   (`HEALTH INSURANCE→health_insurance`, …; `sales`/`operations` unchanged). **Next when they reply:**
+   verify the shipped shape against their real code, confirm a new dept key renders, then widen the
+   Phase-26 seed script to the new keys for the owner to run. See the `## Now` entry + DECISIONS
+   2026-08-12 (top). Until `cgpe-api` replies, nothing here is editor-buildable.
+
+2. **Phase 26 — More-tab grouping DB-driven (`nav.more_sections`). BUILT 2026-08-12 (part b); a device
    check + two other levers remain.** Owner picked, of the three Phase-26 parts, the app-side slice (b):
    consume `nav.more_sections`. **Shipped** — `arrangeMoreSections` selector + `MORE_CATALOGUE` +
    config-driven `more.tsx` groups; `tsc` 0, `npm test` **398/398**, lint baseline. See the `## Now` entry +
@@ -607,14 +617,14 @@ exercise.
    for advisor/learn_advisor. The **earned** figures (thisMonth/ytd/pending/history/recent) stay backend-blocked
    until `/commissions/my-summary` is scoped; nothing more app-side on commissions until then.
    Full detail: `docs/spec/PHASE-23.md`, `docs/spec/PHASE-16.md` §"BUILT 2026-08-12", `docs/spec/PHASE-6.md`, DECISIONS 2026-08-12 (top).
-2. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13/16/23/24**
+3. **Device-verification backlog — handset-only acceptance carried from Phases 1/4/5/6/7/9/10/12/13/16/23/24**
    (haptics, the AsyncStorage clock key, background GPS, the master route replay, airplane-mode
    behaviour, a leader's true "On duty now" count, the offline map render, the LIC catalogue + notes
    search against production, reminder cold-start persistence, the language-key cold-start, the Phase-16
    earnings reconcile, the Phase-23 MDRT tier card, and now the Phase-24 coverage % against real
    production data). Phases 18/19 cover the web-reachable slice; the native-only remainder still needs a
    phone + a live backend. Not editor-buildable.
-3. **Widen `t()` coverage — SCOPED (2026-08-11); P0 now BUILT, P1 is the next copy-free step.** Full
+4. **Widen `t()` coverage — SCOPED (2026-08-11); P0 now BUILT, P1 is the next copy-free step.** Full
    worklist + plan in `docs/i18n/` (`SCOPE.md` + `inventory/01–06*.md`): only 74 keys wired across 6
    files, ~40 screens 100% hardcoded, ~1,800 string occurrences. **P0 done (Phase 21, `a7a0979`):**
    `t(key, params?)` interpolation + count-plural extension now exists and is tested — dynamic strings can
