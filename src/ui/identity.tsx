@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Image, Pressable, Text, View } from 'react-native';
 import type { StyleProp, TextStyle, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { font, radius, spacing, tnum, type, useTheme } from '@/theme/theme';
+import { tnum, type, useTheme } from '@/theme/theme';
 import type { Palette } from '@/theme/theme';
 import { colorFromString, initials as toInitials } from '@/lib/format';
 import type { IconName } from './base';
@@ -181,6 +181,7 @@ export function PersonRow({
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const interactive = !!onPress || !!onLongPress;
 
   const subStyle: StyleProp<TextStyle> = [

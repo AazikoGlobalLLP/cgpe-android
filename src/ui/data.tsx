@@ -7,8 +7,8 @@ import * as Haptics from 'expo-haptics';
 import Animated, {
   Easing, useAnimatedStyle, useReducedMotion, useSharedValue, withTiming,
 } from 'react-native-reanimated';
-import { eyebrow, font, motion, radius, spacing, tnum, type, useTheme } from '@/theme/theme';
-import type { Palette } from '@/theme/theme';
+import { eyebrow, motion, tnum, type, useTheme } from '@/theme/theme';
+import type { Font, Palette } from '@/theme/theme';
 import { Card, Metric, Txt } from './base';
 import type { IconName } from './base';
 
@@ -130,7 +130,10 @@ function usePressScale(to = 0.96) {
  * (small) / 26pt (regular) pill height, so they are constants rather than re-derived. */
 const PILL_PX = { small: 8, regular: 11 } as const;
 const PILL_PY = { small: 3, regular: 5 } as const;
-const PILL_FS = { small: font.tiny, regular: 11.5 } as const;
+/* Density leaves font sizes alone (font ×1.0), but the tiny size is still READ off the theme
+ * scale rather than copied, so the pill sizes stay a helper over `c.font` — the same treatment
+ * `clients.tsx`/`leads.tsx` gave their module-scope `sepInset`, applied here to a module const. */
+const pillFs = (f: Font) => ({ small: f.tiny, regular: 11.5 }) as const;
 const PILL_ICON = { small: 10, regular: 12 } as const;
 
 export function Pill({ label, tone = 'neutral', icon, small, dot, numeric, style }: {
@@ -145,8 +148,10 @@ export function Pill({ label, tone = 'neutral', icon, small, dot, numeric, style
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { radius, font } = c;
   const s = toneSurface(c, tone);
   const k = small ? 'small' : 'regular';
+  const pf = pillFs(font);
   return (
     <View style={[{
       flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start',
@@ -159,7 +164,7 @@ export function Pill({ label, tone = 'neutral', icon, small, dot, numeric, style
           flexShrink:1 is load-bearing, not cosmetic — Yoga defaults flexShrink to 0 (unlike
           CSS), so numberOfLines alone lets the Text keep its full intrinsic width and get
           CLIPPED by the container instead of ellipsizing. */}
-      <Text numberOfLines={1} style={[{ color: s.fg, flexShrink: 1, ...type('700', PILL_FS[k]) }, numeric && tnum]}>
+      <Text numberOfLines={1} style={[{ color: s.fg, flexShrink: 1, ...type('700', pf[k]) }, numeric && tnum]}>
         {label}
       </Text>
     </View>
@@ -177,6 +182,7 @@ export function StatCard({ label, value, icon, tone = 'primary', sub, onPress, s
   onPress?: () => void; style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const col = toneColor(c, tone);
   return (
     <Card onPress={onPress} style={[{ flex: 1, padding: spacing.md }, style]}>
@@ -272,6 +278,7 @@ const DELTA_ICON: Record<Delta['direction'], IconName> = {
 
 function DeltaBadge({ delta }: { delta: Delta }) {
   const c = useTheme();
+  const { radius, font } = c;
   // RULE: flat is muted, always. A no-change delta painted green is a lie by decoration,
   // and once one colour lies the whole palette stops being read.
   const sense = delta.tone ?? (delta.direction === 'flat' ? 'muted' : delta.direction === 'up' ? 'good' : 'bad');
@@ -300,6 +307,7 @@ export function MetricTile({ label, value, delta, icon, tone = 'primary', sparkl
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const col = toneColor(c, tone);
   const hasTop = !!icon || !!delta;
 
@@ -368,6 +376,7 @@ export function DataRow({
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** A row can unmount mid-confirmation (sheet closes, list refreshes) while the async
@@ -480,6 +489,7 @@ export function ListSection({ title, footer, children, style }: {
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   // toArray drops null/false, so `{cond && <DataRow/>}` cannot leave an orphan separator.
   const kids = React.Children.toArray(children);
   if (kids.length === 0) return null;
@@ -529,6 +539,7 @@ export type KpiItem = {
 
 function KpiChip({ item }: { item: KpiItem }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const col = toneColor(c, item.tone ?? 'primary');
   const { anim, onPressIn, onPressOut } = usePressScale();
 
@@ -580,6 +591,9 @@ export function KpiStrip({ items, style, contentStyle }: {
    */
   contentStyle?: StyleProp<ViewStyle>;
 }) {
+  // Hook before the early return — the strip owns no other theme reads, but the content gap
+  // must react to density like every other gutter in this module.
+  const { spacing } = useTheme();
   if (!items || items.length === 0) return null;
   return (
     <ScrollView
@@ -607,6 +621,7 @@ export function ActionTile({ icon, label, tileIndex = 0, onPress, tint, badge, s
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius } = c;
   const tile = c.tiles[tileIndex % c.tiles.length];
   const { anim, onPressIn, onPressOut } = usePressScale(0.93);
   const badgeText = typeof badge === 'number' ? (badge > 99 ? '99+' : String(badge)) : badge;
