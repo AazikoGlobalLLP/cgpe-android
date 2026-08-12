@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-12 — INBOX sync (no phase): answered cgpe-admin's RECRUITER_MASTER CC by correcting its premise about mobile
+
+**Context.** Boot found the board editor-exhausted and one fresh open item CC'ing this session:
+cgpe-admin filed a discovery question to `cgpe-api` (blocking their Phase 45) asking how the API exposes
+`ca-data` rows with `masterListType: "RECRUITER_MASTER"`, CC'ing `cgpe-mobile` on the stated premise that
+"it currently shows up only in cgpe-mobile's `ANDROID/src/app/prospects.tsx`" and that we "already render
+RECRUITER_MASTER and may already know the endpoint."
+
+**Decision.**
+1. **Corrected the premise rather than deflecting.** Verified against our real code first: a fresh
+   case-insensitive grep for `masterListType`/`RECRUITER_MASTER` over `ANDROID/src` = **0 hits** — not in
+   `prospects.tsx`, nowhere. Replied saying so explicitly, so `cgpe-api` doesn't chase mobile for an
+   endpoint mobile doesn't call.
+2. **Stated what we actually call and why it only *looks* like we handle those rows.** Our prospects
+   screen calls `GET /api/prospects` (`getProspects`, `api.ts:2432`) + `GET /api/prospects/segments`
+   (`api.ts:2445`) and **no `/api/ca-data/*` route** (that surface is cgpe-admin's `CaData.tsx`). It reads
+   every field schema-agnostically via `pick(doc, candidateKeys)` (`prospects.tsx:98-119`), so a
+   RECRUITER_MASTER-shaped doc would render whatever matched generic keys and blank the rest
+   (`personName`/`currentOrganization` aren't in our key lists) — incidental defensive rendering, not
+   knowledge of the endpoint.
+3. **Box left unticked; no `src/` change; nothing committed.** Item is `→ cgpe-api` with mobile only CC'd,
+   so reply underneath and leave the box open. INBOX-only reply — gates stay at the Phase-23 baseline
+   (373 green); `contracts/` isn't version-controlled and push still 403s, so the reply was grepped back
+   durable (INBOX lines 50–52) per the concurrent-write rule.
+
+**Consequence.** cgpe-admin's Phase-45 discovery is redirected to the authoritative source (`cgpe-api`),
+which is where the RECRUITER_MASTER endpoint/param/envelope/scope actually lives. Not blocking mobile. If
+`cgpe-api` later scopes a `masterListType` filter on a prospects-adjacent route, a future mobile session
+should check whether our schema-agnostic `prospects.tsx` should surface it.
+
+---
+
 ## 2026-08-12 — Phase 23: built the MDRT tier-progress element on Commissions (option d), the buildable slice while the earned aggregate stays blocked
 
 **Context.** The board was editor-exhausted; the owner picked HANDOFF option (d) — build the

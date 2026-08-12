@@ -14,6 +14,20 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**INBOX sync (no phase) — 2026-08-12 (6th of the day). Answered cgpe-admin's RECRUITER_MASTER CC.** Boot
+found the board editor-exhausted and one fresh open item CC'ing this session: cgpe-admin filed a discovery
+question to `cgpe-api` (blocking their Phase 45) — how does the API expose `ca-data` rows with
+`masterListType: "RECRUITER_MASTER"`? — CC'ing mobile on the premise "it currently shows up only in
+cgpe-mobile's `ANDROID/src/app/prospects.tsx`" and that we "already render RECRUITER_MASTER and may know the
+endpoint." **Verified that premise is WRONG** and replied so the sibling stops treating mobile as ground
+truth: a fresh case-insensitive grep for `masterListType`/`RECRUITER_MASTER` over `ANDROID/src` = **0 hits**
+(not in `prospects.tsx`, nowhere). Our prospects screen calls `GET /api/prospects` (`getProspects`,
+`api.ts:2432`) + `GET /api/prospects/segments` (`api.ts:2445`) and **no `/api/ca-data/*` route** (that's
+cgpe-admin's `CaData.tsx`); it renders schema-agnostically via `pick(doc, candidateKeys)`, which only *looks*
+like it handles those rows. The endpoint/param/envelope answer is `cgpe-api`'s to give — **not blocking
+mobile**. Box left **unticked** (`→ cgpe-api`, mobile only CC'd); reply grepped back durable (INBOX lines
+50–52). **No `src/` change, no gate re-run** (373 green, Phase-23 baseline). DECISIONS 2026-08-12 (top); HANDOFF.
+
 **Phase 23 — MDRT tier-progress element on Commissions. BUILT 2026-08-12.** The buildable slice of the
 Phase-6-blocked commissions screen (HANDOFF option d). Commissions itself stays backend-blocked on the earned
 aggregate (`GET /api/commissions/my-summary`, filed to `cgpe-api`, unscoped) — this ships the ONE real datum the
