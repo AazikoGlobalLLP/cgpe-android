@@ -129,8 +129,9 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   is pure in `theme/brand.ts` (`deriveBrandPalette`, fail-open by reference). **Phase 29:** `theme.density`
   is now CONSUMED — pure `applyDensity` in `theme/density.ts` (fail-open by reference; `compact` =
   spacing×0.85 / radius×0.90 / font×1.0) is applied by the bridge AFTER accent, and the layout scale now
-  lives ON the `Palette` (`useTheme().spacing`/`.radius`/`.font`). But **only MIGRATED screens react** (so
-  far `(tabs)/clients.tsx`); the static `spacing`/`radius`/`font` exports stay = comfortable for the ~80
+  lives ON the `Palette` (`useTheme().spacing`/`.radius`/`.font`). But **only MIGRATED screens react**
+  (Phase 29: `(tabs)/clients.tsx`; **Phase 30: `(tabs)/tasks.tsx`, `(tabs)/leads.tsx`, `(tabs)/claims.tsx`**);
+  the static `spacing`/`radius`/`font` exports stay = comfortable for the ~75 remaining
   unmigrated files. Migrate a screen by destructuring the scale off `c` (`const {spacing,radius,font}=c`),
   stripping the static import, and turning any **module-scope** scale use into a helper — see
   `docs/spec/PHASE-29.md` D-2. Do **not** describe `density` as "deferred" again.
