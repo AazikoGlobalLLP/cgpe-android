@@ -6,6 +6,24 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41 (24/7 background location) escalated to #1, ahead of the master surface
+
+**Context.** The owner asked whether member location is tracked 24/7. Verified in `lib/tracker.ts`: it is NOT —
+tracking is **shift-bound** (`startTracking(sid)` on clock-in → `stopTracking` on clock-out). During a shift it
+survives app-close/background via the Android foreground service, but records nothing between shifts and drops
+any fix it can't attribute to a session id (PHASE-7, deliberate). Phase 41 in the plan already covers "24/7
+background location, guaranteed capture."
+
+**Decision.** Pull Phase 41 ahead of Phase 39 (the master surface) as the new #1. Dependency-consistent: 41
+depends on nothing and 39's location element consumes 41/42 anyway. **Flag explicitly: true off-shift 24/7
+tracking (staff during personal/off-duty time) is a policy + DPDP-consent decision the owner must make before it
+is built** — it is not a pure code change, and the shift-bound design is deliberate for privacy/attributability/
+battery (rule 5). Phase 41's first step is to confirm with the owner what "24/7" means and the consent model.
+
+**Consequence.** Roadmap order is now 41→42 (location) → 39 (master surface) → 43 → 44→45 → 46/47 → 48.
+`docs/PHASES.md` "Next 3" + `docs/PLAN-2026-08-14.md` execution order updated. No code changed this session for
+the escalation.
+
 ## 2026-08-14 — Phase 40: live-location visibility gated on the REAL `super_admin` role via a single shared predicate
 
 **Context.** Owner backlog wants live location Master-only. Two location surfaces exist: `agent-track` (already

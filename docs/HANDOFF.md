@@ -1,61 +1,65 @@
-# HANDOFF — CGPE Connect (Android) — Phase 38 — 2026-08-14
+# HANDOFF — CGPE Connect (Android) — Phase 40 — 2026-08-14
 
-This session ran **Phase 38 — [db]+[sec] Master for the 3 numbers via `Profile.role`** — the head of the
-master-role chain (owner backlog PLAN Group C). It is a **verify-and-file phase with NO code on either side**:
-the whole login→role→tier chain already works, so making the 3 accounts Master is a pure DB data change the
-owner runs. Board + spec + decisions + memory updated; INBOX ask filed + grepped back; commit local (push 403s).
+This session **built Phase 40 (live-location visibility = Master only)**, then — at the owner's request —
+**verified the current location-tracking behavior and escalated Phase 41 (24/7 background location) to #1**.
 
 ## Done
-- **Verified end-to-end (both trees, real code — not tags) that "master" needs zero app code.** Phone-OTP login
-  matches by the **last 10 digits** (`findStaffByIdentifier`, `routes/auth.js:869`) and returns `role` verbatim
-  via `toPublicJSON()` (`:1015`); mobile maps it through `adaptUser` (`adapt.ts:157`); `tierOf()` returns
-  `master` iff `role==='super_admin'` (`store/roles.ts:42`) — **no phone literal in `src/`, by design**;
-  `authorize()` passes `super_admin` unconditionally (`middleware/auth.js:57,73`). So promoting
-  `9099032033`/`9825135034`/`9106988376` to `staff_unified.role='super_admin'` makes them read as Master with
-  **zero `src/` change and no backend code change**.
-- **Owner decision captured (AskUserQuestion):** "master" = **full `super_admin`** (org-wide power: edit/promote
-  any user, all PII), NOT a narrower monitor-only role (that would be a new backend capability, not taken). The
-  `Profile.role` enum has no separate monitor rank — `super_admin` is the whole mechanism.
-- **Filed a verified `→ cgpe-api · from cgpe-mobile` INBOX ask** (grepped back durable, 2 hits) + handed the
-  owner a plain-language relay copy (courier workflow): promote the 3 numbers, with the 3 preconditions below.
+- **Live agent locations are now Master-only.** Only a real `super_admin` can open the two coordinate-bearing
+  screens — `agent-map` (live pins) and `agent-track` (movement replay). An admin or a **leader** (who
+  `tierOf()` folds into the admin tier) no longer reaches the location fetch: the tiles are gone from the More
+  tab and the Admin dashboard, and a deep-link to either screen shows an honest **"Master access only"** state,
+  never a blank/loading map. Before this, `agent-map` had **no gate at all** and any admin/leader could open it.
+- **Duty status stays open (verified, not gated).** `getTeam()` uses locations only to compute a clocked-in
+  boolean and discards coordinates, so the roster/dashboard "on duty" counts are unchanged — only the map/
+  coordinates are Master-gated.
+- **Answered the owner's 24/7 question from the real code:** location is **NOT** tracked 24/7 — it is
+  **shift-bound** (clock-in → clock-out). During a shift it survives app-close/background via the Android
+  foreground service; between shifts it records nothing and drops any fix it can't tie to a session.
+- Gates green: `tsc` 0 · `npm test` **435/435** (+5) · lint **0 errors / 12 warnings** (baseline).
 
 ## Files changed
-- `docs/spec/PHASE-38.md` — NEW. The full verification chain, owner decision, mechanism, 3 preconditions.
-- `docs/PHASES.md` — Phase 38 → `## Now`; `## Next 3` re-headed to **40→39** (38 now filed).
-- `docs/DECISIONS.md` — 1 entry prepended (2026-08-14, Phase 38).
-- `docs/STATUS.md` — rewritten (manager-facing).
-- `../contracts/INBOX.md` — NEW top-of-queue `→ cgpe-api` ask (the DB promotion). **Outside this git repo.**
-- memory `owner-backlog-2026-08-14` + `MEMORY.md` — Phase 38 recorded. **Outside this git repo.**
-- Commit `60c6cdb` (the 4 in-repo docs; local — push still 403s). INBOX/memory are on disk only, uncommitted by design.
+- `src/store/roles.ts` — NEW pure predicate `canSeeLiveLocation(user) = user?.role === 'super_admin'` — the ONE
+  shared location gate (real role, never the folded tier or `viewAs`), so the two screens can't drift.
+- `src/app/agent-map.tsx` — import `useAuth`+predicate; `load()` bails before the fetch when not master; honest
+  `ready && !isMaster` "Master access only" `EmptyState`, placed before the loading skeleton.
+- `src/app/agent-track.tsx` — swapped its `capabilitiesOf().tier` caps check for `canSeeLiveLocation` (same
+  result, explicit real-role); dropped the now-unused import.
+- `src/app/(tabs)/more.tsx` — moved the "Agent locations" tile into the existing `caps.tier==='master'` branch
+  beside "Movement paths" (both location tiles now Master-only).
+- `src/screens/dashboards.tsx` — removed the "Agent map" quick action from the **Admin** dashboard (Master keeps it).
+- `src/store/__tests__/roles.test.ts` — NEW (5): pins the gate across all 6 roles + null, incl. the admin/leader
+  folded-tier trap and agreement with `tierOf()==='master'`.
+- `docs/spec/PHASE-40.md` — NEW spec. `docs/PHASES.md` / `docs/DECISIONS.md` / `docs/STATUS.md` updated.
+- `docs/PHASES.md` + `docs/PLAN-2026-08-14.md` — **Phase 41 escalated to #1** (24/7 location), with the DPDP/
+  policy caveat recorded. Commits: `40b3e1e` (Phase 40), `915f4b3`+`c1da964` (escalation). All local — push 403s.
 
 ## Decisions made
-- **"master" = full `super_admin`, delivered as a DB `Profile.role` change with zero `src/` change** (owner-confirmed;
-  DECISIONS 2026-08-14 top; PHASE-38 §1). The value is FORCED by the code — do not invent a "master" role value or
-  reintroduce a phone literal.
-- **No `[api]` code ask and no contract change** — login already returns the role correctly; the only action is the
-  owner/DB promotion. Not a backend build.
-- **Full super_admin over monitor-only** — a monitor-only master would need a new backend role/capability and would
-  reshape Phases 39/40. Explicitly not taken.
+- **Location gate = the REAL `super_admin` role via one shared predicate** (`canSeeLiveLocation`), never the
+  folded tier/caps — `tierOf()` folds `leader` into admin and `seeAgentMap` is true for the whole admin tier, so
+  a tier gate would leak location to every admin/leader. Duty status is not a location read and stays open.
+  (DECISIONS 2026-08-14, top; PHASE-40 §5.)
+- **Phase 41 (24/7 location) pulled ahead of Phase 39** per the owner. Dependency-consistent (39's location
+  element consumes 41/42). **True off-shift 24/7 is a policy + DPDP-consent decision, not a pure code change** —
+  flagged for an explicit owner call before Phase 41 is built.
 
 ## Known broken / deliberately skipped
-- **Phase 38 completes only when the OWNER makes the DB change** — the app side is done. Three preconditions decide
-  whether phone login works: (P1) **exactly one active profile per phone** (login refuses >1 active match,
-  `auth.js:871`; 404s on 0, `:870`); (P2) **sign out + back in** on each device (the app restores the cached `user`
-  and only refreshes `role` on a fresh login/OTP); (P3) **[sec]** full-power grant, reversible by resetting the role.
-  `makeSuperAdmin.js` takes `user_id|email` **not a phone** → use the panel or `updateOne({phone:/…$/},{$set:{role}})`.
-- **On-device Master check CARRIED** — needs the owner to run the DB change first, then each number signs in and
-  lands on Master. Not editor-verifiable.
+- **On-device Master check for Phase 40 CARRIED** — needs a real `super_admin` (see the map) vs. a real admin/
+  leader (tiles gone, deep-link refused). Not editor-verifiable; needs Phase 38's DB promotion for a live master
+  account, though the gate itself holds regardless.
 - **`git push` still 403s** — stored credential `reactjsaaziko` has no write access to
-  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; commit `60c6cdb` is local only. Needs a human to fix access.
+  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; commits `40b3e1e`/`915f4b3`/`c1da964` are local only. Needs a human.
+- **No contract/INBOX change this session** — Phase 40 is pure `[m]` over existing endpoints; nothing crosses a
+  repo boundary, so no sibling session needs notifying.
 
 ## Next session starts here
-- **Phase 40 — [m][sec] Location visibility = Master only.** Gate the live-location surfaces (`agent-map`,
-  `agent-track`, any member-location read) on the **REAL** `user.role === 'super_admin'` (Phase-20 pattern — a
-  non-master never reaches the fetch, and a stale-role deep-link degrades honestly, never a false blank). This is
-  the first mobile-buildable step of the master chain and depends only on Phase 38 (now filed). Then Phase 39 (the
-  master monitoring surface: performance + location + salary, no task UI). Full plan: `docs/PLAN-2026-08-14.md`
-  §Phase 40/39.
+- **Phase 41 — [m]+[api][sec] 24/7 / guaranteed background location, any device.** FIRST STEP IS NOT CODE: confirm
+  with the owner what "24/7" means (reliably capture the whole shift on any handset — Samsung/Xiaomi battery
+  killers included — vs. literally always-on beyond shifts) and the DPDP consent/notice model. Then audit
+  `lib/tracker.ts` (module-scope task, `_layout.tsx:18` load-bearing import) + the "Allow all the time"
+  background-permission flow + delivery to `/time-tracker/track/points` (Phase 7 flagged the server DROPS fixes
+  with accuracy > 100 m while the app records at ~100 m — likely an `[api]` fix). `docs/PLAN-2026-08-14.md` §41/42.
 - **First command:** `/boot`
-- **Watch out for:** gate on the **real `user.role`**, never on `caps`/the folded tier — `tierOf()` folds `leader`
-  into the admin tier, but only `super_admin` is Master; copy the Phase-20 real-role gate exactly. And role lives in
-  DB `Profile.role`, never a phone literal in `src/`.
+- **Watch out for:** `lib/tracker.ts` has **NO test coverage and is device-only** (no `expo-location`/
+  `expo-task-manager` stub) — nothing here is provable in Vitest or web; every change needs a real multi-handset
+  check. And the shift-bound design is deliberate (privacy/attributability/battery) — do NOT make it always-on
+  without the owner's explicit consent decision first (rule 5).
