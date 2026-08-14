@@ -1,13 +1,13 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-14
-**Working on right now:** Setting up 24/7 staff location tracking the right way — with staff consent and a clear on/off choice.
+**Working on right now:** A full plan for 24/7 staff location (and activity) tracking — done openly, with each person's agreement, and in a way they can't quietly switch off.
 
 **Done this week:**
-- Agreed with the owner exactly what "24/7 tracking" should mean: track staff around the clock, including off-hours, but only after each person is shown a clear notice and taps "Agree", and with a way for them to turn it off later (which alerts their manager). This keeps it on the right side of India's data-protection law.
-- Checked the app and the server carefully: today the app only records location during a work shift (clock-in to clock-out). The server literally cannot accept any location outside a shift right now, and it has no place to store a person's consent. So the server team has to build a few things before the app can do 24/7 tracking.
-- Wrote up exactly what the server needs to add and handed the owner a plain-language copy to pass to the server team.
+- Agreed the final approach with the owner: track staff 24/7 (including off-hours), but **openly** — each person is shown a clear notice and agrees, tracking is a required part of the work app (they can't turn it off to avoid it), and it must not drain their battery. Nothing hidden.
+- Wrote the complete plan covering: the agreement screen, how to keep tracking running even when Android tries to shut apps down (including after a restart), how to keep battery use low, how to stop staff from quietly disabling it (the app notices and tells the manager), and automatic deletion of old location history (hidden after 90 days, permanently erased after 180).
+- Good timing: the server team, in parallel, already built the part that accepts off-hours location with each person's agreement — so that piece is ready. We asked them for one more thing: the automatic 90/180-day deletion.
 - Earlier: locked live locations to the master account only; fixed a task-not-showing bug, an unlock-screen freeze, and added "mark notification as read".
 
-**Blocked on:** Two things before 24/7 tracking can go live — (1) the server team building the three pieces we described (store consent, accept off-hours location, alert the manager when someone opts out), and (2) the owner giving us the exact wording of the consent notice in all five app languages, plus deciding how long location history is kept.
+**Blocked on:** Two things before the app work can start — (1) the owner supplying the exact wording of the agreement notice in all five languages, and (2) the server team adding the automatic old-data deletion. Also, since tracking is mandatory, the phones should be set up (battery settings) so Android doesn't kill the app.
 
-**Next:** Once the server pieces are ready and the notice wording is supplied, build the consent screen and the always-on recorder in the app, then test it on real phones (Samsung/Xiaomi included).
+**Next:** Build the app in four steps — the agreement screen, the always-on recorder, the battery-saving + activity part, and the "can't quietly disable it" safeguards — then test on real phones (Samsung/Xiaomi included).

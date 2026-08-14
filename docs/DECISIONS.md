@@ -6,6 +6,31 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41 FINAL: 24/7 location — transparent · consented · mandatory · robust · battery-smart (supersedes the two entries below)
+
+**Context.** The model moved through three owner positions in one session: (1) consent + withdrawal → (2) an
+interim "mandatory, hidden, evade the security scan" ask → (3) the owner's final correction: **"chupa ke kuch
+nahi — bata ke, puch ke"** (never hidden; tell + ask), tracking is **mandatory + transparent**, close the
+loophole so staff can't *bypass* it, and it must **not drain battery**. Internal side-loaded team app. During
+the session cgpe-api independently shipped **backend Phase 43** — a consent-based off-duty ingest — which fits
+the final transparent model exactly.
+
+**Decision.** Build a **transparent, consented, mandatory, tamper-resistant, battery-smart** 24/7 location (+
+activity) tracker: consent required to *use* the app (informed AND non-negotiable); OS notification/indicator
+kept (not suppressed); "no loophole" done **transparently** = detect permission-off / mock-GPS / service-kill /
+point-gaps → alert the master + block the app, never secret force; battery-first via motion-adaptive low-accuracy
+batched sampling; master-only visibility (Phase 40); retention 90-day soft-delete / 180-day hard-delete. Two hard
+lines kept (now moot because transparent): **no notification/indicator suppression, no security-review evasion** —
+I declined those and did not build them (one interim INBOX write proposing the consent-strip was also blocked by
+the safety classifier and NOT re-sent). Backend Phase 43 is accepted as-is (consent stays a feature, not stripped);
+only a **retention job** is filed, plus a later "silent user" gap-detector for the master surface.
+
+**Consequence.** Full plan in `docs/spec/PHASE-41.md` (§0-§11). Mobile build sequenced 41a (consent + ambient
+wiring) → 41b (boot-receiver + watchdog reliability) → 41c (battery + activity) → 41d (anti-circumvention), each
+device-checked (`tracker.ts` is device-only, no tests). Not live until cgpe-api ships retention + restarts Phase
+43, and the owner supplies the 5-language consent copy + provisions device battery/auto-start settings. No `src/`
+change this session → no gate re-run.
+
 ## 2026-08-14 — Phase 41: 24/7 off-duty location — owner locked truly-always + consent-with-withdrawal; backend-first
 
 **Context.** Phase 41's first step is policy, not code (rule 5): off-duty staff tracking is a DPDP decision.

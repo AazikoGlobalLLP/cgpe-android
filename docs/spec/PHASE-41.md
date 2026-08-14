@@ -1,161 +1,148 @@
-# PHASE 41 — [m]+[api]+[db][sec] 24/7 off-duty background location (consented)
+# PHASE 41 — 24/7 Location & Activity: transparent · consented · mandatory · robust · battery-smart
 
-**Status:** SPEC + POLICY LOCKED + `[api]`/`[db]` FILED — no mobile code yet — 2026-08-14.
-Owner-escalated to #1 (`docs/PLAN-2026-08-14.md` §Phase 41; DECISIONS 2026-08-14, top). Mirrors the
-Phase-38 shape: verified against real code, filed to `cgpe-api`, owner-relay copy handed over. The
-mobile build waits on the backend endpoints below **and** on human-translated notice copy.
+**Status:** FINAL PLAN LOCKED — backend Phase 43 SHIPPED (consent-based, fits) · retention ask filed ·
+mobile build sequenced (not yet built) — 2026-08-14. Owner-escalated to #1
+(`docs/PLAN-2026-08-14.md` §41; DECISIONS 2026-08-14, top). Internal side-loaded team app (not a store app).
 
 ---
 
-## 1. What the owner decided (locked, AskUserQuestion 2026-08-14)
+## 0. Locked principles (owner, 2026-08-14 — the rails everything else obeys)
 
-Two policy forks were put to the owner before any code. Both are now locked:
+1. **Transparent, never hidden.** Staff are told and asked — a clear consent notice + "Allow all the
+   time". The app does NOT conceal that it collects location; the OS notification/indicator stay.
+2. **Consented + mandatory.** Consent is required to *use* the work app (grant or you can't proceed), so it
+   is both informed AND non-negotiable — no "quietly opt out and slack".
+3. **No loophole — enforced transparently.** Staff must not be able to *bypass/disable* tracking to dodge
+   it. We close loopholes by **detecting** tampering (permission revoked, location off, service killed,
+   mock location) and **alerting the master + blocking the app** until fixed — never by secret force and
+   never by hiding. Staff always know it is on; they just can't silently defeat it.
+4. **Battery-first.** The app must NOT be a visible battery drain. Adaptive, motion-aware, low-accuracy,
+   batched sampling — measured on real devices.
+5. **Master-only visibility** (Phase 40, shipped) and **retention 90-day soft-delete / 180-day
+   hard-delete** (owner-set).
+6. **Two hard lines that remain (now aligned with the owner):** no suppression of the OS
+   notification/indicator, and no security-review evasion. Both are unnecessary here because the model is
+   transparent, and the foreground notification is technically required for reliability anyway (§3).
 
-1. **Scope = truly 24/7, every day.** Record location at all hours — including off-duty, nights,
-   weekends — whenever the phone is on. (Not the narrower "whole shift, any handset" reading, and not
-   the "working-window" middle ground.)
-2. **Consent model = DPDP-safe consent + withdrawal.** On first login the member sees a plain-language
-   notice and must tap **Agree**; consent is stored server-side with a timestamp. The member can
-   **withdraw** in Settings; withdrawal stops off-duty tracking and **alerts the manager/master** (so the
-   owner knows who opted out).
+## 1. Consent & onboarding (transparent — the "bata ke, puch ke" part)
 
-Visibility is unchanged from **Phase 40**: only the **Master** (`super_admin`) can see the map/path.
+- **First-login consent screen** (all 5 app languages — **human copy owed**, machine translation forbidden,
+  PHASE-19 §4): what is collected (precise location + activity, 24/7 incl. off-duty), why (field-force
+  management), who sees it (Master only), retention (90/180), and that it is a condition of the app.
+  **"I Agree" is required to continue** — decline ⇒ can't use the app (mandatory), not a silent skip.
+- On Agree → `POST /api/time-tracker/consent {granted:true}` (backend Phase 43, shipped).
+- **Permission ladder** (order matters — Android auto-denies background before foreground):
+  foreground → background ("Allow all the time") → **battery-optimisation exemption** prompt. All already
+  half-built in `ensureBackgroundPermission` (`tracker.ts:308`); extend with the battery-opt step.
 
-**Honest legal flag (rule 5), already given to the owner:** continuous off-duty tracking of staff is the
-most sensitive category under India's **DPDP Act 2023**; employee consent can be challenged as not
-"freely given" because of the power imbalance. The owner accepted this and chose the consent+withdrawal
-posture, which is the defensible path. A withdrawal switch means "always-on" is **not 100 % guaranteed
-for a member who opts out** — that is the deliberate legal trade-off the owner picked.
+## 2. 24/7 capture engine — reliability against OS background-kill (★ the owner's core question)
 
-## 2. Current state (verified in real code, both trees — not tags)
+Layered defence, Android (present levers noted; the rest is the build). All device-only, untestable in
+Vitest/web (`tracker.ts` has no stub).
 
-**Mobile (`src/lib/tracker.ts`, `src/app/(tabs)/home.tsx`, `src/data/api.ts`):**
-- Tracking is **strictly shift-bound.** `startTracking(sessionId)` fires on clock-in
-  (`home.tsx:924`, from the server's `res.sessionId`); `stopTracking()` on clock-out (`home.tsx:867`).
-- Off-duty records **nothing**, by design: any fix with no session id is refused (`unattributable`) and
-  the service tears itself down and clears state (`tracker.ts:272-283`). Phase 7 made this deliberate —
-  a route that cannot be attributed to a shift is worse than none (battery, a notification nobody can
-  explain, and on a shared handset one person's fixes landing on another's day).
-- Within a shift it already survives the app being closed (Android foreground service,
-  `killServiceOnDestroy:false`, `tracker.ts:412-421`; task defined at module scope, load-bearing import
-  `_layout.tsx:18`). It **already requests "Allow all the time"** and gates clock-in on it
-  (`ensureBackgroundPermission`, `tracker.ts:308-353`; `home.tsx:800-813`).
+1. **Foreground service — primary anti-kill (PRESENT).** Reuse the shift recorder's service
+   (`killServiceOnDestroy:false`, `tracker.ts:412`). Requires the ongoing notification — **transparent,
+   neutral wording** ("CGPE Connect — location on for work"). Survives app-swipe + normal Doze.
+2. **Battery-optimisation exemption (NEW).** Add `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`; prompt via
+   `expo-intent-launcher`. OEM auto-start (Samsung Device Care / MIUI Autostart / Oppo-Vivo-Realme) set at
+   **device provisioning** since devices are mandatory/managed. Ref: dontkillmyapp.com.
+3. **Reboot persistence (NEW — the one genuinely-new native piece).** expo-location's task does NOT
+   survive a reboot. Add `RECEIVE_BOOT_COMPLETED` + a small **config plugin** with a native `BootReceiver`
+   that re-arms `startLocationUpdatesAsync`. (Read SDK-57 docs first — AGENTS.md.)
+4. **Watchdog re-arm (NEW).** `expo-task-manager` + `expo-background-task` periodic (~15 min min) checks
+   `hasStartedLocationUpdatesAsync()` and restarts if killed.
 
-**Backend (`cgpe-backend-main/routes/timeTracker.js`):**
-- `POST /api/time-tracker/track/points` is **hard session-bound**: it resolves `session_id` from the body
-  or the caller's active DayLog session; with none it returns **400 "No active session — clock in
-  first."** (`timeTracker.js:1339-1340`). **Off-duty points cannot be ingested today.**
-- Points with **accuracy > 100 m are silently dropped** and the call still 200s with `{added:0}`
-  (`.filter(… p.accuracy <= 100)`, `timeTracker.js:1350`). Phase 7 flagged this; it matters more for 24/7
-  because a battery-friendly ambient fix is coarser.
-- `location_tracks` is **"one doc per shift session"**, keyed by `session_id` (`timeTracker.js:1301,1306`).
-  There is no per-user / off-duty keying.
-- **No staff-consent concept exists** (grep `consent|off-duty|ambient` over the backend = only the
-  web-visitor tracker `routes/track.js` and unrelated files). But `routes/track.js` already models
-  visitor consent as `consent: { status: 'pending'|'accepted'|'declined', decidedAt }` — a **precedent**
-  the backend can mirror for staff.
+**Honest ceiling:** even fully configured, a few aggressive OEMs kill exempted services; ~100 % on every
+handset is not softwarely guaranteed. iOS cannot do true continuous 24/7 (best: Always + significant-change
++ region monitoring). Fleet is Android-first, so this is a documented limit, not a blocker.
 
-**Net:** the core of 24/7 (off-duty ingest + consent storage + withdrawal-alert) is entirely
-backend-side. Mobile cannot make it work without new endpoints, and inventing an endpoint violates the
-contract rule. So Phase 41 files the backend asks first and builds the client only once they land.
+## 3. Battery efficiency (owner priority — "battery speed me na ghate")
 
-## 3. Proposed contract (filed to `cgpe-api` — mechanism is theirs; mobile states the guarantee)
+- **Motion-adaptive sampling.** Use activity recognition (§5) to go **sparse when still** (e.g. one fix
+  every few min / on significant-change) and **denser when moving/driving**. Stationary staff cost almost
+  nothing.
+- **Low/Balanced accuracy**, `distanceInterval` (no fix without real movement), `deferredUpdatesInterval`
+  batching (already 60 s) — GPS is the battery cost; minimise fixes, not coverage.
+- **Batched, backed-off uploads** (already batched in `tracker.ts`); coalesce, retry with backoff, never
+  spin on a dead network.
+- **Target + proof:** measure % drain over a real day on 3+ handsets; tune until it's a small single-digit
+  overhead. This is a device-only acceptance gate.
 
-### A. Staff location-consent store + read/write — `[api]`+`[db]`
-- Persist per staff, mirroring the `routes/track.js` precedent:
-  `location_consent: { status: 'pending'|'granted'|'withdrawn', decided_at, version }`.
-- **Read** on `GET /api/rbac/config` `me.location_consent` (the app already fetches this on boot — same
-  place backend Phase 41 put `can_approve_content`), or a dedicated `GET /api/time-tracker/consent`.
-- **Write** `POST /api/time-tracker/consent { granted: boolean, version }` → sets `granted` /
-  `withdrawn` + `decided_at`. On **withdrawal**, create a Notification to the master/manager
-  ("<name> turned off location sharing"). `version` lets a materially-changed notice force re-consent.
+## 4. Activity tracking (owner also asked — scoped as 41c)
 
-### B. Off-duty (ambient) point ingest — `[api]`+`[db]`
-- **Guarantee mobile needs:** the client can post off-duty points attributed to the **authenticated
-  user** (no shift session), and the server stores them **only if** that user's
-  `location_consent.status === 'granted'`; otherwise it answers a **distinct refusal** (e.g. 403
-  `consent_required`) so the client stops recording and drops its buffer.
-- **Recommended shape (their call):** `POST /api/time-tracker/track/ambient { points }` → attribute to
-  `req.user`, store as a per-user/day off-duty track (e.g. `location_tracks` with
-  `session_id = 'ambient:<userId>:<date>'` + `off_duty: true`, or a sibling collection). Keeping it
-  **distinct** from the shift `/track/points` keeps shift routes clean and lets the master tell duty from
-  off-duty apart — which is exactly what **Phase 42** (green inside a shift, red outside) needs.
+`ACTIVITY_RECOGNITION` permission + a motion source (`expo-sensors` Pedometer/Accelerometer, or Google
+Activity Recognition via a native module). Classifies still / walking / driving — **doubles as the battery
+adaptivity input** (§3). Its own permission + design; does not block the location core.
 
-### C. Accuracy for ambient fixes — `[api]`
-- Do **not** apply the shift path's `<= 100 m` drop to ambient points. 24/7 uses coarser, battery-
-  friendly accuracy; the shift filter would discard almost every ambient fix. Accept coarser ambient
-  points (or raise the cap materially) — and separately, re-flag the **shift**-path silent drop from
-  Phase 7 (surface a `dropped` count in the 200 instead of dropping invisibly).
+## 5. Anti-circumvention — "loophole nahi dhundhne dena" (transparent enforcement, 41d)
 
-### D. Master read of off-duty path — `[api]` (Phase 39/42 dependency, flagged not built here)
-- The master monitoring surface (Phase 39) and route-colouring (Phase 42) will need the off-duty track in
-  the session list / path reads. Called out so the ingest is designed read-compatible; the read build is
-  39/42's, not 41's.
+Staff know tracking is required; they must not be able to *silently* defeat it. All of this is visible/
+honest, never covert:
 
-**No `contracts/api.md` edit from mobile.** Per the project pattern (Phase 38/34/27), the backend writes
-the contract when it ships these; mobile files the verified ask and wires afterward.
+- **Permission & services monitor** — on every app open + periodically, verify foreground+background
+  location, location-services-on, and battery-opt exemption. Any off ⇒ **block the app** behind a "Turn
+  location back on to use CGPE Connect" screen **and** flag the master (backend).
+- **Mock-location detection** — reject/label `isFromMockProvider` fixes so a fake-GPS app can't spoof a
+  location.
+- **Service-liveness + gap detection** — the watchdog re-arms; the **backend** flags a user who sends no
+  points for > X hours during expected windows (a force-stopped app leaves a gap) → master alert.
+- **Consent-withdrawal signal** — if the OS permission is revoked, the app can send
+  `POST /consent {granted:false}`, which (Phase 43) notifies every super_admin. So an opt-out is loud, not
+  silent.
 
-## 4. DPDP notice — content the owner must supply (blocks the consent screen)
+## 6. Data, privacy & visibility
 
-The first-login notice must state, in **all five app languages** (human copy — machine translation is
-forbidden, i18n rule / PHASE-19 §4):
-- **What** is collected: precise location, continuously, 24/7 including off-duty.
-- **Why:** field-force management / attendance.
-- **Who** sees it: the employer's Master account only (Phase 40).
-- **Retention:** how long location history is kept — **owner must set a value** (no default invented).
-- **How to withdraw:** in Settings, any time; withdrawal stops off-duty tracking.
-- **Grievance / contact** point (DPDP requirement).
+- **Master-only** map/replay (Phase 40, shipped) — off-duty location is even more sensitive, so this gate
+  is load-bearing.
+- **Retention:** 90-day **soft-delete** (hidden from all reads incl. master), 180-day **hard-delete**
+  (purge). Backend job — filed (§7). Applies to shift AND ambient tracks.
+- **Off-duty vs on-duty** stays distinguishable (`off_duty` flag, Phase 43) → Phase 42 green/red colouring.
 
-Until this copy exists in en/gu/hi/hi-en/gu-en, the consent screen cannot be finalised — same block the
-i18n phases hit.
+## 7. Backend status (cgpe-api)
 
-## 5. Mobile plan (built ONLY after §3 A/B land and §4 copy is supplied)
+- ✅ **SHIPPED — backend Phase 43** (verified in real code): `Profile.location_consent`,
+  `POST /consent` (+ super_admin notify on withdrawal), `me.location_consent` on `GET /rbac/config`,
+  `POST /track/ambient` (consent-gated, token-attributed, `ambient:<uid>:<date>`, `off_duty:true`),
+  ambient skips the ≤100 m drop, both track routes return `dropped` + carry `off_duty`. **This fits our
+  transparent-consent model exactly** — no change to the gate needed (the earlier "strip consent" idea is
+  dropped; consent is now a feature, not an obstacle).
+- ⏳ **Filed (retention):** soft-delete > 90 d / hard-delete > 180 d job. Owner relays.
+- ⏳ **Flagged for the anti-circ layer (§5):** a backend "silent user" gap-detector → master alert (design
+  later, pairs with the master surface Phase 39).
+- ⚠️ Phase 43 is uncommitted / needs `:3001` restart (their own note) before it is live.
 
-1. **Consent notice screen** — shown on first login (and on a bumped `version`) when
-   `me.location_consent.status !== 'granted'`; **Agree** → `POST …/consent {granted:true}`. Decline →
-   off-duty tracking never starts (shift tracking is separate and unaffected).
-2. **Settings withdrawal row** → `POST …/consent {granted:false}` → stops ambient tracking, drops the
-   buffer, backend alerts the master.
-3. **`src/lib/tracker.ts` ambient mode** — a 24/7 recorder **independent of the shift**: starts at app
-   boot after auth when consent is `granted` (not on clock-in), posts to the ambient endpoint, and stops
-   + clears on withdrawal or a `consent_required` refusal. New 24/7 foreground-service wording ("CGPE
-   Connect is sharing your location with your employer" — **not** "clock out to stop", which is
-   shift-only). Coarser accuracy than the shift recorder for battery. The existing shift recorder stays
-   as-is; the two coexist (a clocked-in member has both a shift route and ambient coverage).
-4. **Battery/OEM reality (device-only):** Android needs the ongoing notification (legal + technical) and
-   likely a battery-optimisation-exemption prompt for Samsung/Xiaomi/OnePlus; iOS needs "Always" + an App
-   Store justification. All only verifiable on real handsets — `tracker.ts` has **no test coverage and is
-   device-only** (no `expo-location`/`expo-task-manager` stub).
+## 8. Mobile build order (each is a device-checked sub-phase; nothing built yet)
 
-## 6. Decisions
+- **41a — consent + wiring:** consent screen (needs §1 copy) + battery-opt step in the permission ladder +
+  ambient recorder wired to `POST /track/ambient` + neutral 24/7 foreground notification. Depends on: §1
+  copy + Phase 43 live.
+- **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
+- **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
+- **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).
+- Gates each: `tsc` 0 · `npm test` green · no new lint errors · **on-device** matrix
+  (Samsung/Xiaomi/OnePlus/Pixel + one iPhone; battery-drain measured).
 
-- **D-1: policy locked by the owner before any code** (§1) — 24/7 truly-always + consent-with-withdrawal.
-  Recorded so a future session does not re-open the "what does 24/7 mean / is off-duty ok" question.
-- **D-2: backend-first, file don't invent.** Off-duty ingest + consent store + withdrawal-alert do not
-  exist and are the backend's to build (verified §2); mobile files the ask and wires after (Phase 38/27
-  precedent). No client code and no `contracts/*` edit this phase.
-- **D-3: ambient is a SEPARATE recorder, not a change to the shift path.** The shift-bound design is
-  correct and Phase-7-hardened; 24/7 is added alongside it, keeping duty vs off-duty distinguishable for
-  Phase 42. The `unattributable`-drop guard stays for the shift path.
-- **D-4: consent read rides `GET /rbac/config` `me`** (recommended) so the app learns consent state on the
-  boot fetch it already does — no extra round trip on every cold start.
-- **D-5: withdrawal wins over "guaranteed always-on."** The owner chose the DPDP-safe posture; a member
-  who withdraws is not tracked off-duty. This is intended, not a gap.
+## 9. Owner action items
 
-## 7. Done means (this phase)
+1. **Relay the retention ask** (§7) to cgpe-api.
+2. **Supply consent-notice copy** in all 5 languages (§1) — the only thing blocking 41a's screen.
+3. **Provision devices** (battery-opt exemption + OEM auto-start) since tracking is mandatory — this is
+   what makes §2 reliable in the field.
 
-Spec written, policy locked with the owner, backend asks **verified against real code and filed** to
-`contracts/INBOX.md` with an owner-relay copy — **all met**. No `src/` change, so no gate re-run
-(baseline stands: `tsc` 0, `npm test` 435/435, lint 0 errors / 12 warnings).
+## 10. Honest limits (so nothing is over-promised)
 
-**Necessary-but-not-sufficient for a working feature:** cgpe-api ships §3 A/B/C, the owner supplies §4
-notice copy in five languages and a retention value, then a **later mobile phase** builds §5 and it is
-checked on real multi-handset devices. Until then 24/7 off-duty tracking is **not live**.
+100 % on every OEM is not softwarely guaranteed; iOS is not truly continuous; the foreground notification
+cannot be removed. Within those, this plan gets a mandatory, transparent, robust, low-battery 24/7 tracker
+that staff cannot silently disable — the outcome the owner asked for.
 
-## 8. Next
+## 11. Decisions
 
-- **cgpe-api** builds §3 (consent store + read on `me`, ambient ingest, ambient accuracy). Owner relays
-  the filed ask.
-- **Owner** supplies the §4 DPDP notice copy (5 languages) + a retention period.
-- **Then** the mobile build phase (§5), device-checked. Phase 42 (green/red route colouring) consumes the
-  off-duty vs shift distinction this ingest creates.
+- **D-1: transparent + consented + mandatory** (§0.1-0.2) — consent required to use the app; informed, not
+  hidden. Reverses the interim "covert/no-consent" idea; aligns with backend Phase 43.
+- **D-2: no-loophole = transparent detection + enforcement** (§5), never secret force or concealment.
+- **D-3: battery-first is a hard acceptance gate** (§3), measured on device.
+- **D-4: backend Phase 43 fits as-is** (§7); only the retention job is owed + the anti-circ gap-detector
+  later. No consent-strip.
+- **D-5: honest ceilings documented** (§10) — not sold as a guarantee.
+- **D-6: two hard lines remain** (§0.6) — no notification/indicator suppression, no security-review
+  evasion. Now moot because the model is transparent.
