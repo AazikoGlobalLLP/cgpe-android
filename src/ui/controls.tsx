@@ -8,7 +8,8 @@ import Animated, {
   Easing, interpolateColor, useAnimatedStyle, useReducedMotion, useSharedValue,
   withSequence, withTiming,
 } from 'react-native-reanimated';
-import { font, motion, radius, shadow, spacing, tnum, type, useTheme } from '@/theme/theme';
+import { motion, shadow, tnum, type, useTheme } from '@/theme/theme';
+import type { Font } from '@/theme/theme';
 import { Metric, noOutline, type IconName } from './base';
 
 /* ------------------------------------------------------------------ *
@@ -73,7 +74,10 @@ export type BtnVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'whatsap
 
 const BTN_H = { sm: 38, md: 48, lg: 54 } as const;
 const BTN_PX = { sm: 14, md: 18, lg: 18 } as const;
-const BTN_FS = { sm: 13.5, md: font.body, lg: font.body } as const;
+/* Font never scales under density (font ×1.0), but the label size is still READ off the theme
+ * scale rather than copied — a helper over `c.font`, the same treatment `data.tsx`'s `pillFs`
+ * gave its module-scope `PILL_FS` const, so the static import can be dropped from this module. */
+const btnFs = (f: Font) => ({ sm: 13.5, md: f.body, lg: f.body }) as const;
 const BTN_ICON = { sm: 16, md: 18, lg: 18 } as const;
 /** `sm` is 38pt tall by design; slop makes the real target 44. */
 const SM_SLOP = { top: 3, bottom: 3, left: 0, right: 0 };
@@ -89,12 +93,13 @@ export function Button({
   onLongPress?: () => void;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
   const { p, onPressIn, onPressOut } = usePress();
 
   const h = BTN_H[size];
   const px = BTN_PX[size];
-  const fs = BTN_FS[size];
+  const fs = btnFs(font)[size];
   const iconSz = BTN_ICON[size];
 
   // rest / pressed background per variant. Pressed is always a real colour step, so the
@@ -207,6 +212,7 @@ export function Fab({ icon, onPress, label, style, disabled }: {
   style?: StyleProp<ViewStyle>; disabled?: boolean;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
   const { p, onPressIn, onPressOut } = usePress();
 
@@ -261,6 +267,7 @@ export function Chips<T extends string>({ options, value, onChange, style }: {
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   return (
     <View style={[{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }, style]}>
       {options.map((o) => {
@@ -321,6 +328,7 @@ export function Segmented<T extends string>({ options, value, onChange, full, st
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
 
   const found = options.findIndex((o) => o.key === value);
@@ -418,6 +426,7 @@ export function Stepper({ value, onChange, min = 0, max = 99, step = 1, style, f
   disabled?: boolean;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
 
   const latest = useRef(value);
@@ -508,6 +517,7 @@ export function SearchBar({ value, onChange, placeholder, autoFocus, onSubmit, s
   onSubmit?: () => void; style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const [focused, setFocused] = useState(false);
   return (
     <View style={[{
@@ -566,6 +576,7 @@ export function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
 

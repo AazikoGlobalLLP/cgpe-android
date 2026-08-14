@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
-  font, radius, shadow, spacing, tnum, type, useTheme, Weight,
+  shadow, tnum, type, useTheme, Weight,
 } from '@/theme/theme';
 
 export type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -114,6 +114,7 @@ export function Header({ title, subtitle, back, right }: {
   title: string; subtitle?: string; back?: boolean; right?: React.ReactNode;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const insets = useSafeAreaInsets();
   const router = useRouter();
 
@@ -165,6 +166,7 @@ export function Header({ title, subtitle, back, right }: {
 /* ---------- SectionHeader ---------- */
 export function SectionHeader({ title, action, onAction }: { title: string; action?: string; onAction?: () => void }) {
   const c = useTheme();
+  const { font } = c;
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12, marginTop: 4 }}>
       <Text style={{ color: c.text, ...type('800', font.h3), letterSpacing: -0.2 }}>{title}</Text>
@@ -178,6 +180,7 @@ export function Card({ children, style, onPress, padded = true }: {
   children: React.ReactNode; style?: StyleProp<ViewStyle>; onPress?: () => void; padded?: boolean;
 }) {
   const c = useTheme();
+  const { radius, spacing } = c;
   const base: ViewStyle = {
     backgroundColor: c.card, borderRadius: radius.lg, padding: padded ? spacing.lg : 0,
     borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, ...shadow(c, 1),
@@ -188,11 +191,13 @@ export function Card({ children, style, onPress, padded = true }: {
 
 /* ---------- GlassCard (translucent, for over gradients) ---------- */
 export function GlassCard({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const { radius, spacing } = useTheme();
   return <View style={[{ backgroundColor: 'rgba(255,255,255,0.14)', borderColor: 'rgba(255,255,255,0.22)', borderWidth: 1, borderRadius: radius.lg, padding: spacing.lg }, style]}>{children}</View>;
 }
 
 /* ---------- Row ---------- */
 export function Row({ children, style }: { children: React.ReactNode; style?: StyleProp<ViewStyle> }) {
+  const { spacing } = useTheme();
   return <View style={[{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }, style]}>{children}</View>;
 }
 
@@ -203,7 +208,7 @@ export function Row({ children, style }: { children: React.ReactNode; style?: St
  * any more: that type admits 'bold' / 100 / 200 / etc., none of which have a bundled
  * face, and on Android an unbundled weight silently renders as regular.
  * ------------------------------------------------------------------ */
-export function Txt({ children, size = font.body, weight = '400', color, style, numberOfLines, numeric }: {
+export function Txt({ children, size: sizeProp, weight = '400', color, style, numberOfLines, numeric }: {
   children: React.ReactNode;
   size?: number;
   weight?: Weight;
@@ -214,6 +219,9 @@ export function Txt({ children, size = font.body, weight = '400', color, style, 
   numeric?: boolean;
 }) {
   const c = useTheme();
+  // Font never scales with density (font ×1.0), but the default is still READ off the theme
+  // scale rather than copied, so the static import can be dropped from this module.
+  const size = sizeProp ?? c.font.body;
   return (
     <Text numberOfLines={numberOfLines}
       style={[{ color: color ?? c.text, ...type(weight, size) }, numeric && tnum, style]}>
@@ -228,7 +236,7 @@ export function Txt({ children, size = font.body, weight = '400', color, style, 
  * Tabular figures plus negative tracking at scale. This is the treatment that carries
  * the panel's `.tnum` data-console feel onto mobile; use it for every headline figure.
  * ------------------------------------------------------------------ */
-export function Metric({ value, size = font.metric, color, style, numberOfLines = 1, fit = true }: {
+export function Metric({ value, size: sizeProp, color, style, numberOfLines = 1, fit = true }: {
   value: string; size?: number; color?: string; style?: StyleProp<TextStyle>; numberOfLines?: number;
   /**
    * Shrink to fit rather than wrap or clip. On by default because this component exists to
@@ -239,6 +247,7 @@ export function Metric({ value, size = font.metric, color, style, numberOfLines 
   fit?: boolean;
 }) {
   const c = useTheme();
+  const size = sizeProp ?? c.font.metric;
   return (
     <Text
       numberOfLines={numberOfLines}

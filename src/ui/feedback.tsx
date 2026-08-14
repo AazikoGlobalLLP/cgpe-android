@@ -9,7 +9,7 @@ import Animated, {
   useSharedValue, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { font, motion, radius, shadow, spacing, useTheme } from '@/theme/theme';
+import { motion, shadow, useTheme } from '@/theme/theme';
 import type { Palette } from '@/theme/theme';
 import { Card, Grad, Metric, Txt } from './base';
 import type { IconName } from './base';
@@ -76,6 +76,7 @@ const asPct = (n: number) => `${n}%` as DimensionValue;
  * the screen has no layout to hold yet — there is nothing honest to draw a shape for. */
 export function Loader({ label, inline }: { label?: string; inline?: boolean }) {
   const c = useTheme();
+  const { spacing, font } = c;
   return (
     <View style={inline
       ? { alignItems: 'center', justifyContent: 'center', paddingVertical: spacing.xxxl, gap: spacing.md }
@@ -95,13 +96,14 @@ const SWEEP_HOLD_MS = 420;
  *
  * The band fades to the block's OWN colour rather than to `transparent`: interpolating to
  * transparent on Android goes through transparent *black*, which greys the mid-stops. */
-export function Skeleton({ width = '100%', height = 14, radius: r = radius.sm, style }: {
+export function Skeleton({ width = '100%', height = 14, radius: rProp, style }: {
   width?: DimensionValue;
   height?: number;
   radius?: number;
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const r = rProp ?? c.radius.sm;
   const reduced = useReducedMotion();
   const [w, setW] = useState(0);
   const t = useSharedValue(0);
@@ -156,12 +158,14 @@ export function Skeleton({ width = '100%', height = 14, radius: r = radius.sm, s
 const LINE_WIDTHS: DimensionValue[] = ['100%', '94%', '88%'];
 
 /* ---------- SkeletonText ---------- */
-export function SkeletonText({ lines = 3, lineHeight = 12, gap = spacing.sm, style }: {
+export function SkeletonText({ lines = 3, lineHeight = 12, gap: gapProp, style }: {
   lines?: number;
   lineHeight?: number;
   gap?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const c = useTheme();
+  const gap = gapProp ?? c.spacing.sm;
   const n = Math.max(1, Math.round(lines));
   return (
     <View style={[{ gap }, style]}>
@@ -169,7 +173,7 @@ export function SkeletonText({ lines = 3, lineHeight = 12, gap = spacing.sm, sty
         <Skeleton
           key={i}
           height={lineHeight}
-          radius={radius.sm}
+          radius={c.radius.sm}
           // Last line runs short: a full-width final line reads as a block, not a paragraph.
           width={n > 1 && i === n - 1 ? '62%' : LINE_WIDTHS[i % LINE_WIDTHS.length]}
         />
@@ -182,6 +186,8 @@ export function SkeletonText({ lines = 3, lineHeight = 12, gap = spacing.sm, sty
  * Mirrors the real list-row card (avatar + title + subtitle + trailing meta) so the
  * layout does not shift when the data lands. */
 export function SkeletonCard({ rows = 2, style }: { rows?: number; style?: StyleProp<ViewStyle> }) {
+  const c = useTheme();
+  const { spacing, radius } = c;
   return (
     <Card style={style}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
@@ -217,6 +223,7 @@ export function EmptyState({ icon, title, subtitle, action, style }: {
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   return (
     <View style={[{
       alignItems: 'center', justifyContent: 'center',
@@ -370,6 +377,7 @@ export function Meter({
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
   const col = color ?? meterColor(c, tone);
   const shown = valueLabel ?? `${Math.round(clamp01(value) * 100)}%`;
 
@@ -416,6 +424,7 @@ export function Banner({ tone = 'info', title, message, action, onDismiss, icon,
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
   const s = toneSpec(c, tone);
 
@@ -511,6 +520,7 @@ export function Toast({ message, tone = 'info', onDismiss, icon }: {
   icon?: IconName;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const s = toneSpec(c, tone);
   return (
     <Pressable
@@ -553,6 +563,7 @@ export const useToast = () => useContext(ToastContext);
  * Queued, not stacked. Two toasts at once means neither is read, so messages wait their
  * turn; each gets its own full dwell. Rapid-fire calls therefore never drop a message. */
 export function ToastProvider({ children }: { children: React.ReactNode }) {
+  const { spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const [queue, setQueue] = useState<QueuedToast[]>([]);

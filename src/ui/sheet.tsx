@@ -11,7 +11,7 @@ import Animated, {
   useSharedValue, withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { font, motion, radius, shadow, spacing, tnum, type, useTheme } from '@/theme/theme';
+import { motion, shadow, tnum, type, useTheme } from '@/theme/theme';
 
 /* ------------------------------------------------------------------ *
  * sheet — the app's one modal surface.
@@ -70,6 +70,7 @@ export function Sheet({
   footer?: React.ReactNode;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const insets = useSafeAreaInsets();
   const win = useWindowDimensions();
   const reduced = useReducedMotion();
@@ -308,6 +309,7 @@ function OptionChip({ label, count, selected, multi, onPress }: {
   label: string; count?: number; selected: boolean; multi: boolean; onPress: () => void;
 }) {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   return (
     <Pressable
       onPress={onPress}
@@ -349,6 +351,7 @@ function BarBtn({ label, onPress, tone, disabled, flex, style }: {
   flex: number; style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const { radius, font } = c;
   const solid = tone === 'solid';
   return (
     <Pressable
@@ -397,6 +400,7 @@ export function FilterSheet({
   applyLabel?: string;
 }) {
   const c = useTheme();
+  const { spacing, font } = c;
 
   const active = groups.reduce((n, g) => n + (value[g.key]?.length ?? 0), 0);
 
