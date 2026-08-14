@@ -943,15 +943,19 @@ shift via the Android foreground service, but records nothing between shifts and
 attribute to a session). The owner wants continuous capture, so Phase 41 is pulled ahead of the master surface
 (39). Dependency-consistent: 41 depends on nothing and 39's location element consumes 41/42 anyway.
 
-1. **Phase 41a-iii-b (→41b/c/d, →42) — boot-gate wiring + device pieces.** 41a-iii-**a** is now BUILT (see
-   `## Now`: `getLocationConsent()` read of `GET /rbac/config` `me.location_consent`, fail-open + silent, tested).
-   **Next = wire it + the device-only remainder:** the `_layout.tsx`-level fail-open boot redirect to `/consent`
-   when the read returns `ok` with status ≠ granted (once-per-cold-start, no flash / no loop, survives Expo's
-   restored-route cold start — NOT `index.tsx`, which only runs at `/`), then `tracker.ts` (ambient recorder
-   calling `postAmbientPoints`, battery-opt permission step, neutral 24/7 foreground notification). Then 41b
-   (boot-receiver plugin + watchdog), 41c (battery/activity), 41d (anti-circumvention). ⚠️ `tracker.ts` has NO
-   test coverage (device-only); the redirect changes app entry for EVERY user (verify on a handset); and do NOT
-   wire against Phase 43/45 until cgpe-api **commits + `:3001`-restarts** them (a device miss before that ≠ a code bug). Original audit
+1. **Phase 41a-iii-b part 2 (→41b/c/d, →42) — the `tracker.ts` device pieces (a build-and-device session).**
+   41a-iii-**a** (the `getLocationConsent()` read) AND **41a-iii-b part 1** (the `_layout.tsx` boot-gate
+   redirect + pure `needsConsentGate`, fail-open, tested) are now BUILT — see `## Now`. **Next = the device
+   remainder**, which is NOT editor-buildable: `expo-intent-launcher` is not installed and
+   `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`/`RECEIVE_BOOT_COMPLETED` are absent from `app.json`, so it needs a
+   fresh EAS build + a handset. **Follow the decision-complete plan `docs/spec/PHASE-41.md` §12** (architecture
+   LOCKED: ONE unified 24/7 recorder — `sid`⇒shift `/track/points`, no `sid`⇒ambient `postAmbientPoints`
+   `off_duty`; graceful-degrade to shift-only when un-consented; battery-opt step; persisted-i18n
+   notification). Then 41b (boot-receiver plugin + watchdog), 41c (battery/activity), 41d
+   (anti-circumvention). ⚠️ `tracker.ts` has NO test coverage (device-only — "looks fine in foreground, breaks
+   only after a process kill"); the boot redirect changes app entry for EVERY user (verify on a handset).
+   Backend Phase 43/45 is now committed + LIVE on `:3001` (`909b117`), so the Phase-34 "don't wire before live"
+   trap is CLEARED — part 2 is device/build-gated only. Original audit
    scope below still applies — `lib/tracker.ts` (module-scope task, `_layout.tsx:18` load-bearing import) + the
    "Allow all the time" background-permission flow + the SecureStore buffer + delivery to `/track/points`
    (Phase 7 flagged the server silently DROPS

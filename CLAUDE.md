@@ -50,6 +50,9 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
 - `npx expo start --web` — the only way to reach a localhost backend.
 - `npx tsc --noEmit` — a green gate. Run before every commit.
 - `npm test` — Vitest, 258 tests over 9 files, ~0.6 s, no network. The second green gate.
+  **Run the whole suite with `npm test` — do NOT invoke `npx vitest run <file>` for one file; it fails
+  `Vitest failed to find the runner` (the project's runner resolves only through the npm script). To scope to
+  one file, pass the path to the script: `npm test -- src/data/__tests__/<file>.test.ts`.**
   Config is `vitest.config.mts`; the four `test/stubs/*` files exist only so native modules
   resolve in Node. `globals: false`, so every file imports `describe`/`it`/`expect`/`vi` from
   `vitest` explicitly. Some cases deliberately pin **known bugs** and live in `describe` blocks

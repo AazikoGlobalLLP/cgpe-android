@@ -6,6 +6,34 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41a-iii-b part 2 is a build-and-device session (not editor); architecture LOCKED to one unified 24/7 recorder; device plan written (PHASE-41 §12)
+
+**Context.** Owner chose "write the device-ready plan" over authoring the `tracker.ts` code blind. Checking
+the native prerequisites first proved part 2 is not editor-buildable at all: `expo-intent-launcher` is **not
+installed** (needed for the battery-opt exemption, §2.2), and `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` /
+`RECEIVE_BOOT_COMPLETED` are **absent from `app.json`** — adding a native module + permissions changes the
+native project, so it needs a fresh EAS build (not Expo Go). Plus `tracker.ts` has no test stub, so nothing
+written for it is verifiable in the editor, and the file "looks fine in foreground, breaks only after a
+process kill."
+
+**Decision.** (1) **Do not author `tracker.ts` blind.** Writing a danger-zone refactor of the app's most
+fragile file, gating only `tsc`/lint, would be declaring unverified work done (the karpathy #4 anti-pattern)
+and could silently kill background GPS for the whole team. Instead, write a decision-complete execution plan
+(PHASE-41 §12) so the on-device session is execution, not design. (2) **Architecture LOCKED: ONE unified
+24/7 recorder**, not a second location task. Rationale: §2.1 ("reuse the shift recorder's service"), §3
+battery (one GPS stream, not two), and a single Android location foreground-service/notification. The service
+runs continuously under granted consent; clock-in/out only **set/clear the shift `sid`**, and `ingest`
+attributes each batch by it — `sid` present ⇒ shift (`/track/points`), absent ⇒ ambient (`postAmbientPoints`,
+`off_duty`). (3) **Graceful degradation LOCKED:** un-consented users keep today's exact shift-only behaviour,
+so 24/7 is purely additive and can't regress anyone who hasn't consented — and a consent read that fails open
+(`error`) never starts 24/7 recording blindly.
+
+**Consequence.** No `src/` change this turn → no gate re-run (parts-1 gates stand: `tsc` 0, `npm test`
+467/467, lint 0/12). The device session follows §12 (unified recorder + battery-opt step + persisted-i18n
+notification + native build steps + a verification matrix whose hard gate is measured battery drain over a
+real day on 3+ handsets). Commit `600628f` (local — push 403s). Part 2 is device/build-gated only, no longer
+backend-gated (`909b117` live on `:3001`).
+
 ## 2026-08-14 — Phase 41a-iii-b (part 1) BUILT: the consent BOOT GATE (redirect) — pure decision seam + `_layout.tsx` wiring; `tracker.ts` device pieces still deferred
 
 **Context.** Owner said "go" on 41a-iii-b. Re-checked the backend live-state first: `909b117 backend:
