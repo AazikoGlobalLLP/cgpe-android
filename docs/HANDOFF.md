@@ -1,56 +1,61 @@
-# HANDOFF — CGPE Connect (Android) — Phase 34 — 2026-08-14
+# HANDOFF — CGPE Connect (Android) — Phase 35 — 2026-08-14
 
-This session ran **Phase 34 — [audit] self-created task not visible** end to end, and it closed as **RESOLVED
-in the same session**: the audit found the root cause, filed a verified backend ask, the owner relayed it, and
-`cgpe-api` shipped the fix (their Phase 40). Mobile owes nothing.
+This session ran **Phase 35 — [audit] intermittent touch-freeze, esp. the AppLock "Unlock" button** end to
+end: audited it, disproved the plan's three suspects, root-caused the real bug, and shipped the fix in one file.
+`[m]` — mobile-only, no contract change, no `[api]` ask.
 
 ## Done
-- **A user's own self-created task now shows on the phone.** The owner's exact bug — `super_admin` creates a
-  task for himself, it never appears on Home/Tasks even after restart — is fixed at the backend: every
-  `team_tasks` write now stamps `createdById` (the creator's user_id) and `/team/task-overview`'s own/team
-  filter matches the creator by `createdById` (new rows) **AND** by `createdBy` name (legacy rows). The task
-  shows in the owner's **DEFAULT own-scope** — precise (his task, not everyone's), so no mobile change was
-  needed.
-- **The mechanism is understood and written down** (`docs/spec/PHASE-34.md`): the phone reads
-  `GET /team/task-overview` (the `team_tasks` collection), never `GET /api/tasks` (that fallback is dead — an
-  empty `{members:[]}` is a valid response); the old creator match compared a NAME against a set of user_ids,
-  so it could never fire.
+- **The AppLock "Unlock" button responds every time.** The owner's bug — tapping Unlock "often does nothing,"
+  intermittently, worst on Samsung/OEM handsets — is fixed. Biometric unlock attempts are now serialised, so
+  exactly one system prompt is ever live; the dead-tap window is gone.
+- **The root cause is written down** (`docs/spec/PHASE-35.md`): `attempt()` fired two overlapping
+  `LocalAuthentication.authenticateAsync()` calls (auto-lock + AppState foreground return + the Unlock button,
+  with no guard). Because the app passes `disableDeviceFallback:false`, tapping "Use PIN" launches Android's
+  separate Confirm-Device-Credential activity → the app goes `background → active` → the foreground `AppState`
+  listener read that as "the user returned" and fired a **second** `attempt()` over the first. Android rejects a
+  concurrent `authenticateAsync` ("already in progress"); `authenticateBiometric` (fail-closed) swallows it into
+  a plain `false` — so the tap showed no prompt and never unlocked. NOT a pointer-absorbing overlay.
 
 ## Files changed
-- `docs/spec/PHASE-34.md` — NEW. The audit finding (read path · server scope · root cause · one-line fix) plus
-  a RESOLVED banner recording the backend Phase-40 fix. Commits `8248eb5` (finding) + resolution commit.
-- `../contracts/INBOX.md` — filed `→ cgpe-api · 2026-08-14 · from cgpe-mobile` (the verified backend ask);
-  `cgpe-api` replied and **ticked it** (their Phase 40). NOT under git (`contracts/` is untracked by policy).
-- `docs/PHASES.md` (Now + Next 3), `docs/DECISIONS.md` (2 entries), `docs/STATUS.md` (rewrite), project
-  `CLAUDE.md` (backend-courier workflow note) — Phase-34 close.
+- `src/ui/AppLock.tsx` — the fix. New `inFlight` ref serialises `attempt()` (one biometric prompt at a time) +
+  `try/finally` guarantees `trying`/`inFlight` reset (also kills a latent "button stuck disabled" trap); the
+  foreground `AppState` listener now gates on `!inFlight.current` so the prompt's own AppState churn can't spawn
+  a competing prompt. A genuine foreground return still re-locks. Big block comment explains why.
+- `docs/spec/PHASE-35.md` — NEW. The audit finding: report · verdict · mechanism · the three suspects disproved
+  · the fix · gates · device-check acceptance list · done-when.
+- `docs/PHASES.md` (Now + Next 3), `docs/DECISIONS.md` (1 entry, prepended), `docs/STATUS.md` (rewrite),
+  memory `owner-backlog-2026-08-14` — Phase-35 close. Commit `2fc683b` (local; push still 403s).
 
 ## Decisions made
-- **The fix went to the BACKEND, not mobile.** The audit's first suggestion was a mobile `?scope=all` for real
-  admins (Phase 34b), but the audit's §6 secondary finding — the `createdBy` name-vs-user_id mismatch — was the
-  true root cause. Fixing it backend-side is more precise (shows the owner HIS task, not the whole board) and
-  fixes it for non-admins too. `cgpe-api` shipped it; **34b is deferred** (revisit only if an admin should see
-  the whole team's board on the ordinary Tasks tab vs. the dedicated master surface, Phase 39).
-- **Backend-courier workflow confirmed and used.** The owner relays a verified `[api]` ask to the backend and
-  confirms when live. Proven this session: filed → owner relayed → backend shipped → mobile verified, all in
-  one session. Roadmap `[api]` items are no longer "blocked indefinitely."
+- **The fix is a re-entrancy guard, NOT a pointerEvents change.** The plan pointed at "an opacity-0 View
+  absorbing touches (the `sheet.tsx` bug class)," the gesture-handler root, and a lingering full-screen overlay.
+  All three were investigated and **disproven** (PHASE-35 §3): AppLock's overlay correctly captures its own
+  touches, `JobPill`/`HealthBanner` return `null` when idle, and `Splash` sits below at `zIndex:50` and unmounts
+  cleanly. Adding speculative `pointerEvents` hardening would have been dead weight; the fix is scoped to the one
+  real defect.
+- **Kept `disableDeviceFallback:false`.** The device-passcode fallback is deliberate (`store/auth.tsx` — a
+  handset with no biometric hardware must still be unlockable). It is the *trigger* for the AppState churn but
+  not a bug; the correct fix is to serialise attempts, not to remove the fallback.
 
 ## Known broken / deliberately skipped
-- **⚠️ OPS — the backend fix is uncommitted and needs a `:3001` restart** (and a production deploy for cgpe.in)
-  before it shows on a device. If a self-created task is still missing on device, that is the server not
-  restarted, **not** a code bug — the fix is verified in source.
-- **Mobile edge case (not the owner's case):** a task created *explicitly Unassigned from the panel* can still
-  be hidden for a NON-admin on the phone, because the app groups by assignee (`getTasks(true)`'s client-side
-  `mine` filter drops the "Unassigned" member group). A mobile-app-created self task avoids this (assignee
-  defaults to the creator's name). Fixable in-app if it ever bites; left as-is.
-- **Phase 34b (mobile `?scope=all`) deferred** — not needed for the owner's bug.
+- **Device check is CARRIED — not editor-verifiable.** AppLock is native-only: there is no
+  `expo-local-authentication` / `AppState` stub, and neither `npm test` (pure logic) nor the Expo web build
+  reaches biometric + OS-lifecycle behaviour (CLAUDE.md). The fix is verified by reading. The acceptance walk
+  (PHASE-35 §6: cold-start unlock, "Use PIN" round-trip, repeated Unlock taps, background→foreground re-lock)
+  needs a physical Android handset, ideally Samsung/One UI where the AppState bounce is most reliable.
+- **"Touches stop in several places" — only the AppLock repro was in scope.** The report mentioned other
+  places; the plan's clear repro was AppLock and that is what was root-caused and fixed. If touch-freeze recurs
+  elsewhere, it is a *different* cause (the overlay stack was cleared of invisible absorbers here — see §3).
 - **`git push` still 403s** — stored credential `reactjsaaziko` has no write access to
-  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; all commits this session are **local**.
+  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; commit `2fc683b` is **local only**.
 
 ## Next session starts here
-- **Phase 35 — [audit] touch-freeze, especially the AppLock "Unlock" button.** Investigate `ui/AppLock.tsx`
-  overlay `pointerEvents` (the opacity-0-View-absorbs-touches class the sheet code documents at `sheet.tsx`) +
-  the gesture-handler root + any full-screen Animated overlay that stays mounted. Deliverable: root-cause +
-  fix. Full plan: `docs/PLAN-2026-08-14.md` §Phase 35.
+- **Phase 36 — [audit] hardcoded-vs-DB data sweep (notifications first, then app-wide).** Deliverable is an
+  **inventory** separating (a) real fabrication to remove, (b) legitimate documented synthesis to keep (claim
+  timeline, lead notes, prospects via `pick()`), (c) static label maps (fine). Note the project already forbids
+  fabricated data (`data/mock.ts` is `export {}`; failed reads resolve empty via `unavailable()`). Feeds Phase
+  37 (notification mark-read + bell-dot clear). Full plan: `docs/PLAN-2026-08-14.md` §Phase 36.
 - **First command:** `/boot`
-- **Watch out for:** before treating Phase 34 as "still broken," confirm the backend `:3001` was restarted /
-  prod deployed — the code fix is verified, so a device miss is almost certainly an un-restarted server.
+- **Watch out for:** do NOT flag legitimate synthesis as fabrication. `adapt.ts` synthesises claim
+  timeline/lead notes and `prospects.tsx` resolves schema-less docs via `pick()` **on purpose** — those are the
+  (b) bucket, not the (a) bucket. The audit's value is the separation, not a blanket "remove synthesis."

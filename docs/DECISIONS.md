@@ -6,6 +6,34 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 35 (AppLock touch-freeze) fixed with a re-entrancy guard, not a pointerEvents change
+
+**Context.** Audit Phase 35: the AppLock "Unlock" button "often does nothing," intermittently, worst on
+Samsung/OEM. The plan pointed at three pointer-level suspects — an opacity-0 View absorbing touches (the
+`sheet.tsx:101-111` bug class), the gesture-handler root, and a lingering full-screen overlay. All three were
+investigated and **disproven** (`docs/spec/PHASE-35.md` §3): AppLock's overlay is a solid `zIndex:60` View that
+captures its own touches, its Unlock `Pressable` has a real hit target (`Grad` adds no `pointerEvents`),
+`JobPill`/`HealthBanner` early-return `null` when idle, and `Splash` sits below at `zIndex:50` and unmounts
+cleanly (no opacity-0 lingering). And `disabled={trying}` can't stick, because `authenticateBiometric` fails
+closed (`try/catch → return false`, never rejects).
+
+**Decision.** The real cause is a **re-entrant biometric race**: `attempt()` fired from three unguarded places
+(cold-start, every foreground return, the Unlock button), and the `disableDeviceFallback:false` device-credential
+activity (plus OEM fingerprint-sheet AppState bounce) sends the app `background → active`, so the foreground
+`AppState` listener re-fired `attempt()` over the running prompt. Android rejects the concurrent
+`authenticateAsync` ("already in progress"); `authenticateBiometric` swallows it to a plain `false` → the tap
+shows no prompt and never unlocks. Fix = serialise attempts with an `inFlight` ref (one prompt at a time) +
+`try/finally` reset + `!inFlight.current` on the foreground listener. One file (`src/ui/AppLock.tsx`). **Did
+NOT** add speculative `pointerEvents` hardening (no absorber exists) and **did NOT** remove
+`disableDeviceFallback:false` (the passcode fallback is deliberate — it is the trigger, not the bug).
+
+**Consequence.** Unlock responds on the first tap; the AppState churn can no longer spawn a competing prompt; a
+genuine foreground return still re-locks. Gates green (tsc 0 · npm test 417/417 · lint 0 errors/12 warnings).
+The device check is carried — AppLock is native-only (no `expo-local-authentication`/`AppState` stub; web can't
+reach it), so it needs a physical Android handset (ideally Samsung). General lesson for any future overlay that
+auto-fires a native prompt: guard against the prompt's OWN AppState churn re-triggering it. Commit `2fc683b`
+(local; push 403s). See `docs/spec/PHASE-35.md`.
+
 ## 2026-08-14 — Phase 34 (self-created task not visible) fixed BACKEND-side; mobile owes nothing
 
 **Context.** Audit Phase 34: a `super_admin` created a task for himself and it never appeared on the phone,

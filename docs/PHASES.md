@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 35 — [audit] intermittent touch-freeze, esp. the AppLock "Unlock" button. FIXED 2026-08-14.** The
+second of the three roadmap audits (PLAN §Phase 35), and unlike Phase 34 it was fixed the same phase — `[m]`,
+one file, no contract change. **Root cause is NOT a pointer-absorbing overlay** (the plan's three suspects —
+opacity-0 View absorbing touches à la `sheet.tsx`, the gesture-handler root, a lingering full-screen overlay —
+were all investigated and **disproven**, PHASE-35 §3: AppLock's `zIndex:60` overlay captures its own touches,
+`JobPill`/`HealthBanner` return `null` when idle, `Splash` sits below at `zIndex:50` and unmounts cleanly; and
+`disabled={trying}` can't stick because `authenticateBiometric` fails closed). **The real bug is a re-entrant
+biometric race:** `attempt()` fired from three unguarded places (cold-start, every foreground return, the Unlock
+button); because the app passes `disableDeviceFallback:false`, tapping "Use PIN" launches Android's separate
+Confirm-Device-Credential activity → app goes `background → active` → the foreground `AppState` listener read
+that as "the user returned" and fired a **second** `attempt()` over the first (OEM/Samsung fingerprint sheets
+bounce AppState too). Android rejects a concurrent `authenticateAsync` ("already in progress");
+`authenticateBiometric` swallows it to a plain `false` → the tap showed no prompt and never unlocked. **Fix
+(`src/ui/AppLock.tsx` only):** an `inFlight` ref serialises attempts (one prompt at a time) + `try/finally`
+guarantees `trying`/`inFlight` reset (also kills a latent "button stuck disabled" trap) + `!inFlight.current`
+gates the foreground listener so the prompt's own AppState churn can't spawn a competing prompt; a genuine
+foreground return still re-locks. Gates green: `tsc` 0, `npm test` **417/417** (unchanged — AppLock is
+native-only, no stub, untestable in Vitest/web), lint 0 errors / 12 warnings (baseline). Commit `2fc683b`
+(local — push still 403s). **Device check CARRIED** (native-only: cold-start unlock, "Use PIN" round-trip,
+repeated Unlock taps, background→foreground re-lock, ideally on Samsung/One UI) — PHASE-35 §6. Full path:
+`docs/spec/PHASE-35.md`; DECISIONS 2026-08-14 (top).
+
 **Phase 34 — [audit] self-created task not visible. RESOLVED (backend, `cgpe-api` Phase 40) 2026-08-14.** The
 first of the three roadmap audits (PLAN §Phase 34). Traced end to end: the phone's task list is
 `GET /team/task-overview` (the `team_tasks` collection), **never** `GET /api/tasks` (that fallback is dead — an
@@ -717,15 +739,19 @@ mark-read + bell-dot clear + a hardcoded-vs-DB audit; Viewing-as restricted to o
 biometric-only session restore after logout. **These are PLANNED, not built.** Cross-cutting rules baked into
 the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
 the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
-(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **Phase 34 is DONE (resolved
-backend-side, `cgpe-api` Phase 40 — see `## Now`); next up the other two audits:**
+(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **Phases 34 (backend-fixed,
+`cgpe-api` Phase 40) and 35 (AppLock touch-freeze, mobile-fixed) are DONE — see `## Now`. The last audit next,
+then the master-role chain:**
 
-1. **Phase 35 — [audit] touch-freeze, esp. AppLock "Unlock".** Investigate `ui/AppLock.tsx` overlay
-   `pointerEvents` (the opacity-0-View-absorbs-touches class the sheet code documents at `sheet.tsx`) + the
-   gesture-handler root + any full-screen Animated overlay that stays mounted. Root-cause + fix. See §Phase 35.
-2. **Phase 36 — [audit] hardcoded-vs-DB sweep** (notifications first). Inventory real fabrication to remove vs
-   documented synthesis to keep (claim timeline / lead notes / prospects `pick()` are legit) vs static label
-   maps. Feeds Phase 37. See §Phase 36.
+1. **Phase 36 — [audit] hardcoded-vs-DB sweep** (notifications first, then app-wide). Deliverable is an
+   **inventory** separating (a) real fabrication to remove, (b) legitimate documented synthesis to keep (claim
+   timeline / lead notes / prospects `pick()` are legit), (c) static label maps (fine). The project already
+   forbids fabricated data (`data/mock.ts` is `export {}`; failed reads resolve empty via `unavailable()`).
+   Feeds Phase 37. See §Phase 36.
+2. **Phase 37 — [m]+[api?] notification mark-read + clear the bell dot.** Verify first whether a read-persist
+   endpoint exists (history: the WhatsApp inbox has none so `unread` never clears; notices only had
+   `markNoticeRead`) — file an `[api]` ask if missing. Removes any hardcoded notification data found in Phase 36.
+   Depends on 36. See `docs/PLAN-2026-08-14.md` §Phase 37.
 3. **Then 38→40→39** (master role via DB → gate → surface): set `Profile.role` in the DB for the 3 master phone
    numbers (owner/DB change, **never** a client literal — Phase 11), gate location + the master surface on the
    REAL role (Phase-20 pattern). See `docs/PLAN-2026-08-14.md` §Phase 38+.
