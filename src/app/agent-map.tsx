@@ -19,6 +19,8 @@ import type { TeamMember } from '@/data/team';
 import { fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { LeafletMap } from '@/ui/LeafletMap';
+import { useAuth } from '@/store/auth';
+import { canSeeLiveLocation } from '@/store/roles';
 
 /* ------------------------------------------------------------------ *
  * Where the field is, right now.
@@ -70,6 +72,11 @@ export default function AgentMap() {
   const router = useRouter();
   const health = useDataHealth();
   const insets = useSafeAreaInsets();
+  const { user, ready } = useAuth();
+  // Live agent locations are Master-only (Phase 40). Real-role gate, never the folded tier —
+  // a non-master must never reach the location fetch, and a stale-role deep-link degrades to
+  // an honest refusal rather than a blank map.
+  const isMaster = canSeeLiveLocation(user);
 
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [pins, setPins] = useState<AgentPin[]>([]);
@@ -87,6 +94,7 @@ export default function AgentMap() {
   useEffect(() => () => { live.current = false; }, []);
 
   const load = useCallback(async () => {
+    if (!isMaster) { setLoading(false); return; }   // never fetch member locations as a non-master
     const [tm, pn, saved] = await Promise.all([
       api.getTeam(),
       api.getAgentLocations(),
@@ -97,7 +105,7 @@ export default function AgentMap() {
     setPins(pn);
     setMine(readMine(saved));
     setLoading(false);
-  }, []);
+  }, [isMaster]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -113,6 +121,21 @@ export default function AgentMap() {
   }, [pins, team]);
 
   const open = useCallback((id: string) => router.push(`/team/${id}`), [router]);
+
+  // Gate before the skeleton so a non-master never sees a loading map for a map it cannot fetch.
+  // Waits for `ready` so a signed-in master is not flashed the refusal during session restore.
+  if (ready && !isMaster) {
+    return (
+      <Screen>
+        <Header title="Agent locations" back />
+        <EmptyState
+          icon="lock-closed-outline"
+          title="Master access only"
+          subtitle="Live agent locations are visible to the master admin. Ask them if you need to know where the field is."
+        />
+      </Screen>
+    );
+  }
 
   if (loading) return <MapSkeleton />;
 

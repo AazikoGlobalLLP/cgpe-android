@@ -14,7 +14,7 @@ import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import { LeafletMap } from '@/ui/LeafletMap';
 import { useAuth } from '@/store/auth';
-import { capabilitiesOf } from '@/store/roles';
+import { canSeeLiveLocation } from '@/store/roles';
 import * as api from '@/data/api';
 import type { TrackPoint, TrackSession } from '@/data/api';
 import { fmtTime } from '@/lib/format';
@@ -57,7 +57,8 @@ export default function AgentTrack() {
   const health = useDataHealth();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const isMaster = capabilitiesOf(user).tier === 'master';
+  // Master (real super_admin) only — the shared location gate, never the folded tier (Phase 40).
+  const isMaster = canSeeLiveLocation(user);
 
   const [members, setMembers] = useState<Member[]>([]);
   // Seeded from the capability, so a non-master never renders a roster skeleton for a

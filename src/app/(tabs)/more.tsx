@@ -222,9 +222,13 @@ export default function More() {
         href: '/team' as Href,
         navKey: 'team',
       },
-      { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href, navKey: 'agent-map' },
+      // Live location (map + movement replay) is Master-only (Phase 40) — the screens gate on the
+      // real super_admin role, so these tiles follow the same rule and stay off the Admin/leader menu.
       ...(caps.tier === 'master'
-        ? [{ icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' }]
+        ? [
+            { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href, navKey: 'agent-map' },
+            { icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' },
+          ]
         : []),
       { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href, navKey: 'analytics' },
       ...((user.role === 'admin' || user.role === 'super_admin')

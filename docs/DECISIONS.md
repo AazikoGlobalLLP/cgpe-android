@@ -6,6 +6,27 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 40: live-location visibility gated on the REAL `super_admin` role via a single shared predicate
+
+**Context.** Owner backlog wants live location Master-only. Two location surfaces exist: `agent-track` (already
+gated, but via the `capabilitiesOf().tier` caps indirection) and `agent-map` (gated by NOTHING — reachable by any
+admin/leader through `more.tsx`'s `caps.manageTeam`-gated oversight group and the Admin dashboard). The standing
+trap (PLAN rule 1 / Phase-20): `tierOf()` folds `leader` INTO the admin tier and `capabilitiesOf().seeAgentMap`
+is true for the whole admin tier, so gating location on the tier/caps would leak it to every admin and leader.
+
+**Decision.** Add ONE pure predicate `canSeeLiveLocation(user) = user?.role === 'super_admin'` in
+`store/roles.ts` and gate both screens on it (real role, not the folded tier, not `viewAs`). `agent-map` bails
+before the fetch and shows an honest "Master access only" state; `agent-track` swaps its caps check for the
+predicate. The More tiles + Admin dashboard entry points are moved behind the master branch. The predicate is
+the single source of truth so the two screens can't drift, and it is unit-tested across all 6 roles + null
+(the folded admin/leader case pinned explicitly). Duty status (`getTeam`'s `clockedIn` boolean, coordinates
+discarded) is NOT a location read and stays open. No `[api]` ask, no contract change — pure `[m]`.
+
+**Consequence.** Only a real `super_admin` reaches the live map / movement replay; admin/leader see the tiles
+gone and an honest refusal on deep-link, never a blank map. The gate holds independent of Phase 38's DB
+promotion (that just supplies a live master account to test with). `tsc` 0, `npm test` 435/435 (+5), lint
+baseline. Reuse this exact real-role gate for Phase 39's master surface. Full path: `docs/spec/PHASE-40.md`.
+
 ## 2026-08-14 — Phase 38: "master" = full `super_admin` (owner-confirmed), delivered as a DB `Profile.role` change with zero `src/` change
 
 **Context.** Owner backlog: make 3 phone numbers (`9099032033`, `9825135034`, `9106988376`) "master". Rule 1

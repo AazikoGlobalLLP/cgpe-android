@@ -44,6 +44,23 @@ export function tierOf(user: User | null): Tier {
   return 'team';
 }
 
+/**
+ * Live-location gate (Phase 40) — the ONE predicate the location surfaces share.
+ *
+ * Only the Master (real `super_admin`) may see where the field physically is: the live pins on
+ * `agent-map` and the movement replay on `agent-track`. This reads `user.role` DIRECTLY, never
+ * the folded tier or `capabilitiesOf`, on purpose: `tierOf()` folds `leader` INTO the admin
+ * tier and `seeAgentMap` is true for the whole admin tier, so gating location on the tier/caps
+ * would leak it to every admin and leader. Master is `super_admin` and nothing else, so a real
+ * `role` comparison is both the correct rule and immune to a "view as" preview (a master
+ * previewing a lower tier still holds the real role — the screen is theirs to open). Duty status
+ * (on/off) is NOT a location read and stays where it was: `getTeam()` uses locations only to
+ * derive a boolean and never surfaces coordinates.
+ */
+export function canSeeLiveLocation(user: User | null): boolean {
+  return user?.role === 'super_admin';
+}
+
 export function capabilitiesOf(user: User | null, viewAs?: Tier | null): Capabilities {
   const real = tierOf(user);
   // "View as" preview: you can only ever preview a LOWER tier than you actually hold.

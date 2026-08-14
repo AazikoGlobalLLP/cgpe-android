@@ -222,11 +222,12 @@ export function AdminDashboard({ team, tasks, snapshot }: {
 
       <View>
         <SectionHeader title="Admin actions" />
+        {/* No "Agent map" here: live agent locations are Master-only (Phase 40). The Admin tier
+            (which folds in leaders) monitors duty status via the team roster, not the map. */}
         <QuickRow actions={[
           { icon: 'person-add', label: 'Assign task', tint: c.primary, onPress: () => router.push('/task-new') },
           { icon: 'paper-plane', label: 'Send renewals', tint: c.warning, onPress: () => router.push('/premium') },
           { icon: 'people-circle', label: 'Team', tint: th.accent, onPress: () => router.push('/team') },
-          { icon: 'map', label: 'Agent map', tint: c.info, onPress: () => router.push('/agent-map') },
           { icon: 'shield-half', label: 'Claims', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
         ]} />
       </View>

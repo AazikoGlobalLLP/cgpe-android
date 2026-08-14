@@ -14,6 +14,37 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 40 — [m][sec] Live-location visibility = Master only. BUILT 2026-08-14.** The first mobile-buildable
+step of the master chain after Phase 38 (PLAN §Phase 40). Only the **Master** (real `super_admin`) may see
+where the field physically is — the two coordinate-bearing screens `agent-map` (live pins) and `agent-track`
+(movement replay). **Verified the gap in code first:** `agent-track` was already master-gated (via the
+`capabilitiesOf().tier` caps indirection), but **`agent-map` had NO gate at all** — any signed-in user reaching
+`/agent-map` fetched `getTeam()`+`getAgentLocations()`, and its entry points (`more.tsx` admin-oversight group
+gated `caps.manageTeam`, the Admin dashboard) are **true for admin AND leader**, so an admin/leader could open
+the live map. Gated on the **REAL `user.role === 'super_admin'`**, never the folded tier (`tierOf()` folds
+`leader`→admin and `seeAgentMap` is true for the whole admin tier, so a tier/caps gate would leak location to
+every admin and leader — the Phase-20 trap). **6 files:** (a) NEW shared pure predicate
+`canSeeLiveLocation(user)=user?.role==='super_admin'` in `store/roles.ts` — the ONE gate both screens share, so
+they can't drift; (b) `app/agent-map.tsx` — `load()` bails before the fetch when not master + an honest
+`ready && !isMaster` "Master access only" `EmptyState` (waits for `ready` so a real master isn't flashed the
+refusal on session restore), placed **before** the loading skeleton; (c) `app/agent-track.tsx` — swap the caps
+gate → `canSeeLiveLocation` (same result, explicit real-role), drop the unused `capabilitiesOf` import; (d)
+`app/(tabs)/more.tsx` — move the "Agent locations" tile into the existing `caps.tier==='master'` branch beside
+"Movement paths" (both location tiles now Master-only; the tile stays viewAs-aware — an affordance — while the
+SCREEN's real-role gate is the security authority); (e) `screens/dashboards.tsx` — drop the "Agent map" quick
+action from the **Admin** dashboard (the **Master** dashboard keeps map+movement, it renders for master only);
+(f) NEW `store/__tests__/roles.test.ts` (5) — pins the invariant across all 6 roles + null: admits `super_admin`,
+refuses every other role, refuses **admin AND leader** specifically (the folded trap), refuses null, agrees
+exactly with `tierOf()==='master'`. **Scope boundary (verified):** `getTeam()` uses `getAgentLocations()` only
+to derive a **duty boolean** (`clockedIn`) and discards coordinates — so on/off duty counts on the roster/
+dashboards are NOT a location read and stay open (not gated); `getTrackableMembers()` (notify recipient picker)
+carries no location. **No `[api]` ask, no contract change** — pure `[m]` gate over existing endpoints. Gates
+green: `tsc` 0, `npm test` **435/435** (+5), lint 0 errors / 12 warnings (baseline). Commit local (push still
+403s). **Device check carried** (native-only: a real `super_admin` sees the map; a real admin + a real leader
+find the tiles gone and a deep-link shows "Master access only", never a blank map; light/dark at 390 px) — needs
+Phase 38's DB promotion for a live master account, though the gate holds regardless. Full path:
+`docs/spec/PHASE-40.md`; DECISIONS 2026-08-14 (top). Next mobile step: **Phase 39** (the master monitoring surface).
+
 **Phase 38 — [db]+[sec] Master for the 3 numbers via `Profile.role` (NOT client literals). VERIFIED + FILED, no code — 2026-08-14.**
 The head of the master-role chain (PLAN §Phase 38). Owner-confirmed via AskUserQuestion (2026-08-14): "master" is
 **exactly the `super_admin` role** — the `Profile.role` enum (`cgpe-backend-main/models/Profile.js:28`) has no
@@ -816,16 +847,17 @@ biometric-only session restore after logout. **These are PLANNED, not built.** C
 the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
 the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
 (tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **The three audits, the first
-feature AND the head of the master chain are now DONE — Phases 34 (backend-fixed, `cgpe-api` Phase 40), 35
-(AppLock touch-freeze, mobile-fixed), 36 (hardcoded-vs-DB sweep — bucket-a EMPTY, no code change), 37
-(notification mark-read + bell dot, `[m]` only) and 38 (master role via DB `Profile.role`, VERIFIED + filed to
-`cgpe-api`/owner — owner-confirmed full `super_admin`, zero code) — see `## Now`. The rest of the master chain is
-next:**
+feature, the head of the master chain AND the location gate are now DONE — Phases 34 (backend-fixed, `cgpe-api`
+Phase 40), 35 (AppLock touch-freeze, mobile-fixed), 36 (hardcoded-vs-DB sweep — bucket-a EMPTY, no code change),
+37 (notification mark-read + bell dot, `[m]` only), 38 (master role via DB `Profile.role`, VERIFIED + filed to
+`cgpe-api`/owner — owner-confirmed full `super_admin`, zero code) and 40 (live-location visibility gated to real
+`super_admin`, `[m]` only, `canSeeLiveLocation` predicate + tests) — see `## Now`. The rest of the master chain
+is next:**
 
-1. **Phase 40 → 39** (gate → surface): gate the live-location surfaces (`agent-map`/`agent-track`) on the REAL
-   `user.role === 'super_admin'` (Phase-20 pattern — a non-master never reaches the fetch); then build the
-   Master-only monitoring surface (performance + location + salary, no task UI). Phase 40 is the first
-   mobile-buildable step and depends only on 38 (now filed). See `docs/PLAN-2026-08-14.md` §Phase 40/39.
+1. **Phase 39** (the master surface): build the Master-only monitoring surface (performance + location + salary,
+   no task UI), reusing the now-gated location screens (Phase 40). Gate strictly on the REAL
+   `user.role === 'super_admin'` (Phase-20 pattern). Depends on 38/40 (both done) + the data endpoints from
+   41/42 (location), 44 (salary), 45 (performance). See `docs/PLAN-2026-08-14.md` §Phase 39.
 2. **Then location 41→42** (guaranteed 24/7 background GPS on any device with green/red in-shift route colouring)
    — the owner's stated main need, feeds the master surface. See `docs/PLAN-2026-08-14.md` §Phase 41+.
 3. **Then geofence 43, salary/tasks 44→45** (per-member 200 m clock-in fence; strict backend salary from
