@@ -6,6 +6,28 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41: 24/7 off-duty location — owner locked truly-always + consent-with-withdrawal; backend-first
+
+**Context.** Phase 41's first step is policy, not code (rule 5): off-duty staff tracking is a DPDP decision.
+Put two forks to the owner via AskUserQuestion, after verifying the current design in both trees. Verified:
+mobile tracking is shift-bound (`tracker.ts`, refuses un-attributable fixes); backend `/track/points` 400s with
+no active session (`timeTracker.js:1339-1340`), silently drops accuracy > 100 m (`:1350`), and has **no staff
+consent concept** at all — so 24/7 off-duty is impossible server-side today.
+
+**Decision.** Owner locked (1) scope = **truly 24/7, every day** (off-duty, nights, weekends included), and
+(2) model = **DPDP-safe consent + withdrawal** — first-login notice + Agree, stored server-side; withdrawal in
+Settings stops off-duty tracking and alerts the master. Given the guarantee is entirely backend (off-duty
+ingest + consent store + withdrawal-alert don't exist), Phase 41 is **backend-first**: verified + filed the
+`[api]`/`[db]` ask to `cgpe-api` with an owner-relay copy, wrote `docs/spec/PHASE-41.md`, and wrote **no client
+code and no `contracts/*` edit** (Phase-38/27 precedent — file, wait for backend, then wire).
+
+**Consequence.** 24/7 tracking is **not live** until cgpe-api ships the consent read (`me.location_consent`) +
+`POST /consent` + an ambient ingest (`POST /track/ambient`, consent-gated, coarse-accuracy-tolerant), the owner
+supplies the DPDP notice copy in all 5 languages + a retention period, and a later mobile phase builds the
+consent screen + `tracker.ts` ambient mode and device-checks it. A member who **withdraws** is not tracked
+off-duty — intended, the legal trade-off the owner chose. No `src/` change → no gate re-run. Full path:
+`docs/spec/PHASE-41.md`.
+
 ## 2026-08-14 — Phase 41 (24/7 background location) escalated to #1, ahead of the master surface
 
 **Context.** The owner asked whether member location is tracked 24/7. Verified in `lib/tracker.ts`: it is NOT —

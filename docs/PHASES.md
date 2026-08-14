@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 41 — [m]+[api]+[db][sec] 24/7 off-duty (consented) location. POLICY LOCKED + `[api]`/`[db]` FILED — no mobile code — 2026-08-14.**
+Owner-escalated to #1 (PLAN §Phase 41). **First step was policy, not code (rule 5).** Put two forks to the owner
+via AskUserQuestion after verifying both trees; owner **locked**: (1) scope = **truly 24/7, every day**
+(off-duty/nights/weekends), (2) model = **DPDP-safe consent + withdrawal** (first-login notice + Agree, stored
+server-side; withdrawal in Settings stops off-duty tracking + alerts the master). Visibility stays Master-only
+(Phase 40). **Verified the core is impossible server-side today:** mobile tracking is shift-bound
+(`tracker.ts`; refuses un-attributable fixes, `:272-283`); backend `/track/points` **400s with no active
+session** (`timeTracker.js:1339-1340`), **silently drops accuracy > 100 m** (`:1350`), `location_tracks` is
+one-doc-per-shift-session, and there is **no staff-consent concept** anywhere (only the web-visitor tracker
+`routes/track.js` has a consent precedent to mirror). So Phase 41 is **backend-first** (Phase-38/27 shape):
+wrote `docs/spec/PHASE-41.md`, filed a **verified** `→ cgpe-api` `[api]`+`[db]` ask (A: staff `location_consent`
+store + read on `me` + `POST /consent` with master-alert-on-withdrawal; B: consent-gated off-duty
+`POST /track/ambient` attributed to the token; C: don't drop coarse ambient fixes), grepped it back durable (2
+hits), and handed the owner a plain-language relay copy (courier workflow). **No `src/` change, no `contracts/*`
+edit → no gate re-run** (baseline stands: `tsc` 0, `npm test` 435/435, lint 0 errors / 12 warnings). **24/7 is
+NOT live** — necessary-but-not-sufficient: cgpe-api ships A/B/C, the owner supplies the DPDP notice copy in all 5
+languages + a **retention period** (both flagged, no default invented), then a later mobile phase builds the
+consent screen + `tracker.ts` ambient mode and device-checks it (`tracker.ts` has no test coverage, device-only).
+A member who **withdraws** is not tracked off-duty — intended (the legal trade-off the owner chose). Full path:
+`docs/spec/PHASE-41.md`; DECISIONS 2026-08-14 (top). Next: cgpe-api build + owner copy → mobile build; Phase 42
+(green/red route colouring) consumes the duty vs off-duty distinction this ingest creates.
+
 **Phase 40 — [m][sec] Live-location visibility = Master only. BUILT 2026-08-14.** The first mobile-buildable
 step of the master chain after Phase 38 (PLAN §Phase 40). Only the **Master** (real `super_admin`) may see
 where the field physically is — the two coordinate-bearing screens `agent-map` (live pins) and `agent-track`
