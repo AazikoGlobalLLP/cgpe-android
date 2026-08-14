@@ -60,12 +60,18 @@ hard-block **cleared**.
 - **`git push` still 403s** — this session's commit is local only. Human-owned credential swap (CLAUDE.md).
 
 ## Next session starts here
-- **Phase 41a-iii-b part 2 — the `tracker.ts` device pieces**, on a real device: battery-opt exemption step,
-  the ambient recorder wiring (`postAmbientPoints` on grant), and the 24/7 foreground notification — plus the
-  on-device UX check of the boot gate built this session. Backend Phase 43/45 is live on `:3001`, so wiring
-  the recorder is now safe (the Phase-34 trap is cleared).
+- **Phase 41a-iii-b part 2 — the `tracker.ts` device pieces.** This is a **build-and-device** session, not an
+  editor one: it needs `npm i expo-intent-launcher`, `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` in `app.json`, an
+  `eas build -p android --profile preview`, and a handset. **A decision-complete execution plan was written
+  this session — `docs/spec/PHASE-41.md` §12** (architecture LOCKED: ONE unified 24/7 recorder with per-batch
+  shift-vs-ambient attribution; the exact `tracker.ts` / `ensureBackgroundPermission` / `consent.tsx` / boot
+  changes; native build steps; the device verification matrix). Follow §12 — the design is done; the session
+  is execution + on-device verification.
+- Also fold in the **on-device UX check of the boot gate** built this session (part 1): a granted user never
+  sees `/consent`; a non-granted user reaches it with no Home flash-then-bounce and no loop; a config outage
+  (read → `error`) leaves everyone on their normal Home (fail-open).
 - **First command:** `/boot`
-- **Watch out for:** the boot gate changes app entry for EVERY user — on device, confirm a granted user never
-  sees `/consent`, a non-granted user reaches it without a Home flash-then-bounce or a loop, and a config
-  outage (read → `error`) leaves everyone on their normal Home (fail-open). Do the recorder wiring at
-  `Accuracy.Balanced`/batched per §3 so battery stays flat.
+- **Watch out for:** `tracker.ts` is the danger zone — the shift recorder "looks fine in foreground, breaks
+  only after a process kill", so verify AFTER swiping the app away, not just in foreground. The §12 design
+  keeps the recorder off for un-consented users (graceful degrade), so shipping it can't regress anyone who
+  hasn't consented. Battery drain over a real day on 3+ handsets is the hard acceptance gate (§3/§12.7.8).

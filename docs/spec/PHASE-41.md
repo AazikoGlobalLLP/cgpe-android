@@ -173,7 +173,9 @@ honest, never covert:
     `postAmbientPoints` on grant; the neutral 24/7 foreground notification (`consent.serviceTitle`/
     `serviceBody` — the copy already exists from 41a-ii). Zero test path (`tracker.ts` has no stub) and a
     danger zone; provable only on a handset now that Phase 43 is live. The consent screen + read + gate all
-    render/resolve standalone until this lands (`/consent` is web-demoable).
+    render/resolve standalone until this lands (`/consent` is web-demoable). **Decision-complete device
+    execution plan: §12** (architecture LOCKED to one unified 24/7 recorder; native build steps; the
+    verification matrix) — the on-device session is execution, not design.
 - **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
 - **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
 - **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).
@@ -204,3 +206,129 @@ that staff cannot silently disable — the outcome the owner asked for.
 - **D-5: honest ceilings documented** (§10) — not sold as a guarantee.
 - **D-6: two hard lines remain** (§0.6) — no notification/indicator suppression, no security-review
   evasion. Now moot because the model is transparent.
+
+---
+
+## 12. Device execution plan — 41a-iii-b part 2 (the `tracker.ts` device pieces)
+
+Written 2026-08-14 so the on-device session is **execution, not design**. Everything below is a locked
+decision unless flagged "device call". Nothing here is editor-buildable/verifiable — see §12.0.
+
+### 12.0 Why this is a build-and-device session, not an editor one
+- **New native surface → a fresh EAS/dev-client build is required (not Expo Go).** `expo-intent-launcher`
+  is **not installed**; `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` and `RECEIVE_BOOT_COMPLETED` are **not** in
+  `app.json` (only `ACCESS_FINE/COARSE_LOCATION`, `ACCESS_BACKGROUND_LOCATION`, `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_LOCATION` are). Adding a native module + permissions changes the native project.
+- **`tracker.ts` has no test stub** (no `expo-location`/`expo-task-manager`/`expo-intent-launcher` mocks) —
+  every change is provable only on a handset, and the file's own header warns a mistake "looks fine in
+  foreground, breaks only after a process kill." So `tsc`/lint green ≠ working here.
+- Backend is LIVE (`909b117`, Phases 43-46 on `:3001`), so this is device/build-gated only, not backend-gated.
+
+### 12.1 Architecture (LOCKED): ONE unified 24/7 recorder, per-batch attribution
+Do **not** run a second location task for ambient. Reasons: §2.1 ("reuse the shift recorder's service"),
+§3 battery (one GPS stream, not two — a second task doubles the drain that §3 exists to minimise), and one
+Android location foreground-service/notification. Design:
+- The single `ROUTE_TASK` service runs **continuously while (consent granted AND background permission)**.
+  Clock-in/out **no longer start/stop it** — they only **set/clear the shift `sid`** in persisted state,
+  which flips per-batch attribution.
+- **Attribution rule (in `ingest`, at each flush):** `state.sid` present ⇒ **shift** (existing `deliver` →
+  `POST /track/points`); absent ⇒ **ambient** (new `deliverAmbient` → `postAmbientPoints`, `off_duty` on the
+  server). The whole batch is attributed by the `sid` at flush time; a batch straddling a clock-in/out
+  boundary mis-attributes at most one `deferredUpdatesInterval` (~60 s). **Device call:** accept that for v1
+  (documented), or split the batch by timestamp against the clock event — not worth the complexity for v1.
+- **Graceful degradation (LOCKED):** if consent is **not** granted, keep today's exact shift-only behaviour
+  (service starts on clock-in, stops on clock-out, `/track/points` only). The 24/7 mode is additive and
+  only engages under granted consent, so a not-yet-consented user is never worse off, and a consent read
+  that fails open (`error`) never starts 24/7 recording blindly.
+
+### 12.2 `tracker.ts` changes (precise)
+- **New persisted marker** `track.ambient='1'`, set when 24/7 mode is armed (consent granted), cleared on
+  withdrawal/sign-out. The module reads it once per JS start (beside the existing `running` hydration) to
+  know whether it may run 24/7 after a headless wake.
+- **New export `startAmbientTracking({ prompt }: { prompt: boolean })`** — idempotent. `prompt:true` (from
+  the consent-grant tap) runs `ensureBackgroundPermission()` (which now includes the battery-opt step,
+  §12.3) and only proceeds if background permission is granted; `prompt:false` (from boot when already
+  granted) starts the service **only if** background permission is already held, never prompting. On
+  proceed: set `track.ambient='1'`, **persist the resolved notification strings** (§12.4), and start
+  `ROUTE_TASK` if not already running (same `startLocationUpdatesAsync` options as the shift recorder, but
+  the neutral 24/7 notification).
+- **New export `stopAmbientTracking()`** — on consent withdrawal or sign-out: flush any buffered points
+  (ambient), `stopUpdates()`, clear `STATE_KEY` + `track.ambient`.
+- **Repurpose `startTracking(sid)` / `stopTracking()`** to mean "begin/end SHIFT attribution", not
+  "start/stop the service":
+  - `startTracking(sid)` — if `track.ambient` armed: set `state.sid=sid` + `api.startTrack(sid)` and ensure
+    the service is running (start it if, exceptionally, it is not), but do **not** restart a running
+    service. If not armed: today's behaviour unchanged.
+  - `stopTracking()` — if `track.ambient` armed: flush shift points via `deliver`, `api.stopTrack(sid)`,
+    clear `state.sid` (attribution drops to ambient) but **leave the service running**. If not armed:
+    today's behaviour (flush, `stopUpdates`, clear) unchanged.
+- **`ingest` routing** — replace the single `deliver(state.sid, state.pts)` with: `state.sid` ⇒ `deliver`
+  (unchanged); else ⇒ **`deliverAmbient(state.pts)`**:
+  - Rehydrate the token first (reuse `deliver`'s pattern — `postAmbientPoints` checks `sessionReal` and does
+    NOT read storage, so a headless context has no token otherwise).
+  - Call `api.postAmbientPoints(toPoints(pts), localDate())` — pass local `YYYY-MM-DD` so the server keys
+    `ambient:<uid>:<date>` correctly across midnight.
+  - Map outcomes (from `AmbientDelivery`): `sent` ⇒ drop buffer; **`consent-required` ⇒ consent was
+    withdrawn server-side → `stopAmbientTracking()` + drop** (loud opt-out already reached the master, §5);
+    `signed-out` ⇒ stop + drop (like the shift path); `refused` (other 4xx) ⇒ drop (won't improve on retry);
+    `retry` (5xx/429/network) ⇒ keep for the next wake.
+
+### 12.3 `ensureBackgroundPermission` — the battery-opt step
+- `npm i expo-intent-launcher` (SDK-57-compatible). Add `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` to
+  `app.json` → `expo.android.permissions`.
+- After background permission is granted, **Android only**, launch the exemption request:
+  `IntentLauncher.startActivityAsync('android.settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+  { data: 'package:com.cgpe.connect' })`, wrapped in try/catch, **best-effort and non-blocking** — it never
+  flips `granted` to false. **Known limit (device call):** JS cannot read `PowerManager.isIgnoringBattery
+  Optimizations` without a native module, so we can't confirm the exemption was accepted from JS; a tiny
+  native module could report it later (41b/41d), not now.
+- Keep the existing foreground/background location gating exactly as-is; battery-opt is a reliability
+  booster layered after, not a new hard gate.
+
+### 12.4 The neutral 24/7 foreground notification
+- Use the already-landed copy `consent.serviceTitle` / `consent.serviceBody` (41a-ii, all 5 languages).
+- **Persist the RESOLVED strings** (`storage.set('track.notif', JSON.stringify({title,body}))`) at the
+  moment 24/7 is armed in-app (i18n is available then), and read them back in the `foregroundService`
+  config at `startLocationUpdatesAsync`, falling back to a neutral English default if absent. Rationale: a
+  headless service restart (41b boot-receiver) has **no i18n context**, exactly as the current hardcoded
+  shift strings note — so the language must be captured at arm-time, not resolved at start-time.
+
+### 12.5 Wiring the start triggers (integration surface)
+- **`src/app/consent.tsx`** `onAgree` success: after `setLocationConsent(true,…)` returns `ok`, call
+  `startAmbientTracking({ prompt: true })` **before** `router.replace('/(tabs)/home')` (so the permission +
+  battery-opt ladder runs at the grant moment, the one place a dialog belongs).
+- **Boot (already-granted users):** extend the boot gate — when `getLocationConsent()` returns
+  `ok`+`granted`, call `startAmbientTracking({ prompt: false })` (start the service if permission is already
+  held; never prompt on a cold start). This can live in `ConsentGate` (rename its intent to "consent gate +
+  recorder arm") or a sibling effect; keep the once-per-session guard.
+- **`src/app/(tabs)/home.tsx`** clock-in/out: no call-site change — it keeps calling
+  `ensureBackgroundPermission()`/`startTracking(sid)`/`stopTracking()`; the new semantics live inside
+  `tracker.ts` (§12.2).
+
+### 12.6 Native build steps
+1. `npm i expo-intent-launcher`. 2. `app.json`: add `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (note:
+`RECEIVE_BOOT_COMPLETED` + the boot-receiver config plugin are **41b**, not this sub-phase).
+3. `eas build -p android --profile preview` → install the APK. `tsc`/lint must still pass, but they do not
+prove the recorder.
+
+### 12.7 Device verification matrix (the acceptance gate)
+1. Grant consent → the 24/7 service notification appears with **neutral wording in the user's language**.
+2. Off-duty (not clocked in), phone pocketed, move → points land as **ambient / `off_duty:true`** (confirm
+   via the master surface or DB); coarse fixes are kept (no ≤100 m drop on ambient).
+3. Clock in → same service, points now attributed to the **shift** (`/track/points`); clock out → shift is
+   sealed (`stopTrack`) and recording **drops back to ambient without the service stopping**.
+4. Swipe the app away → the service survives and keeps recording in whichever mode applies.
+5. Battery-opt prompt appears **once** after the background grant; accepting it makes the service more
+   kill-resistant on aggressive OEMs.
+6. Withdraw consent server-side → the next ambient flush gets `403 consent_required` → the service **stops**
+   and the buffer is dropped (no un-consented recording).
+7. **FAIL-OPEN:** a consent read `error` on boot starts **no** 24/7 recording and gates nobody.
+8. **Battery drain measured over a real working day on 3+ handsets** (Samsung/Xiaomi/OnePlus/Pixel) — the §3
+   hard acceptance gate; target a small single-digit %. If it exceeds that, motion-adaptive sampling (41c)
+   is the mitigation, not shipping as-is.
+
+### 12.8 Open questions to resolve on-device (flagged, not blocking the plan)
+- Boundary-batch attribution (§12.1) — accept the ~1-interval slop, or split by timestamp.
+- Whether running the foreground service 24/7 (vs shift-only today) is within the §3 battery budget on the
+  worst OEM — the §12.7.8 measurement decides; 41c (motion-adaptive) is the lever if not.
+- Battery-opt acceptance is unreadable from JS (§12.3) — leave as best-effort now; a native reporter later.
