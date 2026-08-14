@@ -1,65 +1,61 @@
-# HANDOFF — CGPE Connect (Android) — Phase 40 — 2026-08-14
+# HANDOFF — CGPE Connect (Android) — Phase 41a — 2026-08-14
 
-This session **built Phase 40 (live-location visibility = Master only)**, then — at the owner's request —
-**verified the current location-tracking behavior and escalated Phase 41 (24/7 background location) to #1**.
+This session **built Phase 41a** (the buildable, testable slice of the 24/7 location feature) end to end:
+the consent data layer, the owner-supplied 5-language consent copy, and the consent screen. It also
+**verified cgpe-api's retention job (backend Phase 45)** against real code — the last backend piece owed.
 
 ## Done
-- **Live agent locations are now Master-only.** Only a real `super_admin` can open the two coordinate-bearing
-  screens — `agent-map` (live pins) and `agent-track` (movement replay). An admin or a **leader** (who
-  `tierOf()` folds into the admin tier) no longer reaches the location fetch: the tiles are gone from the More
-  tab and the Admin dashboard, and a deep-link to either screen shows an honest **"Master access only"** state,
-  never a blank/loading map. Before this, `agent-map` had **no gate at all** and any admin/leader could open it.
-- **Duty status stays open (verified, not gated).** `getTeam()` uses locations only to compute a clocked-in
-  boolean and discards coordinates, so the roster/dashboard "on duty" counts are unchanged — only the map/
-  coordinates are Master-gated.
-- **Answered the owner's 24/7 question from the real code:** location is **NOT** tracked 24/7 — it is
-  **shift-bound** (clock-in → clock-out). During a shift it survives app-close/background via the Android
-  foreground service; between shifts it records nothing and drops any fix it can't tie to a session.
-- Gates green: `tsc` 0 · `npm test` **435/435** (+5) · lint **0 errors / 12 warnings** (baseline).
+- **24/7 location consent flow is built and demoable on web at `/consent`.** A mandatory, transparent
+  notice renders in the signed-in user's language (all 5), **Agree** records consent via the real backend
+  and proceeds to Home, **Decline** shows an honest "you cannot continue" state — no back, no skip, no
+  bypass. The screen **never claims consent it did not record** (only a real 200 lets the user through).
+- **The data layer both the screen and the future recorder need is shipped + pinned by tests:**
+  `setLocationConsent(granted, version?)` (POST /consent) and `postAmbientPoints(points, date?)`
+  (POST /track/ambient — token-attributed, NO session; 403 `consent_required` ⇒ stop + drop buffer).
+- **Backend side of Phase 41's data plane is now COMPLETE (verified in real code).** cgpe-api shipped the
+  retention job (Phase 45): 90-day soft-delete / 180-day hard-delete on `location_tracks` (both shift and
+  `off_duty:true` ambient), and every track read excludes soft-deleted rows. Matches the filed ask exactly;
+  **zero mobile change needed** (row set only narrows). With Phase 43 (consent + ambient), the server is done.
+- Gates green: `tsc` 0 · `npm test` **454/454** (+19) · lint **0 errors / 12 warnings** (baseline).
 
 ## Files changed
-- `src/store/roles.ts` — NEW pure predicate `canSeeLiveLocation(user) = user?.role === 'super_admin'` — the ONE
-  shared location gate (real role, never the folded tier or `viewAs`), so the two screens can't drift.
-- `src/app/agent-map.tsx` — import `useAuth`+predicate; `load()` bails before the fetch when not master; honest
-  `ready && !isMaster` "Master access only" `EmptyState`, placed before the loading skeleton.
-- `src/app/agent-track.tsx` — swapped its `capabilitiesOf().tier` caps check for `canSeeLiveLocation` (same
-  result, explicit real-role); dropped the now-unused import.
-- `src/app/(tabs)/more.tsx` — moved the "Agent locations" tile into the existing `caps.tier==='master'` branch
-  beside "Movement paths" (both location tiles now Master-only).
-- `src/screens/dashboards.tsx` — removed the "Agent map" quick action from the **Admin** dashboard (Master keeps it).
-- `src/store/__tests__/roles.test.ts` — NEW (5): pins the gate across all 6 roles + null, incl. the admin/leader
-  folded-tier trap and agreement with `tierOf()==='master'`.
-- `docs/spec/PHASE-40.md` — NEW spec. `docs/PHASES.md` / `docs/DECISIONS.md` / `docs/STATUS.md` updated.
-- `docs/PHASES.md` + `docs/PLAN-2026-08-14.md` — **Phase 41 escalated to #1** (24/7 location), with the DPDP/
-  policy caveat recorded. Commits: `40b3e1e` (Phase 40), `915f4b3`+`c1da964` (escalation). All local — push 403s.
+- `src/data/api.ts` — NEW `setLocationConsent` / `postAmbientPoints` + result types (Phase 43 wire contract).
+- `src/data/__tests__/api-ambient.test.ts` — NEW (19): pins both request bodies + every failure branch,
+  incl. the no-`session_id` invariant and 403→stop, and the silent-recorder (no banner) posture.
+- `src/i18n/index.tsx` — 19 `consent.*` keys in all 5 dictionaries (owner human copy `translation-v.01`,
+  NOT machine-translated; doc-only `**bold**` stripped).
+- `src/i18n/__tests__/dictionaries.test.ts` — parity gate **75 → 94**.
+- `src/app/consent.tsx` — NEW mandatory consent screen (`CONSENT_NOTICE_VERSION='v.01'`).
+- `docs/i18n/PHASE-41-CONSENT-COPY.md` — NEW English source + 5-language translation table.
+- `docs/spec/PHASE-41.md` — §8 build order updated (41a-i data layer + 41a-ii copy/screen DONE;
+  41a-iii device-only remains).
 
 ## Decisions made
-- **Location gate = the REAL `super_admin` role via one shared predicate** (`canSeeLiveLocation`), never the
-  folded tier/caps — `tierOf()` folds `leader` into admin and `seeAgentMap` is true for the whole admin tier, so
-  a tier gate would leak location to every admin/leader. Duty status is not a location read and stays open.
-  (DECISIONS 2026-08-14, top; PHASE-40 §5.)
-- **Phase 41 (24/7 location) pulled ahead of Phase 39** per the owner. Dependency-consistent (39's location
-  element consumes 41/42). **True off-shift 24/7 is a policy + DPDP-consent decision, not a pure code change** —
-  flagged for an explicit owner call before Phase 41 is built.
+- **api layer FIRST, then copy, then screen** — so the owner's "go" produced verifiable work despite the
+  copy blocker; the device-only `tracker.ts` wiring is deferred to 41a-iii. (DECISIONS 2026-08-14, top.)
+- **Consent version `'v.01'`** tracks the owner's copy version (`translation-v.01`) — one-line change if a
+  date/`v1` scheme is preferred.
+- **Screen is NOT yet auto-gated** — the app does not read the `me` block from `/rbac/config`; the screen
+  lives at `/consent` standalone until the boot-gate slice reads `me.location_consent`.
+- **Retention verified, not assumed** — read cgpe-api's `services/locationRetention.js` + the `deleted_at`
+  read-filters; it matches the filed ask, so nothing for mobile to build.
 
 ## Known broken / deliberately skipped
-- **On-device Master check for Phase 40 CARRIED** — needs a real `super_admin` (see the map) vs. a real admin/
-  leader (tiles gone, deep-link refused). Not editor-verifiable; needs Phase 38's DB promotion for a live master
-  account, though the gate itself holds regardless.
-- **`git push` still 403s** — stored credential `reactjsaaziko` has no write access to
-  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; commits `40b3e1e`/`915f4b3`/`c1da964` are local only. Needs a human.
-- **No contract/INBOX change this session** — Phase 40 is pure `[m]` over existing endpoints; nothing crosses a
-  repo boundary, so no sibling session needs notifying.
+- **41a-iii is device-only and UNBUILT:** the `me.location_consent` boot read + redirect-to-`/consent`
+  gate, the battery-opt permission step in `tracker.ts`, the ambient recorder wiring (`postAmbientPoints`),
+  and the 24/7 foreground notification. `tracker.ts` has **NO test stub** — provable only on a handset.
+- **Backend Phase 43 + 45 are UNCOMMITTED** on backend `main` — the flow is not live end-to-end until
+  cgpe-api commits + `:3001`-restarts. A device miss before that ≠ a mobile code bug.
+- **`git push` still 403s** — all this session's commits (`2a4cf31` data layer, `8992bc9` copy doc,
+  `a7bad0b` i18n, `2578839` screen) are **local only**. Human-owned credential swap (rule in CLAUDE.md).
 
 ## Next session starts here
-- **Phase 41 — [m]+[api][sec] 24/7 / guaranteed background location, any device.** FIRST STEP IS NOT CODE: confirm
-  with the owner what "24/7" means (reliably capture the whole shift on any handset — Samsung/Xiaomi battery
-  killers included — vs. literally always-on beyond shifts) and the DPDP consent/notice model. Then audit
-  `lib/tracker.ts` (module-scope task, `_layout.tsx:18` load-bearing import) + the "Allow all the time"
-  background-permission flow + delivery to `/time-tracker/track/points` (Phase 7 flagged the server DROPS fixes
-  with accuracy > 100 m while the app records at ~100 m — likely an `[api]` fix). `docs/PLAN-2026-08-14.md` §41/42.
+- **Phase 41a-iii — [m] boot-gate + device wiring.** Add a `getLocationConsent()` read of
+  `GET /rbac/config` `me.location_consent` (the app does NOT read the `me` block yet — a NEW read path, not
+  `appUi.tsx`'s `normalizeUiConfig` which drops unknown fields), redirect to `/consent` on boot when status
+  ≠ granted, then wire the `tracker.ts` ambient recorder (`postAmbientPoints`) + the battery-opt permission
+  step + the neutral 24/7 foreground notification (`consent.serviceTitle`/`serviceBody`). All device-checked.
 - **First command:** `/boot`
-- **Watch out for:** `lib/tracker.ts` has **NO test coverage and is device-only** (no `expo-location`/
-  `expo-task-manager` stub) — nothing here is provable in Vitest or web; every change needs a real multi-handset
-  check. And the shift-bound design is deliberate (privacy/attributability/battery) — do NOT make it always-on
-  without the owner's explicit consent decision first (rule 5).
+- **Watch out for:** `tracker.ts` is **device-only, zero test coverage** — nothing here is provable in
+  Vitest/web. And do NOT wire the ambient recorder against Phase 43/45 until they are **committed +
+  `:3001`-restarted** — a device miss before the backend is live is not a code bug (the Phase-34 OPS trap).

@@ -1,13 +1,13 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-14
-**Working on right now:** A full plan for 24/7 staff location (and activity) tracking — done openly, with each person's agreement, and in a way they can't quietly switch off.
+**Working on right now:** Building the 24/7 staff-location feature — this session finished the agreement (consent) screen and the piece that sends location to the server.
 
 **Done this week:**
-- Agreed the final approach with the owner: track staff 24/7 (including off-hours), but **openly** — each person is shown a clear notice and agrees, tracking is a required part of the work app (they can't turn it off to avoid it), and it must not drain their battery. Nothing hidden.
-- Wrote the complete plan covering: the agreement screen, how to keep tracking running even when Android tries to shut apps down (including after a restart), how to keep battery use low, how to stop staff from quietly disabling it (the app notices and tells the manager), and automatic deletion of old location history (hidden after 90 days, permanently erased after 180).
-- Good timing: the server team, in parallel, already built the part that accepts off-hours location with each person's agreement — so that piece is ready. We asked them for one more thing: the automatic 90/180-day deletion.
-- Earlier: locked live locations to the master account only; fixed a task-not-showing bug, an unlock-screen freeze, and added "mark notification as read".
+- Built the **agreement screen**: before using the app, each person sees a clear notice — what is shared, why, who can see it (only the master), that old data is deleted after 90/180 days, and that agreeing is required. It shows in all five languages (the owner supplied the wording) and works two ways: agree and continue, or decline and see an honest "you can't continue without agreeing" message. No hidden tracking, no way to quietly skip it.
+- Built the **behind-the-scenes plumbing** that records the agreement and sends off-hours location to the server, with safe handling for every failure (e.g. if someone hasn't agreed, the app stops sending and clears what it held).
+- **Confirmed the server team finished the automatic old-data deletion** we asked for (hidden after 90 days, permanently erased after 180) — checked their actual code; it does exactly what was requested, and the app needs no change for it.
+- All automated checks pass. Earlier this week: agreed the overall approach with the owner and wrote the full plan.
 
-**Blocked on:** Two things before the app work can start — (1) the owner supplying the exact wording of the agreement notice in all five languages, and (2) the server team adding the automatic old-data deletion. Also, since tracking is mandatory, the phones should be set up (battery settings) so Android doesn't kill the app.
+**Blocked on:** Two server-side items must go live before the feature works end to end — the server team needs to **switch on** the two pieces they built (the agreement handling and the old-data deletion). Also, the always-on part still needs testing on real phones, which comes next.
 
-**Next:** Build the app in four steps — the agreement screen, the always-on recorder, the battery-saving + activity part, and the "can't quietly disable it" safeguards — then test on real phones (Samsung/Xiaomi included).
+**Next:** Wire the app so it shows the agreement screen automatically at startup for anyone who hasn't agreed, then turn on the always-on background recorder — and test all of it on real phones (Samsung/Xiaomi included), since that part can only be checked on a device.

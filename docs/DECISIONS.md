@@ -6,6 +6,30 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41a BUILT: consent data layer + 5-language copy + consent screen (api-first split; version 'v.01'; retention verified)
+
+**Context.** Owner said "go" on Phase 41 while the only demoable slice (the consent screen) was blocked on
+5-language consent copy (machine translation forbidden, PHASE-19 §4). During the session the owner supplied the
+copy (`translation-v.01`) and cgpe-api independently shipped the retention job (backend Phase 45).
+
+**Decision.** (1) **Split 41a so "go" produced verifiable work regardless of the copy blocker:** build the
+testable api data layer FIRST (`setLocationConsent`, `postAmbientPoints` + `api-ambient.test.ts`), then land the
+human copy, then the screen — leaving the device-only `tracker.ts` wiring + boot gating for 41a-iii. (2)
+`postAmbientPoints` is **silent** (like `postTrackPoints` — a background recorder never raises the outage banner)
+and treats **403 as `consent-required` = stop + drop buffer**, token-attributed with NO `session_id`;
+`setLocationConsent` uses the getMyEarnings/getMdrtTier `ok`/`refused`/`error` posture and **never fabricates a
+granted state** (only a real 200 → ok). (3) The consent-notice **version is `'v.01'`**, tracking the owner's copy
+version. (4) The consent screen is **NOT yet auto-gated** — the app does not read the `me` block from
+`/rbac/config`; the screen lives at `/consent` standalone until the boot-gate slice. (5) **Verified cgpe-api
+Phase 45 retention against real code** (`services/locationRetention.js` + the `deleted_at` read-filters) — it
+matches the filed ask (90 soft / 180 hard, both shift + ambient, reads exclude soft-deleted), so **no mobile change**.
+
+**Consequence.** Gates green: `tsc` 0, `npm test` **454/454** (+19), lint **0 errors / 12 warnings** (baseline).
+Four local commits (push still 403s). Backend Phase 43 + 45 remain **uncommitted** → not live until committed +
+`:3001` restart. Next mobile step is 41a-iii (device-only). Full path: `docs/spec/PHASE-41.md` §8; HANDOFF.
+Trap logged: `expo lint` caches under `node_modules/.cache` — a removed unused-import warning lingers in the
+count; verify with a cache-free `npx eslint <file>` / `npx eslint src` (CLAUDE.md lint note updated).
+
 ## 2026-08-14 — Phase 41 FINAL: 24/7 location — transparent · consented · mandatory · robust · battery-smart (supersedes the two entries below)
 
 **Context.** The model moved through three owner positions in one session: (1) consent + withdrawal → (2) an

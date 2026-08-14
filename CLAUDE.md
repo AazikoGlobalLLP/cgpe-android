@@ -69,7 +69,12 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
 - `npm run lint` — **green as of Phase 15 (2026-08-11): 0 errors, 12 warnings.** Rule is still
   **no new errors**. **Takes longer than 120 s**, so it exceeds the default tool timeout — run it in
   the background or raise the timeout, and read the count off the `✖ N problems (…errors, …warnings)`
-  line. The React Compiler is enabled (`app.json` `experiments.reactCompiler:true`), so
+  line. **`npm run lint` is `expo lint`, which CACHES under `node_modules/.cache` — after you fix a
+  warning (e.g. remove an unused import) the stale entry lingers and the count reads one too high.
+  Verify a specific file cache-free with `npx eslint <file>`, or the whole tree with `npx eslint src`
+  (NOT `npx eslint .` — that pulls in root config files expo ignores and reports phantom errors).
+  Phase 41a hit exactly this: a removed `radius` import showed as 13 while cache-free lint confirmed
+  12.** The React Compiler is enabled (`app.json` `experiments.reactCompiler:true`), so
   `eslint-plugin-react-hooks` v7 promotes its compiler rules to **errors**; three of them —
   `react-hooks/{immutability,refs,set-state-in-effect}` — are **disabled with a documented reason**
   in `eslint.config.js` because they fire on working Reanimated/Animated code and the app's

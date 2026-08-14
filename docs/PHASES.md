@@ -14,7 +14,22 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 41 — 24/7 location + activity: transparent · consented · mandatory · robust · battery-smart. FINAL PLAN LOCKED; backend Phase 43 SHIPPED (fits); retention filed — no mobile code yet — 2026-08-14.**
+**Phase 41a BUILT — consent data layer + 5-language copy + consent screen. Backend Phase 43 (consent+ambient) + Phase 45 (retention) SHIPPED & VERIFIED (both uncommitted). 41a-iii (boot-gate + tracker wiring) is device-only, next — 2026-08-14.**
+41a built end to end this session: (a) NEW `src/data/api.ts` `setLocationConsent(granted,version?)` (POST /consent)
++ `postAmbientPoints(points,date?)` (POST /track/ambient — token-attributed, NO session; 403 `consent_required`
+⇒ stop+drop buffer; silent like `postTrackPoints`; never fabricates a granted state), pinned by NEW
+`api-ambient.test.ts` (19); (b) 19 `consent.*` i18n keys in all 5 languages (owner copy `translation-v.01`, NOT
+machine-translated), parity gate 75→94; (c) NEW `src/app/consent.tsx` — mandatory (no back/skip), Agree→
+`setLocationConsent(true,'v.01')`→Home, Decline→honest "can't continue", reachable at `/consent` (web-demoable),
+**not yet auto-gated** (the app doesn't read the `me` block from `/rbac/config` yet). **Verified cgpe-api Phase 45
+retention in real code** (`services/locationRetention.js`: 90d soft-delete `deleted_at` / 180d hard-delete, both
+shift+ambient, keyed on `started_at`; reads exclude soft-deleted at `timeTracker.js:1496-1521`) — matches the
+filed ask, **zero mobile change**. Gates: `tsc` 0 · `npm test` **454/454** (+19) · lint 0 errors/12 warnings.
+Commits local (push 403s). **41a-iii remains (device-only):** `me.location_consent` boot read + redirect-to-
+`/consent` gate + `tracker.ts` ambient recorder/battery-opt step/24-7 foreground notification. NOT live until
+cgpe-api commits + `:3001`-restarts Phase 43/45. Full path: `docs/spec/PHASE-41.md` §8; DECISIONS 2026-08-14 (top).
+
+**Phase 41 (plan) — 24/7 location + activity: transparent · consented · mandatory · robust · battery-smart. FINAL PLAN LOCKED; backend Phase 43 SHIPPED (fits); retention SHIPPED (Phase 45) — 2026-08-14.**
 Owner-escalated to #1 (PLAN §41). **First step was policy, not code (rule 5).** The model moved through three
 owner positions this session — consent+withdrawal → an interim "mandatory/hidden/evade-the-scan" ask (**declined**;
 one INBOX write proposing the consent-strip was also blocked by the safety classifier and NOT re-sent) → the
@@ -885,9 +900,17 @@ shift via the Android foreground service, but records nothing between shifts and
 attribute to a session). The owner wants continuous capture, so Phase 41 is pulled ahead of the master surface
 (39). Dependency-consistent: 41 depends on nothing and 39's location element consumes 41/42 anyway.
 
-1. **Phase 41 (→42) — 24/7 / guaranteed background location, any device.** Audit `lib/tracker.ts` (module-scope
-   task, `_layout.tsx:18` load-bearing import) + the "Allow all the time" background-permission flow + the
-   SecureStore buffer + delivery to `/time-tracker/track/points` (Phase 7 flagged the server silently DROPS
+1. **Phase 41a-iii (→41b/c/d, →42) — device-only 24/7 wiring.** 41a is BUILT (see `## Now`: consent data layer +
+   5-lang copy + consent screen; backend Phase 43/45 shipped & verified). **Next = the device-only remainder:**
+   add a `getLocationConsent()` read of `GET /rbac/config` `me.location_consent` (the app does NOT read the `me`
+   block yet — NEW read path, not `appUi.tsx`'s `normalizeUiConfig`), redirect to `/consent` on boot when status
+   ≠ granted, then wire `tracker.ts` (ambient recorder calling `postAmbientPoints`, battery-opt permission step,
+   neutral 24/7 foreground notification). Then 41b (boot-receiver plugin + watchdog), 41c (battery/activity), 41d
+   (anti-circumvention). ⚠️ `tracker.ts` has NO test coverage (device-only); and do NOT wire against Phase 43/45
+   until cgpe-api **commits + `:3001`-restarts** them (a device miss before that ≠ a code bug). Original audit
+   scope below still applies — `lib/tracker.ts` (module-scope task, `_layout.tsx:18` load-bearing import) + the
+   "Allow all the time" background-permission flow + the SecureStore buffer + delivery to `/track/points`
+   (Phase 7 flagged the server silently DROPS
    fixes with accuracy > 100 m while the app records at `Accuracy.Balanced` ~100 m — likely an `[api]` fix).
    ⚠️ **The current shift-bound design is deliberate** (attributability, battery, and — critically — privacy):
    a route is tied to a session so one person's location can't land on another, and off-shift fixes are dropped.
