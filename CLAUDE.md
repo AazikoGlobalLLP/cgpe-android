@@ -135,16 +135,19 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   ListSection/KpiStrip/ActionTile + PersonRow; **Phase 32: the remaining shared primitives `ui/base.tsx` +
   `ui/controls.tsx` + `ui/feedback.tsx` + `ui/sheet.tsx`** — Button/Field/Card/Banner/Skeleton/Sheet/Segmented
   etc., so those ELEMENTS now tighten on every screen that renders them, though a not-yet-migrated screen's OWN
-  layout — its outer padding/gaps — stays comfortable until that screen is migrated too); the static
-  `spacing`/`radius`/`font` exports stay = comfortable for the ~69 remaining unmigrated files (led by
-  `home.tsx`). Migrate by destructuring the scale off `c` (`const {spacing,radius,font}=c`), stripping the
+  layout — its outer padding/gaps — stays comfortable until that screen is migrated too; **Phase 33:
+  `(tabs)/home.tsx`** — the danger-zone dashboard, so Home now tightens WHOLE-screen, its own layout included);
+  the static `spacing`/`radius`/`font` exports stay = comfortable for the ~68 remaining unmigrated files (no
+  single dominant one — the other `ui/` modules `spine`/`swipe`/`Confirm`/… + the ~40 flat stack-route
+  screens). Migrate by destructuring the scale off `c` (`const {spacing,radius,font}=c`), stripping the
   static import (`tsc` flags any miss), and handling three non-mechanical shapes as helper/hooks/fallbacks, not
   literals: (a) a **module-scope** scale const → a helper taking the scale (as `data.tsx`'s `PILL_FS`→`pillFs(font)`
   and `controls.tsx`'s `BTN_FS`→`btnFs(font)` did); (b) a **default parameter** that captured the scale (a default
   can't reference the body's `c`) → make the param optional and resolve `?? c.<scale>.<x>` in the body (as
   `Txt`/`Metric` `size`, `Skeleton` `radius`, `SkeletonText` `gap` did); (c) a component with **no `useTheme()` at
-  all** → add the hook (as `KpiStrip`/`GlassCard`/`Row`/`ToastProvider` needed) — see `docs/spec/PHASE-32.md` +
-  `PHASE-29.md` D-2. Do **not** describe `density` as "deferred" again.
+  all** → add the hook (as `KpiStrip`/`GlassCard`/`Row`/`ToastProvider` needed) — see `docs/spec/PHASE-33.md` /
+  `PHASE-32.md` / `PHASE-29.md` D-2 (a file may need none of the three — `home.tsx` was a straight strip +
+  destructure). Do **not** describe `density` as "deferred" again.
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
 - `store/roles.ts` `tierOf()` grants Master by `user.role === 'super_admin'` (Phase 11,
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's

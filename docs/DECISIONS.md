@@ -6,6 +6,34 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 33: density rollout — migrate the Home dashboard (`(tabs)/home.tsx`) with the D-2 pattern
+
+**Context.** Phases 29–32 migrated the four list tabs, the shared list primitives (`data`/`identity`) and the
+remaining shared primitives (`base`/`controls`/`feedback`/`sheet`); every one named **`home.tsx`** as the last
+big single-file lever (PHASE-32 §6). It is a documented danger zone — 1915 lines, 62 scale refs,
+`AppUiProvider`'s only consumer. Pure rollout — no mechanism, contract, or copy change.
+
+**Decision.** Migrate `home.tsx` alone (D-4 — one file, on its own because of size + load-bearing role) with
+the D-2 pattern verbatim (D-1): strip the static `{ font, radius, spacing }` import, destructure **exactly**
+the scale each of the five scale-using components needs off `c` (D-2). `WidgetShell` + `SmallEmpty` had **no
+`useTheme()` at all** and gain `const { spacing } = useTheme()` (D-3); `LinkCard` → `{ radius, spacing, font }`;
+`HomeSkeleton` → `{ spacing, radius }`; `Home` (default export) → `{ spacing, radius, font }`, which
+`renderWidget` and all the dashboard JSX close over. `ClockRing` uses colours only — untouched. **This file
+had no module-scope scale const and no default-param scale capture** (unlike the Phase-32 primitives), so
+neither the helper nor the optional-prop fallback variant of D-3 was needed — a straight strip + destructure,
+six lines. Providers in `_layout.tsx` untouched. No new test (presentational; density numbers pinned by
+`density.test.ts`). Gates: tsc 0, npm test **417/417** (unchanged), lint 0 errors / 12 warnings (baseline;
+`home.tsx` itself 0/0). Commit `f754843` (local).
+
+**Consequence.** Because Home owns its **whole** layout (its own section gutters/hero, not just shared
+primitives), migrating it makes the **entire** Home surface tighten under `theme.density: "compact"` (spacing
+×0.85 / radius ×0.90 / font ×1.0), type sizes and ≥44pt targets unchanged, light/dark, next cold start, no
+APK — the Phase-31/32 "elements tighten but the screen's own layout stays comfortable" nuance (D-5 there) **no
+longer applies to Home** (D-5 here). The four list tabs + all shared primitives + Home now react to compact;
+~68 files remain, no single dominant one — the other `ui/` modules and the ~40 flat stack-route screens,
+batchable by area. No contract change. **Device check carried** (needs a seeded compact-density doc, light/dark
+at 390 px — Phase-26/27 seeding backlog). Full path: `docs/spec/PHASE-33.md`.
+
 ## 2026-08-14 — Phase 32: density rollout — migrate the remaining shared primitives (`base`/`controls`/`feedback`/`sheet`) with the D-2 pattern
 
 **Context.** Phases 29/30/31 migrated four screens and the two shared list-primitive modules

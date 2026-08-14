@@ -14,6 +14,27 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 33 — density rollout: migrate the Home dashboard (`(tabs)/home.tsx`). BUILT 2026-08-14.** The last
+big single-file lever (PHASE-32 §6): the 1915-line Home screen — 62 scale refs, `AppUiProvider`'s only
+consumer, a documented danger zone — migrated on its own. Same D-2 pattern, no mechanism/contract/copy change:
+strip the static `{ font, radius, spacing }` import, destructure **exactly** the scale each of the five
+scale-using components needs off `c`; `tsc` proves completeness (all 62 refs resolve). `WidgetShell` +
+`SmallEmpty` had **no `useTheme()` call at all** and gain `const { spacing } = useTheme()`; `LinkCard` →
+`{ radius, spacing, font }`; `HomeSkeleton` → `{ spacing, radius }`; `Home` (default export) →
+`{ spacing, radius, font }`, which `renderWidget` and all the dashboard JSX close over. **Unlike the Phase-32
+primitives, this file had no module-scope scale const and no default-param scale capture** — a straight strip
++ destructure, six lines. `ClockRing` uses colours only — untouched; providers in `_layout.tsx` untouched.
+Because Home owns its **whole** layout (its own gutters/hero, not just shared primitives), the entire Home
+surface now tightens under `theme.density:"compact"` (spacing ×0.85 / radius ×0.90 / font ×1.0), type sizes and
+≥44pt targets unchanged, on the next cold start — the "elements tighten but the screen's own layout stays
+comfortable" nuance no longer applies to Home. Gates green: `tsc` 0, `npm test` **417/417** (unchanged —
+presentational; density numbers pinned by `density.test.ts`), lint 0 errors / 12 warnings (baseline; `home.tsx`
+itself 0/0). Commit `f754843` (local — push still 403s). **Device check carried** (a seeded
+`theme.density:"compact"` dept config showing a tighter Home, light/dark at 390 px) — not editor-buildable (no
+seeded compact doc yet). Remaining density targets: no single dominant one left — the other `ui/` modules
+(`spine`/`swipe`/`Confirm`/…) and the ~40 flat stack-route screens, batchable by area. Full path:
+`docs/spec/PHASE-33.md`; DECISIONS 2026-08-14 (top).
+
 **Phase 32 — density rollout: migrate the remaining shared primitives (`ui/base.tsx` + `ui/controls.tsx` +
 `ui/feedback.tsx` + `ui/sheet.tsx`). BUILT 2026-08-14.** The next high-leverage lever after the list
 primitives (PHASE-31 §6): the base building blocks nearly every screen renders — buttons, fields, cards,
@@ -669,20 +690,22 @@ exercise.
 
 ## Next 3
 
-**Density rollout continues → next lever is `home.tsx`.** Phase 29 shipped the `theme.density` mechanism +
-migrated `(tabs)/clients.tsx`; Phase 30 migrated the three other list tabs `tasks`/`leads`/`claims` (commit
-`d70da17`); Phase 31 migrated the shared list primitives `ui/data.tsx` + `ui/identity.tsx` (commit `2dd37fe`);
-**Phase 32 (2026-08-14) migrated the remaining shared primitives `ui/base.tsx` + `ui/controls.tsx` +
-`ui/feedback.tsx` + `ui/sheet.tsx`** (commit `2b50aaf`) — so buttons, fields, cards, banners, skeletons and the
-modal sheet now tighten wherever they render. The remaining unmigrated files still render their own outer
-layout comfortable until migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern:
-`const { spacing, radius, font } = c`, strip the static import (`tsc` flags any miss), watch for **module-scope**
-scale uses (make a helper, as `data.tsx`'s `pillFs`/`controls.tsx`'s `btnFs` did), **default parameters** that
-captured the scale (make the param optional + resolve `?? c.<scale>` in the body, as `Txt`/`Skeleton` did) and
-components with **no `useTheme()` call at all** (add the hook, as `KpiStrip`/`GlassCard`/`Row` needed). Best
-next target: **`home.tsx`** (62 refs, a danger zone — `AppUiProvider`'s only consumer) on its own, then the
-other `ui/` modules (`spine`/`swipe`/`Confirm`/`JobPill`/`health-banner`/…) that still import the static scale.
-No backend, no copy — buildable today. See `docs/spec/PHASE-32.md` + `docs/spec/PHASE-29.md`.
+**Density rollout — the big levers are done; what's left batches by area.** Phase 29 shipped the
+`theme.density` mechanism + migrated `(tabs)/clients.tsx`; Phase 30 the three other list tabs
+`tasks`/`leads`/`claims` (commit `d70da17`); Phase 31 the shared list primitives `ui/data.tsx` +
+`ui/identity.tsx` (commit `2dd37fe`); Phase 32 the remaining shared primitives `ui/base.tsx` +
+`ui/controls.tsx` + `ui/feedback.tsx` + `ui/sheet.tsx` (commit `2b50aaf`); **Phase 33 (2026-08-14) migrated the
+Home dashboard `(tabs)/home.tsx`** (commit `f754843`) — the last big single-file lever. The four list tabs,
+all the shared primitives and Home now react to compact. **~68 files remain** — no single dominant one left:
+the other `ui/` modules (`spine`/`swipe`/`Confirm`/`JobPill`/`health-banner`/`AppLock`/`Splash`) and the ~40
+flat stack-route screens (`client/[id]`, `lead/[id]`, `attendance`, `search`, `settings`, …), each still
+rendering its own layout comfortable until migrated. Each migration is a ≤8-file phase using the PHASE-29
+**D-2** pattern — `const { spacing, radius, font } = c`, strip the static import (`tsc` flags any miss), and
+handle three non-mechanical shapes as helper/hooks/fallbacks: **module-scope** scale consts (make a helper, as
+`data.tsx`'s `pillFs`/`controls.tsx`'s `btnFs` did), **default parameters** that captured the scale (optional
+prop + `?? c.<scale>`, as `Txt`/`Skeleton` did), and components with **no `useTheme()` at all** (add the hook,
+as `KpiStrip`/`GlassCard`/`Row` needed). These can be batched by area (all detail screens, all settings-family
+screens). No backend, no copy — buildable today. See `docs/spec/PHASE-33.md` + `docs/spec/PHASE-29.md`.
 
 1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). ANSWERED by `cgpe-api` —
    SHIPPED as their Phase 34 (2026-08-12); mobile verification now editor-buildable.** A pure backend change
