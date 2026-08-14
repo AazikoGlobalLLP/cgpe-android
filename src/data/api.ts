@@ -2182,6 +2182,57 @@ export async function postAmbientPoints(points: TrackPoint[], date?: string): Pr
   }
 }
 
+export type ConsentReadResult =
+  | { status: 'ok'; consent: ConsentState; decidedAt: string | null; version: string | null }
+  | { status: 'error' };   // unknown — the boot gate MUST fail open on this (never trap the user)
+
+/**
+ * Read the caller's stored 24/7 location-consent state -> GET /api/rbac/config `me.location_consent`
+ * (backend Phase 43; `contracts/api.md` §`/api/rbac/config` `me`). This is the boot-gate input: the
+ * app decides whether to show the mandatory consent notice (`/consent`) and whether to start the
+ * ambient recorder from `consent === 'granted'`.
+ *
+ * A GENUINELY NEW READ PATH. Nothing in the app read `GET /rbac/config` before — the server-driven
+ * layout comes from `GET /rbac/app-ui` via `getAppUiConfig`/`normalizeUiConfig`, which rebuilds a
+ * fixed object and DROPS unknown fields, so `me.location_consent` could never have arrived through
+ * it. Note the envelope: `me` is TOP-LEVEL on this response (`{ success, config, me }`), NOT under
+ * `data` (`routes/rbac.js` GET `/config`), so this reads `json.me.location_consent`, not `json.data`.
+ *
+ * DELIBERATELY SILENT, and FAIL-OPEN. Unlike `getMdrtTier`, this read never touches the health
+ * channel, for two reasons: (1) it runs on EVERY cold start and drives an invisible gate, so a
+ * banner the user cannot act on (or one pinned open until the backend deploys Phase 43) would be the
+ * exact permanent-outage anti-pattern the channel exists to prevent — the parallel `/rbac/app-ui`
+ * boot fetch is the surface that legitimately reports config-endpoint health; (2) the only safe
+ * response to "couldn't determine consent" is to NOT block the user, so anything that is not a clear
+ * granted/withdrawn/pending answer collapses to `error`, which the gate treats as "don't redirect".
+ *
+ *   ok    — 200 carrying a valid `me.location_consent.status`; authoritative.
+ *   error — 200 with no consent block (Phase 43 not yet deployed — the field is simply absent),
+ *           any non-2xx, or a dead network / abort. All fail open; none raises the banner.
+ * `req`'s universal auth handling still applies: a 401 with a live token ends the session, same as
+ * every other call — that is correct (a dead token should log out), not a consent decision.
+ */
+export async function getLocationConsent(): Promise<ConsentReadResult> {
+  if (FORCE_DEMO || !sessionReal) return { status: 'error' };   // no request attempted; gate fails open
+  try {
+    const { ok, json } = await req('/rbac/config', {}, REQUEST_TIMEOUT, '/rbac/config');
+    if (!ok) return { status: 'error' };
+    const lc = json?.me?.location_consent;
+    const st = lc?.status;
+    if (st === 'granted' || st === 'withdrawn' || st === 'pending') {
+      return {
+        status: 'ok',
+        consent: st,
+        decidedAt: typeof lc?.decided_at === 'string' ? lc.decided_at : null,
+        version: typeof lc?.version === 'string' ? lc.version : null,
+      };
+    }
+    return { status: 'error' };   // no consent block yet ⇒ unknown ⇒ fail open
+  } catch {
+    return { status: 'error' };   // dead network / abort ⇒ unknown ⇒ fail open
+  }
+}
+
 /* ------------------------------------------------------- Agent locations */
 export type AgentPin = {
   id: string; name: string; city?: string;

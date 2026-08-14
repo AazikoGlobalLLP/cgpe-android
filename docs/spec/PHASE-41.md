@@ -134,14 +134,30 @@ honest, never covert:
       claims consent it did not record; a failure keeps the user on the notice with a retry Banner),
       Decline → an honest "you cannot continue" sub-state. Version `'v.01'` tracks the owner's copy version.
     - Gates: `tsc` 0 · `npm test` **454/454** · lint 0 errors / 12 warnings (baseline).
-  - ⏳ **41a-iii — gating + device wiring (remaining).** The `me.location_consent` read off
-    `GET /rbac/config` to DECIDE when to show the screen (the app does not read the `me` block yet — a new
-    read path, NOT `appUi.tsx`'s `normalizeUiConfig` which drops unknown fields) + the boot redirect to
-    `/consent` when status ≠ granted; the battery-opt step in the permission ladder; the ambient recorder
-    in `tracker.ts` calling `postAmbientPoints` on grant; the neutral 24/7 foreground notification
-    (`consent.serviceTitle`/`serviceBody`). Depends on: Phase 43 committed/`:3001`-restarted + a device
-    (`tracker.ts` is device-only, no test stub). The consent screen renders standalone at `/consent`
-    (web-demoable) until the boot gate lands.
+  - ✅ **41a-iii-a — consent READ (the boot-gate input) BUILT (2026-08-14).** `getLocationConsent()`
+    in `src/data/api.ts` reads `GET /rbac/config` `me.location_consent` and returns `ok`(granted/
+    withdrawn/pending) / `error`. A **genuinely new read path** — nothing read `/rbac/config` before
+    (the layout comes from `/rbac/app-ui` via `normalizeUiConfig`, which drops unknown fields), and `me`
+    is **TOP-LEVEL** on this envelope (`{ success, config, me }`), so it reads `json.me.location_consent`,
+    NOT `json.data`. **Fail-open + fully SILENT by design:** absent block (Phase 43 not yet deployed) /
+    non-2xx / dead network all collapse to `error`, which the gate treats as "don't redirect", and the
+    read never touches the health channel (it runs every cold start and drives an invisible gate — a
+    banner would be the permanent-outage anti-pattern; `/rbac/app-ui`'s boot fetch reports config health).
+    Pinned by NEW `src/data/__tests__/api-consent-read.test.ts` (10): the `json.me` (not `.data`) unwrap,
+    all three enum states, absent/odd fields → null, and the silent fail-open on legacy-body / 5xx / 403 /
+    network. Gates: `tsc` 0 · `npm test` **464/464** (+10) · lint 0 errors / 12 warnings (baseline;
+    unchanged). Green-gateable — the read is editor-testable even though its consumer (the gate) is not.
+  - ⏳ **41a-iii-b — boot-gate wiring + device pieces (remaining).** The boot redirect to `/consent` when
+    `getLocationConsent()` returns `ok` with status ≠ granted (a once-per-cold-start decision, fail-open on
+    `error`, that must not flash or loop and must survive Expo's restored-route cold start — reliably a
+    `_layout.tsx`-level guard, not `index.tsx` which only runs at `/`); the battery-opt step in the
+    permission ladder; the ambient recorder in `tracker.ts` calling `postAmbientPoints` on grant; the
+    neutral 24/7 foreground notification (`consent.serviceTitle`/`serviceBody`). **Deferred as one device
+    pass:** the redirect changes app entry for EVERY user and is only meaningfully verifiable on a handset
+    against a live backend, and the `tracker.ts` pieces are device-only (no test stub) AND must NOT be
+    wired until Phase 43 is **committed + `:3001`-restarted** (the Phase-34 OPS trap — a device miss before
+    the backend is live is not a code bug). The consent screen + the read render/resolve standalone until
+    the boot gate lands (`/consent` is web-demoable; `getLocationConsent()` is dormant until a caller uses it).
 - **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
 - **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
 - **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).
