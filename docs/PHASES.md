@@ -14,6 +14,25 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 41a-iii-a BUILT — `getLocationConsent()` boot-gate READ (fail-open + fully silent). Wiring + device pieces deferred to 41a-iii-b (one device pass). 2026-08-14.**
+The editor-buildable, testable slice of 41a-iii. NEW `getLocationConsent()` in `src/data/api.ts` reads
+`GET /rbac/config` `me.location_consent` and returns `ok`(granted/withdrawn/pending) / `error` — the input the
+boot gate will use to decide whether to show `/consent` and start the ambient recorder. **A genuinely new read
+path:** nothing read `/rbac/config` before (the layout comes from `/rbac/app-ui` via `normalizeUiConfig`, which
+drops unknown fields), and `me` is **TOP-LEVEL** on this envelope (`{ success, config, me }`, `routes/rbac.js:79`),
+so it reads `json.me.location_consent`, NOT `json.data`. **Fail-open + fully SILENT by design** (deliberately
+unlike `getMdrtTier`): absent block (Phase 43 not yet deployed) / non-2xx / dead network all collapse to
+`{status:'error'}` (the gate treats it as "don't redirect"), and it **never touches the health channel** — it runs
+every cold start and drives an invisible gate, so a banner would be the permanent-outage anti-pattern
+(`/rbac/app-ui`'s boot fetch reports config health). **Adding the function alone changes zero runtime behavior**
+(no caller yet) — a dormant, tested capability until the gate wires it. Pinned by NEW `api-consent-read.test.ts`
+(10): the `json.me` (not `.data`) unwrap, all three enum states, absent/odd fields → null, silent fail-open on
+legacy-body / 5xx / 403 / network. Gates: `tsc` 0 · `npm test` **464/464** (+10) · lint 0 errors/12 warnings
+(baseline). Commit `8e76bbe` (local — push 403s). **No contract change** (pure consumer of the documented Phase 43
+contract → no INBOX/CHANGELOG). **41a-iii-b remains (device-only + backend-live-gated):** the `_layout.tsx` boot
+redirect + `tracker.ts` ambient recorder/battery-opt/24-7 notification — NOT until cgpe-api commits + `:3001`-
+restarts Phase 43. Full path: `docs/spec/PHASE-41.md` §8; DECISIONS 2026-08-14 (top).
+
 **Phase 41a BUILT — consent data layer + 5-language copy + consent screen. Backend Phase 43 (consent+ambient) + Phase 45 (retention) SHIPPED & VERIFIED (both uncommitted). 41a-iii (boot-gate + tracker wiring) is device-only, next — 2026-08-14.**
 41a built end to end this session: (a) NEW `src/data/api.ts` `setLocationConsent(granted,version?)` (POST /consent)
 + `postAmbientPoints(points,date?)` (POST /track/ambient — token-attributed, NO session; 403 `consent_required`
@@ -900,14 +919,15 @@ shift via the Android foreground service, but records nothing between shifts and
 attribute to a session). The owner wants continuous capture, so Phase 41 is pulled ahead of the master surface
 (39). Dependency-consistent: 41 depends on nothing and 39's location element consumes 41/42 anyway.
 
-1. **Phase 41a-iii (→41b/c/d, →42) — device-only 24/7 wiring.** 41a is BUILT (see `## Now`: consent data layer +
-   5-lang copy + consent screen; backend Phase 43/45 shipped & verified). **Next = the device-only remainder:**
-   add a `getLocationConsent()` read of `GET /rbac/config` `me.location_consent` (the app does NOT read the `me`
-   block yet — NEW read path, not `appUi.tsx`'s `normalizeUiConfig`), redirect to `/consent` on boot when status
-   ≠ granted, then wire `tracker.ts` (ambient recorder calling `postAmbientPoints`, battery-opt permission step,
-   neutral 24/7 foreground notification). Then 41b (boot-receiver plugin + watchdog), 41c (battery/activity), 41d
-   (anti-circumvention). ⚠️ `tracker.ts` has NO test coverage (device-only); and do NOT wire against Phase 43/45
-   until cgpe-api **commits + `:3001`-restarts** them (a device miss before that ≠ a code bug). Original audit
+1. **Phase 41a-iii-b (→41b/c/d, →42) — boot-gate wiring + device pieces.** 41a-iii-**a** is now BUILT (see
+   `## Now`: `getLocationConsent()` read of `GET /rbac/config` `me.location_consent`, fail-open + silent, tested).
+   **Next = wire it + the device-only remainder:** the `_layout.tsx`-level fail-open boot redirect to `/consent`
+   when the read returns `ok` with status ≠ granted (once-per-cold-start, no flash / no loop, survives Expo's
+   restored-route cold start — NOT `index.tsx`, which only runs at `/`), then `tracker.ts` (ambient recorder
+   calling `postAmbientPoints`, battery-opt permission step, neutral 24/7 foreground notification). Then 41b
+   (boot-receiver plugin + watchdog), 41c (battery/activity), 41d (anti-circumvention). ⚠️ `tracker.ts` has NO
+   test coverage (device-only); the redirect changes app entry for EVERY user (verify on a handset); and do NOT
+   wire against Phase 43/45 until cgpe-api **commits + `:3001`-restarts** them (a device miss before that ≠ a code bug). Original audit
    scope below still applies — `lib/tracker.ts` (module-scope task, `_layout.tsx:18` load-bearing import) + the
    "Allow all the time" background-permission flow + the SecureStore buffer + delivery to `/track/points`
    (Phase 7 flagged the server silently DROPS

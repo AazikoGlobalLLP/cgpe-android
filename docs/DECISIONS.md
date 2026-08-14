@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41a-iii-a BUILT: `getLocationConsent()` boot-gate read (fail-open + fully silent); wiring + device pieces deferred to one device pass (41a-iii-b)
+
+**Context.** Owner said "go" on Phase 41a-iii ("gating + device wiring"). But three of its four pieces —
+the boot redirect, and the `tracker.ts` ambient recorder / battery-opt step / 24-7 foreground notification —
+are device-only (no test stub) and the recorder must NOT wire against the still-**uncommitted** backend
+Phase 43 (the Phase-34 OPS trap). Only the consent READ is editor-buildable + green-gateable.
+
+**Decision.** (1) **Split 41a-iii** so "go" produced verifiable, gate-green work: build + test the read
+(`getLocationConsent()`) now as **41a-iii-a**; defer the boot-redirect wiring + all `tracker.ts` pieces to
+**41a-iii-b**, one on-device pass once Phase 43 is committed + `:3001`-restarted. (2) **Verified the contract
+against real code before writing** — the handoff was ambiguous: it IS `GET /rbac/config` (not `/rbac/app-ui`),
+and `me` is **TOP-LEVEL** on that envelope (`{ success, config, me }`, `routes/rbac.js:79`), so the read is
+`json.me.location_consent`, NOT the app's usual `.data` unwrap. A test pins that a `.data`-only granted body
+is ignored. (3) **Fail-open + fully SILENT**, deliberately unlike `getMdrtTier`: absent block (Phase 43 not
+yet deployed) / non-2xx / dead network all collapse to `{status:'error'}` (the gate treats it as "don't
+redirect"), and the read **never touches the health channel** — it runs every cold start and drives an
+invisible gate, so a banner would be the permanent-outage anti-pattern; `/rbac/app-ui`'s parallel boot fetch
+is the surface that reports config-endpoint health. (4) **Adding the function alone changes zero runtime
+behavior** — it is a dormant, tested capability until the gate (41a-iii-b) calls it; the boot gate belongs at
+`_layout.tsx` level (survives Expo's restored-route cold start), not `index.tsx` (only runs at `/`).
+
+**Consequence.** Gates green: `tsc` 0, `npm test` **464/464** (+10, `api-consent-read.test.ts`), lint
+**0 errors / 12 warnings** (baseline; unchanged). Commit `8e76bbe` (local — push still 403s). **No contract
+change** — pure consumer of the already-documented Phase 43 contract, so no INBOX/CHANGELOG entry. Next mobile
+step is 41a-iii-b (device-only, backend-live-gated). Full path: `docs/spec/PHASE-41.md` §8; HANDOFF.
+
 ## 2026-08-14 — Phase 41a BUILT: consent data layer + 5-language copy + consent screen (api-first split; version 'v.01'; retention verified)
 
 **Context.** Owner said "go" on Phase 41 while the only demoable slice (the consent screen) was blocked on
