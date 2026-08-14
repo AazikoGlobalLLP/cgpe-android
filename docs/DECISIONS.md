@@ -6,6 +6,31 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 37: per-item notification mark-read is a pure `[m]` wire-up (endpoint already exists); bell clears via an outage-guarded focus refresh
+
+**Context.** First feature off the owner backlog after the three audits: add a per-item "mark as read" and clear
+the header bell dot. History warned the WhatsApp inbox has no read endpoint (its `unread` never clears), so the
+brief said verify a persist endpoint FIRST and file an `[api]` ask if missing.
+
+**Decision.** Verified the real `cgpe-backend-main` before writing anything: `PUT /api/notifications/:id/read`
+already exists (`routes/notifications.js:86-111`, `protect` + ownership check, persists `read:true`/`read_at`)
+and is already in `contracts/api.md:878`. So **no `[api]` ask and no contract change** — the opposite of the
+WhatsApp case; this is a pure client wire-up. Shipped: (1) `markNotificationRead(id)` in `api.ts` mirroring
+`markAllNotificationsRead`'s `req()` + boolean posture, but suppressing **403/404 as answers** (a stale/foreign
+id must not pin the health banner — mirrors `reportIfOutage`), reporting only real faults. (2) Tap an **unread**
+`SpineRow` to mark it read (optimistic, single-row rollback on refusal + the existing Banner — never refetch the
+whole feed per tap; mark-all keeps its verify-refetch). (3) A `useFocusEffect` on Home re-reads just the feed on
+RE-focus so the bell clears on return from the pushed `/notifications` route (first focus skipped → no cold-open
+double-fetch), **outage-guarded**: an empty result while `getHealth().degraded` (read LIVE after the await) keeps
+the last count rather than forging a "0 unread" bell. (4) New `api-notifications.test.ts` (13).
+
+**Consequence.** Notification read-state now persists and the bell reflects it honestly across a visit, with no
+new backend dependency. The per-item report-suppression (403/404) is a deliberate, defensible divergence from
+`markAllNotificationsRead` (which can only 5xx). The bell's outage guard extends convention 4 ("never a
+fabricated zero") to the header dot, matching how the feed screen already forks degraded vs. empty. Do not
+re-file an `[api]` ask for notification read — it is already live and documented. Gates: `tsc` 0, `npm test`
+430/430 (+13), lint 0 errors / 12 warnings. `docs/spec/PHASE-37.md`.
+
 ## 2026-08-14 — Phase 36 (hardcoded-vs-DB sweep) is an inventory, not a deletion — bucket (a) is empty
 
 **Context.** Audit Phase 36: the owner wants to know how much of the app is hardcoded/synthesised vs. from the

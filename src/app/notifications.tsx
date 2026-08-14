@@ -42,9 +42,13 @@ import { fmtDay } from '@/lib/format';
  * to clear. The unread count stays at the top where the eye lands first: status is read,
  * actions are reached for.
  *
- * ROWS DO NOT NAVIGATE. `AppNotification` carries no target id, so a tap could only guess at
- * a destination. A row that goes somewhere plausible but wrong is worse than one that stays
- * put.
+ * ROWS DO NOT NAVIGATE — THEY MARK THEMSELVES READ. `AppNotification` carries no target id, so
+ * a tap could only guess at a destination, and a row that goes somewhere plausible but wrong is
+ * worse than one that stays put. But an UNREAD row IS the one thing it can honestly act on:
+ * tapping it clears that single item. Same verified posture as mark-all — the node greys on the
+ * tap frame (optimistic), and if the server refuses (a 403/404 answer or a fault) that one row
+ * is put straight back to unread and the Banner explains, so the rail never shows a read the
+ * server never agreed to. Read rows have nothing to do and take no press.
  * ------------------------------------------------------------------ */
 
 const KIND_ICON: Record<AppNotification['kind'], IconName> = {
@@ -224,6 +228,27 @@ export default function Notifications() {
     }
   }, [busy, unread, items]);
 
+  /**
+   * Mark ONE notification read, from a tap on its row. Functional `setItems` updates so two
+   * quick taps each flip their own row without a stale-closure clobber, and so this needs no
+   * `items` dependency. Optimistic first; if the server does not accept it (`markNotificationRead`
+   * returns false on a 403/404 answer or a real fault) only that row is put back to unread and
+   * the shared Banner explains — never a cleared row the server never agreed to.
+   */
+  const markOne = useCallback(async (n: AppNotification) => {
+    if (n.read) return;
+    haptics.tap();
+    setRefused(false);
+    setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
+    const accepted = await api.markNotificationRead(n.id);
+    if (!alive.current) return;
+    if (!accepted) {
+      setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: false } : x)));
+      setRefused(true);
+      haptics.warn();
+    }
+  }, []);
+
   const retry = useCallback(() => {
     haptics.tap();
     setLoading(true);
@@ -326,6 +351,9 @@ export default function Notifications() {
                       // how much is still new.
                       tone={n.read ? 'neutral' : (KIND_TONE[n.kind] ?? 'primary')}
                       right={!n.read ? <Pill label="New" tone="primary" small /> : undefined}
+                      // Only an unread row has anything to do; tapping it clears that one item.
+                      // A read row takes no press, so its lack of feedback reads as "nothing here".
+                      onPress={!n.read ? () => markOne(n) : undefined}
                       last={i === g.items.length - 1}
                     />
                   );

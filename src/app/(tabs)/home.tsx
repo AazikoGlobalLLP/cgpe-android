@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import type { Href } from 'expo-router';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +26,7 @@ import { useAuth } from '@/store/auth';
 import { DEFAULT_UI, useAppUi } from '@/store/appUi';
 import { useT } from '@/i18n';
 import * as api from '@/data/api';
+import { getHealth } from '@/data/health';
 import type { AppNotification, Claim, Lead, Reminder } from '@/data/types';
 import { CATEGORY_ICON, Task, taskProgress } from '@/data/tasks';
 import { CLAIM_STATUS, REMINDER_ICON, STAGE_META } from '@/data/labels';
@@ -734,6 +735,35 @@ export default function Home() {
 
   // Held until the layout is known, so a widget the role does not have is never fetched for.
   useEffect(() => { if (uiReady) load(); }, [uiReady, load]);
+
+  /**
+   * Keep the header bell honest across a visit to /notifications.
+   *
+   * That screen is a pushed route, so Home stays MOUNTED beneath it and the mount `load()`
+   * above never re-runs on the way back — the unread dot would otherwise stay frozen at its
+   * old count after the user marks items read there. Re-read just the feed on every RE-focus
+   * (returning from that route, or switching back to this tab), not the whole dashboard. The
+   * first focus is skipped because the mount `load()` already fetched the feed once, so this
+   * never double-fetches on a cold open.
+   *
+   * An outage's empty result must NOT forge a "0 unread" bell (convention 4): if the refetch
+   * came back empty because the network is down, keep the last known count and let the
+   * HealthBanner carry the outage. `getHealth()` is read live AFTER the await because the
+   * failing fetch is itself what would have raised the flag. A genuinely empty feed on a
+   * healthy backend still clears the dot.
+   */
+  const bellPrimed = useRef(false);
+  const refreshBell = useCallback(async () => {
+    const nt = await api.getNotifications();
+    if (!mounted.current) return;
+    if (nt.length === 0 && getHealth().degraded) return;
+    setNotifs(nt);
+    setUnread(nt.filter((n) => !n.read).length);
+  }, []);
+  useFocusEffect(useCallback(() => {
+    if (!bellPrimed.current) { bellPrimed.current = true; return; }
+    void refreshBell();
+  }, [refreshBell]));
 
   const toggleClock = useCallback(async () => {
     if (clocking) return;

@@ -1459,6 +1459,33 @@ export async function markAllNotificationsRead(): Promise<boolean> {
 }
 
 /**
+ * Mark ONE notification read — the per-item companion to `markAllNotificationsRead`.
+ *
+ * Backend: `PUT /api/notifications/:id/read` (`protect`, ownership-checked — `api.md:878`).
+ * `id` is the row's Mongo `_id`, which is exactly what `adaptNotification` stores in
+ * `AppNotification.id`, so it drops straight into the path. `healthKey` collapses that 24-hex
+ * segment back to `/notifications/:id/read`, the same string used below.
+ *
+ * The server 404s a row that no longer exists and 403s one that is not the caller's. Both are
+ * ANSWERS, not outages, so — like `reportIfOutage` — they stay quiet and let the screen roll
+ * its optimistic row back; only a genuine fault (5xx, a malformed 4xx, or a dead network)
+ * raises the app-wide health banner. Returns whether the SERVER accepted the write, the same
+ * boolean contract as `markAllNotificationsRead`, so a caller never claims a read it did not get.
+ */
+export async function markNotificationRead(id: string): Promise<boolean> {
+  if (!sessionReal || FORCE_DEMO || !id) return false;
+  try {
+    const { ok, status, json } = await req(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PUT' });
+    if (ok && json?.success !== false) return true;
+    if (![401, 403, 404, 501].includes(status)) reportFailure('/notifications/:id/read');
+    return false;
+  } catch {
+    reportFailure('/notifications/:id/read');
+    return false;
+  }
+}
+
+/**
  * Dispatch a custom notification to the team. Admin/leader only.
  *
  * `audience: 'all'` fans out to every active staff member; `'selected'` targets the given

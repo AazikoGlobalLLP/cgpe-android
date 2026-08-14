@@ -14,6 +14,35 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 37 — [m] notification mark-as-read (per-item) + clear the bell dot. BUILT 2026-08-14.** The first
+feature off the owner backlog after the three audits (PLAN §Phase 37). **Verified the backend FIRST (grep, not
+tags):** the per-item persist endpoint already EXISTS — `PUT /api/notifications/:id/read` (`protect`,
+ownership-checked: 404 if missing, 403 if not the caller's, else `markAsRead()` sets `read:true`/`read_at:now`),
+already documented at `contracts/api.md:878`. So — unlike the WhatsApp inbox (no read endpoint, `unread` never
+clears) — this is a **pure `[m]` wire-up: no contract change, no `[api]` ask**. And Phase 36 already proved there
+is **no hardcoded notification data to strip** (feeds are 100% DB-driven), so this is purely the feature. Three
+files + a new test: (a) `api.ts` gains `markNotificationRead(id):Promise<boolean>` — the per-item companion to
+`markAllNotificationsRead`, same `req()` posture + boolean contract (returns whether the SERVER accepted it);
+reporting mirrors `reportIfOutage` so a **403/404 is an ANSWER** (quiet, the screen rolls back) while a
+5xx/malformed-4xx/dead-network is a fault that raises the banner (`healthKey` collapses the 24-hex `_id` →
+`/notifications/:id/read`). (b) `notifications.tsx` — tapping an **unread** row marks it read via the existing
+`SpineRow` `onPress` (read rows take no press); **verified, not assumed** like mark-all: optimistic (functional
+`setItems`, so two quick taps don't clobber), and on a refusal the **single** row goes back to unread + the
+shared Banner explains — never a cleared row the server never agreed to; per-item does NOT refetch the feed (a
+single PUT is authoritative), mark-all keeps its verify-refetch; the screen's own unread Pill + bottom bar track
+`unread` and the bar hides when the last clears; rows still **do not navigate** (no target id). (c) `home.tsx` —
+the bell lives here and `/notifications` is a **pushed route** (Home stays mounted, mount `load()` never re-runs
+on return), so a `useFocusEffect` re-reads **just the feed** on every RE-focus (skipping the first, so no cold-open
+double-fetch); **outage-guarded** — an empty result during `getHealth().degraded` (read LIVE after the await)
+keeps the last count rather than forging a "0 unread" bell (convention 4); a genuinely empty feed on a healthy
+backend still clears. (d) NEW `api-notifications.test.ts` (13) pins the read-state wire contract (403/404 = no
+banner; 5xx/network/200-`success:false` = banner; empty-id/demo = no request; +`markAllNotificationsRead` and
+`getNotifications` incl. the `is_read` alias and outage→empty+degraded). Gates green: `tsc` 0, `npm test`
+**430/430** (+13), lint 0 errors / 12 warnings (baseline). Commit local (push still 403s). **Device check
+carried** (native-only pushed-route focus lifecycle + haptics + real bell: tap-to-read, bell clears on return,
+airplane-mode rollback + no false-zero) — PHASE-37 §5. Full path: `docs/spec/PHASE-37.md`; DECISIONS 2026-08-14
+(top).
+
 **Phase 36 — [audit] hardcoded-vs-DB data sweep (notifications first, then app-wide). DONE (inventory, no code change) 2026-08-14.**
 The third of the three roadmap audits (PLAN §Phase 36). Deliverable was an **inventory** separating (a) real
 fabrication to remove, (b) legitimate synthesis to keep, (c) static config. **Finding: bucket (a) is EMPTY —
@@ -761,24 +790,24 @@ mark-read + bell-dot clear + a hardcoded-vs-DB audit; Viewing-as restricted to o
 biometric-only session restore after logout. **These are PLANNED, not built.** Cross-cutting rules baked into
 the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
 the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
-(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **All three audits are now DONE —
-Phases 34 (backend-fixed, `cgpe-api` Phase 40), 35 (AppLock touch-freeze, mobile-fixed) and 36 (hardcoded-vs-DB
-sweep — bucket-a EMPTY, no code change) — see `## Now`. The features chain is next:**
+(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **The three audits AND the first
+feature are now DONE — Phases 34 (backend-fixed, `cgpe-api` Phase 40), 35 (AppLock touch-freeze, mobile-fixed),
+36 (hardcoded-vs-DB sweep — bucket-a EMPTY, no code change) and 37 (notification mark-read + bell dot, `[m]` only
+— the persist endpoint already existed) — see `## Now`. The master-role chain is next:**
 
-1. **Phase 37 — [m]+[api?] notification mark-read + clear the bell dot.** Verify first whether a read-persist
-   endpoint exists (history: the WhatsApp inbox has none so `unread` never clears; notices only had
-   `markNoticeRead`) — file an `[api]` ask if missing. **Phase 36 confirmed there is NO hardcoded notification
-   data to remove** (the feed surfaces are 100% DB-driven), so this phase is purely the feature. Depends on 36
-   (done). See `docs/PLAN-2026-08-14.md` §Phase 37.
-2. **Then 38→40→39** (master role via DB → gate → surface): set `Profile.role` in the DB for the 3 master phone
+1. **Then 38→40→39** (master role via DB → gate → surface): set `Profile.role` in the DB for the 3 master phone
    numbers (owner/DB change, **never** a client literal — Phase 11), gate location + the master surface on the
    REAL role (Phase-20 pattern). See `docs/PLAN-2026-08-14.md` §Phase 38+.
-3. **Then location 41→42** (guaranteed 24/7 background GPS on any device with green/red in-shift route colouring;
+2. **Then location 41→42** (guaranteed 24/7 background GPS on any device with green/red in-shift route colouring;
    Master-only location visibility) — the owner's stated main need. See `docs/PLAN-2026-08-14.md` §Phase 41+.
+3. **Then geofence 43, salary/tasks 44→45** (per-member 200 m clock-in fence; strict backend salary from
+   hours/days; completed-tasks report + performance score) — the money/attendance cluster. See
+   `docs/PLAN-2026-08-14.md` §Phase 43+.
 
 Then **38→40→39** (master role via DB → gate → surface), location **41→42**, geofence **43**, salary/tasks
-**44→45**, polish **37/46/47**, and finally **48** (biometric, security review). Full dependency order and the
-`cgpe-api`/owner-DB asks per phase are in `docs/PLAN-2026-08-14.md`.
+**44→45**, polish **46/47** (greeting emojis, Viewing-as restricted to one number — Phase 37 now done), and
+finally **48** (biometric, security review). Full dependency order and the `cgpe-api`/owner-DB asks per phase
+are in `docs/PLAN-2026-08-14.md`.
 
 ---
 
