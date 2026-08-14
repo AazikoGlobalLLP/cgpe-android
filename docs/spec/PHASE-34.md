@@ -3,6 +3,18 @@
 **Audit only — no fix code written this phase (per `docs/PLAN-2026-08-14.md` Group A).** Deliverable: a
 written root-cause finding + the one-line fix. The fix is its own small phase (**Phase 34b**, below).
 
+> **RESOLVED 2026-08-14 — fixed on the BACKEND (`cgpe-api` Phase 40), mobile owes nothing.** The audit's
+> §6 secondary finding turned out to be the true fix. `cgpe-api` (a) now stamps `createdById` (= caller
+> `user_id`) on every `team_tasks` write, incl. `POST /api/team/tasks` (`routes/team.js:200`), and (b) rewrote
+> the `/task-overview` own/team creator match to `createdById ∈ allowedUids` (new rows) **AND** `createdBy(name)
+> ∈ allowedNames` (legacy rows) — `routes/team.js:63-75` — deleting the broken name-vs-user_id comparison.
+> Verified in their source + `__tests__/auth.phase40.test.js` (9 cases, 590 green). The owner's self-created
+> task now returns in his **default own-scope** — precise (shows HIS task, not everyone's), so the mobile
+> `?scope=all` change below (**Phase 34b) is NO LONGER NEEDED for the owner's bug** and is deferred; it stays a
+> candidate only if we later want an admin to see the whole team's board on the ordinary Tasks tab (vs. the
+> dedicated master surface, Phase 39). ⚠️ OPS: the backend change was uncommitted at reply time and needs a
+> `:3001` restart (and a prod deploy for cgpe.in) before it shows on a device. Mobile code unchanged.
+
 ## 0. The report
 
 Owner signs in as `super_admin` (the same account as the admin panel), creates a task **for himself**, and
