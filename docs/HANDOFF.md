@@ -1,82 +1,69 @@
-# HANDOFF — CGPE Connect (Android) — Phase 31 — 2026-08-12
+# HANDOFF — CGPE Connect (Android) — Phase 33 — 2026-08-14
 
-Phase 29 built the density mechanism + migrated one proof screen (`clients.tsx`); Phase 30 migrated the
-three other core list tabs (`tasks`/`leads`/`claims`). This session continued the rollout onto the
-**shared list primitives** (`ui/data.tsx` + `ui/identity.tsx`) — the highest-leverage target, because these
-are consumed by many screens, so migrating them lifts `theme.density:"compact"` onto the ELEMENTS they
-render across the whole app at once. Pure rollout — no mechanism change, no contract change, no new copy.
-All three gates green, two commits local (push still 403s).
+This session did two things: (1) built **Phase 32** (density → the remaining shared primitives
+`base`/`controls`/`feedback`/`sheet`) and **Phase 33** (density → the Home dashboard `home.tsx`), finishing the
+big density levers; (2) at `/handoff`, scoped the owner's large 2026-08-14 feature backlog into a proper
+ordered roadmap (`docs/PLAN-2026-08-14.md`, Phases 34–48) — **planned, not built.**
 
 ## Done
-- **A department whose config sets `theme.density: "compact"` now renders the shared list ELEMENTS tighter
-  wherever they appear** — status Pills, StatCard/MetricTile number tiles, DataRow/ListSection detail rows,
-  KpiStrip chips, ActionTile quick actions, and PersonRow/Avatar people rows — spacing ×0.85, radius ×0.90,
-  type sizes and ≥44pt touch targets unchanged. Renders on the next cold start, no APK. A
-  `comfortable`/absent role is unchanged (fail-open by reference).
-- **Honest nuance (not overclaimed):** a not-yet-migrated screen's **own** outer layout (its container
-  padding/gaps, still computed from the static exports) stays comfortable until that screen is migrated too.
-  So this widens density's reach substantially without making any single unmigrated screen fully compact.
-- **Non-regressive:** every file NOT yet migrated (~73, incl. `home.tsx` and `base`/`controls`/`feedback`/
-  `sheet`) still renders comfortable exactly as before — the static `spacing`/`radius`/`font` exports are
-  untouched.
+- **A department whose config sets `theme.density:"compact"` now renders tighter across every big surface:**
+  the four list tabs (Clients/Tasks/Leads/Claims), all the shared UI primitives (status pills, number tiles,
+  detail rows, KPI chips, buttons, fields, cards, banners, skeletons, the modal sheet, person rows), **and now
+  the whole Home dashboard** — spacing ×0.85, radius ×0.90, type sizes and ≥44 pt touch targets unchanged.
+  Renders on the next cold start, no APK. `comfortable`/absent is unchanged (fail-open by reference).
+- **Home is now WHOLE-screen compact** (Phase 33): because Home owns its own gutters/hero (not just shared
+  primitives), the Phase-31/32 "elements tighten but the screen's own layout stays comfortable" nuance no
+  longer applies to it.
+- **The owner's backlog is now a real, ordered plan** (`docs/PLAN-2026-08-14.md`) — 15 phases, each with owner
+  (mobile / `cgpe-api` / DB / security), dependencies, traps, and open questions.
 
 ## Files changed
-- `src/ui/data.tsx` — static `{ font, radius, spacing }` import stripped; `Pill`→`{radius,font}`,
-  `StatCard`→`{spacing,font}`, `DeltaBadge`→`{radius,font}`, `MetricTile`→`{spacing,font}`,
-  `DataRow`→`{spacing,font}`, `ListSection`→`{spacing,radius,font}`, `KpiChip`→`{spacing,radius,font}`,
-  `ActionTile`→`{spacing,radius}` all destructure off `c`. `KpiStrip` had **no `useTheme()` call at all** and
-  now reads `{spacing}` (hook placed before its early return). The module-scope `PILL_FS` const became a
-  `pillFs(font)` helper, computed per-component off `c.font` (font never scales, but the size is still read
-  off the scale, not copied). `Sparkline`/`Label`/`usePressScale` use no scale tokens — untouched.
-- `src/ui/identity.tsx` — same import strip; `PersonRow` destructures `{spacing,radius,font}`.
-  `Avatar`/`AvatarStack` use only size-derived literals — untouched. Commit `2dd37fe` (2 files, local).
-- `docs/spec/PHASE-31.md` (new); `docs/PHASES.md` (`## Now` + `## Next 3`) + `docs/DECISIONS.md` +
-  `docs/STATUS.md` + project `CLAUDE.md` (density note: primitives now migrated, ~73 remain, the
-  element-vs-own-layout nuance, the `pillFs`/`KpiStrip` gotchas). Commit `5697d3c` (docs), local — push
-  still 403s. `.claude/settings.json` left as-is (modified before this session).
+- `src/ui/base.tsx`, `src/ui/controls.tsx`, `src/ui/feedback.tsx`, `src/ui/sheet.tsx` — Phase 32: static
+  `{font,radius,spacing}` import stripped; each component destructures the scale off `c`; `controls.tsx`'s
+  module-scope `BTN_FS`→`btnFs(font)` helper; default-param captures (`Txt`/`Metric`/`Skeleton`/`SkeletonText`)
+  → optional prop + `?? c.<scale>`; `GlassCard`/`Row`/`SkeletonText`/`SkeletonCard`/`ToastProvider` gained the
+  hook. Commit `2b50aaf`.
+- `src/app/(tabs)/home.tsx` — Phase 33: static import stripped; 5 scale-using components destructure off `c`
+  (`WidgetShell`/`SmallEmpty` gained the hook). No module-scope const, no default-param capture — a straight
+  strip. Commit `f754843`.
+- `docs/spec/PHASE-32.md`, `docs/spec/PHASE-33.md` (new); `docs/PLAN-2026-08-14.md` (new — the backlog
+  roadmap); `docs/PHASES.md` (Now + Next 3 rewritten — backlog is the new driving priority); `docs/DECISIONS.md`
+  (Phase 32/33 + planning entries); `docs/STATUS.md`; project `CLAUDE.md` (density note + a backlog pointer).
+  Docs commits `2c13e89`, `4f81d6e` (+ this handoff).
 
 ## Decisions made
-- **D-1 — reuse the Phase-29 D-2 pattern verbatim; no mechanism change.** The mechanism is done; this is
-  pure rollout. Strip the static import, destructure off `c`, `tsc` proves completeness.
-- **D-2 — destructure precisely what each component uses** (`{radius,font}`, `{spacing,radius}`, …) — precise
-  destructuring avoids `no-unused-vars` warnings and keeps the diff faithful.
-- **D-3 — two non-mechanical cases handled as helpers/hooks, not literals.** `data.tsx`'s module-scope
-  `PILL_FS` → a `pillFs(font)` helper (a module const can't react to context; identical treatment to
-  `clients.tsx`/`leads.tsx`'s `sepInset`); `KpiStrip` had no `useTheme()` at all and gains one before its
-  early return (Rules of Hooks). Every other component already called `useTheme()`.
-- **D-4 — two files, the primitives only** — kept within the ≤8-files convention; the remaining primitives
-  (`base`/`controls`/`feedback`/`sheet`) and `home.tsx` (62 refs, danger zone) are separate later phases.
-- **D-5 — leverage nuance recorded, not overclaimed** (see Done, second bullet).
+- **Phase 32/33 — reuse the Phase-29 D-2 pattern verbatim; no mechanism change.** Strip the static import,
+  destructure off `c`, `tsc` proves completeness. Home had no module-scope const / no default-param capture, so
+  it needed neither the helper nor the fallback variant — a straight strip + destructure.
+- **Backlog is PLANNED, not started.** `/handoff` says do not start new work; turning the requirements into an
+  ordered, dependency-aware roadmap is planning, not building. No feature code was written and no INBOX ask was
+  filed (the project rule is verify-against-real-backend-first; file when each phase is picked up).
+- **Role-by-identity stays in the DB, never a client literal.** The owner's "these 3 phone numbers are master"
+  and "Viewing-as only for this one number" must be a `Profile.role` / capability change in the DB, not
+  hard-coded phone strings in `src/` (Phase 11 removed the old email literal for exactly this reason).
+- **Salary is a backend formula.** "Strict salary from hours/days" is `cgpe-api`'s payroll engine; the app only
+  renders the server's computed amount (the app never multiplies — Phase 16/20/23/25).
 
 ## Known broken / deliberately skipped
-- **Device check (carried — the only thing left for Phase 31).** A role with `theme.density:"compact"`
-  showing tighter primitives in light/dark at 390 px, type/targets unchanged; a comfortable role unchanged.
-  **Not editor-buildable: no compact-density dept doc is seeded yet** (Phase-26/27 seeding backlog) — same
-  prerequisite as Phases 29/30.
-- **The other ~73 files** still render their own outer layout comfortable until migrated — deliberately
-  deferred. Top targets: the remaining shared primitives `ui/base.tsx`/`ui/controls.tsx`/`ui/feedback.tsx`/
-  `ui/sheet.tsx`, then `home.tsx` on its own. These are the top editor-buildable levers now.
-- **No new test** — presentational migration, no new pure logic (same untested class as the
-  `clients.tsx`/list-tab migrations; the density numbers are already pinned by `density.test.ts`).
-- **⚠️ SECURITY (carried, unchanged):** `cgpe-backend-main/scripts/seedAppRolePreferences.js:56` still
-  hardcodes a live Atlas credential — **remove + rotate before that file is committed anywhere.** Sibling
-  repo, not touched.
-- **Phase 27 (`resolveRoleKey`) still awaiting `cgpe-api`** — INBOX ask still `[ ]` (unanswered).
-- **Device-verification backlog** carried (Phases 1/4/5/6/7/9/10/12/13/16/23/24/25/28/29/30 + now 31).
-- **`git push` still 403s** — all commits local (stored credential `reactjsaaziko` has no write access to
-  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; needs a human to grant access or swap the credential).
-- **No contract change / no INBOX activity this phase** — density is enum-only upstream and consumed exactly
-  as documented; nothing crosses a repo boundary, no sibling session needs notifying.
+- **The owner backlog (Phases 34–48) is entirely unbuilt** — by design; this was a `/handoff`, planning only.
+- **`git push` still 403s** — stored credential `reactjsaaziko` has no write access to
+  `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`; all four commits this session are **local**. Needs a human to grant
+  access or swap the credential.
+- **Device-verification backlog carried** (Phases 1/4/5/6/7/9/10/12/13/16/23/24/25/28/29/30/31/32 + now 33) —
+  no seeded compact-density dept doc exists yet, so the density work is not device-confirmable (Phase-26/27
+  seeding backlog).
+- **⚠️ SECURITY (carried, unchanged):** `cgpe-backend-main/scripts/seedAppRolePreferences.js` — remove + rotate
+  the hardcoded Atlas credential before that file is committed/pushed anywhere. Sibling repo, not touched.
+- **`density` still needs a seeded compact doc to be visible**; ~68 files remain on the static scale (the other
+  `ui/` modules + the ~40 flat stack-route screens) — background fill, lower priority than the backlog.
 
 ## Next session starts here
-- **Phase 32 — continue the density rollout:** migrate the remaining shared primitives `ui/base.tsx` +
-  `ui/controls.tsx` + `ui/feedback.tsx` + `ui/sheet.tsx` (or `home.tsx`, 62 refs, a danger zone, on its
-  own). Same D-2 pattern. No backend, no copy — buildable today. Or, if `cgpe-api` has replied to the
-  Phase-27 `resolveRoleKey` ask, do Phase 27 verification instead.
+- **Phase 34 — [audit] the self-created task not showing on the phone.** Reproduce (`super_admin` creates a task
+  for himself → not visible), grep the task scope in `cgpe-backend-main`, and write the finding (client filter
+  vs backend scope vs assignee/creator mismatch) before any fix. It is the first of three cheap audits (34/35/36)
+  that unblock the rest of the backlog. Full plan: `docs/PLAN-2026-08-14.md`.
 - **First command:** `/boot`
-- **Watch out for:** in these primitives, look for **module-scope** scale uses (a const capturing the scale
-  at load, like `data.tsx`'s old `PILL_FS`) — they can't be destructured off `c`, so turn them into a helper
-  that takes the scale; and for components with **no `useTheme()` call at all** (like `KpiStrip` was) — add
-  the hook. `tsc` flags every stale reference once the static import is gone, but it does NOT flag a
-  component that quietly relied on the module import with no hook of its own. And do not reorder the
-  load-bearing providers in `_layout.tsx` — `BrandTheme` applies both accent and density.
+- **Watch out for:** the two identity traps in the backlog — (1) do **not** hard-code the master phone numbers
+  or the Viewing-as number in `src/`; those are DB `Profile.role`/capability changes (Phase 11). (2) do **not**
+  compute salary on the device; it is a backend formula. And verify every `[api]` assumption against the real
+  `cgpe-backend-main` code before filing or building — the tags have been wrong 5×.

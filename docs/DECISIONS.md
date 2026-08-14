@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Owner backlog scoped into a roadmap (Phases 34–48), planned not built
+
+**Context.** At `/handoff` the owner handed a large feature backlog: per-member 200 m clock-in geofence; strict
+salary from hours/days; a completed-tasks report + performance score (assigned-and-completed only, excluding
+reminders); a Master-only monitoring side (performance + location + salary, no tasks) for 3 specific phone
+numbers; guaranteed 24/7 background location on any device with green/red route colouring; Master-only location
+visibility; a self-created-task-not-visible bug; a touch-freeze/AppLock bug; notification mark-read + bell-dot
+clear + a hardcoded-vs-DB audit; Viewing-as restricted to one number; greeting emojis; and biometric-only
+session restore after logout.
+
+**Decision.** Because `/handoff` forbids starting new work, the backlog was turned into an ordered,
+dependency-aware **plan** (`docs/PLAN-2026-08-14.md`, Phases 34–48) rather than any code. Ordering: three cheap
+audits first (34 task-visibility, 35 touch-freeze, 36 hardcoded-vs-DB), then master role→gate→surface
+(38→40→39), location hardening (41→42) + geofence (43), salary/tasks reports (44→45), polish (37/46/47), and
+biometric last (48, security review). Five cross-cutting rules were baked into the plan and must not be
+violated: (1) **role-by-identity = DB `Profile.role`/capability, never a client phone/email literal** — the
+"3 master numbers" and "Viewing-as for one number" are DB/owner changes, not `src/` literals (Phase 11 removed
+the old email literal for exactly this); (2) **the app never computes money** — salary is a backend
+payroll-engine formula, mobile renders the server's `payable` (Phase 16/20/23/25); (3) **verify the real
+`cgpe-backend-main` code before filing/building** — the `[api]` tags have been wrong 5×; (4) **never invent a
+number/field** (200 m, score weights, salary inputs, cadence — confirm against contracts or lock with the
+owner); (5) **flag security-sensitive items** — biometric token restore, 24/7 background location (DPDP
+consent), master-only location visibility.
+
+**Consequence.** No feature code written, no INBOX ask filed (deferred to when each phase is picked up, per the
+verify-first rule), no gate re-run for the backlog. `docs/PLAN-2026-08-14.md` is now the driving priority in
+`docs/PHASES.md` `## Next 3`; the density-rollout continuation drops to background fill. Next session starts at
+Phase 34 (the task-visibility audit). Several phases need `cgpe-api` and/or an owner DB change — listed
+per-phase in the plan.
+
 ## 2026-08-14 — Phase 33: density rollout — migrate the Home dashboard (`(tabs)/home.tsx`) with the D-2 pattern
 
 **Context.** Phases 29–32 migrated the four list tabs, the shared list primitives (`data`/`identity`) and the

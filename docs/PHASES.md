@@ -690,7 +690,37 @@ exercise.
 
 ## Next 3
 
-**Density rollout — the big levers are done; what's left batches by area.** Phase 29 shipped the
+**⭐ NEW DRIVING PRIORITY — owner backlog 2026-08-14. Full roadmap: `docs/PLAN-2026-08-14.md` (Phases 34–48).**
+The owner handed a concrete feature backlog: per-member 200 m clock-in geofence; strict salary from
+hours/days; completed-tasks report + performance score (assigned-and-completed only, not reminders); a
+**Master-only** monitoring side (performance + location + salary, no tasks) for 3 specific phone numbers;
+guaranteed 24/7 background location on any device with green(in-shift)/red(outside) route colouring;
+Master-only location visibility; a self-created-task-not-visible bug; a touch-freeze/AppLock bug; notification
+mark-read + bell-dot clear + a hardcoded-vs-DB audit; Viewing-as restricted to one number; greeting emojis; and
+biometric-only session restore after logout. **These are PLANNED, not built.** Cross-cutting rules baked into
+the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
+the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
+(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **Start with the three audits:**
+
+1. **Phase 34 — [audit] self-created task not visible.** `super_admin` created a task for himself; it never
+   showed on the phone (panel layout changes DID reach the phone, so `rbac/app-ui` is fine — this is a
+   task-data/scope problem). Reproduce, grep the task scope in `cgpe-backend-main`, write the finding
+   (client filter vs backend scope vs assignee/creator mismatch), then a small fix phase. See
+   `docs/PLAN-2026-08-14.md` §Phase 34.
+2. **Phase 35 — [audit] touch-freeze, esp. AppLock "Unlock".** Investigate `ui/AppLock.tsx` overlay
+   `pointerEvents` (the opacity-0-View-absorbs-touches class the sheet code documents) + the gesture root.
+   Root-cause + fix. See §Phase 35.
+3. **Phase 36 — [audit] hardcoded-vs-DB sweep** (notifications first). Inventory real fabrication to remove vs
+   documented synthesis to keep (claim timeline / lead notes / prospects `pick()` are legit) vs static label
+   maps. Feeds Phase 37. See §Phase 36.
+
+Then **38→40→39** (master role via DB → gate → surface), location **41→42**, geofence **43**, salary/tasks
+**44→45**, polish **37/46/47**, and finally **48** (biometric, security review). Full dependency order and the
+`cgpe-api`/owner-DB asks per phase are in `docs/PLAN-2026-08-14.md`.
+
+---
+
+**Background fill (density rollout) — the big levers are done; what's left batches by area.** Phase 29 shipped the
 `theme.density` mechanism + migrated `(tabs)/clients.tsx`; Phase 30 the three other list tabs
 `tasks`/`leads`/`claims` (commit `d70da17`); Phase 31 the shared list primitives `ui/data.tsx` +
 `ui/identity.tsx` (commit `2dd37fe`); Phase 32 the remaining shared primitives `ui/base.tsx` +
@@ -707,7 +737,9 @@ prop + `?? c.<scale>`, as `Txt`/`Skeleton` did), and components with **no `useTh
 as `KpiStrip`/`GlassCard`/`Row` needed). These can be batched by area (all detail screens, all settings-family
 screens). No backend, no copy — buildable today. See `docs/spec/PHASE-33.md` + `docs/spec/PHASE-29.md`.
 
-1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). ANSWERED by `cgpe-api` —
+**Also still available (lower priority than the owner backlog above):**
+
+- **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). ANSWERED by `cgpe-api` —
    SHIPPED as their Phase 34 (2026-08-12); mobile verification now editor-buildable.** A pure backend change
    (mobile has no resolver, renders any `role_key` fail-open — **nothing mobile-side to build**). `cgpe-api`
    shipped exactly the recommended non-regressive candidate-key chain `candidateRoleKeys = [deptKey, role,
@@ -719,7 +751,7 @@ screens). No backend, no copy — buildable today. See `docs/spec/PHASE-33.md` +
    `src/` change, then widen the Phase-26 seed script to the new keys for the owner to run. See DECISIONS
    2026-08-12 (Phase 27) + the answered INBOX item.
 
-2. **Phase 26 — More-tab grouping DB-driven (`nav.more_sections`). BUILT 2026-08-12 (part b); a device
+- **Phase 26 — More-tab grouping DB-driven (`nav.more_sections`). BUILT 2026-08-12 (part b); a device
    check + two other levers remain.** Owner picked, of the three Phase-26 parts, the app-side slice (b):
    consume `nav.more_sections`. **Shipped** — `arrangeMoreSections` selector + `MORE_CATALOGUE` +
    config-driven `more.tsx` groups; `tsc` 0, `npm test` **398/398**, lint baseline. See the `## Now` entry +

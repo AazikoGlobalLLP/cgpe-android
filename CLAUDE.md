@@ -153,7 +153,10 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
   `Profile.role` field. If Master unexpectedly reads as Admin/Team, that is a database row on the
   `cgpe-api` side, not a client bug — check `Profile.role` in `staff_unified` before touching this
-  file. See `docs/spec/PHASE-11.md` D-4. **`tierOf()` folds `leader` INTO the `admin` tier** (so
+  file. See `docs/spec/PHASE-11.md` D-4. **The 2026-08-14 owner backlog (`docs/PLAN-2026-08-14.md`) asks for 3
+  phone numbers to be Master and Viewing-as to be kept for one number — those are DB `Profile.role`/capability
+  changes, NEVER client phone literals in `src/`. Keep it that way (same reason the email literal was removed).**
+  **`tierOf()` folds `leader` INTO the `admin` tier** (so
   `caps.manageTeam` is true for a leader) — but several backend surfaces gated `authorize('admin')`
   **403 a leader** (payroll is the live example: `routes/payroll.js:22-23`). So any mobile surface that
   consumes an admin-only endpoint must gate on the **real** `user.role === 'admin'|'super_admin'`, never
