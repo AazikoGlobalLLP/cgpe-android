@@ -10,6 +10,7 @@ import { Appear } from '@/ui/motion';
 import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { setLocationConsent } from '@/data/api';
+import { startAmbientTracking } from '@/lib/tracker';
 
 /* ------------------------------------------------------------------ *
  * PHASE 41a-ii — the 24/7 location consent notice.
@@ -22,9 +23,10 @@ import { setLocationConsent } from '@/data/api';
  * There is deliberately NO back affordance and NO skip: declining shows an honest "you cannot
  * continue" state, not a way around the gate. Agreeing is the only path forward.
  *
- * NOT YET AUTO-GATED. This is the screen + the write. Reading `me.location_consent` off
- * GET /rbac/config to DECIDE when to show it (and starting the ambient recorder on grant) is the
- * next, device-checked slice — the app does not read the `me` block yet.
+ * AUTO-GATED (41a-iii). The boot gate (`_layout.tsx` ConsentGate) redirects a not-yet-consented user
+ * here off `me.location_consent`, and on Agree this screen arms the native 24/7 recorder
+ * (`startAmbientTracking`, PHASE-41 §12.5) before proceeding to Home. The recorder's own device pieces
+ * in `tracker.ts` are verified on a handset, not in the editor.
  * ------------------------------------------------------------------ */
 
 /**
@@ -63,8 +65,16 @@ export default function Consent() {
     if (!live.current) return;
     if (r.status === 'ok') {
       haptics.success();
-      // Proceed into the app. When this screen becomes a boot gate, the gate redirects here and
-      // this replace lands the now-consented user on Home with no way back to the pre-consent state.
+      // Consent is recorded — arm the native 24/7 recorder at the grant moment (PHASE-41 §12.5), the
+      // one place the permission + battery-opt ladder belongs. Best-effort (never throws); the resolved
+      // (translated) neutral notification is captured now, while an i18n context exists. A denied
+      // background permission just means recording waits — consent itself is already recorded, so we
+      // still proceed. The gate redirects here and this replace lands the user on Home for good.
+      await startAmbientTracking({
+        prompt: true,
+        notif: { title: t('consent.serviceTitle'), body: t('consent.serviceBody') },
+      });
+      if (!live.current) return;
       router.replace('/(tabs)/home');
       return;
     }

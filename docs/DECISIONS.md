@@ -6,6 +6,56 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41a-iii-b part 2 BUILT in the editor (owner: "write it all now"), gates green but DEVICE-UNVERIFIED; the unified 24/7 recorder wired per PHASE-41 §12
+
+**Context.** Yesterday's decision (below) was "don't author `tracker.ts` blind — write the plan." This session the
+owner reversed that via AskUserQuestion: **write the full §12 code now** so the on-device session is pure
+build-and-verify. The constraint kept from the prior decision: the non-consented recording path must stay
+byte-identical (§12.1 graceful degradation), because a blind mistake in the repurposed `start/stopTracking`
+could invisibly regress the working shift recorder (green gates ≠ working; `tracker.ts` has no test stub).
+
+**Decision — what was built** (`src/lib/tracker.ts` + 3 wiring surfaces + `app.json` + `expo-intent-launcher`):
+- **ONE unified recorder, attribution by `sid` at flush time** (§12.1). `ingest`: `sid` present ⇒ `deliver`
+  (`/track/points`, unchanged); absent + armed ⇒ new `deliverAmbient` (`postAmbientPoints`, `off_duty`); absent
+  + not armed ⇒ the exact PHASE-7 unattributable teardown, preserved. `start/stopTracking` repurposed to only
+  set/clear the shift `sid` and ensure/keep the one service, never stop it, when 24/7 is armed.
+- **New exports** `startAmbientTracking({prompt,notif})` / `stopAmbientTracking()`; new persisted markers
+  `track.ambient` / `track.notif` / `track.batteryOptAsked`; battery-opt step in `ensureBackgroundPermission`.
+- **Wiring:** `consent.tsx` onAgree → `startAmbientTracking({prompt:true, notif})` before Home; `_layout.tsx`
+  ConsentGate boot-arm → `startAmbientTracking({prompt:false, notif})` on `ok+granted` (fail-open: `error`
+  arms nothing). `home.tsx` clock-in/out unchanged (§12.5) — the new semantics live inside `tracker.ts`.
+
+**Decision — deliberate reconciliations of the §12 plan** (all lean safe/boring):
+- **D-a: read `track.ambient` FRESH from storage at each attribution branch, not a once-per-JS-start module
+  flag** (deviates from §12.2's "read once"). A headless wake can invoke the task before a hydration promise
+  resolves; a stale `false` would misread a consented ambient batch as unattributable and tear the 24/7 service
+  down. Per-read is strictly more correct and the cost is one SecureStore read per ~60 s batch.
+- **D-b: `startAmbientTracking` takes the resolved `notif` strings as a param** (§12.2 showed only `{prompt}`).
+  `tracker.ts` has no i18n; §12.4 needs the RESOLVED (translated) notification persisted at arm time. The two
+  arm call sites (consent screen, boot gate) both have i18n, so they pass `t('consent.serviceTitle'/'serviceBody')`.
+- **D-c: battery-opt fires at most ONCE per install** (a `track.batteryOptAsked` flag; not in §12.3's text).
+  §12.3 puts the step in the shared `ensureBackgroundPermission`, but §12.5 keeps clock-in calling it, so
+  without the flag it would re-prompt on every clock-in. Side effect (flagged): a plain **shift** clock-in now
+  also fires the one-time battery-opt prompt — beneficial for the shift service too, and recording semantics
+  are unchanged.
+- **D-d: `expo-intent-launcher` is a top-level static import**, not a lazy `require`. Its web/iOS shim is
+  `export default {}`, so importing is safe on every platform (only a *call* throws off-Android, which is
+  `Platform.OS==='android'`-guarded + try/caught). This keeps the lint baseline at 12 warnings (a `require`
+  would have added a 13th, the storage.ts pattern).
+- **D-e: boundary-batch slop accepted for v1** (§12.1/§12.8 device-call). A batch straddling clock-in/out
+  mis-attributes by ≤ one ~60 s interval; not worth timestamp-splitting now.
+- **D-f: `isTracking()` now means "service running (shift OR 24/7)"**, so it reads true for an armed,
+  not-clocked-in user. Verified it has **zero consumers** in `src` (grep) — no UI regression; left as-is (dead
+  export, not deleted per surgical-change rule).
+
+**Consequence.** Gates green: `tsc` 0 · `npm test` **467/467** (unchanged — `tracker.ts` untestable, wiring
+presentational) · lint **0 errors / 12 warnings** (baseline). **NONE of it is device-verified** — the §12.7
+matrix (ambient `off_duty` points, attribution flip on clock-in/out without stopping the service, app-swipe
+survival, battery-opt once, withdrawal→403→stop, fail-open boot, and battery drain measured over a real day on
+3+ handsets) is the acceptance gate and needs a fresh EAS/dev-client build + handsets. Commit local (push 403s).
+`stopAmbientTracking` is exported and ready but NOT yet wired to sign-out/withdrawal (no withdrawal UI yet; both
+self-heal via the next ambient flush's `signed-out`/`consent-required`) — a later slice.
+
 ## 2026-08-14 — Phase 41a-iii-b part 2 is a build-and-device session (not editor); architecture LOCKED to one unified 24/7 recorder; device plan written (PHASE-41 §12)
 
 **Context.** Owner chose "write the device-ready plan" over authoring the `tracker.ts` code blind. Checking

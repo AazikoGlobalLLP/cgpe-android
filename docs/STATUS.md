@@ -1,14 +1,15 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-14
-**Working on right now:** Building the 24/7 staff-location feature — this step added the check that sends a staff member to the agreement screen if they haven't yet agreed.
+**Working on right now:** Building the always-on staff-location feature — this step wrote the actual background-recording code, which can only be proven on real phones.
 
 **Done this week:**
-- The app now automatically shows the always-on location agreement screen to any staff member who hasn't already agreed — and won't let them past it until they do. This is the "you must agree to use the app" gate the owner asked for.
-- Built it to fail safe: if the server can't answer, or that part of the server isn't reachable, the app quietly leaves everyone on their normal home screen and never locks anyone out. It only sends someone to the agreement screen when it's certain they haven't agreed.
-- Confirmed the company's server team has switched their matching location features on and they're running live, so the app side is no longer waiting on them.
-- Earlier this week: the agreement notice itself (in all five languages), the screen that shows it, and the behind-the-scenes plumbing were all completed; the server team finished the data-cleanup rules.
+- Wrote the code for the always-on location recording. It's a single background recorder: during a shift it logs travel as before, and once a staff member has agreed, it also keeps logging in the background off-hours — clearly marked as "off duty" so on-duty and off-duty are never mixed up.
+- Built it so no one is worse off: a staff member who has NOT agreed keeps exactly today's behaviour (records only during a shift). The always-on part is switched on only after they agree.
+- Added the "please don't power-save this app" request (so the phone doesn't quietly kill the recorder) and a plain, always-visible "location on for work" notice shown in the person's own language — nothing is hidden.
+- Confirmed the app never records off-hours unless the server says the person has agreed, and if agreement is later withdrawn on the server side the recorder stops itself.
+- Earlier this week: the agreement gate, the agreement notice in all five languages, the screen, the plumbing, and the server team's data-cleanup rules were all finished.
 - All automated checks pass.
 
-**Blocked on:** One thing owned by someone else — the code-upload permission still needs fixing so our saved work can be pushed to the shared repository (it's saved safely on this machine in the meantime).
+**Blocked on:** Two things. (1) The code-upload permission still needs fixing so our saved work can reach the shared repository — it's saved safely on this machine in the meantime. (2) This recording step **cannot be tested on a computer at all** — it needs a real installable app on real phones, which is the next session.
 
-**Next:** Test the agreement gate on real phones, and switch on the actual always-on recording — this part can only be built and checked on a real device, and the server side it needs is now live.
+**Next:** Build an installable test app and check on several real phones that off-duty location logs correctly, the shift/off-duty switch works when clocking in and out, it keeps working after the app is closed, and — the most important one — it does **not** noticeably drain the battery over a full working day.

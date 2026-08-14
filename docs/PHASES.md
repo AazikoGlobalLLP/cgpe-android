@@ -14,6 +14,36 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 41a-iii-b (part 2) BUILT IN EDITOR — the unified 24/7 recorder wired (`tracker.ts` + triggers + native config). Gates green, DEVICE-UNVERIFIED. 2026-08-14.**
+The owner chose (AskUserQuestion) "write it all now" so the on-device session is pure build-and-verify. Built the
+full PHASE-41 §12 slice: (a) **`src/lib/tracker.ts` — ONE unified recorder** (§12.1). `ingest` now attributes each
+batch by the shift `sid` at flush time: present ⇒ `deliver` (`/track/points`, unchanged); absent + 24/7 armed ⇒
+NEW `deliverAmbient`→`postAmbientPoints` (`off_duty`); absent + NOT armed ⇒ the exact PHASE-7 unattributable
+teardown, preserved. `startTracking`/`stopTracking` are repurposed to only set/clear the shift `sid` and
+ensure/keep the single service (never stop it) when armed — so **clock-in/out no longer start/stop the service,
+they flip attribution**; the service stays up across clock-out and records ambient. NEW exports
+`startAmbientTracking({prompt,notif})` / `stopAmbientTracking()`; NEW persisted markers `track.ambient` (armed),
+`track.notif` (resolved neutral notification, captured at arm time — a headless restart has no i18n, §12.4),
+`track.batteryOptAsked` (once-per-install). (b) **Battery-opt step** in `ensureBackgroundPermission`
+(§12.2/§12.3): Android-only `IntentLauncher.startActivityAsync(REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)`, best-effort,
+never flips `granted`, fires at most once. (c) **Wiring** (§12.5): `consent.tsx` onAgree →
+`startAmbientTracking({prompt:true, notif})` before Home; `_layout.tsx` ConsentGate boot-arm →
+`startAmbientTracking({prompt:false, notif})` on `ok+granted` (**fail-open: `error` arms nothing**); `home.tsx`
+clock-in/out **unchanged**. (d) **`app.json`** gains `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`; **`expo-intent-launcher`
+57.0.1** installed (top-level import, web-safe `{}` shim). **Non-consented path is byte-identical** (§12.1
+graceful degradation) — 24/7 is purely additive. Deliberate §12 reconciliations in DECISIONS 2026-08-14 (top):
+fresh-storage `ambientArmed()` read (not a once-per-start flag — avoids a headless race), `notif` param on
+`startAmbientTracking` (tracker has no i18n), once-per-install battery-opt flag, boundary-batch slop accepted for
+v1, `isTracking()` now "service running (shift OR 24/7)" but has **zero consumers** (verified). Gates: `tsc` 0 ·
+`npm test` **467/467** (unchanged — `tracker.ts` has no stub, wiring is presentational) · lint **0 errors / 12
+warnings** (baseline). **No contract change** (pure consumer of shipped Phase 43). Commit local (push 403s).
+**DEVICE-UNVERIFIED — the whole acceptance gate is on a handset (§12.7):** a fresh EAS/dev-client build (new
+native module + permission), then the matrix — ambient `off_duty` points off-shift, attribution flips on
+clock-in/out without the service stopping, app-swipe survival, battery-opt prompt once, withdrawal→403→stop+drop,
+fail-open boot arms nothing, and **battery drain measured over a real working day on 3+ handsets** (the §3 hard
+gate). `stopAmbientTracking` is exported but not yet wired to sign-out/withdrawal (self-heals via the next flush;
+a later slice). Full path: `docs/spec/PHASE-41.md` §8/§12; DECISIONS 2026-08-14 (top).
+
 **Phase 41a-iii-b (part 1) BUILT — the consent BOOT GATE (redirect). Pure decision seam + `_layout.tsx` wiring; `tracker.ts` device pieces still deferred. 2026-08-14.**
 The editor-verifiable half of 41a-iii-b. Re-checked the backend first: `909b117` (backend Phases 43-46 —
 consent + ambient + retention) is now **committed + live on `:3001`** (cgpe-admin INBOX re-verify), so the

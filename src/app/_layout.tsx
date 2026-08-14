@@ -1,6 +1,6 @@
 import 'react-native-gesture-handler';
 /**
- * SIDE-EFFECT IMPORT, AND IT IS LOAD-BEARING.
+ * LOAD-BEARING IMPORT (side effect + `startAmbientTracking`).
  *
  * tracker.ts registers its background location task with `TaskManager.defineTask` at module
  * scope. That only helps if the module is actually EVALUATED. expo-router loads route modules
@@ -13,9 +13,11 @@ import 'react-native-gesture-handler';
  * process is killed, which is the NORMAL case across an all-day shift, and the symptom is a
  * route with a start, an end, and hours missing in between.
  *
- * The import is cheap: the module body only defines the task and reads a flag.
+ * The named import still evaluates the module body (registering the task); it also brings in
+ * `startAmbientTracking`, which the boot gate below calls to arm the 24/7 recorder for an
+ * already-consented user (PHASE-41 §12.5).
  */
-import '@/lib/tracker';
+import { startAmbientTracking } from '@/lib/tracker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -27,7 +29,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme, deriveBrandPalette, applyDensity, PaletteProvider } from '@/theme/theme';
 import { useAppFonts } from '@/theme/fonts';
 import { AuthProvider, useAuth } from '@/store/auth';
-import { I18nProvider } from '@/i18n';
+import { I18nProvider, useT } from '@/i18n';
 import { ConfirmProvider } from '@/ui/Confirm';
 import { ToastProvider } from '@/ui/feedback';
 import { Splash } from '@/ui/Splash';
@@ -41,10 +43,11 @@ import { getLocationConsent, needsConsentGate } from '@/data/api';
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 /**
- * PHASE 41a-iii-b — the 24/7-location consent BOOT GATE (redirect half).
+ * PHASE 41a-iii-b — the 24/7-location consent BOOT GATE (redirect + recorder-arm).
  *
  * A signed-in user who has not granted consent is bounced to the mandatory `/consent` notice
- * (PHASE-41 §1: "bata ke, puch ke" — informed, transparent, non-negotiable). Headless and mounted
+ * (PHASE-41 §1: "bata ke, puch ke" — informed, transparent, non-negotiable); an already-consented user
+ * instead has the native 24/7 recorder armed here without a prompt (§12.5, part 2). Headless and mounted
  * once at the root beside `AppLock`/`JobPill`, so it lives for the process lifetime and reads the
  * live navigation context (JobPill navigates from exactly here). It must run at THIS layout level,
  * not `index.tsx`, which only mounts at `/`.
@@ -65,12 +68,14 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
  * React StrictMode's dev double-mount.
  *
  * DEVICE-ONLY to verify (no test stub reaches boot navigation): that a non-granted user lands on
- * `/consent` without a Home flash-then-bounce or a loop, and that it survives Expo's restored-route
- * cold start. The pure decision `needsConsentGate` IS unit-tested (api-consent-read.test.ts).
+ * `/consent` without a Home flash-then-bounce or a loop, that it survives Expo's restored-route cold
+ * start, and that an already-consented user's 24/7 recorder actually arms on boot. The pure decision
+ * `needsConsentGate` IS unit-tested (api-consent-read.test.ts).
  */
 function ConsentGate() {
   const { user, ready } = useAuth();
   const router = useRouter();
+  const t = useT();
   const checked = useRef(false);
 
   useEffect(() => {
@@ -80,11 +85,24 @@ function ConsentGate() {
     checked.current = true;
     void (async () => {
       const r = await getLocationConsent();      // silent + fail-open by design (api.ts)
-      // `/consent` postdates the last generated route type (as `/earnings` does in attendance.tsx),
-      // so cast to Href until `expo start` regenerates .expo/types.
-      if (needsConsentGate(r)) router.replace('/consent' as Href);
+      if (needsConsentGate(r)) {
+        // `/consent` postdates the last generated route type (as `/earnings` does in attendance.tsx),
+        // so cast to Href until `expo start` regenerates .expo/types.
+        router.replace('/consent' as Href);
+        return;
+      }
+      // Already granted: arm the native 24/7 recorder WITHOUT prompting (PHASE-41 §12.5). prompt:false
+      // starts the service only if background permission is already held and never opens a dialog on a
+      // cold start; the resolved (translated) neutral notification is captured here while i18n exists.
+      // FAIL-OPEN holds: an `error` read is not `granted`, so nothing is armed (§12.7.7).
+      if (r.status === 'ok' && r.consent === 'granted') {
+        void startAmbientTracking({
+          prompt: false,
+          notif: { title: t('consent.serviceTitle'), body: t('consent.serviceBody') },
+        });
+      }
     })();
-  }, [user, ready, router]);
+  }, [user, ready, router, t]);
 
   return null;
 }

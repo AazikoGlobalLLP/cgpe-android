@@ -168,14 +168,21 @@ honest, never covert:
       change → no INBOX/CHANGELOG. Commit local (push 403s).
     - **Device-only check still owed:** that a non-granted user lands on `/consent` with no Home
       flash-then-bounce and no loop, and survives a restored-route cold start (no test stub reaches boot nav).
-  - ⏳ **41a-iii-b (part 2) — the `tracker.ts` device pieces (remaining, device-only).** The battery-opt step
-    in the permission ladder (`ensureBackgroundPermission`); the ambient recorder in `tracker.ts` calling
-    `postAmbientPoints` on grant; the neutral 24/7 foreground notification (`consent.serviceTitle`/
-    `serviceBody` — the copy already exists from 41a-ii). Zero test path (`tracker.ts` has no stub) and a
-    danger zone; provable only on a handset now that Phase 43 is live. The consent screen + read + gate all
-    render/resolve standalone until this lands (`/consent` is web-demoable). **Decision-complete device
-    execution plan: §12** (architecture LOCKED to one unified 24/7 recorder; native build steps; the
-    verification matrix) — the on-device session is execution, not design.
+  - 🔨 **41a-iii-b (part 2) — the `tracker.ts` device pieces BUILT IN EDITOR, DEVICE-UNVERIFIED (2026-08-14).**
+    Owner chose "write it all now" (AskUserQuestion) so the handset session is pure build-and-verify. Shipped the
+    full §12 code: the ONE unified recorder in `tracker.ts` (§12.1 — `ingest` attributes by shift `sid` at flush,
+    `deliverAmbient`→`postAmbientPoints` for off-duty, `start/stopTracking` repurposed to flip attribution not
+    stop the service); NEW exports `startAmbientTracking`/`stopAmbientTracking`; the battery-opt step in
+    `ensureBackgroundPermission` (§12.3, once-per-install); the neutral 24/7 notification persisted at arm time
+    and read back at `startLocationUpdatesAsync` (§12.4); the two start triggers wired (§12.5) — `consent.tsx`
+    onAgree (prompt) + `_layout.tsx` boot gate (no prompt, fail-open). `app.json` +
+    `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`; `expo-intent-launcher` 57.0.1 installed. Non-consented path is
+    byte-identical (§12.1). Gates green (`tsc` 0 · `npm test` 467/467 · lint 0/12) but **none of it is
+    device-verified** — `tracker.ts` has no stub and the file "looks fine in foreground, breaks only after a
+    process kill." The §12.7 matrix on a fresh EAS build + 3+ handsets is the acceptance gate. Deliberate §12
+    reconciliations: DECISIONS 2026-08-14 (top). **Not yet wired:** `stopAmbientTracking` → sign-out/withdrawal
+    (self-heals via the next flush; later slice). The consent screen + read + gate render/resolve standalone;
+    `/consent` stays web-demoable.
 - **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
 - **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
 - **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).
@@ -212,7 +219,15 @@ that staff cannot silently disable — the outcome the owner asked for.
 ## 12. Device execution plan — 41a-iii-b part 2 (the `tracker.ts` device pieces)
 
 Written 2026-08-14 so the on-device session is **execution, not design**. Everything below is a locked
-decision unless flagged "device call". Nothing here is editor-buildable/verifiable — see §12.0.
+decision unless flagged "device call". Nothing here is editor-*verifiable* — see §12.0.
+
+> **STATUS 2026-08-14: the code below is now WRITTEN in the editor** (see §8's 41a-iii-b part-2 bullet and
+> DECISIONS 2026-08-14 top for the exact reconciliations). Gates are green but **nothing here is
+> device-verified**. This section stays as the execution/verification checklist for the handset session — walk
+> §12.7 against the built code, don't re-author it. Note the code diverges from the plan in a few flagged,
+> safer ways: `track.ambient` is read fresh from storage per attribution (not a once-per-JS-start module flag);
+> `startAmbientTracking` takes the resolved `notif` strings as a param; the battery-opt prompt is gated to
+> once-per-install; `expo-intent-launcher` is a top-level import (web-safe `{}` shim).
 
 ### 12.0 Why this is a build-and-device session, not an editor one
 - **New native surface → a fresh EAS/dev-client build is required (not Expo Go).** `expo-intent-launcher`

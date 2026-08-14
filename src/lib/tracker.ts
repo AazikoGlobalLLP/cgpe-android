@@ -29,6 +29,7 @@
 import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { storage } from './storage';
 import * as api from '@/data/api';
 
@@ -48,6 +49,31 @@ const LEGACY_SESSION_KEY = 'track.sessionId';
  * importing the auth store here would pull React state into a headless task context.
  */
 const TOKEN_KEY = 'cgpe.token';
+
+/**
+ * PHASE 41 — 24/7 (off-duty) recording. It is armed only after the user grants consent (`/consent`),
+ * and the flag is persisted so a headless wake — a brand-new JS context — can tell whether a batch
+ * with no shift `sid` is a consented ambient batch (post it) or the PHASE 7 unattributable case (stop).
+ * `track.notif` holds the RESOLVED (translated) 24/7 notification strings, captured at arm time because
+ * a headless service restart has no i18n context (§12.4). `track.batteryOptAsked` makes the
+ * battery-optimisation prompt fire at most once per install rather than on every clock-in.
+ */
+const AMBIENT_KEY = 'track.ambient';
+const NOTIF_KEY = 'track.notif';
+const BATTOPT_KEY = 'track.batteryOptAsked';
+
+/** The two foreground-service notifications: the shift recorder's, and the neutral 24/7 one. */
+type Notif = { title: string; body: string };
+const SHIFT_NOTIF: Notif = {
+  title: 'Recording your field route',
+  body: 'Your shift is being tracked. Clock out to stop.',
+};
+/**
+ * Neutral 24/7 fallback, matching the English `consent.serviceTitle`/`serviceBody` (i18n). Used only
+ * when the resolved strings are absent (e.g. a headless restart before any in-app arm) — normally the
+ * user's own language is read back from `track.notif`.
+ */
+const AMBIENT_NOTIF_FALLBACK: Notif = { title: 'CGPE Connect', body: 'Location on for work' };
 
 /**
  * Roughly four hours of points at one fix a minute. The buffer only grows while the device
@@ -181,6 +207,109 @@ async function deliver(sid: string | undefined, pts: PointTuple[]): Promise<Deli
   return res.outcome === 'no-session' ? 'unattributable' : res.outcome;
 }
 
+/* ------------------------------------------------------------------ 24/7 (PHASE 41) */
+
+/** Local calendar date as YYYY-MM-DD so the server keys `ambient:<uid>:<date>` correctly across midnight. */
+function localDate(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * True when this install has consented to 24/7 (off-duty) recording. Read fresh from storage — NOT a
+ * module flag — everywhere the attribution branch decides, because a headless wake gets a new JS
+ * context and the OS can invoke the task before a once-per-start hydration resolves; a stale `false`
+ * there would misread a consented ambient batch as unattributable and tear the service down.
+ */
+async function ambientArmed(): Promise<boolean> {
+  return (await storage.get(AMBIENT_KEY)) === '1';
+}
+
+/**
+ * The neutral 24/7 foreground-service notification, RESOLVED to the user's language at arm time and
+ * read back here. A headless service restart (41b boot-receiver) has no i18n context, so the strings
+ * are captured when 24/7 is armed, not resolved now. Falls back to a neutral English default.
+ */
+async function readNotif(): Promise<Notif> {
+  try {
+    const raw = await storage.get(NOTIF_KEY);
+    if (raw) {
+      const n = JSON.parse(raw);
+      if (n && typeof n.title === 'string' && typeof n.body === 'string') return { title: n.title, body: n.body };
+    }
+  } catch {
+    // Corrupt JSON: use the neutral default rather than start the service with no notification.
+  }
+  return AMBIENT_NOTIF_FALLBACK;
+}
+
+async function writeNotif(n: Notif): Promise<void> {
+  await storage.set(NOTIF_KEY, JSON.stringify({ title: n.title, body: n.body }));
+}
+
+/**
+ * Off-duty (ambient) sibling of `deliver`. Same token rehydration — a headless context has no token
+ * and `postAmbientPoints` short-circuits `sent` when the session is not real, so without this the
+ * buffer would be cleared having sent nothing. The date is the LOCAL calendar day so the server's
+ * `ambient:<uid>:<date>` key is right across midnight. `consent-required` (403) means consent was
+ * withdrawn server-side; the caller stops 24/7 and drops the buffer (that withdrawal already reached
+ * the master, PHASE-41 §5).
+ */
+async function deliverAmbient(pts: PointTuple[]): Promise<api.AmbientDelivery> {
+  if (!pts.length) return 'sent';
+  if (!api.isRealSession()) {
+    const token = await storage.get(TOKEN_KEY);
+    if (!token) return 'signed-out';
+    api.setAuthToken(token);
+    // A demo token has no server behind it. Report success so the buffer does not grow forever.
+    if (!api.isRealSession()) return 'sent';
+  }
+  const res = await api.postAmbientPoints(toPoints(pts), localDate()).catch(() => null);
+  if (!res) return 'retry';
+  return res.outcome;
+}
+
+/**
+ * Start the ONE background location foreground-service if it is not already running, with the given
+ * notification. Extracted from `startTracking` (PHASE-41 §12.1: one unified recorder) so the shift
+ * and 24/7 paths share identical sampling options and differ only in the notification wording. The
+ * `already` guard means a running service is never restarted, so clocking in over a running 24/7
+ * service keeps that service — and its neutral notification — exactly as it was.
+ */
+async function startService(notif: Notif): Promise<void> {
+  const already = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK).catch(() => false);
+  if (already) return;
+  await Location.startLocationUpdatesAsync(ROUTE_TASK, {
+    // Balanced is a deliberate battery choice: these people are out all day and a route replay does
+    // not need lane-level precision.
+    accuracy: Location.Accuracy.Balanced,
+    timeInterval: 60000,
+    distanceInterval: 30,
+    deferredUpdatesInterval: 60000,
+    // The service can restart in the background, where a settings dialog would be both impossible and
+    // alarming. `ensureBackgroundPermission` is where the user is told that location is switched off.
+    mayShowUserSettingsDialog: false,
+    // iOS: without these the OS pauses updates the moment it decides the user is stationary, and the
+    // route ends up with holes.
+    activityType: Location.ActivityType.AutomotiveNavigation,
+    showsBackgroundLocationIndicator: true,
+    pausesUpdatesAutomatically: false,
+    // Android: no foreground service means the OS kills the process. The wording is passed in so the
+    // shift path reads "Recording your field route" and the 24/7 path reads the neutral consented copy.
+    foregroundService: {
+      notificationTitle: notif.title,
+      notificationBody: notif.body,
+      // Brand azure. Hardcoded because the theme is a React hook and the OS restarts this service in
+      // contexts where no provider exists.
+      notificationColor: '#3182ed',
+      // The recording outlives the app window: swiping the app away must not silently end it. Only
+      // clock out (shift) or consent withdrawal (24/7) does that.
+      killServiceOnDestroy: false,
+    },
+  });
+}
+
 /**
  * Tear the OS service down. Deliberately not wrapped in `serial` so it can be called from
  * inside an already-serialised block.
@@ -264,19 +393,41 @@ async function ingest(locations: Location.LocationObject[]): Promise<void> {
   // first, and the tail is what the flush is about to send anyway.
   if (state.pts.length > MAX_POINTS) state.pts = state.pts.slice(-MAX_POINTS);
 
-  const outcome = await deliver(state.sid, state.pts);
-  // Two different facts, one buffer action: `sent` landed and `refused` was declined, and
-  // neither is improved by being sent again.
-  if (outcome === 'sent' || outcome === 'refused') state.pts = [];
-
-  if (outcome === 'signed-out' || outcome === 'unattributable') {
-    // `signed-out`: the account was signed out while the service kept running.
-    // `unattributable` (PHASE 7): the service is running with no session id, so every fix it
-    // collects belongs to no shift and cannot be posted — the server would otherwise resolve
-    // the owner from whichever token is on the handset, which is how one person's route lands
-    // on another person's day.
-    // Either way, leaving the service up would burn battery, hold a notification the user
-    // cannot explain, and collect location for nobody. Drop everything.
+  // Attribution by the session id at flush time (PHASE-41 §12.1). A shift `sid` present ⇒ the batch is
+  // the shift's (unchanged). Absent + 24/7 armed ⇒ off-duty ambient. Absent + NOT armed ⇒ the PHASE 7
+  // unattributable case (a service running with no shift and no consent) → tear it down.
+  if (state.sid) {
+    const outcome = await deliver(state.sid, state.pts);
+    if (outcome === 'sent' || outcome === 'refused') state.pts = [];
+    if (outcome === 'signed-out' || outcome === 'unattributable') {
+      // `signed-out`: the account was signed out while the service kept running. `unattributable`
+      // (PHASE 7): a running service with no session id collects location for nobody and, if posted,
+      // would resolve the owner from whichever token is on the handset — one person's route landing
+      // on another's day. Either way, drop everything and stop.
+      await storage.remove(STATE_KEY);
+      await stopUpdates();
+      return;
+    }
+  } else if (await ambientArmed()) {
+    const outcome = await deliverAmbient(state.pts);
+    if (outcome === 'sent' || outcome === 'refused') state.pts = [];
+    if (outcome === 'consent-required') {
+      // Consent was withdrawn on the server (Phase 43 already notified the master, §5). Stop the 24/7
+      // recorder entirely and drop the buffer — no un-consented recording may continue.
+      await storage.remove(STATE_KEY);
+      await storage.remove(AMBIENT_KEY);
+      await stopUpdates();
+      return;
+    }
+    if (outcome === 'signed-out') {
+      await storage.remove(STATE_KEY);
+      await stopUpdates();
+      return;
+    }
+    // `retry` ⇒ keep the buffer; the service stays and the next wake retries.
+  } else {
+    // NOT armed and no session id: the exact PHASE 7 unattributable case, preserved — a service
+    // running with no shift and no consent has nothing it may post. Drop everything and stop.
     await storage.remove(STATE_KEY);
     await stopUpdates();
     return;
@@ -343,6 +494,30 @@ export async function ensureBackgroundPermission(): Promise<{ granted: boolean; 
       };
     }
 
+    // Battery-optimisation exemption (PHASE-41 §12.2/§12.3). Android only, best-effort, NON-BLOCKING:
+    // it must never flip `granted`. A phone that keeps the app battery-optimised has its foreground
+    // service killed by aggressive Doze, so we ask the OS to exempt it. Fired at most once per install
+    // (a persisted flag) so it does not re-prompt on every clock-in. JS cannot read whether the
+    // exemption was accepted — no PowerManager binding — so a native reporter is left for 41b/41d.
+    if (Platform.OS === 'android') {
+      const asked = await storage.get(BATTOPT_KEY);
+      if (asked !== '1') {
+        await storage.set(BATTOPT_KEY, '1'); // once, whatever the user chooses — no nagging
+        try {
+          // Android-only (guarded above). The native module resolves to `{}` on web/iOS so the import
+          // is safe everywhere; `startActivityAsync` throws UnavailabilityError if ever reached off
+          // Android, which this try/catch would swallow anyway.
+          await IntentLauncher.startActivityAsync(
+            IntentLauncher.ActivityAction.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+            { data: 'package:com.cgpe.connect' },
+          );
+        } catch {
+          // The activity may be unavailable, or the permission missing on an older build — never fail
+          // the permission grant over the battery-opt booster.
+        }
+      }
+    }
+
     return { granted: true };
   } catch {
     return {
@@ -373,54 +548,36 @@ export async function startTracking(sid: string): Promise<void> {
       const fg = await Location.getForegroundPermissionsAsync();
       if (!fg.granted) return;
 
+      const armed = await ambientArmed();
       const state = await readState();
-      // A new shift must never inherit the previous shift's undelivered points, which on a
-      // shared handset could belong to a different person entirely. Points survive only when
-      // the session id is byte-identical, i.e. this is a genuine resume.
-      if (state.sid !== sid) {
-        state.pts = [];
-        state.lastAt = 0;
+
+      if (!armed) {
+        // NOT consented to 24/7 — today's exact shift-only behaviour, unchanged. A new shift must
+        // never inherit the previous shift's undelivered points, which on a shared handset could
+        // belong to a different person entirely; points survive only when the session id is
+        // byte-identical, i.e. this is a genuine resume.
+        if (state.sid !== sid) {
+          state.pts = [];
+          state.lastAt = 0;
+        }
+        state.sid = sid;
+        await writeState(state);
+        await storage.remove(LEGACY_SESSION_KEY);
+        api.startTrack(sid).catch(() => {});
+        await startService(SHIFT_NOTIF);
+        running = true;
+        return;
       }
+
+      // 24/7 armed (PHASE-41 §12.1): clocking in only BEGINS shift attribution — the recorder is
+      // already running in ambient mode. Keep its buffer (a batch straddling the boundary
+      // mis-attributes by at most one ~60 s interval, the accepted slop) and keep the neutral 24/7
+      // notification — `startService` no-ops on the already-running service.
       state.sid = sid;
       await writeState(state);
       await storage.remove(LEGACY_SESSION_KEY);
-
       api.startTrack(sid).catch(() => {});
-
-      const already = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK).catch(() => false);
-      if (!already) {
-        await Location.startLocationUpdatesAsync(ROUTE_TASK, {
-          // Balanced is a deliberate battery choice: these people are out all day and a
-          // route replay does not need lane-level precision.
-          accuracy: Location.Accuracy.Balanced,
-          timeInterval: 60000,
-          distanceInterval: 30,
-          deferredUpdatesInterval: 60000,
-          // The service can restart in the background, where a settings dialog would be
-          // both impossible and alarming. `ensureBackgroundPermission` is where the user is
-          // told that location is switched off.
-          mayShowUserSettingsDialog: false,
-
-          // iOS: without these the OS pauses updates the moment it decides the user is
-          // stationary, and the shift ends up with holes.
-          activityType: Location.ActivityType.AutomotiveNavigation,
-          showsBackgroundLocationIndicator: true,
-          pausesUpdatesAutomatically: false,
-
-          // Android: no foreground service means the OS kills the process. The wording is
-          // literal on purpose, the user should never wonder what this notification is.
-          foregroundService: {
-            notificationTitle: 'Recording your field route',
-            notificationBody: 'Your shift is being tracked. Clock out to stop.',
-            // Brand azure. Hardcoded because the theme is a React hook and the OS restarts
-            // this service in contexts where no provider exists.
-            notificationColor: '#3182ed',
-            // The shift outlives the app window: swiping the app away must not silently end
-            // route recording. Only clock out does that.
-            killServiceOnDestroy: false,
-          },
-        });
-      }
+      await startService(await readNotif());
       running = true;
     } catch {
       // A refused or unavailable service must not fail the clock-in that triggered it.
@@ -445,17 +602,99 @@ export async function startTracking(sid: string): Promise<void> {
 export async function stopTracking(): Promise<void> {
   if (!isNative) return;
   await serial(async () => {
+    if (!(await ambientArmed())) {
+      // NOT consented to 24/7 — today's exact behaviour: flush the last points, tear the service
+      // down, clear the buffer.
+      try {
+        const state = await readState();
+        if (state.pts.length) await deliver(state.sid, state.pts);
+        await stopUpdates();
+        if (state.sid) await api.stopTrack(state.sid).catch(() => {});
+      } catch {
+        // Fall through: the storage cleanup below must happen either way.
+      }
+      running = false;
+      await storage.remove(STATE_KEY);
+      await storage.remove(LEGACY_SESSION_KEY);
+      return;
+    }
+
+    // 24/7 armed (PHASE-41 §12.1): clocking out ENDS shift attribution but the recorder keeps running
+    // in ambient mode. Flush the shift's last points, seal the shift server-side, and drop the shift
+    // id so subsequent batches post as ambient — but LEAVE the service and its notification up.
     try {
       const state = await readState();
-      if (state.pts.length) await deliver(state.sid, state.pts);
-      await stopUpdates();
+      if (state.pts.length && state.sid) {
+        const outcome = await deliver(state.sid, state.pts);
+        // Sent/refused: clear. Retry (dead zone): keep — the next ambient flush sends them, a few
+        // shift points landing as off-duty (the accepted boundary slop, §12.1), which beats dropping.
+        if (outcome === 'sent' || outcome === 'refused') state.pts = [];
+      }
       if (state.sid) await api.stopTrack(state.sid).catch(() => {});
+      state.sid = undefined;
+      await writeState(state);
     } catch {
-      // Fall through: the storage cleanup below must happen either way.
+      // Non-fatal: the recorder stays in ambient mode regardless.
+    }
+    // `running` stays true — ambient recording continues past clock-out.
+  });
+}
+
+/**
+ * Arm 24/7 (off-duty) recording after the user grants consent (PHASE-41 §12.2). Idempotent and
+ * best-effort; it never throws.
+ *
+ * `prompt:true` is the consent-grant tap — it runs the full permission ladder
+ * (`ensureBackgroundPermission`, now including the battery-opt step) and only arms if background
+ * permission is actually granted. `prompt:false` is a boot / already-granted user — it NEVER prompts
+ * on a cold start and arms only if background permission is already held. `notif` is the RESOLVED
+ * (translated) 24/7 notification, persisted so a later headless restart can read it (§12.4).
+ *
+ * The permission flow runs OUTSIDE the serial lock — it can open system dialogs and take seconds, and
+ * must not block location-batch ingest that also serialises on the persisted state.
+ */
+export async function startAmbientTracking({ prompt, notif }: { prompt: boolean; notif?: Notif }): Promise<void> {
+  if (!isNative) return;
+  if (notif) await writeNotif(notif);
+
+  let ok: boolean;
+  if (prompt) {
+    ok = (await ensureBackgroundPermission()).granted;
+  } else {
+    const bg = await Location.getBackgroundPermissionsAsync().catch(() => null);
+    ok = !!bg?.granted;
+  }
+  if (!ok) return; // never arm 24/7 without background permission
+
+  await serial(async () => {
+    try {
+      await storage.set(AMBIENT_KEY, '1');
+      await startService(await readNotif());
+      running = true;
+    } catch {
+      running = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK).catch(() => false);
+    }
+  });
+}
+
+/**
+ * Disarm 24/7 recording — on consent withdrawal or sign-out (PHASE-41 §12.2). Flushes any buffered
+ * OFF-DUTY points best-effort (a shift's points are the shift's to seal, not ours to post as ambient),
+ * tears the service down, and clears the persisted 24/7 state.
+ */
+export async function stopAmbientTracking(): Promise<void> {
+  if (!isNative) return;
+  await serial(async () => {
+    try {
+      const state = await readState();
+      if (state.pts.length && !state.sid) await deliverAmbient(state.pts);
+      await stopUpdates();
+    } catch {
+      // Fall through: the cleanup below must happen either way.
     }
     running = false;
     await storage.remove(STATE_KEY);
-    await storage.remove(LEGACY_SESSION_KEY);
+    await storage.remove(AMBIENT_KEY);
   });
 }
 
