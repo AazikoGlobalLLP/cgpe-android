@@ -18,14 +18,42 @@ export function AppLock() {
   const [trying, setTrying] = useState(false);
   const appState = useRef<AppStateStatus>('active');
   const armed = useRef(false);
+  const inFlight = useRef(false);
 
   const shouldLock = !!user && biometricAvailable && biometricEnabled;
 
+  /**
+   * Run the biometric prompt — but only ever ONE at a time.
+   *
+   * THE BUG THIS FIXES: "tapping Unlock often does nothing." `attempt()` auto-fires the
+   * instant the lock appears (cold start below) and again on every foreground return, and the
+   * Unlock button fires it too. Nothing stopped two of those from overlapping — and
+   * `authenticateAsync` cannot be called twice at once: a second call while one is open rejects
+   * native-side ("authentication is already in progress"), which `authenticateBiometric`
+   * (fail-closed) catches and returns as a plain `false`. So the second attempt shows no
+   * prompt, fails instantly, and never unlocks — exactly the dead-button symptom.
+   *
+   * They overlap for real, not in theory: we pass `disableDeviceFallback: false`
+   * (store/auth.tsx), so picking the device PIN/passcode launches Android's SEPARATE
+   * Confirm-Device-Credential activity, which sends the app `background → active`. The
+   * foreground `AppState` listener below reads that return as "the user came back" and fires a
+   * competing `attempt()` on top of the one still running (OEM skins — Samsung/One UI — also
+   * bounce AppState for the plain fingerprint sheet). The `inFlight` guard here, plus the
+   * matching `!inFlight.current` check on that listener, serialise the calls so exactly one
+   * prompt is ever live. `finally` also guarantees `trying` clears — so the button can never
+   * stick disabled — even if a future change ever lets the auth call throw.
+   */
   const attempt = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
     setTrying(true);
-    const ok = await authenticateBiometric();
-    setTrying(false);
-    if (ok) setLocked(false);
+    try {
+      const ok = await authenticateBiometric();
+      if (ok) setLocked(false);
+    } finally {
+      inFlight.current = false;
+      setTrying(false);
+    }
   };
 
   // Lock on cold start when a saved session was restored.
@@ -42,7 +70,11 @@ export function AppLock() {
     const sub = AppState.addEventListener('change', (next) => {
       const back = appState.current.match(/inactive|background/) && next === 'active';
       appState.current = next;
-      if (back && shouldLock) { setLocked(true); attempt(); }
+      // `!inFlight.current`: the biometric / device-credential prompt drives the app
+      // background→active itself, so that return-to-active is NOT the user leaving and coming
+      // back — re-locking on it would start a second prompt that fights the first (see
+      // attempt()). A genuine foreground return, with no prompt in flight, still re-locks.
+      if (back && shouldLock && !inFlight.current) { setLocked(true); attempt(); }
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
