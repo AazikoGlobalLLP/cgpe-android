@@ -6,6 +6,40 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 32: density rollout — migrate the remaining shared primitives (`base`/`controls`/`feedback`/`sheet`) with the D-2 pattern
+
+**Context.** Phases 29/30/31 migrated four screens and the two shared list-primitive modules
+(`data.tsx`/`identity.tsx`) to consume `theme.density`; Phase 31 named the **remaining shared primitives** as
+the next high-leverage target (PHASE-31 §6), because the base building blocks — buttons, fields, cards,
+banners, skeletons, the modal sheet — are rendered by nearly every screen, so migrating them lifts density
+onto those ELEMENTS app-wide. Pure rollout — no mechanism, contract, or copy change.
+
+**Decision.** Migrate `ui/base.tsx`, `ui/controls.tsx`, `ui/feedback.tsx`, `ui/sheet.tsx` with the D-2 pattern
+verbatim (D-1): strip the static `{ font, radius, spacing }` import, destructure **exactly** the scale each
+component uses off `c` (D-2 — precise, to avoid `no-unused-vars`), style bodies untouched. Three non-mechanical
+shapes handled as helper/hooks/fallbacks, not literals (D-3): (a) `controls.tsx`'s module-scope `BTN_FS` const
+→ a `btnFs(font)` helper (identical to `data.tsx`'s `pillFs`); (b) **default parameters** that captured the
+scale (`base.tsx` `Txt`/`Metric` `size`, `feedback.tsx` `Skeleton` `radius` + `SkeletonText` `gap`) — a default
+param can't reference the body's `c`, so the param is made optional and the default resolved in the body as
+`?? c.<scale>.<x>` (a new variant of "read off the scale, not copied", for the default-param case); (c)
+components with **no `useTheme()` at all** (`base.tsx` `GlassCard`/`Row`, `feedback.tsx`
+`SkeletonText`/`SkeletonCard`/`ToastProvider`) gain the hook. `Grad`/`Screen`/`KeyboardScroll`/`Eyebrow`,
+`IconBtn`, `FillBar`/`ProgressBar` use no scale tokens and are untouched. Kept to four files, deferring
+`home.tsx` (62 refs, danger zone) and the other `ui/` modules (`spine`/`swipe`/`Confirm`/…) to later phases
+(D-4 — ≤8-files convention). No new test (presentational migration, no new pure logic; the density numbers are
+pinned by `density.test.ts`). Gates: tsc 0, npm test **417/417** (unchanged), lint 0 errors / 12 warnings
+(baseline). Commit `2b50aaf` (local).
+
+**Consequence.** Under `theme.density: "compact"`, these primitives' rendered elements — a Button, a Field, a
+Card, a Banner, a Skeleton, the Sheet — now tighten (spacing ×0.85 / radius ×0.90 / font ×1.0) on **every**
+screen that renders them, type sizes and ≥44pt targets unchanged, light/dark, next cold start, no APK. **Nuance
+recorded, not overclaimed (D-5, unchanged from Phase 31):** a not-yet-migrated screen's **own** outer layout
+(its container padding/gaps, computed from the static exports) stays comfortable until that screen is migrated
+too — so this widens density's reach substantially without making any single unmigrated screen fully compact.
+`home.tsx` and the remaining screens/`ui/` modules still render their own layout comfortable. No contract
+change. **Device check carried** (needs a seeded compact-density doc, light/dark at 390 px — Phase-26/27
+seeding backlog). Full path: `docs/spec/PHASE-32.md`.
+
 ## 2026-08-12 — Phase 31: density rollout — migrate the shared list primitives (`ui/data.tsx` + `ui/identity.tsx`) with the D-2 pattern
 
 **Context.** Phases 29/30 migrated four screens (`clients`/`tasks`/`leads`/`claims`) to consume

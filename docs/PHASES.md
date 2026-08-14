@@ -14,6 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 32 — density rollout: migrate the remaining shared primitives (`ui/base.tsx` + `ui/controls.tsx` +
+`ui/feedback.tsx` + `ui/sheet.tsx`). BUILT 2026-08-14.** The next high-leverage lever after the list
+primitives (PHASE-31 §6): the base building blocks nearly every screen renders — buttons, fields, cards,
+banners, skeletons, the modal sheet — so migrating them lifts `theme.density:"compact"` onto those ELEMENTS
+app-wide. Same D-2 pattern, no mechanism/contract/copy change: strip the static `{ font, radius, spacing }`
+import from each file, destructure **exactly** the scale each component uses off `c`; `tsc` proves
+completeness. Three non-mechanical shapes handled as helper/hooks/fallbacks, not literals (D-3): (a)
+`controls.tsx`'s module-scope `BTN_FS` const → a `btnFs(font)` helper (like `data.tsx`'s `pillFs`); (b)
+**default parameters** that captured the scale (`base.tsx` `Txt`/`Metric` `size`, `feedback.tsx` `Skeleton`
+`radius` + `SkeletonText` `gap`) — made optional and resolved in the body as `?? c.<scale>` (a default-param
+can't reference the body's `c`); (c) components with **no `useTheme()` at all** (`base.tsx` `GlassCard`/`Row`,
+`feedback.tsx` `SkeletonText`/`SkeletonCard`/`ToastProvider`) gain the hook. `Grad`/`Screen`/`KeyboardScroll`/
+`Eyebrow` (base), `IconBtn` (controls), `FillBar`/`ProgressBar` (feedback) use no scale tokens and are
+untouched. A department with `theme.density:"compact"` now renders these primitives' elements tighter (spacing
+×0.85 / radius ×0.90 / font ×1.0, applied by `applyDensity`) wherever they appear, on the next cold start; an
+unmigrated screen's own outer layout stays comfortable until that screen is migrated too (static exports
+unchanged) — non-regressive. Gates green: `tsc` 0, `npm test` **417/417** (unchanged — presentational
+migration, no new pure logic; the density numbers are already pinned by `density.test.ts`), lint 0 errors / 12
+warnings (baseline). Commit `2b50aaf` (local — push still 403s). **Device check carried** (a seeded
+`theme.density:"compact"` dept config showing tighter base primitives, light/dark at 390 px; other screens'
+own layout stays comfortable) — not editor-buildable (no seeded compact doc yet). Next density target:
+`home.tsx` (62 refs, danger zone) on its own, then the other `ui/` modules (`spine`/`swipe`/`Confirm`/…) that
+still import the static scale. Full path: `docs/spec/PHASE-32.md`; DECISIONS 2026-08-14 (top).
+
 **Phase 31 — density rollout: migrate the shared list primitives (`ui/data.tsx` + `ui/identity.tsx`).
 BUILT 2026-08-12.** The highest-leverage lever after the list tabs (PHASE-29 §6, PHASE-30 "Next density
 targets"): rather than one screen per phase, migrating the two shared primitive modules lifts
@@ -645,28 +669,32 @@ exercise.
 
 ## Next 3
 
-**Top editor-buildable lever now → Phase 32, the density rollout continues.** Phase 29 shipped the
-`theme.density` mechanism + migrated `(tabs)/clients.tsx`; Phase 30 migrated the three other list tabs
-`tasks`/`leads`/`claims` (commit `d70da17`); **Phase 31 (2026-08-12) migrated the shared list primitives
-`ui/data.tsx` + `ui/identity.tsx`** (commit `2dd37fe`) — so `Pill`/`StatCard`/`MetricTile`/`DataRow`/
-`ListSection`/`KpiStrip`/`ActionTile` + `PersonRow`/`Avatar` now tighten wherever they render. ~73 files
-still render their own outer layout comfortable until migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern: `const { spacing, radius,
-font } = c`, strip the static import (`tsc` flags any miss), watch for **module-scope** scale uses (they
-can't be destructured — make a helper, as `clients.tsx`/`leads.tsx`'s `sepInset` did) and for components with **no `useTheme()` call at all** (add the hook, as `KpiStrip` needed). Best next
-targets: the remaining shared primitives `ui/base.tsx` / `ui/controls.tsx` / `ui/feedback.tsx` /
-`ui/sheet.tsx`, then `home.tsx` (62 refs, a danger zone) on its own. No backend, no copy —
-buildable today. See `docs/spec/PHASE-31.md` + `docs/spec/PHASE-29.md`.
+**Density rollout continues → next lever is `home.tsx`.** Phase 29 shipped the `theme.density` mechanism +
+migrated `(tabs)/clients.tsx`; Phase 30 migrated the three other list tabs `tasks`/`leads`/`claims` (commit
+`d70da17`); Phase 31 migrated the shared list primitives `ui/data.tsx` + `ui/identity.tsx` (commit `2dd37fe`);
+**Phase 32 (2026-08-14) migrated the remaining shared primitives `ui/base.tsx` + `ui/controls.tsx` +
+`ui/feedback.tsx` + `ui/sheet.tsx`** (commit `2b50aaf`) — so buttons, fields, cards, banners, skeletons and the
+modal sheet now tighten wherever they render. The remaining unmigrated files still render their own outer
+layout comfortable until migrated. Each migration is a ≤8-file phase using the PHASE-29 **D-2** pattern:
+`const { spacing, radius, font } = c`, strip the static import (`tsc` flags any miss), watch for **module-scope**
+scale uses (make a helper, as `data.tsx`'s `pillFs`/`controls.tsx`'s `btnFs` did), **default parameters** that
+captured the scale (make the param optional + resolve `?? c.<scale>` in the body, as `Txt`/`Skeleton` did) and
+components with **no `useTheme()` call at all** (add the hook, as `KpiStrip`/`GlassCard`/`Row` needed). Best
+next target: **`home.tsx`** (62 refs, a danger zone — `AppUiProvider`'s only consumer) on its own, then the
+other `ui/` modules (`spine`/`swipe`/`Confirm`/`JobPill`/`health-banner`/…) that still import the static scale.
+No backend, no copy — buildable today. See `docs/spec/PHASE-32.md` + `docs/spec/PHASE-29.md`.
 
-1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). FILED to `cgpe-api`
-   2026-08-12; awaiting their reply.** A pure backend change (mobile has no resolver, renders any
-   `role_key` fail-open — **nothing mobile-side to build**). Wrote `docs/spec/PHASE-27.md` + filed the
-   `→ cgpe-api` ask (grep-verified durable). Recommended a non-regressive candidate-key chain
-   (`[deptKey, roleKey, 'advisor']`) + a `canonicalizeDepartment`-derived `DEPT_KEY` map
-   (`HEALTH INSURANCE→health_insurance`, …; `sales`/`operations` unchanged). **Next when they reply:**
-   verify the shipped shape against their real code, confirm a new dept key renders, then widen the
-   Phase-26 seed script to the new keys for the owner to run. See the `## Now` entry + DECISIONS
-   2026-08-12 (top). Until `cgpe-api` replies, nothing *on Phase 27* is editor-buildable — but the
-   density rollout above (Phase 30) is.
+1. **Phase 27 — per-business-department layouts (`resolveRoleKey` widening). ANSWERED by `cgpe-api` —
+   SHIPPED as their Phase 34 (2026-08-12); mobile verification now editor-buildable.** A pure backend change
+   (mobile has no resolver, renders any `role_key` fail-open — **nothing mobile-side to build**). `cgpe-api`
+   shipped exactly the recommended non-regressive candidate-key chain `candidateRoleKeys = [deptKey, role,
+   'advisor']` (first key with a stored doc wins) + a `canonicalizeDepartment`-derived `DEPT_KEY` map
+   (`HEALTH INSURANCE→health_insurance`, …; `sales`/`operations` byte-identical), all four mobile guarantees
+   met, contracts (`api.md` §`/app-ui` + `enums.md` §4.1) updated; INBOX box `[x] answered`. **Next
+   (editor-buildable now):** verify the shipped mechanism against their real `routes/rbac.js`
+   (`candidateRoleKeys`/`chooseAppUiKey`), confirm a new dept key renders fail-open on device with zero
+   `src/` change, then widen the Phase-26 seed script to the new keys for the owner to run. See DECISIONS
+   2026-08-12 (Phase 27) + the answered INBOX item.
 
 2. **Phase 26 — More-tab grouping DB-driven (`nav.more_sections`). BUILT 2026-08-12 (part b); a device
    check + two other levers remain.** Owner picked, of the three Phase-26 parts, the app-side slice (b):
