@@ -761,22 +761,20 @@ mark-read + bell-dot clear + a hardcoded-vs-DB audit; Viewing-as restricted to o
 biometric-only session restore after logout. **These are PLANNED, not built.** Cross-cutting rules baked into
 the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
 the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
-(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **Phases 34 (backend-fixed,
-`cgpe-api` Phase 40) and 35 (AppLock touch-freeze, mobile-fixed) are DONE — see `## Now`. The last audit next,
-then the master-role chain:**
+(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **All three audits are now DONE —
+Phases 34 (backend-fixed, `cgpe-api` Phase 40), 35 (AppLock touch-freeze, mobile-fixed) and 36 (hardcoded-vs-DB
+sweep — bucket-a EMPTY, no code change) — see `## Now`. The features chain is next:**
 
-1. **Phase 36 — [audit] hardcoded-vs-DB sweep** (notifications first, then app-wide). Deliverable is an
-   **inventory** separating (a) real fabrication to remove, (b) legitimate documented synthesis to keep (claim
-   timeline / lead notes / prospects `pick()` are legit), (c) static label maps (fine). The project already
-   forbids fabricated data (`data/mock.ts` is `export {}`; failed reads resolve empty via `unavailable()`).
-   Feeds Phase 37. See §Phase 36.
-2. **Phase 37 — [m]+[api?] notification mark-read + clear the bell dot.** Verify first whether a read-persist
+1. **Phase 37 — [m]+[api?] notification mark-read + clear the bell dot.** Verify first whether a read-persist
    endpoint exists (history: the WhatsApp inbox has none so `unread` never clears; notices only had
-   `markNoticeRead`) — file an `[api]` ask if missing. Removes any hardcoded notification data found in Phase 36.
-   Depends on 36. See `docs/PLAN-2026-08-14.md` §Phase 37.
-3. **Then 38→40→39** (master role via DB → gate → surface): set `Profile.role` in the DB for the 3 master phone
+   `markNoticeRead`) — file an `[api]` ask if missing. **Phase 36 confirmed there is NO hardcoded notification
+   data to remove** (the feed surfaces are 100% DB-driven), so this phase is purely the feature. Depends on 36
+   (done). See `docs/PLAN-2026-08-14.md` §Phase 37.
+2. **Then 38→40→39** (master role via DB → gate → surface): set `Profile.role` in the DB for the 3 master phone
    numbers (owner/DB change, **never** a client literal — Phase 11), gate location + the master surface on the
    REAL role (Phase-20 pattern). See `docs/PLAN-2026-08-14.md` §Phase 38+.
+3. **Then location 41→42** (guaranteed 24/7 background GPS on any device with green/red in-shift route colouring;
+   Master-only location visibility) — the owner's stated main need. See `docs/PLAN-2026-08-14.md` §Phase 41+.
 
 Then **38→40→39** (master role via DB → gate → surface), location **41→42**, geofence **43**, salary/tasks
 **44→45**, polish **37/46/47**, and finally **48** (biometric, security review). Full dependency order and the

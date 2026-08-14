@@ -1,13 +1,13 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-14
-**Working on right now:** Fixing the specific problems the owner reported — this session, the lock screen where tapping "Unlock" often did nothing.
+**Working on right now:** Checking whether any screen in the app shows made-up or placeholder information instead of real data from the database — starting with notifications.
 
 **Done this week:**
-- Fixed the lock-screen freeze. When you re-open the app it asks for your fingerprint or face, and tapping "Unlock" often did nothing — worst on Samsung phones. The cause: the app was asking for your fingerprint twice at the same time, and the phone quietly refuses the second request, so it looked like the button was dead. The app now only ever asks once, so Unlock responds on the first tap. This needs a quick check on a real phone (it can't be tested on a computer) before we call it fully closed.
-- Earlier this week: fixed the reason a task you create for yourself didn't show on the phone (that one was a server fix, checked line by line, and needs the server restarted to appear on a device).
+- Checked the whole app for fake or placeholder data, notifications first. The result: there is none. Every list and figure the user sees comes from the real database, or is worked out from real database information. When something can't load, the app now clearly says "couldn't load" instead of quietly showing a blank or a made-up zero. The few things that looked like placeholders were traced and confirmed to be either real, or already cleaned up in earlier weeks. No changes to the app were needed — this was a verification, and it passed.
+- Earlier this week: fixed the lock-screen freeze where tapping "Unlock" often did nothing (worst on Samsung). Still needs a quick check on a real phone before we call it fully closed.
+- Earlier this week: fixed the reason a task you create for yourself didn't show on the phone (a server fix; needs the server restarted to appear on a device).
 
 **Blocked on:**
-- The lock-screen fix needs a real Android phone to confirm — ideally a Samsung — because this part of the app can't be tested on a computer. Reading the code, it is correct.
-- The app still cannot be uploaded to the shared code store (an access issue for the developer's account) — all work is saved locally.
+- The app still cannot be uploaded to the shared code store (an access issue on the developer's account) — all work is saved locally on this machine.
 
-**Next:** Take stock of how much of the app shows real information from the database versus placeholder text, starting with the notifications, and list what needs cleaning up.
+**Next:** Add a "mark as read" button to notifications so the little dot on the bell clears once you've seen them — first checking the server supports remembering that they were read.
