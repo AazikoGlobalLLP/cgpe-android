@@ -41,11 +41,13 @@ describe('i18n dictionaries — parity and value quality', () => {
     expect(Object.keys(DICT).sort()).toEqual([...CODES].sort());
   });
 
-  it('English carries the full 75-key set (guards against a silent key deletion)', () => {
+  it('English carries the full 94-key set (guards against a silent key deletion)', () => {
     // A hard count so removing a key without updating this file is caught, not absorbed.
     // Bumped 74 → 75 for `common.today` (Phase 21 P1, 2026-08-12) — a dedup key lifted from
     // the existing `tab.home`/`tasks.today` human copy, not a new translation.
-    expect(EN_KEYS.length).toBe(75);
+    // Bumped 75 → 94 for the 19 `consent.*` keys (Phase 41a-ii, 2026-08-14) — human copy supplied
+    // in all 5 languages (translation-v.01; docs/i18n/PHASE-41-CONSENT-COPY.md), not machine-translated.
+    expect(EN_KEYS.length).toBe(94);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });
