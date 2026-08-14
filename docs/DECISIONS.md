@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 43 (per-member 200 m clock-in fence) is a pure `[api]` phase; VERIFIED + FILED, zero mobile build
+
+**Context.** Owner backlog Phase 43: each member has their own set location and clock-in is allowed only within
+200 m of it, not the single shared office fence. Two verification sweeps (backend real code + `contracts/`,
+both trees) established the current state before any code was considered.
+
+**Decision.** File it to `cgpe-api`, build nothing mobile-side. Verified that clock-in enforces ONE global
+office fence keyed to nobody (`checkClockGeofence` has no user/profile param, `utils/geofence.js:80`;
+`GET /geofence` serves the same fence to all, `routes/timeTracker.js:1267`); the two per-member fields that
+exist (`Profile.attendanceRules.geo`, `PayrollProfile.start_location`) **do not drive clock-in** — the first is
+break-fence-only and null everywhere, the second is documented as "the clock-in pin" but read only by
+`routes/payroll.js`. So per-member enforcement is entirely backend-owned (data field + caller-keyed
+`checkClockGeofence` + non-regressive fallback + set/self-read endpoints). Mobile clock-in is already
+server-authoritative and fence-shape-agnostic (`getGeofence`/`checkGeofence`, `src/data/api.ts:1707/1788`; 403
+`message`+`distance_m` verbatim), so a per-member fence served through the existing `GET /geofence` just works
+with **no `src/` change** — the Phase 27 / Phase 38 "pure backend, mobile fail-open consumes" pattern.
+Recommended (but did not dictate) `PayrollProfile.start_location` as the source field + a non-regressive
+member-pin→office→default fallback; the field/unit/radius choice is `cgpe-api`'s.
+
+**Consequence.** No `src/` change → **no gate re-run** (baseline stands: `tsc` 0, `npm test` 467/467, lint 0
+errors / 12 warnings). Deliverable is `docs/spec/PHASE-43.md` + a top-of-queue `→ cgpe-api · from cgpe-mobile`
+INBOX ask (grepped back durable, 1 hit) + a plain-language owner-relay copy. Per-member fencing is live only when
+`cgpe-api` ships enforcement + a panel way to set each member's pin + an on-device check. The 200 m + 100 m
+accuracy credit → ~300 m effective rule the roadmap asked us to confirm is confirmed and already mirrored by the
+Phase-7 pre-check.
+
 ## 2026-08-14 — Phase 41a-iii-b part 2 BUILT in the editor (owner: "write it all now"), gates green but DEVICE-UNVERIFIED; the unified 24/7 recorder wired per PHASE-41 §12
 
 **Context.** Yesterday's decision (below) was "don't author `tracker.ts` blind — write the plan." This session the

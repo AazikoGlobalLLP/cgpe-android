@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 43 — [api]+[m] Per-member set location + 200 m clock-in enforcement. VERIFIED + FILED to `cgpe-api`, no mobile build — 2026-08-14.**
+Owner backlog Phase 43 (Group E): each team member has their OWN set location; clock-in only within 200 m of that
+pin, not the single shared office fence. **Verified against real code + `contracts/` (both trees, not tags):**
+clock-in enforces ONE global office fence keyed to nobody — `checkClockGeofence(lat,lng,accuracy)` has no
+user/profile param (`utils/geofence.js:80`), default **200 m** (`geofence.js:24-30`) + 100 m accuracy credit
+(`:93-94`, coarser-than-300 m rejected `:89-91`), and `GET /geofence` (`routes/timeTracker.js:1267`) serves that
+same fence to everyone. The two per-member fields that exist **do not drive clock-in**: `Profile.attendanceRules.geo`
+(break-fence-only via `validateLocation`, null for everyone, m-vs-km conflict) and `PayrollProfile.start_location`
+— documented `models.md:824` as *"the clock-in pin"* but read only by `routes/payroll.js`. No CHANGELOG/api.md
+entry specifies per-member clock-in fencing, so this is a **new contract change and an entirely backend-owned
+enforcement gap** (per-member fence field + caller-keyed `checkClockGeofence` + non-regressive fallback + set +
+self-read endpoints). **Mobile = ZERO change:** `getGeofence`/`checkGeofence` (`src/data/api.ts:1707/1788`) read
+the fence shape-agnostically and `POST /clock-in` is the authority (403 `message`+`distance_m` verbatim), so a
+per-member fence served through the existing `GET /geofence` just works — the Phase 27/38 "pure backend, mobile
+fail-open consumes" pattern. The 200 m + 100 m-credit → ~300 m effective rule the roadmap asked us to confirm is
+confirmed (§1) and already mirrored by the Phase-7 pre-check. Filed a top-of-queue `→ cgpe-api · from cgpe-mobile`
+INBOX ask (grepped back durable, 1 hit) + a plain-language owner-relay copy; recommended (not dictated)
+`PayrollProfile.start_location` as the source field + a member-pin→office→default fallback (mechanism is
+`cgpe-api`'s call). **No `src/` change → no gate re-run** (baseline: `tsc` 0, `npm test` 467/467, lint 0 errors /
+12 warnings). Live only when `cgpe-api` ships enforcement + a panel way to set each member's pin + a device check.
+Full path: `docs/spec/PHASE-43.md`; DECISIONS 2026-08-14 (top).
+
 **Phase 41a-iii-b (part 2) BUILT IN EDITOR — the unified 24/7 recorder wired (`tracker.ts` + triggers + native config). Gates green, DEVICE-UNVERIFIED. 2026-08-14.**
 The owner chose (AskUserQuestion) "write it all now" so the on-device session is pure build-and-verify. Built the
 full PHASE-41 §12 slice: (a) **`src/lib/tracker.ts` — ONE unified recorder** (§12.1). `ingest` now attributes each
