@@ -852,21 +852,38 @@ Phase 40), 35 (AppLock touch-freeze, mobile-fixed), 36 (hardcoded-vs-DB sweep �
 37 (notification mark-read + bell dot, `[m]` only), 38 (master role via DB `Profile.role`, VERIFIED + filed to
 `cgpe-api`/owner — owner-confirmed full `super_admin`, zero code) and 40 (live-location visibility gated to real
 `super_admin`, `[m]` only, `canSeeLiveLocation` predicate + tests) — see `## Now`. The rest of the master chain
-is next:**
+is next.**
 
-1. **Phase 39** (the master surface): build the Master-only monitoring surface (performance + location + salary,
+**🔺 OWNER ESCALATION 2026-08-14 — Phase 41 (24/7 background location) is now #1.** The owner asked whether
+member location is tracked 24/7; it is NOT — today's `lib/tracker.ts` records only a **clocked-in shift**
+(`startTracking(sid)` on clock-in → `stopTracking` on clock-out; it survives app-close/background during the
+shift via the Android foreground service, but records nothing between shifts and refuses any fix it can't
+attribute to a session). The owner wants continuous capture, so Phase 41 is pulled ahead of the master surface
+(39). Dependency-consistent: 41 depends on nothing and 39's location element consumes 41/42 anyway.
+
+1. **Phase 41 (→42) — 24/7 / guaranteed background location, any device.** Audit `lib/tracker.ts` (module-scope
+   task, `_layout.tsx:18` load-bearing import) + the "Allow all the time" background-permission flow + the
+   SecureStore buffer + delivery to `/time-tracker/track/points` (Phase 7 flagged the server silently DROPS
+   fixes with accuracy > 100 m while the app records at `Accuracy.Balanced` ~100 m — likely an `[api]` fix).
+   ⚠️ **The current shift-bound design is deliberate** (attributability, battery, and — critically — privacy):
+   a route is tied to a session so one person's location can't land on another, and off-shift fixes are dropped.
+   **True 24/7 (tracking staff during personal/off-duty time) is a policy + DPDP-consent decision the owner must
+   make explicitly** (rule 5 — security-sensitive) before it is built; it is NOT a pure code change. First step:
+   confirm with the owner what "24/7" means — (a) reliably capture the WHOLE shift even when the app is killed on
+   any handset (Samsung/Xiaomi aggressive battery killers included), or (b) literally always-on beyond shifts —
+   and the consent/notice model. Then `tsc`/`test` green + a real multi-device check (`tracker.ts` has NO test
+   coverage — device-only). See `docs/PLAN-2026-08-14.md` §Phase 41/42.
+2. **Phase 39 — the master surface.** Build the Master-only monitoring surface (performance + location + salary,
    no task UI), reusing the now-gated location screens (Phase 40). Gate strictly on the REAL
    `user.role === 'super_admin'` (Phase-20 pattern). Depends on 38/40 (both done) + the data endpoints from
    41/42 (location), 44 (salary), 45 (performance). See `docs/PLAN-2026-08-14.md` §Phase 39.
-2. **Then location 41→42** (guaranteed 24/7 background GPS on any device with green/red in-shift route colouring)
-   — the owner's stated main need, feeds the master surface. See `docs/PLAN-2026-08-14.md` §Phase 41+.
 3. **Then geofence 43, salary/tasks 44→45** (per-member 200 m clock-in fence; strict backend salary from
    hours/days; completed-tasks report + performance score) — the money/attendance cluster. See
    `docs/PLAN-2026-08-14.md` §Phase 43+.
 
-Then **40→39** (gate → surface — Phase 38 now filed), location **41→42**, geofence **43**, salary/tasks
-**44→45**, polish **46/47** (greeting emojis, Viewing-as restricted to one number), and finally **48**
-(biometric, security review). Full dependency order and the `cgpe-api`/owner-DB asks per phase are in
+Revised order after the escalation: **41→42** (location, now first), **39** (master surface), geofence **43**,
+salary/tasks **44→45**, polish **46/47** (greeting emojis, Viewing-as restricted to one number), and finally
+**48** (biometric, security review). Full dependency order and the `cgpe-api`/owner-DB asks per phase are in
 `docs/PLAN-2026-08-14.md`.
 
 ---
