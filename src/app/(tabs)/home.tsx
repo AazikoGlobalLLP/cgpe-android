@@ -7,7 +7,7 @@ import type { Href } from 'expo-router';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import { font, radius, shadow, spacing, useTheme } from '@/theme/theme';
+import { shadow, useTheme } from '@/theme/theme';
 import { Card, Eyebrow, Grad, Metric, Row, Screen, SectionHeader, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
 import { Button, IconBtn } from '@/ui/controls';
@@ -362,6 +362,7 @@ function WidgetShell({ title, action, onAction, children }: {
   onAction?: () => void;
   children: React.ReactNode;
 }) {
+  const { spacing } = useTheme();
   return (
     <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.xxl }}>
       <SectionHeader title={title} action={action} onAction={onAction} />
@@ -381,6 +382,7 @@ function SmallEmpty({ icon, title, subtitle, action }: {
   subtitle?: string;
   action?: { label: string; onPress: () => void };
 }) {
+  const { spacing } = useTheme();
   return (
     <Card>
       <EmptyState
@@ -399,6 +401,7 @@ function LinkCard({ icon, title, subtitle, onPress }: {
   icon: IconName; title: string; subtitle: string; onPress: () => void;
 }) {
   const c = useTheme();
+  const { radius, spacing, font } = c;
   return (
     <Pressable
       onPress={onPress}
@@ -433,6 +436,7 @@ function LinkCard({ icon, title, subtitle, onPress }: {
  * not move when the data lands. */
 function HomeSkeleton({ hero, widgets }: { hero: HeroMode; widgets: DashWidget[] }) {
   const c = useTheme();
+  const { spacing, radius } = c;
   const hairline = {
     height: StyleSheet.hairlineWidth, backgroundColor: c.hairline,
     marginVertical: spacing.lg, marginHorizontal: -spacing.lg,
@@ -496,6 +500,7 @@ function HomeSkeleton({ hero, widgets }: { hero: HeroMode; widgets: DashWidget[]
 
 export default function Home() {
   const c = useTheme();
+  const { spacing, radius, font } = c;
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, viewAs } = useAuth();
