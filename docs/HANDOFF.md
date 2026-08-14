@@ -28,7 +28,7 @@ endpoint already existed, so no contract change and no `[api]` ask. Gates green;
 - `docs/spec/PHASE-37.md` — NEW. `docs/PHASES.md` (Phase 37 → `## Now`; `## Next 3` promoted to 38→40→39).
   `docs/DECISIONS.md` (1 entry, prepended). `docs/STATUS.md` (rewritten). memory `owner-backlog-2026-08-14` +
   `MEMORY.md` updated.
-- Commit `<local>` (docs+code; push still 403s).
+- Commit `97f2694` (docs+code; local — push still 403s).
 
 ## Decisions made
 - **No `[api]` ask, no contract change** — the persist endpoint already exists and is documented (DECISIONS
