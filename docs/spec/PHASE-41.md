@@ -125,11 +125,23 @@ honest, never covert:
     - Pinned by NEW `src/data/__tests__/api-ambient.test.ts` (19): the request bodies, the 200 `added`/
       `dropped` handling, the no-`session_id` invariant, and every failure branch incl. 403→stop and the
       quiet-vs-banner health classification. Gates: `tsc` 0 · `npm test` **454/454** (+19).
-  - ⏳ **41a-ii — consent screen** (needs §1 copy — the ONLY blocker), the `me.location_consent` read off
-    `GET /rbac/config` (the app does not yet read the `me` block — new read path, not in `appUi.tsx`'s
-    `normalizeUiConfig` which drops unknown fields), the battery-opt step in the permission ladder, the
-    ambient recorder in `tracker.ts` calling `postAmbientPoints`, and the neutral 24/7 foreground
-    notification. Depends on: §1 copy + Phase 43 committed/`:3001`-restarted + a device.
+  - ✅ **41a-ii — consent copy + screen BUILT (2026-08-14).** Owner supplied the 5-language copy
+    (translation-v.01), unblocking both:
+    - **i18n:** 19 `consent.*` keys landed in all five dictionaries (human copy, not machine-translated);
+      parity gate bumped 75 → 94; `tsc` proves every dictionary carries all 19. `docs/i18n/PHASE-41-CONSENT-COPY.md`.
+    - **Screen:** NEW `src/app/consent.tsx` — mandatory (no back / no skip), renders the notice in the
+      active language, Agree → `setLocationConsent(true, 'v.01')` → on a real 200 proceeds to Home (never
+      claims consent it did not record; a failure keeps the user on the notice with a retry Banner),
+      Decline → an honest "you cannot continue" sub-state. Version `'v.01'` tracks the owner's copy version.
+    - Gates: `tsc` 0 · `npm test` **454/454** · lint 0 errors / 12 warnings (baseline).
+  - ⏳ **41a-iii — gating + device wiring (remaining).** The `me.location_consent` read off
+    `GET /rbac/config` to DECIDE when to show the screen (the app does not read the `me` block yet — a new
+    read path, NOT `appUi.tsx`'s `normalizeUiConfig` which drops unknown fields) + the boot redirect to
+    `/consent` when status ≠ granted; the battery-opt step in the permission ladder; the ambient recorder
+    in `tracker.ts` calling `postAmbientPoints` on grant; the neutral 24/7 foreground notification
+    (`consent.serviceTitle`/`serviceBody`). Depends on: Phase 43 committed/`:3001`-restarted + a device
+    (`tracker.ts` is device-only, no test stub). The consent screen renders standalone at `/consent`
+    (web-demoable) until the boot gate lands.
 - **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
 - **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
 - **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).
