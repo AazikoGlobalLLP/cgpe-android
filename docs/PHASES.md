@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 36 — [audit] hardcoded-vs-DB data sweep (notifications first, then app-wide). DONE (inventory, no code change) 2026-08-14.**
+The third of the three roadmap audits (PLAN §Phase 36). Deliverable was an **inventory** separating (a) real
+fabrication to remove, (b) legitimate synthesis to keep, (c) static config. **Finding: bucket (a) is EMPTY —
+there is nothing to delete.** No runtime path fabricates domain data: `mock.ts` is `export {}` (0 importers),
+`api.ts` `state` starts every collection empty, **all 30** `unavailable(endpoint, X)` calls pass an empty `X`
+(`state.*`/`[]`/`undefined`/`EMPTY_*` shells with `data:[]`), and a failed read resolves empty **and** reports
+to `health.ts` so screens fork "could not load" vs. "genuinely empty" (never a fabricated zero). Prior phases
+already removed every historical fabrication (Phase 8 generateReport ₹42L; lic-plans "benefit estimator";
+Add-Lead invented `'warm'`; Phase 7 Surat geofence pin; the old "invented client counts") — do NOT re-flag
+them. **Notifications first (the stated priority) = clean:** `notifications.tsx`/`notify.tsx`/`notice-board.tsx`
+are 100% DB-driven and refuse to invent state (notice-board deliberately shows **no** unread badges because the
+backend returns no per-user read state) → **Phase 37 has no hardcoded notification data to remove.** Bucket (b)
+kept & catalogued (adapt.ts claim-timeline/lead-notes/segments, prospects `pick()`, write-buffer optimistic
+records = the user's own typed data, computed KPIs/deltas over real fetches, relative-time labels; one minor:
+adapters fill a **missing** wire timestamp with `now`). Bucket (c) = label/tone/icon maps, option lists,
+i18n copy, fail-open `DEFAULT_UI` config, `segments.tsx` `FALLBACK_FLAGS` control-vocab, editable form defaults
+("LIC of India"). Method: 2 read-only Explore sweeps (data-layer agent died mid-run on an API error; its
+territory re-covered directly) + whole-`src` greps (`₹`/big numbers, `^const X=[`, `useState([{` → 0 seeded
+state, `Math.random`, self-labeled `dummy|fake|sample|hardcoded` → every hit documents a *removed* fabrication
+or a hardcoded colour/coordinate). **No `src/` change → no gate re-run** (baseline stands: `tsc` 0, `npm test`
+417/417, lint 0 errors / 12 warnings). Full path: `docs/spec/PHASE-36.md`; DECISIONS 2026-08-14 (top).
+
 **Phase 35 — [audit] intermittent touch-freeze, esp. the AppLock "Unlock" button. FIXED 2026-08-14.** The
 second of the three roadmap audits (PLAN §Phase 35), and unlike Phase 34 it was fixed the same phase — `[m]`,
 one file, no contract change. **Root cause is NOT a pointer-absorbing overlay** (the plan's three suspects —

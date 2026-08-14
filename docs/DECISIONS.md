@@ -6,6 +6,33 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 36 (hardcoded-vs-DB sweep) is an inventory, not a deletion — bucket (a) is empty
+
+**Context.** Audit Phase 36: the owner wants to know how much of the app is hardcoded/synthesised vs. from the
+DB, and the fabrication removed. Deliverable per PLAN = an inventory separating (a) real fabrication to remove,
+(b) legitimate synthesis to keep, (c) static config. Swept notifications first, then app-wide (2 read-only
+Explore agents + direct reads + whole-`src` greps).
+
+**Decision.** Ship the inventory (`docs/spec/PHASE-36.md`); **no `src/` change**, because **bucket (a) is
+empty — nothing fabricates domain data**. The no-mock-data contract is already fully enforced: `mock.ts` =
+`export {}` (0 importers), `api.ts` `state` starts every collection empty, all 30 `unavailable(endpoint, X)`
+calls pass an empty `X`, and every failed read resolves empty + reports to `health.ts` (so screens fork
+"could not load" vs. "genuinely empty", never a fabricated zero). Every historical fabrication was already
+removed in prior phases (Phase 8 generateReport ₹42L; the lic-plans benefit estimator; the Add-Lead invented
+`'warm'`; the Phase-7 Surat geofence pin; the old invented-client-counts path) — these are documented as
+removed and must NOT be re-flagged. Classified the **legitimate synthesis** to keep (adapt.ts
+timeline/notes/segments, prospects `pick()`, the write-buffer optimistic records = the user's own typed data,
+computed KPIs/deltas over real fetches, relative-time labels) as bucket (b), and static config
+(labels/options/i18n/`DEFAULT_UI`/`FALLBACK_FLAGS`/editable form defaults) as bucket (c) — neither is a
+violation. One minor note recorded: adapters fill a **missing** wire timestamp with `now` — a presentation
+gap, not an invented domain figure.
+
+**Consequence.** The audit's value is the separation + the proof, not a code change (same shape as Phase 34).
+Phase 37's "remove any hardcoded notification data" sub-task has **nothing to remove** — the feed surfaces are
+100% DB-driven (notice-board deliberately shows no unread badges rather than invent per-user read state), so
+Phase 37 is purely the mark-as-read + bell-dot feature and its `[api]` persist-endpoint check. Do not
+re-litigate "is the app fabricating data" — it is not, and this sweep is the record of why.
+
 ## 2026-08-14 — Phase 35 (AppLock touch-freeze) fixed with a re-entrancy guard, not a pointerEvents change
 
 **Context.** Audit Phase 35: the AppLock "Unlock" button "often does nothing," intermittently, worst on
