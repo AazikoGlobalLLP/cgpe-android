@@ -2233,6 +2233,22 @@ export async function getLocationConsent(): Promise<ConsentReadResult> {
   }
 }
 
+/**
+ * The boot gate's decision, isolated as a pure predicate so its ONE load-bearing safety property
+ * — fail open — is pinned by a test rather than buried in an effect. Returns true ONLY on a clear
+ * server answer that consent is not yet granted (`pending`/`withdrawn`); everything else is false,
+ * so the app redirects to the mandatory notice ONLY when it is certain it must:
+ *   - `ok` + `granted`  → false (the user already consented; never re-gate them)
+ *   - `ok` + `pending`  → true  (never asked / re-consent needed → show the notice)
+ *   - `ok` + `withdrawn`→ true  (opted out → must re-consent to keep using the app)
+ *   - `error`           → false (unknown: outage, legacy backend, dead network — NEVER trap staff)
+ * Getting the `error` branch wrong would bounce every user to `/consent` on every failed read, so
+ * the fail-open default is the whole point of extracting this.
+ */
+export function needsConsentGate(read: ConsentReadResult): boolean {
+  return read.status === 'ok' && read.consent !== 'granted';
+}
+
 /* ------------------------------------------------------- Agent locations */
 export type AgentPin = {
   id: string; name: string; city?: string;

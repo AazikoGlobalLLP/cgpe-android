@@ -16,11 +16,13 @@ import 'react-native-gesture-handler';
  * The import is cheap: the module body only defines the task and reads a flag.
  */
 import '@/lib/tracker';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+import type { Href } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { ThemeProvider, useTheme, deriveBrandPalette, applyDensity, PaletteProvider } from '@/theme/theme';
 import { useAppFonts } from '@/theme/fonts';
@@ -34,8 +36,58 @@ import { JobsProvider } from '@/store/jobs';
 import { AppUiProvider, useAppUi } from '@/store/appUi';
 import { JobPill } from '@/ui/JobPill';
 import { HealthBanner } from '@/ui/health-banner';
+import { getLocationConsent, needsConsentGate } from '@/data/api';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
+
+/**
+ * PHASE 41a-iii-b — the 24/7-location consent BOOT GATE (redirect half).
+ *
+ * A signed-in user who has not granted consent is bounced to the mandatory `/consent` notice
+ * (PHASE-41 §1: "bata ke, puch ke" — informed, transparent, non-negotiable). Headless and mounted
+ * once at the root beside `AppLock`/`JobPill`, so it lives for the process lifetime and reads the
+ * live navigation context (JobPill navigates from exactly here). It must run at THIS layout level,
+ * not `index.tsx`, which only mounts at `/`.
+ *
+ * THREE INVARIANTS, all leaning safe:
+ *  1. FAIL OPEN. `needsConsentGate` redirects ONLY on a confirmed `ok` + non-granted read; an outage,
+ *     a pre-Phase-43 backend, or a dead network all read `error` → no redirect. A failed read can
+ *     never trap staff behind the wall.
+ *  2. FIRE ONCE per signed-in session. The `checked` ref gates the read to a single fetch per cold
+ *     start (reset only on sign-OUT so the next person is re-checked), so it cannot loop — and the
+ *     consent screen's own success path `replace`s to Home, which never re-triggers this.
+ *  3. NATIVE ONLY. The gate exists to enable the native background recorder; web has none (and the
+ *     e2e web harness must keep reaching every screen), so web is skipped outright.
+ *
+ * There is deliberately no `let alive` cancel guard: this component never unmounts (root-level, like
+ * AppLock) and the effect performs NO setState — only a one-shot `router.replace`, which is safe to
+ * fire whenever the read resolves. A per-effect `alive` flag would in fact swallow the redirect under
+ * React StrictMode's dev double-mount.
+ *
+ * DEVICE-ONLY to verify (no test stub reaches boot navigation): that a non-granted user lands on
+ * `/consent` without a Home flash-then-bounce or a loop, and that it survives Expo's restored-route
+ * cold start. The pure decision `needsConsentGate` IS unit-tested (api-consent-read.test.ts).
+ */
+function ConsentGate() {
+  const { user, ready } = useAuth();
+  const router = useRouter();
+  const checked = useRef(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;          // native-only: no background recorder on web
+    if (!user) { checked.current = false; return; }   // signed out — re-check the next person
+    if (!ready || checked.current) return;
+    checked.current = true;
+    void (async () => {
+      const r = await getLocationConsent();      // silent + fail-open by design (api.ts)
+      // `/consent` postdates the last generated route type (as `/earnings` does in attendance.tsx),
+      // so cast to Href until `expo start` regenerates .expo/types.
+      if (needsConsentGate(r)) router.replace('/consent' as Href);
+    })();
+  }, [user, ready, router]);
+
+  return null;
+}
 
 /**
  * Overlays the signed-in role's server-driven accent (`config.theme.accent`) onto the OS
@@ -95,6 +147,9 @@ function RootNav() {
       {/* Mounted once here so every route inherits outage reporting. Sample data is gone,
           so this is the only thing distinguishing "nothing to show" from "could not load". */}
       <HealthBanner />
+      {/* Redirects a signed-in, not-yet-consented user to the mandatory /consent notice.
+          Fail-open, fires once per session, native-only — see ConsentGate above. */}
+      <ConsentGate />
       <AppLock />
       {/* Hold the animated splash until the auth session AND the Geist faces are ready,
           so the first painted frame is never in the fallback system face. */}

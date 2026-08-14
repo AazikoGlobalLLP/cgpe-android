@@ -14,6 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 41a-iii-b (part 1) BUILT — the consent BOOT GATE (redirect). Pure decision seam + `_layout.tsx` wiring; `tracker.ts` device pieces still deferred. 2026-08-14.**
+The editor-verifiable half of 41a-iii-b. Re-checked the backend first: `909b117` (backend Phases 43-46 —
+consent + ambient + retention) is now **committed + live on `:3001`** (cgpe-admin INBOX re-verify), so the
+Phase-34 "don't wire before backend is live" OPS trap no longer holds. Built the boot gate that makes
+`/consent` actually mandatory: (a) NEW pure `needsConsentGate(read)` in `src/data/api.ts` beside
+`getLocationConsent` — redirect ONLY on a confirmed `ok`+non-granted (`pending`/`withdrawn`); `granted`→no;
+**`error`→no (FAIL OPEN)** so an outage/legacy-backend/dead-network can never bounce staff to the wall.
+Extracted as a predicate so that one load-bearing safety property is pinned by a test, not buried in an
+effect. (b) NEW headless `ConsentGate` in `src/app/_layout.tsx`, mounted in `RootNav` beside `AppLock`/
+`JobPill` (the live nav context): fires **once per signed-in session** (a `checked` ref, reset only on
+sign-out) so it can't loop; the consent screen's own Agree→`replace('/(tabs)/home')` never re-triggers it;
+**native-only** (the gate enables the native recorder — web has none, and the e2e web harness must keep
+reaching every screen); no `let alive` guard because it's process-lifetime like AppLock and does no setState,
+only a one-shot `router.replace('/consent' as Href)` (cast like `attendance.tsx`'s `/earnings` until
+`expo start` regenerates route types). Runs at `_layout.tsx` level (survives Expo's restored-route cold
+start), NOT `index.tsx` (only mounts at `/`). Gates: `tsc` 0 · `npm test` **467/467** (+3, `needsConsentGate`
+branches) · lint 0 errors / 12 warnings (baseline; the two touched `src` files add 0 new). **No contract
+change** (pure consumer of the documented Phase 43 contract) → no INBOX/CHANGELOG. Commit local (push 403s).
+**Still device-only, owed on a handset (41a-iii-b part 2):** the redirect's UX check (no Home
+flash-then-bounce, no loop, restored-route survival) AND the whole `tracker.ts` slice — the battery-opt step
+in `ensureBackgroundPermission`, the ambient recorder calling `postAmbientPoints` on grant, and the neutral
+24/7 foreground notification (`consent.serviceTitle`/`serviceBody`, copy already landed in 41a-ii). Full
+path: `docs/spec/PHASE-41.md` §8; DECISIONS 2026-08-14 (top).
+
 **Phase 41a-iii-a BUILT — `getLocationConsent()` boot-gate READ (fail-open + fully silent). Wiring + device pieces deferred to 41a-iii-b (one device pass). 2026-08-14.**
 The editor-buildable, testable slice of 41a-iii. NEW `getLocationConsent()` in `src/data/api.ts` reads
 `GET /rbac/config` `me.location_consent` and returns `ok`(granted/withdrawn/pending) / `error` — the input the

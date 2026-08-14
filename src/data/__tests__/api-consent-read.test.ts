@@ -125,3 +125,19 @@ describe('getLocationConsent — the boot-gate consent read', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('needsConsentGate — the boot-gate redirect decision', () => {
+  it('redirects (true) ONLY on a confirmed non-granted answer', () => {
+    expect(api.needsConsentGate({ status: 'ok', consent: 'pending', decidedAt: null, version: null })).toBe(true);
+    expect(api.needsConsentGate({ status: 'ok', consent: 'withdrawn', decidedAt: null, version: null })).toBe(true);
+  });
+
+  it('does NOT redirect a user who already granted consent', () => {
+    expect(api.needsConsentGate({ status: 'ok', consent: 'granted', decidedAt: '2026-08-14T10:00:00.000Z', version: 'v.01' })).toBe(false);
+  });
+
+  it('FAILS OPEN on an unknown read — an outage/legacy-backend/dead-network never traps staff', () => {
+    // This is the load-bearing invariant: `error` must be "don't redirect", never "gate them".
+    expect(api.needsConsentGate({ status: 'error' })).toBe(false);
+  });
+});

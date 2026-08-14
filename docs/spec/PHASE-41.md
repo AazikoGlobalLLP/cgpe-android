@@ -147,17 +147,33 @@ honest, never covert:
     all three enum states, absent/odd fields → null, and the silent fail-open on legacy-body / 5xx / 403 /
     network. Gates: `tsc` 0 · `npm test` **464/464** (+10) · lint 0 errors / 12 warnings (baseline;
     unchanged). Green-gateable — the read is editor-testable even though its consumer (the gate) is not.
-  - ⏳ **41a-iii-b — boot-gate wiring + device pieces (remaining).** The boot redirect to `/consent` when
-    `getLocationConsent()` returns `ok` with status ≠ granted (a once-per-cold-start decision, fail-open on
-    `error`, that must not flash or loop and must survive Expo's restored-route cold start — reliably a
-    `_layout.tsx`-level guard, not `index.tsx` which only runs at `/`); the battery-opt step in the
-    permission ladder; the ambient recorder in `tracker.ts` calling `postAmbientPoints` on grant; the
-    neutral 24/7 foreground notification (`consent.serviceTitle`/`serviceBody`). **Deferred as one device
-    pass:** the redirect changes app entry for EVERY user and is only meaningfully verifiable on a handset
-    against a live backend, and the `tracker.ts` pieces are device-only (no test stub) AND must NOT be
-    wired until Phase 43 is **committed + `:3001`-restarted** (the Phase-34 OPS trap — a device miss before
-    the backend is live is not a code bug). The consent screen + the read render/resolve standalone until
-    the boot gate lands (`/consent` is web-demoable; `getLocationConsent()` is dormant until a caller uses it).
+  - ✅ **41a-iii-b (part 1) — the consent BOOT GATE (redirect) BUILT (2026-08-14).** The signed-in →
+    `/consent` redirect is wired, editor-verifiable and gate-green; only its on-device UX check remains.
+    - **Pure decision:** NEW `needsConsentGate(read)` in `src/data/api.ts` beside `getLocationConsent` —
+      redirect ONLY on `ok` + non-granted (`pending`/`withdrawn`); `granted`→no; **`error`→no (FAIL OPEN)**.
+      Extracted so the fail-open invariant (an outage/legacy-backend/dead-network must never bounce every
+      user to the wall) is pinned by a test, not buried in an effect. +3 cases in `api-consent-read.test.ts`.
+    - **Wiring:** NEW headless `ConsentGate` in `src/app/_layout.tsx`, mounted in `RootNav` beside
+      `AppLock`/`JobPill` (the live nav context — JobPill navigates from there). Fires **once per signed-in
+      session** (a `checked` ref, reset only on sign-out) so it can't loop; the consent screen's own success
+      path `replace`s to Home and never re-triggers it. **Native-only** (the gate enables the native recorder;
+      web has none, and the e2e web harness must keep reaching every screen). No `let alive` guard — the
+      component is process-lifetime (like AppLock) and does no setState, only a one-shot `router.replace`
+      (`/consent` cast `as Href`, matching `attendance.tsx:240`'s `/earnings`, until `expo start` regenerates
+      the route types). Runs at `_layout.tsx` level, NOT `index.tsx` (which only mounts at `/`), so it
+      survives Expo's restored-route cold start.
+    - Backend unblock confirmed: `909b117` (backend Phases 43-46) is **committed + live on `:3001`**
+      (cgpe-admin INBOX re-verify), so the Phase-34 OPS trap no longer holds.
+    - Gates: `tsc` 0 · `npm test` **467/467** (+3) · lint 0 errors / 12 warnings (baseline). No contract
+      change → no INBOX/CHANGELOG. Commit local (push 403s).
+    - **Device-only check still owed:** that a non-granted user lands on `/consent` with no Home
+      flash-then-bounce and no loop, and survives a restored-route cold start (no test stub reaches boot nav).
+  - ⏳ **41a-iii-b (part 2) — the `tracker.ts` device pieces (remaining, device-only).** The battery-opt step
+    in the permission ladder (`ensureBackgroundPermission`); the ambient recorder in `tracker.ts` calling
+    `postAmbientPoints` on grant; the neutral 24/7 foreground notification (`consent.serviceTitle`/
+    `serviceBody` — the copy already exists from 41a-ii). Zero test path (`tracker.ts` has no stub) and a
+    danger zone; provable only on a handset now that Phase 43 is live. The consent screen + read + gate all
+    render/resolve standalone until this lands (`/consent` is web-demoable).
 - **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
 - **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
 - **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).

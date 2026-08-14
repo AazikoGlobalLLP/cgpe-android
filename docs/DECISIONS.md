@@ -6,6 +6,42 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 41a-iii-b (part 1) BUILT: the consent BOOT GATE (redirect) — pure decision seam + `_layout.tsx` wiring; `tracker.ts` device pieces still deferred
+
+**Context.** Owner said "go" on 41a-iii-b. Re-checked the backend live-state first: `909b117 backend:
+Phases 43-46 — location retention & ambient consent` is now **committed** (backend tree clean) and
+cgpe-admin's INBOX re-verify confirms that exact commit is **live on `:3001`** (serving PID from 16:42:36),
+so the "uncommitted / not restarted" hard-block from the last handoff is **gone**. What remains is the
+device-only constraint: `tracker.ts` has no test stub, and the boot redirect changes app entry for every
+user — its flash/loop/restored-route behaviour is verifiable only on a handset. 41a-iii-b is therefore two
+unlike halves: the **boot-gate redirect** (editor-buildable app code — a decision + a `_layout.tsx` mount)
+and the **`tracker.ts` device pieces** (ambient recorder + battery-opt + 24/7 notification — zero test path,
+a danger zone).
+
+**Decision.** Build the **editor-verifiable half now**, defer the device half — the same testable-slice split
+every prior 41a step used. (1) **Extract the gate's decision as a pure predicate** `needsConsentGate(read)` in
+`api.ts` beside `getLocationConsent`, so its ONE load-bearing safety property — **fail open** — is pinned by a
+test, not buried in an effect: redirect ONLY on `ok`+non-granted (`pending`/`withdrawn`); `granted`→no, and
+crucially `error`→**no** (an outage/legacy-backend/dead-network must never bounce every user to `/consent`).
+(2) **Wire a headless `ConsentGate` at `_layout.tsx` level** (not `index.tsx`, which only mounts at `/`),
+mounted beside `AppLock`/`JobPill` so it has the live nav context (JobPill navigates from exactly there).
+Fires **once per signed-in session** (a `checked` ref, reset only on sign-out) so it cannot loop; the consent
+screen's own success path `replace`s to Home and never re-triggers it. **No `let alive` guard** — the
+component is process-lifetime (like AppLock) and does NO setState, only a one-shot `router.replace`; an
+`alive` flag would actually swallow the redirect under StrictMode's dev double-mount. (3) **Native-only** —
+the gate exists to enable the native recorder; web has none and the e2e web harness must keep reaching every
+screen, so web is skipped outright. (4) **`/consent` cast `as Href`** — it postdates the last generated
+route type (as `/earnings` already does in `attendance.tsx:240`) until `expo start` regenerates `.expo/types`.
+
+**Consequence.** Gates green: `tsc` 0, `npm test` **467/467** (+3, `needsConsentGate` branches in
+`api-consent-read.test.ts`), lint 0 errors / 12 warnings (baseline; my two touched src files add 0 new).
+**No contract change** (pure consumer of the documented Phase 43 contract) → no INBOX/CHANGELOG. Commit local
+(push still 403s). **Still deferred to the device pass (41a-iii-b part 2):** the redirect's on-device
+verification (no Home flash-then-bounce, no loop, survives restored-route cold start) AND the whole
+`tracker.ts` slice — the battery-opt step in `ensureBackgroundPermission`, the ambient recorder calling
+`postAmbientPoints` on grant, and the neutral 24/7 foreground notification (the `consent.serviceTitle`/
+`serviceBody` copy already exists from 41a-ii). Full path: `docs/spec/PHASE-41.md` §8.
+
 ## 2026-08-14 — Phase 41a-iii-a BUILT: `getLocationConsent()` boot-gate read (fail-open + fully silent); wiring + device pieces deferred to one device pass (41a-iii-b)
 
 **Context.** Owner said "go" on Phase 41a-iii ("gating + device wiring"). But three of its four pieces —
