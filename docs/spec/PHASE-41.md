@@ -111,11 +111,25 @@ honest, never covert:
   later, pairs with the master surface Phase 39).
 - ⚠️ Phase 43 is uncommitted / needs `:3001` restart (their own note) before it is live.
 
-## 8. Mobile build order (each is a device-checked sub-phase; nothing built yet)
+## 8. Mobile build order (each is a device-checked sub-phase)
 
-- **41a — consent + wiring:** consent screen (needs §1 copy) + battery-opt step in the permission ladder +
-  ambient recorder wired to `POST /track/ambient` + neutral 24/7 foreground notification. Depends on: §1
-  copy + Phase 43 live.
+- **41a — consent + wiring.** Split into a testable data layer (done) and the copy/device-blocked UI:
+  - ✅ **41a-i — data layer BUILT (2026-08-14).** Two additive, fully-tested `src/data/api.ts` wire
+    functions against the shipped-and-verified Phase 43 contract (`api.md` §`/api/time-tracker` Phase 43
+    block) — no invented values, no copy needed, green-gateable in Vitest (unlike device-only `tracker.ts`):
+    - `setLocationConsent(granted, version?)` → `POST /time-tracker/consent`; 3-outcome posture
+      (`ok`/`refused`/`error`) mirroring `getMyEarnings`/`getMdrtTier`; never fabricates a granted state.
+    - `postAmbientPoints(points, date?)` → `POST /time-tracker/track/ambient`; token-attributed (NO
+      `session_id`), returns `{outcome, added, dropped}` where **`consent-required`** (403) means stop +
+      drop buffer; silent like `postTrackPoints` (a background recorder never raises the outage banner).
+    - Pinned by NEW `src/data/__tests__/api-ambient.test.ts` (19): the request bodies, the 200 `added`/
+      `dropped` handling, the no-`session_id` invariant, and every failure branch incl. 403→stop and the
+      quiet-vs-banner health classification. Gates: `tsc` 0 · `npm test` **454/454** (+19).
+  - ⏳ **41a-ii — consent screen** (needs §1 copy — the ONLY blocker), the `me.location_consent` read off
+    `GET /rbac/config` (the app does not yet read the `me` block — new read path, not in `appUi.tsx`'s
+    `normalizeUiConfig` which drops unknown fields), the battery-opt step in the permission ladder, the
+    ambient recorder in `tracker.ts` calling `postAmbientPoints`, and the neutral 24/7 foreground
+    notification. Depends on: §1 copy + Phase 43 committed/`:3001`-restarted + a device.
 - **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
 - **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
 - **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).

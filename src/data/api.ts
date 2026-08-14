@@ -2095,6 +2095,93 @@ export async function getTrack(sessionId: string): Promise<{ points: TrackPoint[
   return await tryReal<any>(`/time-tracker/track/${encodeURIComponent(sessionId)}`, {}, (d) => d && Array.isArray(d.points));
 }
 
+/* --------------------------- 24/7 off-duty location + DPDP consent (Phase 41 · backend Phase 43) */
+
+export type ConsentState = 'granted' | 'withdrawn' | 'pending';
+export type ConsentWriteResult =
+  | { status: 'ok'; consent: ConsentState; decidedAt: string | null; version: string | null }
+  | { status: 'refused' }   // a definite server answer (400 bad body / 404 no profile) — retrying will not help
+  | { status: 'error' };    // 5xx / dead network / shape drift — retryable; the global banner also speaks
+
+/**
+ * Record the caller's 24/7 location-tracking consent -> POST /api/time-tracker/consent (backend Phase 43).
+ *
+ * `granted:true` sets `location_consent.status:'granted'`; `granted:false` WITHDRAWS it, and the
+ * server notifies every super_admin so a withdrawal is LOUD by design (PHASE-41 §5 — no silent
+ * opt-out). `version` is the consent-notice version agreed to, so a materially changed notice can
+ * force re-consent later. The current state is read separately off `GET /rbac/config`
+ * `me.location_consent` (a later slice) — this write returns only what the 200 confirms.
+ *
+ * Three outcomes the consent screen forks on — the getMyEarnings / getMdrtTier posture:
+ *   ok      — 200; the returned status/decided_at/version are authoritative.
+ *   refused — 400 (`granted` not a boolean — a client bug) or 404 (no Profile on file): a definite
+ *             answer, surfaced rather than retried.
+ *   error   — 5xx / dead network / shape drift: retryable.
+ * Never fabricates a granted state: only a real 200 yields `ok`.
+ */
+export async function setLocationConsent(granted: boolean, version?: string): Promise<ConsentWriteResult> {
+  if (FORCE_DEMO || !sessionReal) return { status: 'error' };   // no request attempted
+  const key = '/time-tracker/consent';
+  try {
+    const body: Record<string, unknown> = { granted };
+    if (version != null) body.version = version;
+    const { ok, status, json } = await req(key, { method: 'POST', body: JSON.stringify(body) }, REQUEST_TIMEOUT, key);
+    if (ok) {
+      const data = json?.data;
+      const st = data?.status;
+      const consent: ConsentState =
+        st === 'granted' || st === 'withdrawn' || st === 'pending' ? st : granted ? 'granted' : 'withdrawn';
+      return {
+        status: 'ok',
+        consent,
+        decidedAt: typeof data?.decided_at === 'string' ? data.decided_at : null,
+        version: typeof data?.version === 'string' ? data.version : null,
+      };
+    }
+    reportIfOutage(status, key);   // 400 = malformed (banner); 404 = answer (quiet); 5xx = outage (banner)
+    return { status: status === 400 || status === 404 ? 'refused' : 'error' };
+  } catch {
+    reportFailure(key);
+    return { status: 'error' };
+  }
+}
+
+export type AmbientDelivery = 'sent' | 'consent-required' | 'signed-out' | 'retry' | 'refused';
+export type AmbientResult = { outcome: AmbientDelivery; added: number; dropped: number };
+
+/**
+ * Append OFF-DUTY (ambient) GPS points -> POST /api/time-tracker/track/ambient (backend Phase 43).
+ *
+ * Distinct from postTrackPoints: there is NO shift session — the server attributes the points to
+ * the token and stores them ONLY if the caller's `location_consent.status === 'granted'`, else it
+ * answers 403 `consent_required`. On that 403 the caller MUST stop recording and drop its buffer:
+ * there is nothing to retry for an un-consented user, and a loud consent-withdrawal already reached
+ * the master. Every other non-2xx is a transient fault to retry; a 401 ends the session (reportAuth).
+ *
+ * Coarse fixes are kept server-side (the shift path's `accuracy <= 100 m` drop is NOT applied to
+ * ambient), so `dropped` counts only server-rejected (non-finite) points, not battery-friendly ones.
+ * Silent like postTrackPoints — a background recorder must never raise the outage banner.
+ */
+export async function postAmbientPoints(points: TrackPoint[], date?: string): Promise<AmbientResult> {
+  if (!points.length) return { outcome: 'sent', added: 0, dropped: 0 };
+  if (!sessionReal || FORCE_DEMO) return { outcome: 'sent', added: 0, dropped: 0 };
+  try {
+    const body: Record<string, unknown> = { points };
+    if (date) body.date = date;
+    const { ok, status, json } = await req('/time-tracker/track/ambient', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+    if (ok) return { outcome: 'sent', added: Number(json?.added) || 0, dropped: Number(json?.dropped) || 0 };
+    if (status === 403 || json?.code === 'consent_required') return { outcome: 'consent-required', added: 0, dropped: 0 };
+    if (status === 401) return { outcome: 'signed-out', added: 0, dropped: 0 };
+    if (status === 429) return { outcome: 'retry', added: 0, dropped: 0 };
+    return { outcome: status >= 400 && status < 500 ? 'refused' : 'retry', added: 0, dropped: 0 };
+  } catch {
+    return { outcome: 'retry', added: 0, dropped: 0 };
+  }
+}
+
 /* ------------------------------------------------------- Agent locations */
 export type AgentPin = {
   id: string; name: string; city?: string;
