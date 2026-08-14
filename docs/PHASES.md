@@ -14,6 +14,31 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 38 — [db]+[sec] Master for the 3 numbers via `Profile.role` (NOT client literals). VERIFIED + FILED, no code — 2026-08-14.**
+The head of the master-role chain (PLAN §Phase 38). Owner-confirmed via AskUserQuestion (2026-08-14): "master" is
+**exactly the `super_admin` role** — the `Profile.role` enum (`cgpe-backend-main/models/Profile.js:28`) has no
+separate monitor-only rank — and the owner chose **full `super_admin`** (org-wide power) over a narrower
+monitor-only role (which would be a NEW backend capability, not taken). **Verified the whole login→role→tier chain
+against real code (both trees, not tags):** phone-OTP login matches the profile by the **last 10 digits**
+(`findStaffByIdentifier`, `routes/auth.js:869`) and returns `data.user = profile.toPublicJSON()` incl. `role`
+(`:1015`); mobile maps it straight through (`adaptUser`, `adapt.ts:157`) and `tierOf()` returns `master` iff
+`role==='super_admin'` (`store/roles.ts:42`) — **no phone literal in `src/`, by design (rule 1)**; `authorize()`
+then lets `super_admin` pass every gate (`middleware/auth.js:57,73`). So promoting the 3 accounts is a **pure DB
+data change** that makes them read as Master with **zero `src/` change** — nothing for mobile to build, and no
+backend *code* change either. Filed a verified `→ cgpe-api · from cgpe-mobile` INBOX ask (grepped back durable, 2
+hits) + a plain-language owner-relay copy (courier workflow): promote `9099032033`/`9825135034`/`9106988376` to
+`staff_unified.role='super_admin'` via the panel (User Management → Role → Super Admin) or a phone-safe
+`updateOne({phone:/…$/},{$set:{role}})` (the `makeSuperAdmin.js` script takes `user_id|email`, **not** a phone).
+**Three preconditions surfaced (they decide whether phone login even works):** (P1) **exactly one active profile
+per phone** — phone login is REFUSED on >1 active match (`auth.js:871`) and 404s on 0 (`:870`), so confirm
+`countDocuments({phone:/<last10>$/,is_active:true})===1`; (P2) **sign out + back in** on each device after
+promotion (the app restores the cached `user` on cold start, only refreshing `role` on a fresh login/OTP); (P3)
+**[sec]** super_admin = full org-wide power (edit/promote any user, all PII), reversible by resetting the role —
+owner accepted (PLAN rule 5). **No `src/` change → no gate re-run** (baseline stands: `tsc` 0, `npm test` 430/430,
+lint 0 errors / 12 warnings). Deliverable is the owner's DB change + an on-device check (each number signs in →
+lands on Master). Next mobile-buildable step is **Phase 40** (gate location on the real role). Full path:
+`docs/spec/PHASE-38.md`; DECISIONS 2026-08-14 (top).
+
 **Phase 37 — [m] notification mark-as-read (per-item) + clear the bell dot. BUILT 2026-08-14.** The first
 feature off the owner backlog after the three audits (PLAN §Phase 37). **Verified the backend FIRST (grep, not
 tags):** the per-item persist endpoint already EXISTS — `PUT /api/notifications/:id/read` (`protect`,
@@ -790,24 +815,27 @@ mark-read + bell-dot clear + a hardcoded-vs-DB audit; Viewing-as restricted to o
 biometric-only session restore after logout. **These are PLANNED, not built.** Cross-cutting rules baked into
 the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
 the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
-(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **The three audits AND the first
-feature are now DONE — Phases 34 (backend-fixed, `cgpe-api` Phase 40), 35 (AppLock touch-freeze, mobile-fixed),
-36 (hardcoded-vs-DB sweep — bucket-a EMPTY, no code change) and 37 (notification mark-read + bell dot, `[m]` only
-— the persist endpoint already existed) — see `## Now`. The master-role chain is next:**
+(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **The three audits, the first
+feature AND the head of the master chain are now DONE — Phases 34 (backend-fixed, `cgpe-api` Phase 40), 35
+(AppLock touch-freeze, mobile-fixed), 36 (hardcoded-vs-DB sweep — bucket-a EMPTY, no code change), 37
+(notification mark-read + bell dot, `[m]` only) and 38 (master role via DB `Profile.role`, VERIFIED + filed to
+`cgpe-api`/owner — owner-confirmed full `super_admin`, zero code) — see `## Now`. The rest of the master chain is
+next:**
 
-1. **Then 38→40→39** (master role via DB → gate → surface): set `Profile.role` in the DB for the 3 master phone
-   numbers (owner/DB change, **never** a client literal — Phase 11), gate location + the master surface on the
-   REAL role (Phase-20 pattern). See `docs/PLAN-2026-08-14.md` §Phase 38+.
-2. **Then location 41→42** (guaranteed 24/7 background GPS on any device with green/red in-shift route colouring;
-   Master-only location visibility) — the owner's stated main need. See `docs/PLAN-2026-08-14.md` §Phase 41+.
+1. **Phase 40 → 39** (gate → surface): gate the live-location surfaces (`agent-map`/`agent-track`) on the REAL
+   `user.role === 'super_admin'` (Phase-20 pattern — a non-master never reaches the fetch); then build the
+   Master-only monitoring surface (performance + location + salary, no task UI). Phase 40 is the first
+   mobile-buildable step and depends only on 38 (now filed). See `docs/PLAN-2026-08-14.md` §Phase 40/39.
+2. **Then location 41→42** (guaranteed 24/7 background GPS on any device with green/red in-shift route colouring)
+   — the owner's stated main need, feeds the master surface. See `docs/PLAN-2026-08-14.md` §Phase 41+.
 3. **Then geofence 43, salary/tasks 44→45** (per-member 200 m clock-in fence; strict backend salary from
    hours/days; completed-tasks report + performance score) — the money/attendance cluster. See
    `docs/PLAN-2026-08-14.md` §Phase 43+.
 
-Then **38→40→39** (master role via DB → gate → surface), location **41→42**, geofence **43**, salary/tasks
-**44→45**, polish **46/47** (greeting emojis, Viewing-as restricted to one number — Phase 37 now done), and
-finally **48** (biometric, security review). Full dependency order and the `cgpe-api`/owner-DB asks per phase
-are in `docs/PLAN-2026-08-14.md`.
+Then **40→39** (gate → surface — Phase 38 now filed), location **41→42**, geofence **43**, salary/tasks
+**44→45**, polish **46/47** (greeting emojis, Viewing-as restricted to one number), and finally **48**
+(biometric, security review). Full dependency order and the `cgpe-api`/owner-DB asks per phase are in
+`docs/PLAN-2026-08-14.md`.
 
 ---
 

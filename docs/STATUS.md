@@ -1,14 +1,14 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-14
-**Working on right now:** Making the notification bell honest — you can now tap a notification to mark it as read, and the little dot on the bell clears once you've seen them.
+**Working on right now:** Setting up the "master" access for the three specified phone numbers — the accounts that should see everything (staff, locations, performance, salary).
 
 **Done this week:**
-- Added "mark as read" to notifications. Tap any new notification and it's marked as read on the spot; the unread dot on the bell clears once nothing is left unread. If the phone can't reach the server, it doesn't pretend — the item stays marked new and it says so, rather than quietly clearing. The server already remembered "read" for us, so no server work was needed this time.
-- Earlier this week: checked the whole app for fake or placeholder data (notifications first) and confirmed there is none — everything shown comes from the real database.
-- Earlier this week: fixed the lock-screen freeze where tapping "Unlock" often did nothing (worst on Samsung). Still needs a quick check on a real phone before we call it fully closed.
-- Earlier this week: fixed the reason a task you create for yourself didn't show on the phone (a server fix; needs the server restarted to appear on a device).
+- Worked out exactly how to make the three numbers "master". In this system "master" means the top-level account that can see and manage everything. Making a number master is a change in the database (one setting on their account), not a change in the app — so it also means those accounts can edit staff and see all information, which the owner confirmed is what's wanted. I checked the sign-in path end to end and confirmed that once the setting is changed, those phones will read as master the next time they sign in, with no app change needed. Handed the owner the exact, safe steps to make the change, plus two things to check per number (each number must belong to exactly one active account, and each person has to sign out and back in once).
+- Added "mark as read" to notifications, and the unread dot on the bell now clears once nothing is left unread. If the phone can't reach the server it stays honest — it won't pretend an item is read.
+- Earlier this week: confirmed there's no fake or placeholder data anywhere in the app; fixed the lock-screen freeze where "Unlock" often did nothing (worst on Samsung); and fixed the reason a task you create for yourself wasn't showing on the phone.
 
 **Blocked on:**
+- The three accounts becoming "master" needs the owner (or the server team) to make the small database change on those accounts — the app side is ready and needs nothing.
 - The app still cannot be uploaded to the shared code store (an access issue on the developer's account) — all work is saved locally on this machine.
 
-**Next:** Set up the "master" view for the three specified phone numbers (a change made in the database, not in the app), then show them live staff location and performance.
+**Next:** Once the three accounts are master, restrict the live staff-location screens so only master accounts can open them, then build the master monitoring view (staff location, activity and salary in one place).

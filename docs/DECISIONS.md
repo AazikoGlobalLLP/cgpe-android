@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 38: "master" = full `super_admin` (owner-confirmed), delivered as a DB `Profile.role` change with zero `src/` change
+
+**Context.** Owner backlog: make 3 phone numbers (`9099032033`, `9825135034`, `9106988376`) "master". Rule 1
+forbids a client phone literal — role by identity lives in DB `Profile.role`. Two things were undetermined: (a)
+what value counts as "master", and (b) whether "master" should be the full-power role or a narrower monitor-only
+one (the owner described the Phase-39 surface as view-team monitoring, "no task UI").
+
+**Decision.** Verified the whole chain against real code in BOTH trees before deciding: `Profile.role` enum
+(`models/Profile.js:28`) has no separate monitor rank — `super_admin` is the only value that yields `master`
+tier on mobile (`tierOf()`, `store/roles.ts:42`) AND passes every backend `authorize()` gate
+(`middleware/auth.js:57,73`). Phone-OTP login matches by last-10 digits (`findStaffByIdentifier`,
+`routes/auth.js:869`) and returns `role` verbatim via `toPublicJSON()` → `adaptUser` (`adapt.ts:157`). So the
+value is forced, not a free choice. The remaining real question — full power vs monitor-only — was put to the
+owner via AskUserQuestion; **owner chose full `super_admin`** (org-wide: edit/promote any user, all PII). A
+monitor-only master would need a NEW backend role/capability and would reshape 39/40 — explicitly NOT taken.
+Delivered as a DB data change (owner/`cgpe-api` action) filed to INBOX + a plain-language owner-relay copy;
+**zero `src/` change** and **no backend code change** (login already returns the role correctly). Surfaced three
+preconditions: P1 exactly one active profile per phone (phone login refuses >1 active match / 404s on 0), P2
+sign out + back in to refresh the cached role, P3 `[sec]` full-power grant, reversible.
+
+**Consequence.** Phase 38 needs no code on either side — it is complete once the owner promotes the 3 accounts
+and confirms one-active-profile-per-phone, then verifies Master on device. Rule 1 is satisfied by construction
+(no phone literal anywhere; `tierOf()` reads `user.role`). The first mobile-buildable step is Phase 40 (gate the
+location surfaces on the REAL `super_admin` role). Do NOT reintroduce a phone literal or invent a "master" role
+value — `super_admin` is the whole mechanism. See `docs/spec/PHASE-38.md`.
+
 ## 2026-08-14 — Phase 37: per-item notification mark-read is a pure `[m]` wire-up (endpoint already exists); bell clears via an outage-guarded focus refresh
 
 **Context.** First feature off the owner backlog after the three audits: add a per-item "mark as read" and clear
