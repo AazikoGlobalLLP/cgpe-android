@@ -1,15 +1,14 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-14
-**Working on right now:** Letting each department choose how tight or roomy its app layout looks, controlled centrally with no new app version — now rolled out to the main screens, with the smaller remaining screens to follow.
+**Working on right now:** Fixing the specific problems the owner reported — starting with tasks a person creates for themselves not showing up on their phone.
 
 **Done this week:**
-- Switched over the busy home screen — the dashboard people see first. Because it controls its own spacing, the "compact" choice now makes the whole home screen tighter, on top of the four main lists, the shared building blocks (buttons, fields, cards, alert strips, loading placeholders, pop-up panels) and the small tags, number tiles and people rows done earlier. Text size and tap targets stay the same for readability, and departments that don't pick compact keep today's roomier look.
-- The big, high-traffic screens are now all covered. What's left is the smaller detail and settings screens, which can be done in batches — no single large one remains.
-- The backend team's change has landed, so every business area — not just plain Sales and Operations — can get its own menu and look once someone enters those settings. Nothing more is needed from them for this.
-- Every batch is fully checked before moving on, so anything not yet switched keeps working exactly as before.
+- Found and fixed the reason a task you create for yourself didn't appear on the phone. The cause was on the server, not the app: the server wasn't recognising "you created this" properly. The backend team corrected it, and we checked their change line by line — it is right, and the app needs no change. Your own tasks now show in your normal view.
+- Confirmed how the whole task list reaches the phone, and wrote it down, so the next person doesn't have to re-investigate.
+- The owner agreed to pass any server-side requests to the backend team and confirm back when they're live — and that already worked end-to-end this week on the task problem (we asked, the owner relayed, the backend fixed it, we verified).
 
 **Blocked on:**
-- The compact layout, brand colours and name tags only take effect once someone with database access enters them for each department. Before that setup runs, a database password that was pasted into the setup file must be removed and changed.
+- Before the task fix is visible on a phone, the server needs to be restarted (and, for the live site, re-published). Until then a test may still look broken even though the fix is done.
 - The app still cannot be uploaded to the shared code store (an access issue for the developer's account) — all work is saved locally.
 
-**Next:** Switch over the remaining smaller screens in batches, check the compact layout on a real phone in light and dark, remove the pasted password, and run the one-time department setup.
+**Next:** Look into the reported "screen stops responding to touch," especially the unlock button on the lock screen.

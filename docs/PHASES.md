@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 34 — [audit] self-created task not visible. RESOLVED (backend, `cgpe-api` Phase 40) 2026-08-14.** The
+first of the three roadmap audits (PLAN §Phase 34). Traced end to end: the phone's task list is
+`GET /team/task-overview` (the `team_tasks` collection), **never** `GET /api/tasks` (that fallback is dead — an
+empty `{members:[]}` is a valid response). The overview's own/team scope kept a task if you were its assignee
+OR creator, but the creator match compared `team_tasks.createdBy` (stored as a NAME) against a set of user_ids
+— it could never fire — so a `super_admin`'s self-created task (esp. one left `assigneeName:'Unassigned'`)
+belonged to nobody in scope and was dropped. **NOT a client filter, NOT an app-ui problem.** Wrote the finding
+(`docs/spec/PHASE-34.md`), filed a verified `→ cgpe-api` INBOX ask; the owner relayed it and `cgpe-api` shipped
+the fix (their Phase 40): stamp `createdById` (user_id) on every `team_tasks` write + match the creator by
+`createdById ∈ allowedUids` (new rows) AND `createdBy(name) ∈ allowedNames` (legacy rows). Verified against
+their source + `auth.phase40.test.js` (9 cases, 590 green). **Mobile code unchanged** — it already consumes the
+endpoint correctly; the task now shows in the owner's DEFAULT own-scope (his task, not the whole board). The
+mobile `?scope=all` fix (Phase 34b) is **deferred** — not needed for the owner's bug; revisit only if an admin
+should see the whole team's board on the ordinary Tasks tab (vs. the master surface, Phase 39). ⚠️ OPS: the
+backend change needs a `:3001` restart / prod deploy before it shows on device. No gate re-run (no `src/`
+change). Full path: `docs/spec/PHASE-34.md`; DECISIONS 2026-08-14 (top).
+
 **Phase 33 — density rollout: migrate the Home dashboard (`(tabs)/home.tsx`). BUILT 2026-08-14.** The last
 big single-file lever (PHASE-32 §6): the 1915-line Home screen — 62 scale refs, `AppUiProvider`'s only
 consumer, a documented danger zone — migrated on its own. Same D-2 pattern, no mechanism/contract/copy change:
@@ -700,19 +717,18 @@ mark-read + bell-dot clear + a hardcoded-vs-DB audit; Viewing-as restricted to o
 biometric-only session restore after logout. **These are PLANNED, not built.** Cross-cutting rules baked into
 the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
 the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
-(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **Start with the three audits:**
+(tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **Phase 34 is DONE (resolved
+backend-side, `cgpe-api` Phase 40 — see `## Now`); next up the other two audits:**
 
-1. **Phase 34 — [audit] self-created task not visible.** `super_admin` created a task for himself; it never
-   showed on the phone (panel layout changes DID reach the phone, so `rbac/app-ui` is fine — this is a
-   task-data/scope problem). Reproduce, grep the task scope in `cgpe-backend-main`, write the finding
-   (client filter vs backend scope vs assignee/creator mismatch), then a small fix phase. See
-   `docs/PLAN-2026-08-14.md` §Phase 34.
-2. **Phase 35 — [audit] touch-freeze, esp. AppLock "Unlock".** Investigate `ui/AppLock.tsx` overlay
-   `pointerEvents` (the opacity-0-View-absorbs-touches class the sheet code documents) + the gesture root.
-   Root-cause + fix. See §Phase 35.
-3. **Phase 36 — [audit] hardcoded-vs-DB sweep** (notifications first). Inventory real fabrication to remove vs
+1. **Phase 35 — [audit] touch-freeze, esp. AppLock "Unlock".** Investigate `ui/AppLock.tsx` overlay
+   `pointerEvents` (the opacity-0-View-absorbs-touches class the sheet code documents at `sheet.tsx`) + the
+   gesture-handler root + any full-screen Animated overlay that stays mounted. Root-cause + fix. See §Phase 35.
+2. **Phase 36 — [audit] hardcoded-vs-DB sweep** (notifications first). Inventory real fabrication to remove vs
    documented synthesis to keep (claim timeline / lead notes / prospects `pick()` are legit) vs static label
    maps. Feeds Phase 37. See §Phase 36.
+3. **Then 38→40→39** (master role via DB → gate → surface): set `Profile.role` in the DB for the 3 master phone
+   numbers (owner/DB change, **never** a client literal — Phase 11), gate location + the master surface on the
+   REAL role (Phase-20 pattern). See `docs/PLAN-2026-08-14.md` §Phase 38+.
 
 Then **38→40→39** (master role via DB → gate → surface), location **41→42**, geofence **43**, salary/tasks
 **44→45**, polish **37/46/47**, and finally **48** (biometric, security review). Full dependency order and the

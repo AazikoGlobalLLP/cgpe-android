@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 34 (self-created task not visible) fixed BACKEND-side; mobile owes nothing
+
+**Context.** Audit Phase 34: a `super_admin` created a task for himself and it never appeared on the phone,
+even after restart. The audit traced it end to end: the phone's task list comes from `GET /team/task-overview`
+(the `team_tasks` collection), never `GET /api/tasks` (the fallback is dead because an empty `{members:[]}` is
+a valid response). The overview's own/team scope kept a task if you were its assignee OR creator — but the
+creator check compared `team_tasks.createdBy` (stored as a NAME) against a set of user_ids, so it could never
+match, and a self-created task left `assigneeName:'Unassigned'` matched neither predicate → dropped. NOT a
+client filter, NOT an app-ui problem.
+
+**Decision.** Fix it on the BACKEND, not mobile. The audit's first suggestion was a mobile `?scope=all` for
+real admins (Phase 34b), but the audit's §6 secondary finding was the true root cause and the cleaner fix.
+Filed a verified `→ cgpe-api` INBOX ask; the owner relayed it; `cgpe-api` shipped (their Phase 40): stamp
+`createdById` (user_id) on every `team_tasks` write and match the creator by `createdById ∈ allowedUids` (new
+rows) AND `createdBy(name) ∈ allowedNames` (legacy rows). Verified against their source +
+`auth.phase40.test.js` (9 cases, 590 green). **Mobile code unchanged** — it already consumes the endpoint
+correctly.
+
+**Consequence.** The owner's self-created task now returns in his DEFAULT own-scope (precise: his task, not the
+whole board), no APK/app change. **Phase 34b deferred** — only revisit if an admin should see the whole team's
+board on the ordinary Tasks tab (vs. the master surface, Phase 39). Two residual notes: (a) OPS — the backend
+change needs a `:3001` restart / prod deploy to show on device; (b) a panel-created *Unassigned* task can still
+be hidden for a NON-admin on the phone (the app's `getTasks(true)` groups by assignee) — fixable in-app if it
+bites. See `docs/spec/PHASE-34.md`.
+
+## 2026-08-14 — Backend-courier workflow: the owner relays verified `[api]` asks and confirms when live
+
+**Context.** The owner offered: "if you need anything from the backend, write me the instruction, I'll give it
+to the backend, and confirm when done." Proven this session on Phase 34: mobile filed a verified INBOX ask →
+owner relayed → `cgpe-api` shipped Phase 40 → mobile verified, all within one session.
+
+**Decision.** Treat roadmap `[api]` items as actionable, not indefinitely blocked. For each such phase: verify
+against the real `cgpe-backend-main` code FIRST (tags wrong 5×), file a concise verified ask to
+`contracts/INBOX.md`, AND hand the owner a plain-language copy to relay. Then wire the app side + device-check
+once the owner confirms it is live.
+
+**Consequence.** The `[api]`/`[db]` half of `docs/PLAN-2026-08-14.md` (Phases 37/38/41–45/47/48) can now move.
+Still hold the plan's rules — never invent a field/number, role-by-identity stays in the DB, the app never
+computes money.
+
 ## 2026-08-14 — Owner backlog scoped into a roadmap (Phases 34–48), planned not built
 
 **Context.** At `/handoff` the owner handed a large feature backlog: per-member 200 m clock-in geofence; strict

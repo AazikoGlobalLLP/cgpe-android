@@ -36,6 +36,13 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   `CGPE-CURRENT-PROJECT/` is a git repo with **zero commits** and `contracts/` is untracked in it,
   so every INBOX reply exists only on that disk. Do not assume it is backed up, and do not create
   that first commit yourself — it would sweep three project trees into one repo.
+- **The owner relays `[api]` asks to the backend and confirms when they are live (proven 2026-08-14, Phase 34).**
+  So a *verified* INBOX ask is actionable, not an indefinite block: verify against the real `cgpe-backend-main`
+  code FIRST (tags wrong 5×), file the concise ask to `INBOX.md`, **and hand the owner a plain-language copy to
+  relay.** This session: mobile filed → owner relayed → `cgpe-api` shipped Phase 40 → mobile verified, all in
+  one boot. Do **not** re-describe roadmap `[api]` items (`docs/PLAN-2026-08-14.md`: Phases 37/38/41–45/47/48) as
+  "blocked indefinitely." After the owner confirms, re-read the producer's real code before wiring the app side
+  — a backend fix can need a `:3001` restart / prod deploy to actually be live, so a device miss ≠ a code bug.
 
 ## Commands
 - `npx expo start --go` — Expo Go. **`--go` is required**; `expo-dev-client` is installed, so a bare
