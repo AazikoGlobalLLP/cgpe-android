@@ -1,57 +1,65 @@
-# HANDOFF — CGPE Connect (Android) — Phase 39 — 2026-08-15
+# HANDOFF — CGPE Connect (Android) — Phase 47 — 2026-08-15
 
-Phase 39 (the master-only monitoring surface — the owner's "main side") built as one small, self-contained
-`[m]` change: a new `/monitor` hub screen that gathers the already-existing, already-master-gated lenses
-(location, movement, performance, salary) plus the team roster into one dedicated master landing, with **no task
-UI**. No backend, no contract, no i18n change. Also added **Phase 49** to the roadmap (final APK + one-click link →
-OTA-only updates). **Owner has marked Phase 41 (24/7 background location) as the #1 next priority.**
+Phase 47 ("Viewing as" restricted to the owner) built as one small, self-contained `[m]` change: the
+tier-preview row in More is now gated on the **real `super_admin` role** instead of `realCaps.manageTeam`,
+so every admin and leader loses it while the master keeps it. No backend, no contract, no i18n change.
+**Owner locked the mechanism first (AskUserQuestion): role-based, not a per-account backend flag, not a
+phone literal.**
 
 ## Done
-- **A master (real `super_admin`) now has a single "Monitor" surface.** More → Master control → **Monitor** opens
-  `/monitor`: a 2×2 lens grid (**Locations** first — the owner's "most important" — Movement, Performance, Payroll,
-  each opening its existing screen) over the team roster (on-duty KPIs + rows tapping into each member's detail).
-  No task UI. A real admin or leader never sees the Monitor tile, and a deep-link to `/monitor` shows "Owner access
-  only" — the gate is the real role, never the folded tier.
-- **The roadmap now ends with Phase 49** — the ship step: after everything is built + device-verified, cut one
-  final signed APK, hand a one-click download link (the last link ever), then push all future JS/content updates
-  over-the-air. The honest limit is written down: OTA covers only the JS/asset layer; a native change still needs a
-  fresh APK.
+- **"Viewing as" (the tier-preview row in More → Personal) is now Master-only.** A real admin and a real
+  leader no longer see the row; a real `super_admin` still opens the preview sheet, previews the Admin /
+  Team sides, and switches back. The row reads the REAL role (not the preview `caps`), so it stays visible
+  while a master is mid-preview — they can always get back to their own view.
+- The gate is a NEW pure predicate `canViewAs(user) = user?.role === 'super_admin'`, the fourth of the
+  `super_admin`-only predicate family (`canSeeLiveLocation`/`canSeeTeamPerformance`/`canMonitorTeam`),
+  pinned on its own across all 6 roles + null.
 
 ## Files changed
-- `src/app/monitor.tsx` — NEW. The master monitoring hub: `canMonitorTeam` gate → lens grid → `getTeam()` roster
-  (rows → `/team/[id]`). Invents nothing; outage-honest via `useDataHealth()`.
-- `src/store/roles.ts` — NEW pure `canMonitorTeam(user) = user?.role === 'super_admin'`, parallel to
-  `canSeeLiveLocation` / `canSeeTeamPerformance` (kept separate so the three gates can't drift).
-- `src/store/__tests__/roles.test.ts` — +4 cases pinning `canMonitorTeam` across all 6 roles + null.
-- `src/app/(tabs)/more.tsx` — fixed master-only "Monitor" row at the top of the Master-control group (no navKey).
-- `docs/spec/PHASE-39.md` — NEW spec. `docs/PHASES.md` — Phase 39 "Now" block. `docs/PLAN-2026-08-14.md` — NEW
-  Phase 49 (Group I — Ship) + execution order + owner/ops asks.
+- `src/store/roles.ts` — NEW pure `canViewAs(user)`, parallel to the three Phase 39/40/45 gates (kept
+  separate so they can't drift). Doc comment records the folded-tier reasoning + owner lock.
+- `src/app/(tabs)/more.tsx` — Personal-tail "Viewing as" row gated on `canViewAs(user)` (was
+  `realCaps.manageTeam`); import + comment updated. `realCaps` still drives the sheet's option filter
+  (`:425`), so it is not orphaned.
+- `src/store/__tests__/roles.test.ts` — +4 cases pinning `canViewAs` across all 6 roles + null.
+- `docs/spec/PHASE-47.md` — NEW spec. `docs/PHASES.md` — Phase 47 "Now" block + status board row.
+  `docs/DECISIONS.md` — 2026-08-15 Phase 47 entry.
 
 ## Decisions made
-- **Shape = a monitoring HUB, reached pushed from More** (both owner-locked via AskUserQuestion). Not a per-member
-  unified card (would need per-member location/payroll deep-links that don't exist = new backend); not a bottom tab
-  (`nav.tabs` is DB-driven, a master-only tab needs an `[api]`/RBAC change).
-- **`canMonitorTeam` added even though it is byte-identical to the other two `super_admin` predicates** — the file
-  already keeps them separate "so they can't drift"; a distinct name documents what is gated and is pinned on its own.
-- **Phase 49 records the OTA hard limit explicitly** — "last link ever" holds for JS/content updates only; native
-  changes (Phase 41's tracker module already being one) still need a rebuild. Do not over-promise zero rebuilds.
+- **Gate on the real `super_admin` role, owner-locked via AskUserQuestion (2026-08-15).** The backlog
+  says "one number only" (`9106988376`), but rule 1 forbids a phone literal and that number is one of the
+  THREE Phase-38 masters, so a truly-one-account gate would need a NEW per-profile backend capability flag
+  (`[api]`). The owner chose the pure-`[m]`, ship-today option, accepting that all three masters keep the
+  row. No `[api]` ask, no contract change.
+- **New named predicate rather than an inline `role ===` check** — the file's existing convention keeps
+  each `super_admin` gate separate "so they can't drift" and pins each one; `canViewAs` follows it exactly.
+- **Read the REAL role, not the preview `caps`** — a master previewing a lower tier must still see the row
+  to switch back, and (like the sibling gates) a preview must never be able to climb back up.
 
 ## Known broken / deliberately skipped
-- **Device check CARRIED for Phase 39** (native + backend-live-gated): a real `super_admin` reaches the hub, the four
-  lenses open, roster taps open the detail; a real admin + leader find the tile gone and a deep-link shows "Owner
-  access only". Needs Phase 38's DB promotion for a live master + cgpe-api's `:3001` restart for a live roster.
-- **`git push` still 403s** — this commit (`2750794`) + `c4f40bb` (Phase 49 doc) + the local Phase-45/46 commits are
-  local-only; credential `reactjsaaziko` has no write access. Needs a human credential swap. **This blocks Phase 49.**
-- Carried device/backend checks: 41 part-2 (24/7 recorder), 42 (route colouring, blocked on 41), 43 (geofence), 45
-  (both performance screens), 46 (emoji alignment). All native/backend-live-gated, not editor-buildable.
+- **Truly-one-account restriction is NOT built** — that needs a per-profile backend capability flag
+  (`[api]`, Phase-38 courier shape) + an owner DB set on one account; the owner declined it for role-based.
+  If they change their mind, file the flag and swap `canViewAs` to read `user.<flag>` — the seam is a single
+  predicate.
+- **Device check CARRIED for Phase 47** (native + Phase-38-live-gated): a real admin + leader find the row
+  gone; a real `super_admin` still previews Admin/Team and switches back. Needs Phase 38's DB promotion for
+  a live master, though the gate holds regardless.
+- **`git push` still 403s** — this commit (`3baf05d`) + all prior Phase-45/46/49 commits are local-only;
+  credential `reactjsaaziko` has no write access. Needs a human credential swap. **This blocks Phase 49.**
+- Carried device/backend checks unchanged: 41 part-2 (24/7 recorder), 42 (route colouring, blocked on 41),
+  43 (geofence), 45 (both performance screens, needs cgpe-api `:3001` restart), 46 (emoji alignment). All
+  native/backend-live-gated, not editor-buildable.
 
 ## Next session starts here
-- **Phase 41 — 24/7 background location — is the owner's #1 priority.** Its remaining work (`tracker.ts` device
-  slice / battery-opt / boot re-arm) is **device + EAS-build-gated, NOT editor-buildable** — the editor half
-  (41a + 41a-iii-b) is already built and device-unverified (`16e75ae`). So the next real step is a fresh EAS/dev-client
-  build on a real handset + the §12.7 acceptance matrix (`docs/spec/PHASE-41.md` §12). If working editor-only, the
-  next editor-actionable item is **Phase 47** (Viewing-as → one number — first confirm the flag mechanism with the
-  owner/backend; DB capability, never a phone literal).
+- **Phase 48 — [sec][m]+[api] biometric-only session restore after logout — is the next editor-actionable
+  item** (PLAN §Phase 48), but it is a security-sensitive phase: spec it carefully first (the scenario is
+  "return 2 days later logged-out → back into your OWN account with fingerprint/face only, no id/OTP").
+  Verify the real backend before filing (tags wrong 5×) and confirm the identity-binding model — the
+  `biometricIdentity.ts` write half is already wired but the read/restore half is not.
+- **Phase 41 (24/7 background location) remains the owner's #1 priority but is device/EAS-build-gated** —
+  do NOT "build" it in the editor again; it needs a fresh EAS/dev-client build on a real handset + the
+  §12.7 acceptance matrix. The editor half (41a + 41a-iii-b) is already built and device-unverified.
 - First command: `/boot`
-- Watch out for: **Phase 41 is #1 by owner priority but is device/build-gated** — do not "build" it in the editor
-  again; it needs a handset. And **every commit is local (push 403s)** — flag the push as the blocker for Phase 49.
+- Watch out for: **every commit is local (push 403s)** — flag the push as the blocker for Phase 49; and
+  **Phase 48 is `[sec]` — do not write code before the identity-binding model is spec-locked and the
+  backend gate is verified in real code.**

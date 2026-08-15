@@ -1198,15 +1198,15 @@ attribute to a session). The owner wants continuous capture, so Phase 41 is pull
    `super_admin` via new pure `canMonitorTeam`. Reused the Phase-40 location screens + Phase-45 `performance.tsx`
    rather than rebuilding. Gates green (491/491). Device check carried. See `## Now` + `docs/spec/PHASE-39.md`.
    **Next editor-actionable is Phase 47** (Viewing-as → one number — needs owner/backend flag decision).
-3. **Phase 47 — [db]+[sec] Viewing-as restricted to one number — the next editor-actionable after Phase 46.**
-   Owner backlog Phase 47: keep the "Viewing-as" (act-as-another-role) affordance for **one specific number only**.
-   ⚠️ **Same trap as Phase 38:** this is a DB `Profile.role`/capability change (or a backend gate on the real
-   identity), **NOT** a client phone literal in `src/` (rule 1 — the email literal was removed for exactly this
-   reason). **Verify the real backend before filing** (tags wrong 5×): find where Viewing-as is authorised today
-   (`capabilitiesOf`/`viewAs` in `store/roles.ts` + `home.tsx`, and any backend gate) and confirm whether the
-   restriction is a DB capability flag or a code gate before writing anything. Then **48** (biometric-only session
-   restore after logout — a security-review phase). See `docs/PLAN-2026-08-14.md` §Phase 47/48.
-   **Phase 46 (greeting emoji) is DONE — see `## Now`.**
+3. **Phase 48 — [sec][m]+[api] Biometric-only session restore after logout — the next editor-actionable item.**
+   Owner backlog Phase 48 (Group H, do-last/security-sensitive): a user who returns days later logged-out should
+   get back into **their OWN account** with fingerprint/face only — no id/password/OTP. ⚠️ **`[sec]` — spec it
+   carefully before any code (rule 5).** `biometricIdentity.ts` already seals `(userId, token)` behind SecureStore
+   but **only the write half is wired**; the read/restore half + the "restore this exact identity, not just any
+   biometric" binding are the build. **Verify the real backend before filing** (tags wrong 5×): confirm whether the
+   restored token is still valid server-side after logout / how re-auth works, and the identity-binding model,
+   before writing anything. See `docs/PLAN-2026-08-14.md` §Phase 48.
+   **Phase 47 (Viewing-as → Master-only) is DONE — see `## Now`.**
 
 **Phase 45 is DONE (backend SHIPPED + verified, mobile reader + render built) and Phase 46 (greeting emoji) is
 DONE (`153ecc6`, editor-green + device-check carried).** Remaining device checks: **41 part-2** (24/7 recorder),
@@ -1366,6 +1366,7 @@ screens). No backend, no copy — buildable today. See `docs/spec/PHASE-33.md` +
 | 23 | MDRT tier-progress element on Commissions | **Built** 2026-08-12 — buildable slice of Phase-6 (option d). New `getMdrtTier` on the verified Phase-29 `GET /advisor/performance/:advisorId`; `MdrtTierProgress` card is a **separate** element (never the monthly meter), mounted above the ledger fork so it shows real data while the earned aggregate stays blocked. Role-gated advisor/learn_advisor, own id; no contract change. 373 tests green (+13); no PII, no on-device math. Device check outstanding |
 | 24 | Coverage score on Smart segments | **Built** 2026-08-12 — surfaced the response-only per-row `coverage_score` (backend Phase 30, P2-CL-01) landed additively on `GET /clients/segments`, which mobile already calls. One guarded `asNum` read in `segments.tsx`; shown as `· NN%` on the row + a labelled **Coverage** DataRow in the sheet (tone by the server's `100`⟺well_insured/`<100`⟺underinsured invariant). `null`→no line (never `0%`); real `0`→`0%`. No contract change, no INBOX ask, no on-device math. 373 tests green (unchanged); lint 0/12. Device check outstanding |
 | 25 | Commissions EARNED aggregate ~~`[api]`~~ | **Built** 2026-08-12 — Phase-6 D-5 unblock. New `getCommissionSummary()` on the shipped `GET /commissions/my-summary` (backend Phase 31, self-scoped, `protect`-only); two-outcome `req()` posture like `getMdrtTier` (200-zeros = ok/no-banner, 503 = error/banner). `commissions.tsx` renders the earned ledger (thisMonth/lastMonth/pending/ytd/history/recent); `target:0` (no source, never invented); no on-device math. Dead `getCommission`/`EMPTY_COMMISSION` removed. **387 tests green (+14, `api-commissions.test.ts`)**; lint 0/12. **INBOX Phase-31 box ticked. Phase 6 D-5 closed.** Device check outstanding |
+| 47 | "Viewing as" is Master-only | **Built** 2026-08-15 — owner-locked (AskUserQuestion): gate the More tier-preview row on the REAL `super_admin` role, not `realCaps.manageTeam` (which leaked it to every admin+leader) and not a phone literal (rule 1). NEW pure `canViewAs` in `roles.ts` (4th `super_admin` predicate); `more.tsx` swap; +4 `roles.test.ts` cases. `tsc` 0 · `npm test` **495/495** (+4) · eslint 0 errors. Pure `[m]`, no `[api]`/contract. Commit `3baf05d` (local). Device check carried (admin+leader lose row, master keeps it) |
 | 26 | More-tab grouping DB-driven (`nav.more_sections`) | **Built** 2026-08-12 — closes Phase 10 D-3 (the last server-driven-nav gap; contract named mobile the fix owner). New pure `arrangeMoreSections` selector in `appUi.tsx` (mirrors `resolveTabs`: known+not-hidden+first-wins dedupe, drops empty groups, trailing catch-all so omission re-prioritises never hides — `ui_rbac_config.json:18`). `more.tsx` renders fixed admin oversight + config-driven content groups (new `MORE_CATALOGUE`, `profile`/`tickets` dynamic values) + fixed "Personal" tail. `DEFAULT_UI.nav.more_sections` rewritten to name all 22 catalogue modules once. **398 tests green (+11, `arrangeMoreSections` in `appUi.test.ts`)**; tsc 0; lint 0/12. Owner-chosen slice (b); seeding (a) + theme (c) not built. Device check + "Personal" tail layout shift outstanding |
 
 ---
