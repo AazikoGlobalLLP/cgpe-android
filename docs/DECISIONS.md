@@ -6,6 +6,25 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 46: greeting emoji rendered as its own element, not folded into `greet.*`
+
+**Context.** Owner backlog Phase 46: add a tasteful emoji to the greeting copy. The greeting renders in five languages
+(`greet.morning`/`afternoon`/`evening` in en/gu/hi/hi-en/gu-en). The obvious-but-wrong move is to append the emoji to
+the English dictionary string (leaves four languages without it) or to string-concatenate it onto the translated word
+(risks Hindi/Gujarati word order — the standing i18n rule forbids concatenation).
+
+**Decision.** Chose a **time-of-day** glyph off the greeting's own existing hour cutoffs — 🌅 (`hour < 12`) / ☀️
+(`< 17`) / 🌆 (else) — derived as `greetEmoji` right beside `greet` in `(tabs)/home.tsx`, and rendered as a **standalone
+`<Txt>` element** after `{greet},` in the header row. Because it is a separate element, all five languages share the one
+glyph and no translated string is touched. Wrapped in a `View` with `accessibilityElementsHidden` /
+`importantForAccessibility="no-hide-descendants"` so assistive tech reads the greeting, not "sunrise" (the `Txt`
+primitive does not forward a11y props, so the wrapper — not props on `Txt` — carries the hint; `tsc` caught the first
+attempt).
+
+**Consequence.** Gates green (`tsc` 0, `npm test` 487/487 unchanged — presentational, lint home.tsx clean). No contract,
+no backend, no i18n-dictionary change — pure `[m]` render. Device visual check carried (native emoji rendering/alignment,
+light/dark at 390px). Commit `153ecc6` (local — push 403s). Full path: `docs/spec/PHASE-46.md`.
+
 ## 2026-08-15 — Phase 45 RENDER built: self + master-only team performance screen; visibility owner-locked
 
 **Context.** With the backend live and the reader in, the render needed two product decisions I must not guess (it is

@@ -1,14 +1,13 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-15
-**Working on right now:** Finished building the staff performance score end to end; it now needs a check on a real phone.
+**Working on right now:** Small polish — the home screen now greets each person with a friendly sun/sunrise icon that changes with the time of day.
 
 **Done this week:**
-- Designed the **staff performance score** with you — it only counts real work (tasks a manager gave the person that they actually finished; not personal to-dos, reminders, or cancelled tasks), rewards finishing on time and finishing the more important tasks, and is worked out fresh each month. Nothing was invented — you chose every rule.
-- The **server team built it the same day**, and we checked their work line by line against your rules — it matches exactly. We confirmed the remaining choice with you (a task counts in the month it was *due*).
-- **Built the screen inside the app.** Each staff member gets a "My performance" screen showing their own score and the tasks they completed. The owner gets a "Team performance" screen showing everyone's scores, ranked — and this is locked so only the owner can open it; a regular manager or team member cannot see other people's scores. The app only shows the server's numbers; it never makes up a score.
-- Earlier: confirmed salary-from-hours was already done; delivered per-person clock-in location; wrote the always-on location recorder in five languages.
-- All automated checks pass.
+- Staff can now see their own monthly performance score and the work they completed; the owner has a separate screen ranking the whole team — and no one but the owner can see other people's scores.
+- Confirmed the salary calculation (based on real hours and days worked) is already correct and working — no change needed.
+- Made each member's clock-in limited to their own 200-metre work location instead of one shared office point (built on the backend, verified).
+- Added the friendly time-of-day icon to the greeting, shown correctly in all five app languages.
 
-**Blocked on:** Two things, unchanged. (1) The code-upload permission still needs fixing so our saved work can reach the shared repository — it's saved safely on this machine meanwhile. (2) The performance screen and the always-on recorder **need checking on real phones** — and the server needs its scheduled restart before the performance screen shows live numbers.
+**Blocked on:** Publishing the code to the shared server is still blocked — the saved sign-in doesn't have permission. Someone with access needs to grant it or swap the login. All work is saved safely on this machine in the meantime.
 
-**Next:** Check the performance screens on a real phone (own score for a staff member, full ranked list for the owner, and that others are correctly locked out); and test the always-on location recorder on several phones (especially battery use).
+**Next:** Restrict the "view as another role" feature to a single approved phone, then add sign-in-by-fingerprint after logout.

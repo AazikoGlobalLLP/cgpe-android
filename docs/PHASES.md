@@ -14,6 +14,22 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 46 — [m] Tasteful time-of-day emoji in the Home greeting header. BUILT 2026-08-15.** The next
+editor-actionable owner-backlog item after Phase 45 — small, self-contained, no backend/contract/i18n-dictionary
+touch. Added a time-of-day glyph beside the greeting: 🌅 morning (`hour < 12`) / ☀️ afternoon (`< 17`) / 🌆 evening
+(else), chosen off the greeting's **own existing hour cutoffs** (no invented copy). **Avoided the i18n trap
+head-on:** the greeting renders in 5 languages via `greet.*` keys, so the emoji is derived as `greetEmoji` beside
+`greet` and rendered as its **own standalone `<Txt>` element** after `{greet},` in the header row — NOT appended to
+the English dictionary string (would leave 4 languages without it) and NOT string-concatenated onto the translated
+word (would risk Hindi/Gujarati word order — the standing no-concatenation rule). One glyph therefore serves all
+five languages. Wrapped in a `View` with `accessibilityElementsHidden` / `importantForAccessibility="no-hide-descendants"`
+so a screen reader announces the greeting, not "sunrise" (the `Txt` primitive does not forward a11y props, so the
+wrapper carries the hint — `tsc` caught the first attempt that put them on `Txt`). ONE file: `src/app/(tabs)/home.tsx`.
+Gates green: `tsc` 0 · `npm test` **487/487** (unchanged — presentational) · `eslint src/app/(tabs)/home.tsx` clean.
+Commit `153ecc6` (local — push still 403s). **No contract change.** **Device visual check carried** (native-only:
+emoji renders + vertically aligns with the greeting, light/dark at 390px). Full path: `docs/spec/PHASE-46.md`;
+DECISIONS 2026-08-15 (top).
+
 **Phase 45 — [api]+[m] Per-member completed-tasks report + performance score. VERIFIED gap (genuinely new) → score LOCKED with owner → FILED to cgpe-api; no mobile build yet — 2026-08-15.**
 Owner backlog Phase 45 (Group F): a per-member report of **what they completed, when, how much** + a **performance
 score**, counting **only manager-assigned AND actually-completed** tasks — NOT reminders, NOT self-created, NOT
@@ -1124,20 +1140,21 @@ attribute to a session). The owner wants continuous capture, so Phase 41 is pull
    `performance.tsx` (already master-gated via `canSeeTeamPerformance`). Gate strictly on the REAL
    `user.role === 'super_admin'` (Phase-20/40 pattern). Depends on 38/40 (done) + the data endpoints from
    41/42 (location), 44 (salary, done), 45 (performance, **done** — `getTaskReport`). See `docs/PLAN-2026-08-14.md` §Phase 39.
-3. **Phase 46 — [m] greeting emojis — the next editor-actionable, small & self-contained.** Add tasteful emojis to
-   the greeting copy wherever a greeting is shown (`lib/format.ts` `greeting`, the Home hero, any i18n greeting
-   keys). ⚠️ **i18n trap:** greetings appear in 5 languages — do NOT hand-add an emoji to only the English string;
-   put the emoji where all languages share it (e.g. append in the render, or add to each dictionary's greeting key
-   with owner/human copy — never a machine translation). Keep it tasteful (owner said "tasteful"); this is a
-   polish phase, no contract/backend touch. Then Phase 47 (Viewing-as restricted to one number — a DB
-   `Profile`/capability change, NOT a client phone literal, same trap as Phase 38) and finally **48** (biometric-only
-   session restore, security review). See `docs/PLAN-2026-08-14.md` §Phase 46/47/48.
+3. **Phase 47 — [db]+[sec] Viewing-as restricted to one number — the next editor-actionable after Phase 46.**
+   Owner backlog Phase 47: keep the "Viewing-as" (act-as-another-role) affordance for **one specific number only**.
+   ⚠️ **Same trap as Phase 38:** this is a DB `Profile.role`/capability change (or a backend gate on the real
+   identity), **NOT** a client phone literal in `src/` (rule 1 — the email literal was removed for exactly this
+   reason). **Verify the real backend before filing** (tags wrong 5×): find where Viewing-as is authorised today
+   (`capabilitiesOf`/`viewAs` in `store/roles.ts` + `home.tsx`, and any backend gate) and confirm whether the
+   restriction is a DB capability flag or a code gate before writing anything. Then **48** (biometric-only session
+   restore after logout — a security-review phase). See `docs/PLAN-2026-08-14.md` §Phase 47/48.
+   **Phase 46 (greeting emoji) is DONE — see `## Now`.**
 
-**Phase 45 is now DONE (backend SHIPPED + verified, mobile reader + render built) — the last verify-and-file report
-phase is closed.** Remaining device checks: **41 part-2** (24/7 recorder), **43** (per-member geofence), **45** (the
-two performance screens — needs cgpe-api's `:3001` restart for live data). Revised order: **41→42** (location),
-**39** (master surface), polish **46/47**, then **48** (biometric). Full dependency order + `cgpe-api`/owner-DB asks
-per phase in `docs/PLAN-2026-08-14.md`.
+**Phase 45 is DONE (backend SHIPPED + verified, mobile reader + render built) and Phase 46 (greeting emoji) is
+DONE (`153ecc6`, editor-green + device-check carried).** Remaining device checks: **41 part-2** (24/7 recorder),
+**43** (per-member geofence), **45** (the two performance screens — needs cgpe-api's `:3001` restart for live data),
+**46** (emoji render/alignment). Revised order: **41→42** (location), **39** (master surface), polish **47** (Viewing-as),
+then **48** (biometric). Full dependency order + `cgpe-api`/owner-DB asks per phase in `docs/PLAN-2026-08-14.md`.
 
 ---
 
