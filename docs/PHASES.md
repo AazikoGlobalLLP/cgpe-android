@@ -14,6 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 48 — [sec][m]+[api] Biometric-only session restore after logout. VERIFIED gap → owner-locked model → FILED to cgpe-api; no mobile build yet — 2026-08-15.**
+The next editor-actionable owner-backlog item (PLAN §Phase 48, Group H "do last"). Scenario: return 2 days later
+logged-out → back into your OWN account with fingerprint/face only, no id/OTP. **First step was verification + owner
+lock, NOT code** ([sec], rule 5). **Verified both trees (tags wrong 5×):** mobile's sealed `(userId,token)` WRITE half
+is wired (`biometricIdentity.ts` + `auth.tsx`) but the READ/restore half (`resolveBoundIdentity`) has **ZERO callers**;
+today's login "biometric" is only a **liveness gate before a full id+password login**, not a restore; explicit logout
+**destroys** the binding on purpose, silent `onSessionExpired` does **not**. Backend: access tokens expire at **24h**
+(`auth.js:61-65`), and `POST /auth/refresh` exists but is `protect`-gated so `jwt.verify` **throws 401 on the expired
+token** (`middleware/auth.js:16,39-45`) — **it cannot resurrect a 2-day-old token.** No refresh-credential / device
+re-auth route exists. So restore needs an **`[api]`** re-mint endpoint; it is NOT a pure `[m]` wire-up. **Owner-locked
+via AskUserQuestion (2026-08-15):** (D-1) **restore** the sealed session, not create a new account; (D-2) **only after
+a SILENT 24h expiry — never after an explicit "Log out"** (keep destroy-on-logout; explicit logout forces a full login,
+enforced server-side via revoke); (D-3) a **bounded ~30-day** re-entry window, then a full login. Wrote the
+security-reviewed spec `docs/spec/PHASE-48.md` and filed a top-of-queue `→ cgpe-api · from cgpe-mobile` INBOX ask
+(grepped back durable): recommended a device-bound `refresh_token` (30d, allow-list, rotate-on-use) issued at login +
+a PUBLIC `POST /auth/refresh-biometric` (not `protect`-gated) + revoke-on-logout; offered a simpler
+`ignoreExpiration:true` sliding-session alternative and flagged it lacks server-side revocation (won't enforce D-2).
+Mechanism is `cgpe-api`'s call. **No mobile code** (building the restore flow against a non-existent endpoint = untested
+404 dead code — Phase 43/45 file-first pattern). **No `src/` change → no gate re-run** (baseline: `tsc` 0, `npm test`
+495/495, lint 0 errors / 12 warnings). **Live only when cgpe-api ships the re-mint endpoint + contract**, then the
+`[m]` build (seal the refresh token, bump `RECORD_VERSION` 1→2, `refreshBiometricSession()` + test, wire
+`resolveBoundIdentity` on the login screen, keep D-2's destroy+revoke on logout / no-clear on silent expiry) + a device
+& security review. Full path: `docs/spec/PHASE-48.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 47 — [m][sec] "Viewing as" is Master-only. BUILT 2026-08-15.** The next editor-actionable owner-backlog
 item (PLAN §Phase 47). **First step was verification, not code** (spec-mandated, same DB-not-phone-literal trap as
 Phase 38): read the real code and confirmed "Viewing as" is **pure client-side state** (`auth.tsx:56`, never
