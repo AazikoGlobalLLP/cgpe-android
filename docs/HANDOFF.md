@@ -1,66 +1,67 @@
-# HANDOFF — CGPE Connect (Android) — Phase 48 — 2026-08-15
+# HANDOFF — CGPE Connect (Android) — Phases 41b–41d + Phase 50 — 2026-08-15
 
-Phase 48 (`[sec]` biometric-only session restore) went the full arc in this session: verified the gap →
-owner-locked the model → filed the `[api]` ask → cgpe-api shipped it (Backend Phase 58) → verified their
-real code → **built + tested the mobile restore flow.** It is code-complete; only an on-device + security
-review against the running server remains (needs cgpe-api's `:3001` restart).
+This session finished the remaining Phase-41 sub-phases in the editor (41b/41c/41d) and captured a new
+owner request as Phase 50. **All of Phase 41 is now editor-complete; nothing more is editor-buildable there.**
+The whole thing is DEVICE-UNVERIFIED and needs a native APK build (two new native modules → not OTA).
 
-## Done
-- **A user who returns days later, logged-out, can get back into their OWN account with fingerprint/face
-  only — no id/password/OTP.** The login screen shows an "Unlock with fingerprint" affordance when a sealed
-  credential from a prior login exists; tapping it restores the same account.
-- **The safe rule holds both ways:** biometric restore works only after a session *silently* expired. If the
-  user deliberately taps **Log out**, restore is refused and a full login is required — enforced on the phone
-  (the sealed credential is destroyed) AND on the server (the refresh credential is revoked).
-- Backend was verified perfect before any mobile code: the re-mint endpoint is public, refuses a replayed
-  access token, rotates on every use, revokes the whole chain on reuse, and auto-expires after 30 days.
-- All three gates green: `tsc` 0 · `npm test` **513/513** (+18) · eslint 0 errors (3 pre-existing warnings).
+## Done (observable behavior)
+- **The 24/7 recorder re-arms itself** after an aggressive-OEM kill AND after a reboot (a periodic watchdog;
+  WorkManager restores it post-reboot — no native BootReceiver). (41b)
+- **GPS sampling adapts to motion** — an accelerometer classifier marks the phone still/moving and the
+  recorder samples sparser when stationary. (41c)
+- **Fake-GPS is rejected** — OS-flagged mock-provider fixes are dropped, so a spoofed location can't be
+  recorded. (41d)
+- **Revoking location permission is a loud opt-out** — a consented user who turns off "Allow all the time"
+  has every super-admin notified and the recorder stopped. (41d)
+- **Two backend asks filed** (courier workflow, owner to relay): a silent-user gap-detector → master alert
+  (41d §5); and dual-office geofence + out-of-range/early-clock-out reason → super-admin (Phase 50).
+- Gates green all session: `tsc` 0 · `npm test` **552/552** (+29) · eslint 0 errors (2 pre-existing warnings).
 
 ## Files changed
-- `src/lib/biometricIdentity.ts` — the biometric-sealed value is now the **30-day refresh token**, not the
-  24h access token (`BoundIdentity.refreshToken`); `RECORD_VERSION` bumped **1→2** so old v1 records (holding
-  a dead access token) are orphaned fail-closed. All install-scope / reinstall / enrolment-change hardening
-  untouched — only the sealed secret changed.
-- `src/data/api.ts` — NEW `refreshBiometricSession(refreshToken, deviceId?)` (three-outcome `ok`/`declined`/
-  `error` over public `req()`; a partial 200 → `error`, never a session; 400/401 → `declined` with no expiry
-  cascade since no bearer is sent) + `serverLogout(refreshToken?)`; `login`/`verifyOtp` thread `refresh_token`.
-- `src/store/auth.tsx` — `persist()` re-seals the refresh token on every auth + stores a plaintext copy for
-  revoke-only; NEW `restoreBiometricSession()` + `canBiometricRestore()`; `logout()` revokes server-side before
-  `clear()`; `clear()` drops `REFRESH_KEY`; `setBiometric` seals the refresh token (and no longer refuses the
-  toggle when a session has none). Silent expiry still does NOT clear the binding.
-- `src/app/(auth)/login.tsx` — gated "Unlock with fingerprint" affordance (+ "or sign in" divider) → restore.
-- `src/data/__tests__/api-refresh-biometric.test.ts` — NEW (18) — pins the wire contract + the three outcomes.
-- `docs/spec/PHASE-48.md` §6, `docs/PHASES.md` (Now), `docs/DECISIONS.md` (×2), `contracts/INBOX.md` (filed +
-  verified note) — the paper trail.
+- `src/lib/watchdog.ts` (new) — pure watchdog re-arm decision (`watchdogAction`); `watchdog.test.ts` (+11).
+- `src/lib/motion.ts` (new) — accelerometer classifier + sampling profiles + hysteresis + fail-safe freshness;
+  `motion.test.ts` (+16).
+- `src/lib/antiCircumvention.ts` (new) — `dropMocked` + `shouldSignalWithdrawal` + `locationBlockReason`;
+  `antiCircumvention.test.ts` (+12).
+- `src/lib/tracker.ts` — watchdog task + register/retire at the startService/stopUpdates chokepoints; motion
+  classifier wiring + profile-at-restart; mock filter in `ingest`; `syncConsentWithPermission`.
+- `src/app/_layout.tsx` — `PermissionMonitor` (fires the consent-withdrawal signal on foreground).
+- `app.json` + `package.json` — added `expo-background-task` 57.0.10, `expo-sensors` 57.0.2,
+  `RECEIVE_BOOT_COMPLETED` permission (+ auto-added background-task config plugin).
+- `docs/spec/PHASE-41.md` (41b/c/d), `docs/spec/PHASE-50.md` (new), `docs/PHASES.md`, `docs/DECISIONS.md`.
+- `contracts/INBOX.md` — 2 `→ cgpe-api` asks filed (grepped back durable).
 
 ## Decisions made
-- **Seal the 30-day refresh token, not the 24h access token** (owner-locked model). The access token dies
-  before the "2 days later" scenario, and the server refuses a non-refresh token (`typ:'refresh'` check), so
-  sealing it would be dead weight. `RECORD_VERSION` 1→2 orphans old records fail-closed.
-- **Backend chose the refresh-token allow-list, not the simpler sliding-session** — because only the allow-list
-  can be revoked server-side, which is what "an explicit logout forces a full login" (D-2) requires on the wire.
-- **`restoreBiometricSession()` requires a rotated credential on the 200** — a partial body is treated as a
-  fault (`error`), never a session, so the keystore never keeps a token the server just revoked.
-- **JS-only build, no new native module/permission** — stays OTA-eligible for Phase 49.
+- **41b: one watchdog covers OEM-kill AND reboot** (expo-background-task/WorkManager persists across reboot),
+  so no hand-written Kotlin BootReceiver — boring over clever. Trade: reboot re-arm within ~15 min, not seconds.
+  **Owner may veto** and ask for the native receiver.
+- **41c: expo-sensors accelerometer classifier**, profile applied at each service (re)start, NOT mid-session
+  (would fight 41b + flicker the notification). Honest limit: the sensor pauses in the background, so `still`
+  rarely fires for a pocketed phone — §12.8 says MEASURE battery first. **Numbers proposed, pending owner lock:**
+  STILL time-interval 5 min, still/moving threshold 0.05 g.
+- **41d: drop mocks (not label)** — self-enforcing (a spoofer goes silent → the gap-detector flags them). The
+  withdrawal signal is fail-safe against spurious master alerts (armed-gated, skips a failed permission read,
+  fires once). App-block **trigger LOCKED** (block if any of services/fg/bg off) but the **screen needs 5-language
+  copy**. Gap-detector is backend-owned → filed.
+- **Phase 50: backend-first** (server 403s out-of-range today; reversing that is a contract change) + **office
+  pins in the panel, not client literals** (Phase 7 removed exactly that) + unknowns flagged, not invented.
 
 ## Known broken / deliberately skipped
-- **Device + security review NOT done** — needs cgpe-api's `:3001` restart so the new endpoint is live, then a
-  real handset: restore after a real >24h expiry; explicit-logout blocks restore; >30d refused; cross-device
-  rejection; enrolment-change fail-closed. Not editor-verifiable (`biometricIdentity.ts`/`tracker.ts` are
-  device-only; `expo-secure-store` biometric gates never run in Node/web).
-- **`device_id` binding not wired** — v1 is user-bound only (no stable install id sent). cgpe-api's design
-  (row + request must BOTH carry it) makes adding it later non-breaking.
-- **`git push` still 403s** — every commit this session (`8aa9fbd`, `1375de2`) + all prior is local-only;
-  credential `reactjsaaziko` has no write access. **This blocks Phase 49** and needs a human credential swap.
-- Carried device/backend checks unchanged from prior phases: 41 part-2 (24/7 recorder), 42 (route colouring),
-  43 (geofence), 45 (both performance screens, needs `:3001` restart), 46 (emoji alignment).
+- **ALL of Phase 41 is DEVICE-UNVERIFIED** — needs a native EAS/dev-client build (new modules
+  `expo-background-task` + `expo-sensors` + `RECEIVE_BOOT_COMPLETED` → **NOT OTA**), then the §12.7 matrix and the
+  §3 battery measurement over a real day on 3+ handsets (Samsung/Xiaomi/OnePlus/Pixel).
+- **41d app-block SCREEN not built** — needs owner 5-language HUMAN copy (proposed English is in `PHASE-41.md`
+  §8/41d). Trigger is already locked; wiring is a small follow-up once copy lands.
+- **Phase 50 not built** — awaits cgpe-api shipping the change + the panel pins set + the owner confirming the 5
+  flagged points (`PHASE-50.md` §6).
+- **`git push` still 403s** — EVERY commit this session is local-only (`71d15a3 b535c10 25d3d5b 1d75521 08dd00f
+  a484f54 5fe05bc 2617c27 a5bc712 0885197`) + the 2 INBOX asks (contracts/ is untracked). Blocks Phase 49; needs a
+  human credential swap.
 
 ## Next session starts here
-- **Phase 49 — final APK + one-click link, then OTA-only — is the LAST phase, but it is GATED, not
-  editor-buildable yet.** Pre-flight (all must be true first): every device-verification check above cleared on
-  a real handset, AND the `git push` 403 resolved (a production build must ship from pushed, backed-up code).
-  Until those, there is no new editor code — the remaining work is on-device verification + the ops fixes.
+- **Phase 41 device-verification pass (owner's #1) — cut a native APK, then walk the §12.7 matrix + measure
+  battery.** Everything editor-side is done; this is pure build-and-verify. Do NOT cut the "final" APK (Phase 49)
+  while checks are unverified or the push is broken.
 - First command: `/boot`
-- Watch out for: **do not cut the "final" APK while checks are unverified or the push is broken.** Also, Phase
-  41 already added a native module (`expo-intent-launcher`), so at least one more native APK build is due
-  before "final" — OTA covers only JS/asset updates, never a native change (`docs/PLAN-2026-08-14.md` §49).
+- Watch out for: **Phase 41 added TWO native modules — a native build is mandatory, OTA cannot carry it.** And the
+  two filed `[api]`s (gap-detector, Phase 50) need the owner to relay them to cgpe-api.

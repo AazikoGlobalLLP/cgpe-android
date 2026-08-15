@@ -1256,6 +1256,22 @@ exercise.
 
 ## Next 3
 
+**CURRENT next 3 (2026-08-15 handoff):**
+1. **Device-verify ALL of Phase 41 (owner's #1).** 41a–41d are now EDITOR-BUILT. This needs a native EAS/dev-client
+   build — two new native modules (`expo-background-task`, `expo-sensors`) + the `RECEIVE_BOOT_COMPLETED` permission,
+   so **NOT OTA** — then the §12.7 device matrix + the §3 battery measurement over a real day on 3+ handsets. Pure
+   build-and-verify; no editor code left.
+2. **Owner-input unblocks the last mobile bits.** (a) 41d app-block: supply **5-language copy** → wire the block
+   screen (trigger already locked). (b) Phase 50 (dual-office + out-of-range/early-clock-out reason): after cgpe-api
+   ships it + the two office pins are set in the panel + the owner confirms the 5 flagged points → then mobile threads
+   `reason` + builds the prompt (also needs 5-language copy).
+3. **Phase 49 — final APK + one-click link → OTA-only.** GATED: every device check cleared AND the `git push` 403
+   resolved (a production build must ship from pushed, backed-up code).
+
+_History below is retained for context; where it lists 41b–41d / 47 / 48 as pending, those are now editor-done (see `## Now`)._
+
+---
+
 **⭐ NEW DRIVING PRIORITY — owner backlog 2026-08-14. Full roadmap: `docs/PLAN-2026-08-14.md` (Phases 34–48).**
 The owner handed a concrete feature backlog: per-member 200 m clock-in geofence; strict salary from
 hours/days; completed-tasks report + performance score (assigned-and-completed only, not reminders); a
