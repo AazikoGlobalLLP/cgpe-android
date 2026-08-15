@@ -6,6 +6,27 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 45 backend SHIPPED (cgpe-api Phase 53) + VERIFIED + month-basis owner-confirmed + mobile reader built
+
+**Context.** Same day as filing, `cgpe-api` shipped `GET /api/team/task-report` (Backend Phase 53). Their reply
+flagged that the **month basis** (due-month vs completion-month) was shipped to the mobile+backend recommendation but
+NOT yet owner-confirmed.
+
+**Decision.** Accept it — verified their real `routes/team.js` line by line against every owner-locked def and it
+matches exactly (cancelled excluded from both sets, manager-assigned only via `creator ≠ assignee`, reminders +
+Unassigned dropped, `score = round(100×earned/possible)` P1:3/P2:2/P3:1 + on-time ×1.0 / late ×0.5, `possible===0 →
+null`, IST due-month bucket). Resolved the open point directly with the owner (AskUserQuestion, 2026-08-15): **due-month
+confirmed** — no completion-month switch needed. Built the mobile data reader `getTaskReport(month,{scope,userId})` +
+pure `mapTaskReport` (two-outcome `req()` — 403 = quiet answer, outage = banner; server owns every count/score, app
+never recomputes; `score:null` distinct from `0`) + `api-task-report.test.ts` (16). Recorded mobile verification under
+the INBOX item (grepped durable).
+
+**Consequence.** Gates green (`tsc` 0, `npm test` 483/483, lint 0 errors). No contract change (pure consumer). The
+reader has **no UI consumer yet** — the render is a separate device phase feeding Phase 39 (the master monitoring
+surface), and its visibility gating is master/admin-only (the Phase-40 role-gating class: gate on the REAL role, never
+the folded tier, or performance data leaks to every admin/leader). A future weight/cutoff change is a new `[api]` ask
+with the owner's exact numbers, never a mobile recompute. Full path: `docs/spec/PHASE-45.md`.
+
 ## 2026-08-15 — Phase 45 (completed-tasks report + performance score): genuine gap; score LOCKED with owner (not invented); FILED to cgpe-api
 
 **Context.** Owner backlog Phase 45: a per-member report of what they completed, when, and how much, plus a

@@ -333,6 +333,108 @@ export async function getTaskOverview(): Promise<TaskOverview | null> {
   return await tryReal<TaskOverview>('/team/task-overview', {}, (d) => d && Array.isArray(d.members));
 }
 
+/* --- Phase 45: per-member completed-tasks report + monthly performance score ---
+ * `GET /team/task-report?month=YYYY-MM[&scope=all|own][&user_id=…]` (cgpe-api Backend
+ * Phase 53, `contracts/api.md` §`/api/team`). The SERVER computes the score from the
+ * owner-locked rules — manager-assigned AND actually-completed tasks only (reminders,
+ * self-created and cancelled excluded), importance (P1:3/P2:2/P3:1) × timeliness
+ * (on-time ×1 / late ×0.5), bucketed by due-month. **The app RENDERS it and never
+ * recomputes it** (rule 2) — every count/score below is the server's, passed through.
+ *
+ * TWO OUTCOMES, told apart by `req()` (not `tryReal`, which would collapse the envelope) —
+ * this is admin/master monitoring data, so a 401/403 for the wrong role must be a quiet
+ * ANSWER, not a banner:
+ *   - a 200 `{ data:{ month, members[], totals } }` → `{ status:'ok', report }`;
+ *   - a 5xx / network / shape-drift → `{ status:'error' }` + banner; a 401/403/404 stays quiet.
+ * `score` is a server integer 0–100 OR `null` ("no tasks" — never a fabricated 0%). An empty
+ * `members[]` on a healthy 200 is a valid `ok` (a month with no counted work), not an error. */
+export type TaskReportMember = {
+  name: string;
+  userId: string;
+  role: string | null;
+  department: string | null;
+  counts: { assigned: number; completed: number; onTime: number; late: number; notCompleted: number };
+  /** 0–100 server integer, or `null` when no tasks were counted — render as "no tasks", NEVER 0%. */
+  score: number | null;
+  completedTasks: { id: string; title: string; priority: string | null; dueAt: string | null; completedAt: string | null; onTime: boolean }[];
+};
+export type TaskReport = {
+  month: string;
+  members: TaskReportMember[];
+  totals: { members: number; assigned: number; completed: number; onTime: number; late: number };
+};
+export type TaskReportResult = { status: 'ok'; report: TaskReport } | { status: 'error' };
+export type TaskReportScope = { scope?: 'all' | 'own'; userId?: string };
+
+/** Defensive wire→app mapper. Coerces every field; drops junk rows; keeps `score:null` distinct
+ *  from `score:0` (0 = a real "earned nothing", null = "no tasks"). Pure — pinned by tests. */
+function mapTaskReport(data: any): TaskReport {
+  const int = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? Math.floor(v) : 0);
+  const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+  const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+  const members: TaskReportMember[] = (Array.isArray(data.members) ? data.members : [])
+    .filter((m: any) => m && typeof m === 'object')
+    .map((m: any) => {
+      const c = isObj(m.counts) ? m.counts : {};
+      const s = m.score;
+      return {
+        name: str(m.name),
+        userId: str(m.user_id),
+        role: strOrNull(m.role),
+        department: strOrNull(m.department),
+        counts: {
+          assigned: int(c.assigned),
+          completed: int(c.completed),
+          onTime: int(c.on_time),
+          late: int(c.late),
+          notCompleted: int(c.not_completed),
+        },
+        score: typeof s === 'number' && Number.isFinite(s) ? s : null,   // null (no tasks) survives; 0 passes through
+        completedTasks: (Array.isArray(m.completed_tasks) ? m.completed_tasks : [])
+          .filter((t: any) => t && typeof t === 'object')
+          .map((t: any) => ({
+            id: str(t.id),
+            title: str(t.title),
+            priority: strOrNull(t.priority),
+            dueAt: strOrNull(t.due_at),
+            completedAt: strOrNull(t.completed_at),
+            onTime: t.on_time === true,
+          })),
+      };
+    });
+  const t = isObj(data.totals) ? data.totals : {};
+  return {
+    month: str(data.month),
+    members,
+    totals: {
+      members: int(t.members),
+      assigned: int(t.assigned),
+      completed: int(t.completed),
+      onTime: int(t.on_time),
+      late: int(t.late),
+    },
+  };
+}
+
+export async function getTaskReport(month: string, opts: TaskReportScope = {}): Promise<TaskReportResult> {
+  if (FORCE_DEMO || !sessionReal) return { status: 'error' };   // no request attempted
+  const q: string[] = [`month=${encodeURIComponent(month)}`];
+  if (opts.scope) q.push(`scope=${opts.scope}`);
+  if (opts.userId) q.push(`user_id=${encodeURIComponent(opts.userId)}`);
+  const path = `/team/task-report?${q.join('&')}`;
+  const key = healthKey('/team/task-report');   // collapse month/scope → one banner row
+  try {
+    const { ok, status, json } = await req(path, {}, REQUEST_TIMEOUT, key);
+    if (!ok) { reportIfOutage(status, key); return { status: 'error' }; }
+    const data = json?.data;
+    if (!isObj(data) || !Array.isArray(data.members)) { reportFailure(key); return { status: 'error' }; }
+    return { status: 'ok', report: mapTaskReport(data) };
+  } catch {
+    reportFailure(key);            // dead network or the 4.5 s abort
+    return { status: 'error' };
+  }
+}
+
 /** All tasks the signed-in user may see (own only for team tier; everything for admin/master). */
 export async function getTasks(ownOnly = false): Promise<Task[]> {
   const ov = await getTaskOverview();

@@ -34,6 +34,23 @@ change → no gate re-run** (baseline: `tsc` 0, `npm test` 467/467, lint 0 error
 ships the aggregate (+ `api.md`/`models.md`) and a later `[m]` phase renders it (`getTaskReport` + a per-member surface
 feeding Phase 39) + a device check. Full path: `docs/spec/PHASE-45.md`; DECISIONS 2026-08-15 (top).
 
+**Phase 45 UPDATE — cgpe-api SHIPPED (Backend Phase 53) → VERIFIED against real code → owner confirmed due-month → mobile READER built + tested — 2026-08-15.**
+`cgpe-api` shipped `GET /api/team/task-report?month=YYYY-MM[&scope=all|own][&user_id=…]` (Backend Phase 53, 16 tests,
+suite 798). **Verified against their real `routes/team.js` (not the summary):** every owner-locked def honoured
+exactly — `COMPLETED` excludes `cancelled` (`:31`), `selfCreated → continue` (`:307-311`), reminders + Unassigned
+dropped (`:293`/`:298-300`), `score = round(100×earned/possible)` weights P1:3/P2:2/P3:1 + on-time ×1.0 / late ×0.5,
+`possible===0 → null` (`:349`), IST due-month bucket (`:314`). **The one flagged open point (month basis) is now
+OWNER-CONFIRMED = due-month** (AskUserQuestion, 2026-08-15) — exactly what shipped, no change. Mobile verification
+recorded under the (cgpe-api-owned) INBOX item, grepped durable. **Built the mobile data reader:** `getTaskReport(month,
+{scope,userId})` in `src/data/api.ts` + pure `mapTaskReport` — two-outcome `req()` posture (403 for the wrong role = a
+quiet answer, 5xx/network/shape-drift = banner), server owns every count/score (rule 2 — the app never recomputes),
+`score:null` ("no tasks") kept distinct from `score:0`, empty `members[]` on a healthy 200 is a valid `ok`. Pinned by
+NEW `api-task-report.test.ts` (16). Gates green: `tsc` 0 · `npm test` **483/483** (+16) · lint 0 errors (2 pre-existing
+warnings unrelated). Commit local (push 403s). **No contract change** (pure consumer of shipped Phase 53).
+**Remaining = the RENDER (a device phase, feeds Phase 39):** the reader has no UI consumer yet — the per-member
+report/score surface + who-can-see-it gating (master/admin only, the Phase-40 role-gating class) is the next build,
+plus a device check once cgpe-api's `:3001` restart lands. Full path: `docs/spec/PHASE-45.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 44 — [api]+[m] Strict salary from working hours/days. VERIFIED — ALREADY SATISFIED end to end; owner confirmed the live formula as-is; ZERO change — 2026-08-15.**
 Owner backlog Phase 44 (Group F): salary computed **from actual working hours/days**, shown as **one amount**
 (rule 2 — a backend payroll-engine formula; the app never multiplies). **Verified against real code (both trees):
