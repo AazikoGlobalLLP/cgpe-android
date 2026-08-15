@@ -6,6 +6,31 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 41d continued: consent-withdrawal signal BUILT (owner-approved), app-block brain built, gap-detector [api] FILED
+
+**Context.** After the mock-rejection build (below), the owner approved (AskUserQuestion 2026-08-15) pursuing the
+other three §5 parts: the app-block screen, the consent-withdrawal signal, and filing the backend gap-detector.
+
+**Decision.** (1) **Consent-withdrawal signal — BUILT.** `syncConsentWithPermission()` on app foreground (native-only
+`PermissionMonitor` beside `ConsentGate`): a consented 24/7 user whose OS background permission is revoked →
+`setLocationConsent(false)` (Phase 43 master notify) + `stopAmbientTracking`. Made it **fail-safe against spurious
+master alerts**: `armed`-gated, a FAILED permission read returns early (never signal on uncertainty — the risk was
+`getBackgroundPermissionsAsync().catch(()=>null)` defaulting to "not granted" and firing a false withdrawal), and it
+self-clears so one revocation = one alert. (2) **App-block — BRAIN ONLY.** Built + tested the pure `locationBlockReason`
+but did NOT build the screen: a user-facing gate needs **5-language human copy** (machine translation forbidden) + an
+owner trigger decision. Building a screen with English-only or invented copy would violate the i18n rule and ship dead
+keys. So the brain waits for copy; wiring it behind `PermissionMonitor` is then a small follow-up. (3) **Gap-detector —
+FILED, not built here.** It is backend-owned (§5/§7), and its threshold + "expected window" are owner POLICY numbers I
+must not invent — so I verified cgpe-backend has none, grounded the ask in its real scheduler/notify patterns, and filed
+a top-of-queue `[api]` recommending the mechanism with the numbers **flagged for owner + cgpe-api to confirm** (Phase-45
+pattern), then grepped the reply back durable.
+
+**Consequence.** §5's client side is now as complete as it can be without owner copy: spoofed fixes are dropped, a
+revoked permission is a loud (not silent) opt-out, and the enforcement observability is filed to the backend where §5
+puts it. The ONLY remaining 41d work is (a) the owner's 5-language app-block copy → then wire the screen, and (b)
+cgpe-api shipping the gap-detector. Gates: `tsc` 0 · `npm test` 552/552 · eslint 0 errors (2 pre-existing `_layout`
+warnings). Commits `5fe05bc` (code). INBOX ask filed 2026-08-15. Full path: `docs/spec/PHASE-41.md` §8 (41d).
+
 ## 2026-08-15 — Phase 41d PART BUILT (editor): mock-location rejection; the other three §5 parts are owner-input / backend
 
 **Context.** §5 anti-circumvention has four parts: (1) permission-monitor + app-block, (2) mock-location rejection,

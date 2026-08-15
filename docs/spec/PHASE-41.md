@@ -225,25 +225,37 @@ honest, never covert:
   NOT OTA). **DEVICE-UNVERIFIED acceptance gate:** the §3 battery measurement over a real day on 3+ handsets
   decides whether STILL helps enough or whether to escalate to option 3 / mid-session reconfigure. Full path:
   DECISIONS 2026-08-15 (top).
-- 🔨 **41d — anti-circumvention (§5): PART BUILT (mock rejection), 2026-08-15; the rest is owner-input / backend.**
+- 🔨 **41d — anti-circumvention (§5): 3 of 4 parts BUILT/FILED, 2026-08-15; only the app-block SCREEN awaits owner copy.**
   §5 has four parts with very different feasibility:
   - ✅ **Mock-location rejection — BUILT IN EDITOR, DEVICE-UNVERIFIED (2026-08-15).** Verified `expo-location`'s
-    `LocationObject.mocked?:boolean` (SDK 57) — Android stamps fake-GPS fixes. NEW pure `src/lib/antiCircumvention.ts`
-    `dropMocked` + `antiCircumvention.test.ts` (+6); `tracker.ts` `ingest` filters each batch through it before
-    recording, so no spoofed coordinate enters the buffer. A spoofer's dropped points surface as a GAP to the backend
-    detector below (transparent, never fabricated). No dep/permission/contract change. Gates: `tsc` 0 · `npm test`
-    **546/546** (+6) · eslint 0. Commit `08dd00f` (local — push 403s). Device check: a fake-GPS app's fixes are dropped.
-  - 🚫 **Permission-monitor + app-block screen — BLOCKED on owner.** Can read FG/BG location + services (`expo-location`)
-    but **battery-opt exemption is unreadable from JS** (§12.3). Needs (a) a spec-lock on the exact trigger/behaviour and
-    (b) **5-language HUMAN copy** for the "turn location back on" screen (machine translation forbidden, PHASE-19 §4). Not
-    built speculatively.
-  - ⚠️ **Consent-withdrawal auto-signal — needs an owner policy call.** Backend is live (Phase 43: `POST /consent`
-    withdrawal notifies every super_admin, verified `timeTracker.js:1425`), and `setLocationConsent(false)` exists. But
-    auto-firing it when the OS permission is revoked notifies ALL masters — a blast-radius behaviour + device-only
-    foreground wiring; confirm the exact trigger (immediate vs debounced) before building to avoid spurious master alerts.
-  - 🚫 **Gap detection → master alert — backend `[api]`.** Verified cgpe-backend has **no** silent-user/gap detector
-    (grep, not tags). This is the core transparent-enforcement lever and §5/§7 put it on the backend ("design later").
-    To file with a recommended-and-flagged threshold (Phase-45 pattern) once the owner sets the policy number.
+    `LocationObject.mocked?:boolean` (SDK 57) — Android stamps fake-GPS fixes. Pure `src/lib/antiCircumvention.ts`
+    `dropMocked`; `tracker.ts` `ingest` filters each batch through it before recording, so no spoofed coordinate enters
+    the buffer. A spoofer's dropped points surface as a GAP to the backend detector below (transparent, never fabricated).
+    Commit `08dd00f`. Device check: a fake-GPS app's fixes are dropped.
+  - ✅ **Consent-withdrawal auto-signal — BUILT IN EDITOR, DEVICE-UNVERIFIED (2026-08-15).** Owner approved it
+    (AskUserQuestion 2026-08-15). NEW `tracker.ts` `syncConsentWithPermission()` + pure `shouldSignalWithdrawal`: on app
+    foreground (a native-only `PermissionMonitor` mounted beside `ConsentGate` in `_layout.tsx`), a consented 24/7 user
+    whose OS background-location permission is revoked → `setLocationConsent(false)` (Phase 43 notifies every master, a
+    loud opt-out) + `stopAmbientTracking`. **Safe against false alarms:** `armed`-gated, skips a FAILED permission read
+    (never signals on uncertainty), and fires once per revocation (the armed flag clears). Commit `5fe05bc`. Device check:
+    revoke "Allow all the time" → masters get one alert, recorder stops.
+  - 🔨 **Permission-monitor + app-block — BRAIN BUILT, SCREEN awaits owner copy.** Pure `locationBlockReason`
+    (services_off / foreground_denied / background_denied, most-fundamental first, consented-only; battery-opt excluded —
+    unreadable from JS §12.3) is built + tested and ready to wire behind `PermissionMonitor`. The **SCREEN is NOT built**:
+    it needs **5-language HUMAN copy** for the "turn location back on" gate (machine translation forbidden, PHASE-19 §4) +
+    an owner trigger confirmation (which permissions block; immediate vs a grace period). Wiring is a small follow-up once
+    copy lands. Commit `5fe05bc` (brain + test).
+  - ✅ **Gap detection → master alert — `[api]` FILED to cgpe-api (2026-08-15).** Verified cgpe-backend has **no**
+    silent-user/gap detector (grep, not tags); grounded the ask in its real patterns (`locationRetention` scheduler
+    `server.js:197`; master-notify `metadata.kind` `timeTracker.js:1425`; `location_tracks` points). Filed a top-of-queue
+    `→ cgpe-api` ask (grepped back durable): a periodic gap-detector → `metadata:{kind:'location_gap',…}` master alert,
+    with the **threshold + expected-window flagged as the owner's numbers to set** (Phase-45 pattern), consent-aware,
+    privacy-safe (the gap fact, never coordinates). No mobile build is blocked on it (the app already drops mocks + signals
+    withdrawal); it is the backend observability that makes the enforcement transparent.
+  - **`antiCircumvention.test.ts` (+12 total): `dropMocked`, `shouldSignalWithdrawal`, `locationBlockReason`.** Gates
+    across 41d: `tsc` 0 · `npm test` **552/552** · eslint 0 errors (2 pre-existing `_layout` warnings). **Needs a native
+    APK build** only in aggregate with 41a/41b/41c (41d itself added no dep/permission). **Remaining in 41d: the
+    app-block SCREEN (owner copy) + the backend gap-detector shipping.**
 - Gates each: `tsc` 0 · `npm test` green · no new lint errors · **on-device** matrix
   (Samsung/Xiaomi/OnePlus/Pixel + one iPhone; battery-drain measured).
 

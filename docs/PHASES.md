@@ -14,21 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 41d — [m][sec] anti-circumvention (§5). PART BUILT: mock-location rejection; the rest is owner-input / backend — 2026-08-15.**
-The last Phase-41 sub-phase (§5). Verified feasibility against real code (not tags): `expo-location.LocationObject.mocked`
-exists (SDK 57), `setLocationConsent` exists, Phase-43 withdrawal-notify is live, and cgpe-backend has **no** gap-detector.
-§5 splits into four parts of very different feasibility, so only the unblocked one was built: **✅ mock-location rejection**
-— NEW pure `src/lib/antiCircumvention.ts` `dropMocked` + `antiCircumvention.test.ts` (+6), wired into `tracker.ts` `ingest`
-so a fake-GPS `mocked:true` fix never enters the record (a spoofer's dropped points then surface as a coverage GAP to the
-backend detector — transparent, never fabricated). Chose **drop** over **label** (no backend field needed + self-enforcing).
-No dep/permission/contract change. Gates green: `tsc` 0 · `npm test` **546/546** (+6) · eslint 0. Commit `08dd00f` (local —
-push 403s). **The other three §5 parts are deliberately NOT built** (owner-blocked, recorded in DECISIONS 2026-08-15):
-**🚫 permission-monitor + app-block** needs 5-language HUMAN copy (machine translation forbidden) + a trigger spec-lock;
-**⚠️ consent-withdrawal auto-signal** needs an owner policy call (auto-notifying ALL masters is a blast radius) + device
-wiring; **🚫 gap-detector → master alert** is a backend `[api]` with an undefined "X hours" threshold I must not invent
-(file with a recommended-and-flagged number once the owner sets it — Phase-45 pattern). **DEVICE-UNVERIFIED** (fake-GPS app
-on a handset drops mocked fixes). Full path: `docs/spec/PHASE-41.md` §8 (41d); DECISIONS 2026-08-15 (top). **41d is now the
-enforcement centre of gravity on the BACKEND + owner copy — mostly not a mobile-editor build.**
+**Phase 41d — [m][sec] anti-circumvention (§5). 3 of 4 parts BUILT/FILED; only the app-block SCREEN awaits owner copy — 2026-08-15.**
+The last Phase-41 sub-phase (§5). Owner approved pursuing all remaining parts (AskUserQuestion 2026-08-15). Verified
+feasibility against real code (not tags): `expo-location.LocationObject.mocked` exists (SDK 57), `setLocationConsent`
+exists, Phase-43 withdrawal-notify is live (`timeTracker.js:1425`), cgpe-backend has **no** gap-detector. Delivered:
+**✅ mock-location rejection** — pure `dropMocked` in NEW `src/lib/antiCircumvention.ts`, wired into `tracker.ts` `ingest`
+so a fake-GPS `mocked:true` fix never enters the record (chose **drop** over **label** — self-enforcing: dropped points
+show as a GAP to the backend detector). Commit `08dd00f`. **✅ consent-withdrawal auto-signal** — NEW
+`syncConsentWithPermission()` + native-only `PermissionMonitor` (mounted beside `ConsentGate` in `_layout.tsx`): a
+consented 24/7 user who revokes OS background location → `setLocationConsent(false)` (Phase 43 notifies every master, a
+loud opt-out) + `stopAmbientTracking`; **fail-safe** (`armed`-gated, skips a failed permission read so it never spam-alerts
+masters on uncertainty, fires once per revocation). Commit `5fe05bc`. **✅ gap-detector `[api]` FILED** to cgpe-api
+(grounded in its real `locationRetention` scheduler + master-notify patterns; recommends a periodic
+`kind:'location_gap'` master alert with the **threshold + expected-window flagged as the owner's numbers to set** —
+Phase-45 pattern; grepped back durable). **🔨 app-block — BRAIN built** (pure `locationBlockReason`, tested) **but the
+SCREEN awaits owner 5-language copy** (machine translation forbidden) + a trigger confirmation; wiring it behind
+`PermissionMonitor` is then a small follow-up. Pure §5 logic pinned in `antiCircumvention.test.ts` (+12 total). Gates:
+`tsc` 0 · `npm test` **552/552** · eslint 0 errors (2 pre-existing `_layout` warnings). 41d added **no dep/permission/
+contract change**. **DEVICE-UNVERIFIED** (fake-GPS drop; revoke-permission→master-alert). **Remaining in 41d: (1) the
+owner's app-block copy → wire the screen; (2) cgpe-api ships the gap-detector.** Full path: `docs/spec/PHASE-41.md` §8
+(41d); DECISIONS 2026-08-15 (top two).
 
 **Phase 41c — [m] motion-adaptive GPS sampling (expo-sensors classifier). BUILT IN EDITOR, DEVICE-UNVERIFIED — 2026-08-15.**
 The next Phase-41 sub-phase after 41b (§3/§4): "sparse when still, denser when moving." **Owner chose the activity
