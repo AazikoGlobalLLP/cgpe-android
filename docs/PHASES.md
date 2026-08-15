@@ -31,7 +31,21 @@ change → no gate re-run** (baseline `tsc` 0 / `npm test` 552 / eslint 0). **Li
 set + the owner confirms the 5 points** — then mobile threads `reason` + builds the prompt UI (needs 5-language human copy)
 + a device check. Full path: `docs/spec/PHASE-50.md`; DECISIONS 2026-08-15 (top).
 
-**Phase 41d — [m][sec] anti-circumvention (§5). 3 of 4 parts BUILT/FILED; only the app-block SCREEN awaits owner copy — 2026-08-15.**
+**Phase 41d — [m][sec] anti-circumvention (§5). ALL 4 parts BUILT/FILED in the editor — app-block SCREEN now wired (owner copy landed) — 2026-08-15.**
+**UPDATE 2026-08-15 (app-block SCREEN BUILT):** the last editor-buildable 41d piece is done. The owner's 5-language copy
+landed (`translation-v.01.txt` → `consent.blockedTitle`/`blockedBody`/`blockedAction`, already in the dictionary; the
+simpler `consent.blocked*` set supersedes the spec's earlier `block.*` proposal), and the trigger was already LOCKED
+(any-of-3-off = non-null `locationBlockReason`). Built `tracker.evaluateLocationBlock()` (fail-open) +
+`openLocationSettings(reason)` + NEW `src/ui/LocationBlock.tsx` (full-screen overlay modeled on `AppLock`, re-checks on
+foreground, swallows Android back, `zIndex 55` below AppLock, native + signed-in only), mounted before `<AppLock/>`.
+Composition with the withdrawal signal is **spec-literal** (owner-chosen, AskUserQuestion 2026-08-15): permission-revoke
+keeps routing through withdrawal (master alert + disarm) + the `/consent` wall on next open, so the block settles on
+device-Location-OFF. Gates: `tsc` 0 · `npm test` **552/552** (unchanged — device-only + presentational) · eslint 0 errors
+(2 pre-existing `_layout` warnings). No contract/dep/i18n-key change. Commit `dd6a4c3` (local — push 403s).
+**DEVICE-UNVERIFIED** (rolls into the aggregate Phase-41 native build). **Remaining in 41d: cgpe-api's gap-detector +
+on-device verification.** Details: DECISIONS 2026-08-15 (top); `docs/spec/PHASE-41.md` §8 (41d). Original 41d filing below.
+
+**Phase 41d (original filing) — [m][sec] anti-circumvention (§5). 3 of 4 parts BUILT/FILED; only the app-block SCREEN awaited owner copy — 2026-08-15.**
 The last Phase-41 sub-phase (§5). Owner approved pursuing all remaining parts (AskUserQuestion 2026-08-15). Verified
 feasibility against real code (not tags): `expo-location.LocationObject.mocked` exists (SDK 57), `setLocationConsent`
 exists, Phase-43 withdrawal-notify is live (`timeTracker.js:1425`), cgpe-backend has **no** gap-detector. Delivered:

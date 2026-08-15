@@ -6,6 +6,35 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 41d app-block SCREEN BUILT: owner copy landed → wired (spec-literal composition chosen)
+
+**Context.** The 41d "turn location back on" gate had two blockers: 5-language human copy and a locked trigger.
+Both are now cleared — the copy (`consent.blockedTitle`/`blockedBody`/`blockedAction`) is in the i18n dictionary
+across all five languages (owner's `translation-v.01.txt`; note it uses the simpler `consent.blocked*` keys, NOT
+the spec §8 draft's superseded `block.*` proposal), and the trigger was already LOCKED (block immediately when any
+of services/fg/bg is off = non-null `locationBlockReason`). So the screen became editor-buildable.
+
+**Decision.** Built it: `tracker.evaluateLocationBlock()` (native reads → the pure, tested `locationBlockReason`,
+FAIL-OPEN to `null` on any uncertain read) + `openLocationSettings(reason)` (services_off → `LOCATION_SOURCE_SETTINGS`;
+permission → `Linking.openSettings()`); NEW `src/ui/LocationBlock.tsx` overlay modeled on `AppLock` (owner copy,
+"Open settings" CTA, re-checks on foreground, swallows Android back, `zIndex 55` below AppLock's 60, native +
+signed-in only); mounted before `<AppLock/>` in `_layout.tsx`. Wired against the **wired** `consent.blocked*` keys,
+not the spec's `block.*` proposal (the wired copy is the human-approved reality). Composition with the shipped
+withdrawal signal is **spec-literal, owner-chosen via AskUserQuestion 2026-08-15**: a revoked background PERMISSION
+keeps routing through `syncConsentWithPermission` (master alert + disarm) + the `/consent` wall on next open — which
+clears `armed`, so `evaluateLocationBlock` returns `null` for that case and the block settles durably on
+device-Location-OFF (services). Chosen over gating the block on a durable consent marker (would block permission-off
+immediately too, but more state + double-fire) and over re-firing `/consent` on foreground (touches ConsentGate's
+once-per-session invariant). No new tests — `tracker.ts`/UI are device-only (no stub), the pure brain is already
+pinned in `antiCircumvention.test.ts`; no new i18n keys, so the parity count is untouched.
+
+**Consequence.** 41d is now fully editor-complete. Gates: `tsc` 0 · `npm test` 552/552 (unchanged) · eslint 0 errors
+(2 pre-existing `_layout` warnings). No contract change, no new dep. Commit `dd6a4c3` (local — push 403s).
+**DEVICE-UNVERIFIED** (rolls into the aggregate Phase-41 native build): turn off device Location → overlay raises;
+"Open settings" reaches the right page; return with it back on → clears; Android back can't escape. The one accepted
+gap the owner signed off on: a mid-session permission-revoke shows no block until the next app open (withdrawal path
+handles it meanwhile). Full path: `docs/spec/PHASE-41.md` §8 (41d).
+
 ## 2026-08-15 — Phase 50 (new owner request): dual-office geofence + out-of-range / early-clock-out reason → super-admin. SPEC + [api], no build
 
 **Context.** Owner asked (2026-08-15): clock in/out from EITHER of two Surat offices (200 m); an out-of-range

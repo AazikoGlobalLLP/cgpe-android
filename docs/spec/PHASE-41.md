@@ -239,18 +239,25 @@ honest, never covert:
     loud opt-out) + `stopAmbientTracking`. **Safe against false alarms:** `armed`-gated, skips a FAILED permission read
     (never signals on uncertainty), and fires once per revocation (the armed flag clears). Commit `5fe05bc`. Device check:
     revoke "Allow all the time" → masters get one alert, recorder stops.
-  - 🔨 **Permission-monitor + app-block — BRAIN BUILT + TRIGGER LOCKED, SCREEN awaits owner copy.** Pure
-    `locationBlockReason` (services_off / foreground_denied / background_denied, most-fundamental first, consented-only;
-    battery-opt excluded — unreadable from JS §12.3) is built + tested and ready to wire behind `PermissionMonitor`.
-    **Trigger LOCKED by owner (AskUserQuestion 2026-08-15): block IMMEDIATELY when ANY of the three is off** for a
-    consented user — which is exactly a non-null `locationBlockReason`, so no code change is owed. The **SCREEN is the ONLY
-    thing left**: it needs **5-language HUMAN copy** for the "turn location back on" gate (machine translation forbidden,
-    PHASE-19 §4) — English proposed, awaiting gu/hi/hi-en/gu-en: `block.title` "Location is required" · `block.body.services`
-    "Location is switched off on your phone. CGPE Connect needs it on to work. Turn on Location in your phone settings, then
-    come back." · `block.body.permission` "CGPE Connect needs location set to 'Allow all the time'. Open Settings, allow
-    location, then come back." · `block.cta.settings` "Open settings" · `block.cta.recheck` "I've turned it on". Once the
-    copy lands: add the 5 keys (bump the parity test), build the block screen, and gate it in `PermissionMonitor` on
-    `locationBlockReason !== null`. Commit `5fe05bc` (brain + test).
+  - ✅ **Permission-monitor + app-block — BUILT IN EDITOR, DEVICE-UNVERIFIED (2026-08-15).** Both blockers cleared:
+    the owner's 5-language copy landed (`translation-v.01.txt` → `consent.blockedTitle`/`blockedBody`/`blockedAction`,
+    already in the i18n dictionary — note the owner supplied the SIMPLER single-body `consent.blocked*` set, which
+    SUPERSEDES this bullet's earlier proposed `block.*` keys / services-vs-permission split / "I've turned it on"
+    recheck button; recheck is automatic on foreground) and the trigger was already LOCKED (block IMMEDIATELY when ANY
+    of services / foreground / background is off = non-null `locationBlockReason`). Built: `tracker.evaluateLocationBlock()`
+    (native reads → the pure, tested `locationBlockReason`; consented-only; FAIL-OPEN to `null` on any uncertain read)
+    + `tracker.openLocationSettings(reason)` (services_off → `LOCATION_SOURCE_SETTINGS`; a permission denial →
+    `Linking.openSettings()`); NEW `src/ui/LocationBlock.tsx`, a full-screen overlay modeled on `AppLock` (owner copy,
+    "Open settings" CTA, re-checks on every foreground so returning from Settings clears it, swallows the Android back
+    button, `zIndex 55` below AppLock's 60 so the biometric lock wins, native + signed-in only), mounted before
+    `<AppLock/>` in `_layout.tsx`. **Composition with the withdrawal signal = spec-literal (owner-chosen via
+    AskUserQuestion 2026-08-15):** a revoked background PERMISSION routes through `syncConsentWithPermission` (master
+    alert + disarm) + the `/consent` wall on next open — that clears `armed`, so `evaluateLocationBlock` returns `null`
+    for the permission case and the block settles durably on device-Location-OFF (services). Accepted gap: a mid-session
+    permission-revoke shows no block until the next app open. Battery-opt excluded (unreadable from JS §12.3). No new
+    i18n keys (parity untouched), no new test (device-only reads; the brain is pinned in `antiCircumvention.test.ts`).
+    Commit `dd6a4c3` (screen) over `5fe05bc` (brain + test). Device check: turn off device Location → overlay raises;
+    "Open settings" reaches the right page; return with it on → clears; Android back can't escape.
   - ✅ **Gap detection → master alert — `[api]` FILED to cgpe-api (2026-08-15).** Verified cgpe-backend has **no**
     silent-user/gap detector (grep, not tags); grounded the ask in its real patterns (`locationRetention` scheduler
     `server.js:197`; master-notify `metadata.kind` `timeTracker.js:1425`; `location_tracks` points). Filed a top-of-queue
@@ -261,7 +268,8 @@ honest, never covert:
   - **`antiCircumvention.test.ts` (+12 total): `dropMocked`, `shouldSignalWithdrawal`, `locationBlockReason`.** Gates
     across 41d: `tsc` 0 · `npm test` **552/552** · eslint 0 errors (2 pre-existing `_layout` warnings). **Needs a native
     APK build** only in aggregate with 41a/41b/41c (41d itself added no dep/permission). **Remaining in 41d: the
-    app-block SCREEN (owner copy) + the backend gap-detector shipping.**
+    backend gap-detector shipping (cgpe-api) + on-device verification of the app-block overlay. All four 41d parts
+    are now BUILT in the editor.**
 - Gates each: `tsc` 0 · `npm test` green · no new lint errors · **on-device** matrix
   (Samsung/Xiaomi/OnePlus/Pixel + one iPhone; battery-drain measured).
 
