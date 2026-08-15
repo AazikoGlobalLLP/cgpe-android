@@ -1,67 +1,61 @@
-# HANDOFF — CGPE Connect (Android) — Phases 41b–41d + Phase 50 — 2026-08-15
+# HANDOFF — CGPE Connect (Android) — Phase 41d app-block SCREEN — 2026-08-15
 
-This session finished the remaining Phase-41 sub-phases in the editor (41b/41c/41d) and captured a new
-owner request as Phase 50. **All of Phase 41 is now editor-complete; nothing more is editor-buildable there.**
-The whole thing is DEVICE-UNVERIFIED and needs a native APK build (two new native modules → not OTA).
+This session wired the **last editor-buildable piece of Phase 41**: the 41d anti-circumvention
+app-block screen. Its blocker (owner 5-language copy) had already been resolved — the copy landed in
+`translation-v.01.txt` and was in the i18n dictionary — so the "still blocked" note in the previous
+handoff was **stale**. With both gates satisfied (copy + locked trigger), the screen is now built.
+**All four 41d parts, and all of Phase 41, are now editor-complete. Nothing more is editor-buildable
+in Phase 41 — what's left is a native build + on-device verification.**
 
 ## Done (observable behavior)
-- **The 24/7 recorder re-arms itself** after an aggressive-OEM kill AND after a reboot (a periodic watchdog;
-  WorkManager restores it post-reboot — no native BootReceiver). (41b)
-- **GPS sampling adapts to motion** — an accelerometer classifier marks the phone still/moving and the
-  recorder samples sparser when stationary. (41c)
-- **Fake-GPS is rejected** — OS-flagged mock-provider fixes are dropped, so a spoofed location can't be
-  recorded. (41d)
-- **Revoking location permission is a loud opt-out** — a consented user who turns off "Allow all the time"
-  has every super-admin notified and the recorder stopped. (41d)
-- **Two backend asks filed** (courier workflow, owner to relay): a silent-user gap-detector → master alert
-  (41d §5); and dual-office geofence + out-of-range/early-clock-out reason → super-admin (Phase 50).
-- Gates green all session: `tsc` 0 · `npm test` **552/552** (+29) · eslint 0 errors (2 pre-existing warnings).
+- **A consented 24/7 user who turns device Location OFF is blocked** behind a full-screen "Turn
+  location back on to use CGPE Connect" notice, in their own language, with an **Open settings**
+  button that lands on the right page. It clears the moment they return with location back on, and the
+  Android back button cannot escape it.
+- **Permission-revoke still behaves as before** (spec-literal, owner-chosen): it routes through the
+  shipped withdrawal signal (every master notified + recorder stopped) and the `/consent` wall on next
+  open — the block screen settles on the device-Location-OFF case.
 
 ## Files changed
-- `src/lib/watchdog.ts` (new) — pure watchdog re-arm decision (`watchdogAction`); `watchdog.test.ts` (+11).
-- `src/lib/motion.ts` (new) — accelerometer classifier + sampling profiles + hysteresis + fail-safe freshness;
-  `motion.test.ts` (+16).
-- `src/lib/antiCircumvention.ts` (new) — `dropMocked` + `shouldSignalWithdrawal` + `locationBlockReason`;
-  `antiCircumvention.test.ts` (+12).
-- `src/lib/tracker.ts` — watchdog task + register/retire at the startService/stopUpdates chokepoints; motion
-  classifier wiring + profile-at-restart; mock filter in `ingest`; `syncConsentWithPermission`.
-- `src/app/_layout.tsx` — `PermissionMonitor` (fires the consent-withdrawal signal on foreground).
-- `app.json` + `package.json` — added `expo-background-task` 57.0.10, `expo-sensors` 57.0.2,
-  `RECEIVE_BOOT_COMPLETED` permission (+ auto-added background-task config plugin).
-- `docs/spec/PHASE-41.md` (41b/c/d), `docs/spec/PHASE-50.md` (new), `docs/PHASES.md`, `docs/DECISIONS.md`.
-- `contracts/INBOX.md` — 2 `→ cgpe-api` asks filed (grepped back durable).
+- `src/ui/LocationBlock.tsx` (new) — the full-screen block overlay, modeled on `AppLock`; owner copy,
+  Open-settings CTA, re-checks on foreground, swallows Android back, `zIndex 55` (below AppLock), native
+  + signed-in only.
+- `src/lib/tracker.ts` — `evaluateLocationBlock()` (native reads → the pure tested `locationBlockReason`,
+  fail-open to `null`) + `openLocationSettings(reason)` (services-off → device Location page; permission →
+  `Linking.openSettings()`); imports `locationBlockReason`/`BlockReason` + `Linking`.
+- `src/app/_layout.tsx` — mounts `<LocationBlock/>` before `<AppLock/>`.
+- `docs/spec/PHASE-41.md`, `docs/PHASES.md`, `docs/DECISIONS.md` — 41d marked fully editor-complete.
 
 ## Decisions made
-- **41b: one watchdog covers OEM-kill AND reboot** (expo-background-task/WorkManager persists across reboot),
-  so no hand-written Kotlin BootReceiver — boring over clever. Trade: reboot re-arm within ~15 min, not seconds.
-  **Owner may veto** and ask for the native receiver.
-- **41c: expo-sensors accelerometer classifier**, profile applied at each service (re)start, NOT mid-session
-  (would fight 41b + flicker the notification). Honest limit: the sensor pauses in the background, so `still`
-  rarely fires for a pocketed phone — §12.8 says MEASURE battery first. **Numbers proposed, pending owner lock:**
-  STILL time-interval 5 min, still/moving threshold 0.05 g.
-- **41d: drop mocks (not label)** — self-enforcing (a spoofer goes silent → the gap-detector flags them). The
-  withdrawal signal is fail-safe against spurious master alerts (armed-gated, skips a failed permission read,
-  fires once). App-block **trigger LOCKED** (block if any of services/fg/bg off) but the **screen needs 5-language
-  copy**. Gap-detector is backend-owned → filed.
-- **Phase 50: backend-first** (server 403s out-of-range today; reversing that is a contract change) + **office
-  pins in the panel, not client literals** (Phase 7 removed exactly that) + unknowns flagged, not invented.
+- **Built against the WIRED `consent.blocked*` keys, not the spec §8 draft's `block.*` proposal.** The
+  owner supplied a simpler single-body version (title/body/action, no services-vs-permission split, no
+  "I've turned it on" button — recheck is automatic on foreground). The wired copy is the human-approved
+  reality; the proposal was superseded.
+- **Composition with the withdrawal signal = spec-literal (owner-chosen, AskUserQuestion 2026-08-15).**
+  Permission-revoke keeps routing through withdrawal (master alert + disarm) + `/consent` on next open;
+  the block gates on `locationBlockReason` (armed), which disarm clears — so the block lands durably on
+  device-Location-OFF. Chosen over a durable-marker gate (blocks permission-off immediately too, but more
+  state + double-fire) and over re-firing `/consent` on foreground (touches ConsentGate's once-per-session
+  invariant). See DECISIONS 2026-08-15.
+- **No new tests, no i18n-key change.** `tracker.ts`/UI are device-only (no stub, like the rest of the
+  module); the pure brain is already pinned in `antiCircumvention.test.ts`; the keys already existed, so the
+  parity count is untouched.
 
 ## Known broken / deliberately skipped
-- **ALL of Phase 41 is DEVICE-UNVERIFIED** — needs a native EAS/dev-client build (new modules
-  `expo-background-task` + `expo-sensors` + `RECEIVE_BOOT_COMPLETED` → **NOT OTA**), then the §12.7 matrix and the
-  §3 battery measurement over a real day on 3+ handsets (Samsung/Xiaomi/OnePlus/Pixel).
-- **41d app-block SCREEN not built** — needs owner 5-language HUMAN copy (proposed English is in `PHASE-41.md`
-  §8/41d). Trigger is already locked; wiring is a small follow-up once copy lands.
-- **Phase 50 not built** — awaits cgpe-api shipping the change + the panel pins set + the owner confirming the 5
-  flagged points (`PHASE-50.md` §6).
-- **`git push` still 403s** — EVERY commit this session is local-only (`71d15a3 b535c10 25d3d5b 1d75521 08dd00f
-  a484f54 5fe05bc 2617c27 a5bc712 0885197`) + the 2 INBOX asks (contracts/ is untracked). Blocks Phase 49; needs a
-  human credential swap.
+- **ALL of Phase 41 is DEVICE-UNVERIFIED** — needs a native EAS/dev-client APK (two modules from 41b/41c:
+  `expo-background-task` + `expo-sensors` + `RECEIVE_BOOT_COMPLETED` → **NOT OTA**), then the §12.7 matrix +
+  §3 battery over a real day on 3+ handsets, plus the app-block overlay device check.
+- **Accepted gap (owner signed off):** a mid-session permission-revoke shows no block until the next app
+  open (the withdrawal path handles it meanwhile).
+- **Two `[api]`s still need the owner to relay to cgpe-api:** the §5 silent-user gap-detector, and Phase 50.
+- **`git push` still 403s** — this session's commits are local-only (`dd6a4c3` code, `2ea183c` docs). Needs a
+  human credential swap. Blocks Phase 49.
 
 ## Next session starts here
-- **Phase 41 device-verification pass (owner's #1) — cut a native APK, then walk the §12.7 matrix + measure
-  battery.** Everything editor-side is done; this is pure build-and-verify. Do NOT cut the "final" APK (Phase 49)
-  while checks are unverified or the push is broken.
+- Phase 41: **device-verify the whole thing** — cut a native APK, walk the §12.7 matrix (+ app-block
+  overlay check), measure battery. No editor code left; do NOT cut the "final" APK (Phase 49) while checks
+  are unverified or the push is broken.
 - First command: `/boot`
-- Watch out for: **Phase 41 added TWO native modules — a native build is mandatory, OTA cannot carry it.** And the
-  two filed `[api]`s (gap-detector, Phase 50) need the owner to relay them to cgpe-api.
+- Watch out for: **a boot "blocker" can be stale** — this session's blocker (app-block copy) was already
+  resolved; verify blockers against the real files (`src/i18n`, `translation-v.01.txt`) before trusting the
+  handoff/memory. And **Phase 41 added TWO native modules — a native build is mandatory; OTA cannot carry it.**

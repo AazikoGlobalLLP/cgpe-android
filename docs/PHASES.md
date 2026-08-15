@@ -1270,15 +1270,16 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-15 handoff):**
-1. **Device-verify ALL of Phase 41 (owner's #1).** 41a–41d are now EDITOR-BUILT. This needs a native EAS/dev-client
-   build — two new native modules (`expo-background-task`, `expo-sensors`) + the `RECEIVE_BOOT_COMPLETED` permission,
-   so **NOT OTA** — then the §12.7 device matrix + the §3 battery measurement over a real day on 3+ handsets. Pure
-   build-and-verify; no editor code left.
-2. **Owner-input unblocks the last mobile bits.** (a) 41d app-block: supply **5-language copy** → wire the block
-   screen (trigger already locked). (b) Phase 50 (dual-office + out-of-range/early-clock-out reason): after cgpe-api
-   ships it + the two office pins are set in the panel + the owner confirms the 5 flagged points → then mobile threads
-   `reason` + builds the prompt (also needs 5-language copy).
+**CURRENT next 3 (2026-08-15 handoff — app-block SCREEN now wired):**
+1. **Device-verify ALL of Phase 41 (owner's #1).** 41a–41d are now FULLY EDITOR-BUILT (incl. the 41d app-block
+   overlay, wired this session — commit `dd6a4c3`). This needs a native EAS/dev-client build — two new native modules
+   (`expo-background-task`, `expo-sensors`) + the `RECEIVE_BOOT_COMPLETED` permission, so **NOT OTA** — then the §12.7
+   device matrix + the §3 battery measurement over a real day on 3+ handsets, PLUS the app-block overlay check
+   (Location-off raises it, "Open settings" lands right, return clears it, Android back can't escape). Pure
+   build-and-verify; **no editor code left in Phase 41.**
+2. **Phase 50 (dual-office + out-of-range/early-clock-out reason).** After cgpe-api ships it + the two office pins are
+   set in the panel + the owner confirms the 5 flagged points → then mobile threads `reason` + builds the prompt (needs
+   5-language copy). Owner must relay both filed `[api]`s to cgpe-api (Phase 50 + the §5 gap-detector).
 3. **Phase 49 — final APK + one-click link → OTA-only.** GATED: every device check cleared AND the `git push` 403
    resolved (a production build must ship from pushed, backed-up code).
 
