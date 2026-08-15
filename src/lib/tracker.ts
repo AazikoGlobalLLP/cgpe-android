@@ -31,8 +31,18 @@ import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as BackgroundTask from 'expo-background-task';
+import { Accelerometer } from 'expo-sensors';
 import { storage } from './storage';
 import { watchdogAction } from './watchdog';
+import {
+  classifyMotion,
+  debounceMotion,
+  resolveMotion,
+  samplingProfile,
+  MOTION_WINDOW,
+  type MotionState,
+  type SamplingProfile,
+} from './motion';
 import * as api from '@/data/api';
 
 const isNative = Platform.OS !== 'web';
@@ -75,6 +85,13 @@ const TOKEN_KEY = 'cgpe.token';
 const AMBIENT_KEY = 'track.ambient';
 const NOTIF_KEY = 'track.notif';
 const BATTOPT_KEY = 'track.batteryOptAsked';
+/**
+ * PHASE 41c — the last committed motion state (`{state,at}`) written by the accelerometer classifier.
+ * Read at each service (re)start to pick the sampling profile. Persisted (not a module var) so a
+ * headless restart / watchdog re-arm can read it, and stamped with `at` so a stale `still` fails safe
+ * to `moving` (`resolveMotion`) — an out-of-date reading must never make us under-sample and lose a route.
+ */
+const MOTION_KEY = 'track.motion';
 
 /** The two foreground-service notifications: the shift recorder's, and the neutral 24/7 one. */
 type Notif = { title: string; body: string };
@@ -284,6 +301,98 @@ async function deliverAmbient(pts: PointTuple[]): Promise<api.AmbientDelivery> {
   return res.outcome;
 }
 
+/* ------------------------------------------------------------------ motion classifier (PHASE 41c) */
+
+/**
+ * The accelerometer classifier runs only while JS is alive (foreground; sensors pause in the
+ * background). Its rolling window lives in MODULE state — fine, because it never has to survive a
+ * headless wake: only CONFIRMED transitions are persisted to `track.motion`, and that persisted state
+ * is what the headless location (re)start reads. So the classifier's whole job is to keep that state
+ * current whenever the app is open. LIMIT (honest): because sensors pause in the background, a pocketed
+ * phone is not reclassified, so `still` rarely activates in the field — true background adaptivity
+ * needs the native Activity Recognition source (§4, option 3). This is the §12.8 lever to MEASURE first.
+ */
+let accelSub: { remove: () => void } | null = null;
+let motionSamples: { x: number; y: number; z: number }[] = [];
+let motionState: MotionState = 'moving'; // safe default until the first confident reading
+let motionStreak = 0;
+
+/** Persist a committed motion transition, stamped so `resolveMotion` can age out a stale `still`. */
+async function persistMotion(state: MotionState): Promise<void> {
+  try {
+    await storage.set(MOTION_KEY, JSON.stringify({ state, at: Date.now() }));
+  } catch {
+    // A missed write just means the next service start keeps the previous (or default) profile.
+  }
+}
+
+/** Resolve the persisted, freshness-checked motion state for a service (re)start. Defaults to `moving`. */
+async function readMotion(): Promise<MotionState> {
+  try {
+    const raw = await storage.get(MOTION_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && (p.state === 'still' || p.state === 'moving') && typeof p.at === 'number') {
+        return resolveMotion(p.state, p.at, Date.now());
+      }
+    }
+  } catch {
+    // Corrupt/absent: the denser MOVING profile is always the safe default.
+  }
+  return 'moving';
+}
+
+function onAccel(m: { x: number; y: number; z: number }): void {
+  motionSamples.push({ x: m.x, y: m.y, z: m.z });
+  if (motionSamples.length < MOTION_WINDOW) return;
+  const reading = classifyMotion(motionSamples);
+  motionSamples = [];
+  const next = debounceMotion(motionState, reading, motionStreak);
+  motionStreak = next.streak;
+  if (next.changed) {
+    // A CONFIRMED transition (survived the debounce). Persist ONLY here — never on every 4 Hz sample —
+    // so storage sees a handful of writes a day. The new profile is applied at the next natural service
+    // (re)start (clock-in/out, arm, watchdog re-arm); v1 does NOT restart a live service mid-session —
+    // that would fight 41b's reliability and flicker the notification for little real gain given the
+    // foreground-only limit above. See PHASE-41 §8 (41c).
+    motionState = next.state;
+    void persistMotion(next.state);
+  }
+}
+
+/** Begin classifying motion while recording. Idempotent, best-effort, native-only. */
+async function startMotionClassifier(): Promise<void> {
+  if (!isNative || accelSub) return;
+  try {
+    // Seed the committed state from storage so a fresh JS context doesn't start at the default and
+    // re-flip on the first window.
+    motionState = await readMotion();
+    motionSamples = [];
+    motionStreak = 0;
+    Accelerometer.setUpdateInterval(250); // ~4 Hz — enough for a walking cadence, cheap on battery
+    accelSub = Accelerometer.addListener(onAccel);
+  } catch {
+    accelSub = null; // no accelerometer (emulator/unsupported): motion stays the safe MOVING default
+  }
+}
+
+/** Stop classifying — paired with a real recorder teardown so the sensor never runs without the recorder. */
+function stopMotionClassifier(): void {
+  try {
+    accelSub?.remove();
+  } catch {
+    // Nothing further we can do.
+  }
+  accelSub = null;
+  motionSamples = [];
+  motionStreak = 0;
+}
+
+/** Map the motion profile's accuracy to expo-location's enum (both profiles are Balanced today). */
+function accuracyOf(profile: SamplingProfile) {
+  return profile.accuracy === 'low' ? Location.Accuracy.Low : Location.Accuracy.Balanced;
+}
+
 /**
  * PHASE 41b — register the periodic watchdog if it is not already registered. Idempotent (guarded by
  * `isTaskRegisteredAsync`) so re-arming never churns the WorkManager schedule. Best-effort: the
@@ -321,15 +430,20 @@ async function startService(notif: Notif): Promise<void> {
   const already = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK).catch(() => false);
   if (already) {
     await ensureWatchdog();
+    await startMotionClassifier();
     return;
   }
+  // PHASE 41c: pick the sampling cadence from the last committed motion state (fail-safe to MOVING).
+  // Applied at (re)start — the boring, reliability-safe point to change GPS options (a live service
+  // cannot be reconfigured without a stop+start, which would fight 41b and flicker the notification).
+  const profile = samplingProfile(await readMotion());
   await Location.startLocationUpdatesAsync(ROUTE_TASK, {
-    // Balanced is a deliberate battery choice: these people are out all day and a route replay does
-    // not need lane-level precision.
-    accuracy: Location.Accuracy.Balanced,
-    timeInterval: 60000,
-    distanceInterval: 30,
-    deferredUpdatesInterval: 60000,
+    // Accuracy + cadence come from the motion profile: MOVING keeps the all-day-battery Balanced cadence;
+    // STILL lengthens the intervals when stationary. A route replay never needs lane-level precision.
+    accuracy: accuracyOf(profile),
+    timeInterval: profile.timeInterval,
+    distanceInterval: profile.distanceInterval,
+    deferredUpdatesInterval: profile.deferredUpdatesInterval,
     // The service can restart in the background, where a settings dialog would be both impossible and
     // alarming. `ensureBackgroundPermission` is where the user is told that location is switched off.
     mayShowUserSettingsDialog: false,
@@ -355,6 +469,8 @@ async function startService(notif: Notif): Promise<void> {
   // reboots. After `startLocationUpdatesAsync` so a failed start never leaves a watchdog with nothing
   // to guard (that call throws on a mis-provisioned service and this line is skipped).
   await ensureWatchdog();
+  // PHASE 41c: keep the motion classifier running alongside the recorder (idempotent, foreground-only).
+  await startMotionClassifier();
 }
 
 /**
@@ -368,6 +484,8 @@ async function stopUpdates(): Promise<void> {
   // watchdog must retire too, otherwise it would wake and re-arm what we just tore down. The armed
   // clock-out path keeps recording and does NOT call stopUpdates, so ambient's watchdog survives.
   await retireWatchdog();
+  // PHASE 41c: the recorder is gone — stop the accelerometer too so it never runs on its own.
+  stopMotionClassifier();
   try {
     const started = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK);
     if (started) {
