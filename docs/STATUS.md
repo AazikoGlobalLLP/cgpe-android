@@ -1,19 +1,15 @@
 # Status — CGPE Connect (Android)
-
-**Updated:** 2026-08-15
-
-**Working on right now:** The staff location-tracking feature is now finished on the coding side, so the focus turns to testing it on real phones.
+**Updated:** 15 August 2026
+**Working on right now:** Fixing issues the owner spotted in the live app and getting an installable test build onto phones.
 
 **Done this week:**
-- The app now keeps recording a team member's location through the day even if the phone tries to shut it down, and it starts again by itself after the phone restarts.
-- It uses less battery by checking location less often when the person is sitting still.
-- It refuses fake-GPS apps, so nobody can pretend to be somewhere they are not.
-- If a team member turns off location permission, their manager is notified straight away and recording stops — an opt-out is loud, never silent.
-- Finished the last piece: if someone switches their phone's location OFF, the app now shows a full-screen "turn your location back on" notice — in all five languages — that blocks the app and offers a shortcut to the settings, until they turn it back on. (The translated messages had already been supplied, so this could be completed.)
+- Fixed a real problem the owner noticed: policies that had already matured (finished) were still showing as "In force". Now any finished policy correctly shows "Matured", and it no longer nags for a premium that isn't due. This applies across the whole app, not just the one client.
+- Built an installable app file (APK) and shared a download link, so the owner can put the latest version on a phone and try it.
+- Ran an automated end-to-end test that clicked through every screen of the app in a real browser — all 33 checks passed, and it recorded a video and screenshots to review.
+- Looked into the "doesn't work on WiFi" report: the app and server are both healthy and fast, and the app does NOT require mobile data. The problem is that the specific WiFi couldn't reach our server (a network/router issue), so there's a quick 30-second phone test for the owner to pinpoint it.
 
 **Blocked on:**
-- Testing needs a fresh installable app to be built for real phones — this feature is too deep to send as a quick over-the-air update, so a full build is required first.
-- The code still cannot be uploaded/backed up because of a login-access problem — this needs IT to grant access before we can release a final version.
-- A person still needs to (a) confirm the two office locations and a few rules for the separate "clock in from either office" request, and (b) pass two requests to the backend team.
+- Publishing the code to the shared repository still fails (a login/permission issue that needs a person to fix) — the work is saved safely on this machine meanwhile.
+- The 24/7 location feature needs to be tested on real phones over a full day before it can be called finished.
 
-**Next:** Build the app onto real phones and test the location features, including how much battery they use over a full working day.
+**Next:** Test the new app build on a few real phones, and confirm the WiFi issue is the network (not the app) using the quick phone test.

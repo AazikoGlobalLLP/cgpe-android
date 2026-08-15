@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Owner bug fix — matured policies read "Matured", not "In force" (+ no false premium-due). BUILT & SHIPPED in an APK — 2026-08-15.**
+Owner sent a Client 360 screenshot: a policy with maturity **Mar 2023** still read "In force". Root cause: `adaptClient`
+(`src/data/adapt.ts`) hard-coded `status:'in_force'` on EVERY policy. Fixed: status is now **derived from the maturity
+date** — past ⇒ `'matured'` (an existing contract status/label), else `'in_force'`; `lapsed`/`paid_up` untouched (no data
+to infer). Owner-confirmed via AskUserQuestion; also **hid the "Premium due / X days late" indicator on matured policies**
+(KPI + "Next premium" row) so the screen isn't self-contradictory (an in-force overdue policy still shows its reminder).
+Gates green: `tsc` 0 · `npm test` **553** (+4) · eslint 0. Commits `390f7ab` + `588a90d` (local — push 403s). **No
+contract change** (pure client-side inference). Caveat: a missing/garbage maturity date stays "In force" — a DATA issue,
+not code. Details: DECISIONS 2026-08-15 (top).
+
+**Installable APK cut (EAS build works from here despite the push-403) + web E2E 33/33 green — 2026-08-15.**
+Handed the owner an installable preview APK **twice** via `npx eas-cli build -p android --profile preview --non-interactive`
+(logged in as `shivam-bhadoriya`, keystore on the Expo server; direct `.apk` URL from `eas build:view <id> --json` →
+`.artifacts.applicationArchiveUrl`). Latest = build `7cdc351d` (v1.8.0) with the matured-policy fix. Ran the watchable
+web E2E suite (`00/01/10/30/40`) — **33/33 passed (5.8 m)**: all 42 screens render, worst-case backend states keep the
+HealthBanner honest, forms survive hostile input (73 screenshots + video under `e2e/artifacts/`). The `50-languages`
+matrix (~15 m) was offered, not run. **WiFi "network error" diagnosed as ENVIRONMENTAL** (backend proven 200/~40 ms,
+IPv4-only; NO mobile-data requirement in `src/`) — awaiting the owner's on-phone `health`-URL test before any app-side
+change. Details: DECISIONS 2026-08-15.
+
 **Phase 50 — [api]+[m] Dual-office geofence + out-of-range / early-clock-out REASON capture → super-admin. SPEC + `[api]` FILED, no build — 2026-08-15.**
 New owner request (post-backlog): a member may clock in/out from **either of two Surat offices** (Adajan / Katargam), 200 m
 each; an **out-of-range** clock-in OR clock-out is **allowed but must carry a reason** → **super_admin notified**; an
@@ -1276,7 +1296,10 @@ exercise.
    (`expo-background-task`, `expo-sensors`) + the `RECEIVE_BOOT_COMPLETED` permission, so **NOT OTA** — then the §12.7
    device matrix + the §3 battery measurement over a real day on 3+ handsets, PLUS the app-block overlay check
    (Location-off raises it, "Open settings" lands right, return clears it, Android back can't escape). Pure
-   build-and-verify; **no editor code left in Phase 41.**
+   build-and-verify; **no editor code left in Phase 41.** **A native APK is now CUT** (build `7cdc351d`, v1.8.0 —
+   `eas build` works from here despite the push-403) and there is a walkable **`docs/spec/PHASE-41-DEVICE-CHECKLIST.md`**
+   (16-row matrix, each anchored to code + observable) — use both. Also close the WiFi question with the owner's
+   on-phone `https://cgpe.in/internal/api/health` test (diagnosed environmental, not app — DECISIONS 2026-08-15).
 2. **Phase 50 (dual-office + out-of-range/early-clock-out reason).** After cgpe-api ships it + the two office pins are
    set in the panel + the owner confirms the 5 flagged points → then mobile threads `reason` + builds the prompt (needs
    5-language copy). Owner must relay both filed `[api]`s to cgpe-api (Phase 50 + the §5 gap-detector).

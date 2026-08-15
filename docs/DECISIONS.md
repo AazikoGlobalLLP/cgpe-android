@@ -6,6 +6,55 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Matured policy status is DERIVED client-side from the maturity date (owner bug report)
+
+**Context.** The owner sent a Client 360 screenshot: a policy with maturity **Mar 2023** still read
+**"In force"**. Root cause: `adaptClient` (`src/data/adapt.ts`) hard-coded `status: 'in_force'` on
+**every** policy regardless of its maturity date (the test even pinned it — "adaptClient can never
+emit any other status"). The lic-import doc carries no reliable per-policy status field, which is why
+it was hardcoded.
+
+**Decision.** Derive the one status we CAN know for certain from the data: a maturity date **in the
+past** (`daysUntil(maturity) < 0`) ⇒ `'matured'` (an existing contract status with its own label/tone
+in `client/[id].tsx`), otherwise `'in_force'` exactly as before. `lapsed`/`paid_up` are left untouched
+— the doc carries no data to infer them, and inventing them would violate rule 1. Owner-confirmed via
+AskUserQuestion (2026-08-15). ALSO owner-chosen: **hide the "Premium due / X days late" indicator on a
+matured policy** (KPI + the "Next premium" row) — a completed policy has no premium due, so leaving the
+alarm would contradict the new "Matured" status. A genuinely in-force overdue policy still shows its
+reminder. No new status value invented; no contract change (pure client-side inference over existing
+fields). Ideally the backend would send a real policy status someday — NOT filed this session (the
+derivation is honest and sufficient; filing would be scope creep at a bug fix).
+
+**Consequence.** Every matured policy now reads "Matured" app-wide, not just this one client. Gates:
+`tsc` 0 · `npm test` **553** (+4 pinning past→matured / future→in_force / no-date→in_force) · eslint 0.
+Commits `390f7ab` (adapt) + `588a90d` (client screen), local (push 403s). Shipped in APK `7cdc351d`.
+Caveat: a policy with a **missing/garbage** maturity date stays "In force" (can't be known matured
+without a date) — that is a DATA issue, not a code bug.
+
+## 2026-08-15 — WiFi "network error" is ENVIRONMENTAL, not an app bug; and EAS cloud build WORKS from here
+
+**Context.** Owner reported the app fails with a network error on WiFi but works on mobile data, asking
+to remove any "mobile-data mandatory" behavior. Validated rather than guessed.
+
+**Decision / findings.** (1) There is **no network-type check anywhere in `src/`** (grep: 0 hits for
+NetInfo/wifi/cellular) — the app never requires mobile data; native always hits `https://cgpe.in/internal/api`.
+(2) The backend is **healthy and fast** from this machine — HTTP 200, body `Backend is running ✅`,
+total **~0.04–0.17 s** over 3 tries, and cgpe.in is **IPv4-only** (no broken-IPv6 path). So the 4.5 s
+`REQUEST_TIMEOUT` (`config.ts:65`) is NOT the cause when the network is good, and the WiFi-specific
+failure is that **that particular WiFi cannot reach cgpe.in** (captive portal / firewall / no real
+internet). **No code change made** — the definitive next step is the owner opening
+`https://cgpe.in/internal/api/health` in the phone browser ON that WiFi. If it loads but the app still
+fails, THEN revisit app-side (raise the 4.5 s timeout + add a retry) — a genuinely defensible change,
+but not shipped blind. (3) **EAS cloud build works from this environment** (`npx eas-cli build -p
+android --profile preview --non-interactive`): logged in as `shivam-bhadoriya`, keystore already on the
+Expo server, ~15–20 min, and the direct `.apk` URL comes from `npx eas-cli build:view <id> --json` →
+`.artifacts.applicationArchiveUrl`. The git-push 403 does **not** block shipping an APK.
+
+**Consequence.** No `src/` change for the WiFi item (baseline gates stand). Two APKs were cut and handed
+over this session. Documented the EAS-build capability + the WiFi diagnosis in `CLAUDE.md` so neither is
+re-derived. If a future "slow WiFi" case is confirmed, the fix is the timeout/retry, filed as its own
+small change with the owner's confirmation.
+
 ## 2026-08-15 — Phase 41d app-block SCREEN BUILT: owner copy landed → wired (spec-literal composition chosen)
 
 **Context.** The 41d "turn location back on" gate had two blockers: 5-language human copy and a locked trigger.

@@ -112,6 +112,26 @@ write access. This needs a human to grant access or swap the credential in Windo
 Manager. Do **not** change the remote URL, rewrite history, or re-clone to work around it — commit
 locally and say clearly in the handoff that the push is outstanding. `gh` is not installed here.
 
+**BUT the push-403 does NOT block shipping an APK — EAS cloud build WORKS from here (proven 2026-08-15).**
+`npx eas-cli build -p android --profile preview --non-interactive` runs headless: logged in as
+`shivam-bhadoriya` (`aazikodevmern23@gmail.com`), the Android keystore already lives on the Expo
+server (no credential prompt), and EAS archives the LOCAL working tree, so it ships your local commits
+even though `git push` fails. A build takes ~15–20 min (background it). The **installable `preview`
+profile emits an APK**; get the **direct `.apk` download URL** with
+`npx eas-cli build:view <buildId> --json` → `.artifacts.applicationArchiveUrl` (the plain build-page
+URL only shows an Install button when opened ON the Android phone). So when the owner asks for an APK,
+you can deliver one — do not tell them shipping is blocked. (`--non-interactive` is required — stdin is
+EOF here — and `build:view` does NOT accept `--non-interactive`, only `--json`.)
+
+**"App doesn't work on WiFi" is almost always the WiFi, NOT the app (validated 2026-08-15).** There is
+**no network-type check anywhere in `src/`** (the app never requires mobile data), and the backend is
+healthy + fast (HTTP 200, ~40 ms, IPv4-only — verify with `curl -w '%{time_total}' https://cgpe.in/internal/api/health`).
+So a WiFi-only failure means that WiFi can't reach `cgpe.in` (captive portal / firewall / no real
+internet). The definitive test is the owner opening `https://cgpe.in/internal/api/health` in the phone
+browser ON that WiFi. Only if it loads there but the app still fails is it app-side — then the lever is
+the aggressive **4.5 s `REQUEST_TIMEOUT`** (`src/constants/config.ts`), raised + a retry. **Do not
+rebuild an APK to "fix WiFi" before that on-phone test.**
+
 **Write commit messages to a file and use `git commit -F <file>`.** A multi-line `-m` here-string
 breaks under PowerShell 5.1 as soon as the message contains a double quote: PowerShell splits it and
 git reads the fragments as pathspecs (`error: pathspec 'could' did not match any file(s)`). The body
