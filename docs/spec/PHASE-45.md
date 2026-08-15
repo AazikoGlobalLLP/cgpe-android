@@ -110,13 +110,26 @@ Every number is the server's; the phone renders, never multiplies (rule 2). `sco
 
 ---
 
-## 5. Mobile side — zero build this phase
+## 5. Mobile side — SHIPPED same day (cgpe-api Phase 53 landed the aggregate)
 
-Nothing to build until the aggregate ships: mobile has no such screen yet, and the score is server-computed.
-Once `cgpe-api` ships `task-report`, a later `[m]` phase adds a `getTaskReport(month)` reader + a per-member
-report/score surface (feeds Phase 39, the master monitoring surface). **No `src/` change → no gate re-run**
-(baseline: `tsc` 0, `npm test` 467/467, lint 0 errors / 12 warnings). **No contract change on the mobile
-side** — the ask is filed to `INBOX.md`; `api.md`/`models.md` change is `cgpe-api`'s when they ship.
+**Filing → verify → reader → render, all 2026-08-15:**
+- **Backend shipped it** as `GET /api/team/task-report` (cgpe-api Backend Phase 53). Verified against their real
+  `routes/team.js` — every owner-locked def matches exactly (see §2). The flagged open point (§3 month basis) was
+  resolved to **due-month, owner-CONFIRMED** (AskUserQuestion, 2026-08-15).
+- **Reader:** `getTaskReport(month,{scope,userId})` + pure `mapTaskReport` in `src/data/api.ts` — two-outcome
+  `req()` posture (403 wrong-role = quiet answer, 5xx/network/shape = banner); server owns every count/score,
+  the app never recomputes (rule 2); `score:null` kept distinct from `0`. Pinned by `api-task-report.test.ts` (16).
+- **Render:** NEW `src/app/performance.tsx` — one screen, two views by `?view=` param. **Self** (`/performance`,
+  `scope:'own'`, ungated — server self-scopes) = the caller's score hero (0–100 + Meter) + Assigned/Completed/
+  On-time/Late KPIs + completed-tasks list. **Team** (`/performance?view=team`, `scope:'all'`) = the ranked roster
+  (score badge + counts per member, tap-to-expand completed tasks) + totals, **master-only** via NEW pure
+  `canSeeTeamPerformance(user)` in `store/roles.ts` (real `super_admin` role, never the folded tier — Phase-40
+  rule; pinned in `roles.test.ts`). **Owner-locked visibility** (AskUserQuestion, 2026-08-15): each member sees
+  their OWN; only `super_admin` sees all. More-tab tiles: master-only "Team performance" + ungated "My performance".
+- Gates green: `tsc` 0 · `npm test` **487/487** · lint 0 errors. **No contract change** (pure consumer of Phase 53).
+- **DEVICE CHECK CARRIED** (native + backend-live-gated): own score for a member, ranked roster for a real
+  `super_admin`, "Owner access only" for a real admin/leader deep-linking `?view=team` — once cgpe-api's `:3001`
+  restart makes the endpoint return live data.
 
 ---
 

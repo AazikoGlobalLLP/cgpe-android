@@ -1,56 +1,55 @@
-# HANDOFF — CGPE Connect (Android) — Phase 44 — 2026-08-15
+# HANDOFF — CGPE Connect (Android) — Phase 45 — 2026-08-15
 
-Verified Phase 44 (strict salary from working hours/days) against the real backend and found it **already
-satisfied end to end** — the strict engine exists, is owner-locked, and is live (Backend Phase 25b), and both
-mobile payroll screens already render it. Showed the owner the exact live formula (AskUserQuestion) and they chose
-**"correct as-is."** A pure verify-and-document phase: **no `[api]` ask** (nothing missing), **no mobile build**,
-**no contract change**, gates untouched. Third same-shape outcome after Phases 38/43 — verify first, don't invent.
+Phase 45 (completed-tasks report + performance score) went **filed → backend-shipped → verified → built**, all in
+one session. Filed the owner-locked score spec to `cgpe-api`; they shipped `GET /api/team/task-report` the same day
+(Backend Phase 53); verified it line-by-line against the locked rules (matches exactly); confirmed the one open
+point (month basis = due-month) with the owner; then built both the data reader and the on-device screens. Same
+verify-first discipline as Phases 38/43/44 — but this one WAS a genuine gap, so it got built rather than closed as
+already-satisfied. **Everything below is editor-green; the two screens carry a device check.**
 
 ## Done
-- **Salary is already computed server-side strictly from actual working hours/days and shown as one amount**,
-  on both the staff self-view (`earnings.tsx`) and the admin roster (`payroll.tsx`). Verified the formula in real
-  code (both trees): a full day counts at ≥8h worked, half at ≥4h, nothing below 4h (owner-locked fixed cutoffs);
-  `day_wise` = (salary ÷ working_days) × present_days, `hourly` = (salary ÷ working_days ÷ office_hours[8.5]) ×
-  worked_hours, `base` = flat; working_days = days − Sundays − holidays; payable rounded to ₹1. The figures come
-  from the **live `daylogs`**, joined by the member's Profile ObjectId `_id`. The phone never does the sums — it
-  renders the server's `payable`.
-- Owner confirmed the live formula is what they want, so the phase closed with zero change.
+- **The staff performance score exists end to end.** Each member has a **My performance** screen (More → Personal)
+  showing their own monthly score (0–100), a completed/on-time/late breakdown, and their completed tasks. The
+  **owner** has a **Team performance** screen (More → Master control) showing the whole team ranked by score,
+  tap-to-expand per member. It is locked to the real `super_admin` role — a manager or team member cannot see other
+  people's scores (a wrong-role deep-link shows "Owner access only", never the roster).
+- The score is **computed server-side** to your locked rules (only manager-assigned + actually-completed tasks;
+  importance × timeliness; cancelled/reminders/self-created excluded; per due-month). The app **renders, never
+  recomputes** — "no tasks" shows a dash, never a fabricated 0%.
+- Verified cgpe-api's real code matches the spec exactly; recorded mobile's verification in the shared inbox.
 
 ## Files changed
-- `docs/spec/PHASE-44.md` — NEW: the verified finding (engine, cutoffs, join, exposure, mobile render, decisions).
-- `docs/PHASES.md` — `## Now` Phase 44 entry (VERIFIED already-satisfied); `## Next 3` re-pointed to Phase 45.
-- `docs/DECISIONS.md` — one entry (2026-08-15): Phase 44 already-satisfied, owner-confirmed, zero change.
-- `docs/STATUS.md` — manager-facing rewrite: salary-from-hours request confirmed already built + working.
-- **No `src/` change.** Commit `b761628` (local only — push 403s). No `contracts/` change (nothing crossed a
-  repo boundary — no INBOX/CHANGELOG edit, no session to notify).
+- `src/data/api.ts` — NEW `getTaskReport(month,{scope,userId})` + pure `mapTaskReport`; two-outcome `req()` posture
+  (403 = quiet answer, outage = banner); server owns every count/score; `score:null` distinct from `0`.
+- `src/app/performance.tsx` — NEW. One screen, two views by `?view=` param: self (ungated, `scope:own`) + team
+  (master-only, `scope:all`). Score hero + Meter + KPIs + completed-tasks list; ranked roster with expand.
+- `src/store/roles.ts` — NEW pure `canSeeTeamPerformance(user)` (real `super_admin`, never the folded tier).
+- `src/app/(tabs)/more.tsx` — two tiles: master-only "Team performance" + ungated "My performance".
+- `src/data/__tests__/api-task-report.test.ts` — NEW (16). `src/store/__tests__/roles.test.ts` — +4 (the new gate).
+- `contracts/INBOX.md` — filed the Phase-45 `[api]` ask + recorded mobile's verification (durable, grepped back).
+- `docs/spec/PHASE-45.md` (NEW), `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md` — the phase record.
 
 ## Decisions made
-- **Phase 44 is closed as already-satisfied — do NOT file an `[api]` ask.** The plan told this session to "file
-  the exact inputs/rounding" of the salary formula, but that formula already exists, is owner-locked (Backend
-  Phase 25b, 2026-08-11), and is live. A "please build a salary formula" ask would be wrong — the plan text
-  predates knowledge that Backend Phase 25b had shipped it. (DECISIONS 2026-08-15.)
-- **Do NOT invent an alternative cutoff, rate, or working-days basis.** The owner was shown the exact live
-  formula and chose "correct as-is." A future change to the 8h/4h cutoffs or the Sat/Sun/holiday basis is a
-  **new** `[api]` ask carrying the owner's exact numbers — never a mobile guess (rule 2 / rule 4).
-- **Verify the producer's real code before filing, even when the roadmap says `[api]`** — the plan named Phase 44
-  an `[api]` filing, but reading `services/payrollEngine.js` + `payrollAttendance.js` + `routes/payroll.js` showed
-  it was already done. Same lesson as the 5× wrong tags.
+- **Visibility owner-locked (AskUserQuestion, 2026-08-15): each member sees their OWN score; only `super_admin`
+  sees the whole team.** So: self view ungated (server self-scopes), team view gated on the REAL role — never the
+  folded tier, or performance data leaks to every admin/leader (the Phase-40 rule).
+- **Month basis = due-month** (owner-confirmed) — a task counts in the month it was due, which is what cgpe-api
+  shipped. No completion-month switch needed.
+- **Score weights were NOT invented** — importance (P1:3/P2:2/P3:1) × timeliness (on-time ×1 / late ×0.5), monthly,
+  `100 × earned/possible`, null when no tasks — all locked with the owner before filing.
 
 ## Known broken / deliberately skipped
-- **`git push` still 403s** — commit `b761628` (and the prior `16e75ae`, `1a880f0`, `2f55d85`, …) are local only;
-  needs a human credential swap (`reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`).
-- **Payroll-screen device check is CARRIED** (not new to Phase 44) — `earnings.tsx`/`payroll.tsx` against
-  production data on a real handset, light/dark at 390 px. Editor gates are green; this is the existing device gate.
-- **Phase 41a-iii-b part 2 remains DEVICE-UNVERIFIED** (commit `16e75ae`) — the unified 24/7 recorder; its
-  acceptance gate is the §12.7 handset matrix (EAS build + 3+ OEMs + battery over a real day). Untouched this session.
-- **Phase 43 device check carried** — a member inside their assigned pin clocks in; ~201 m away is refused with
-  the measured distance — once an admin sets a `start_location` and the `:3001` restart lands.
+- **Both performance screens are DEVICE-UNVERIFIED** — native UI, so they need a real phone: own score for a member,
+  ranked roster for a real `super_admin`, "Owner access only" for a real admin/leader deep-linking `?view=team`.
+  **cgpe-api also needs its `:3001` restart** before the endpoint returns live data (their reply flagged this).
+- **`git push` still 403s** — commits `5dc5eab`, `6e6033a`, `32158bb` are local only (credential `reactjsaaziko`
+  has no write access). Needs a human credential swap.
+- Carried from before: Phase 41 part-2 (24/7 recorder) + Phase 43 (per-member geofence) device checks.
 
 ## Next session starts here
-- Phase 45: verify the real `cgpe-backend-main` for a completed-assigned-tasks aggregate + performance score, then
-  **LOCK the score weights with the owner (AskUserQuestion) before filing** — do NOT invent the weights.
+- Phase 46: add tasteful emojis to the greeting copy — small, self-contained, no backend/contract touch.
 - First command: `/boot`
-- Watch out for: **do not invent the performance-score weights, and count only tasks that were assigned AND
-  actually completed — NOT reminders, not self-created-unfinished** (owner's hard rule, PLAN §Phase 45). And, as
-  with 44, **verify the backend before filing** — an aggregate may already exist (tags wrong 5×). The app renders
-  the score; it never computes it (rule 2).
+- Watch out for: **the i18n trap** — greetings render in 5 languages, so do NOT hand-add an emoji to only the
+  English string. Put it where all languages share it (append in the render, or add to each dictionary's greeting
+  key with human copy — never a machine translation). And if you touch Phase 39 (master surface) instead, reuse
+  the Phase-45 `getTaskReport` reader + `performance.tsx` rather than rebuilding — it is already master-gated.

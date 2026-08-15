@@ -1082,8 +1082,10 @@ only), **41a** (consent data layer + 5-lang copy + screen + boot gate) + **41a-i
 recorder, EDITOR-BUILT / DEVICE-UNVERIFIED, `16e75ae`), **43** (per-member 200 m clock-in fence — filed →
 `cgpe-api` SHIPPED same-day as Backend Phase 50 → VERIFIED against real code, mobile ZERO change), and **44**
 (strict salary from hours/days — VERIFIED already-satisfied by Backend Phase 25b, owner-confirmed as-is, ZERO
-code) — see `## Now`. What remains is device verification (41 part-2, 43) and the master surface + the last
-report phase (39, 45).**
+code), and **45** (completed-tasks report + performance score — filed → `cgpe-api` SHIPPED same-day as Backend
+Phase 53 → VERIFIED against real code → mobile READER + RENDER built: `performance.tsx` self + master-only team,
+owner-locked visibility) — see `## Now`. What remains is device verification (41 part-2, 43, **45**) and the
+master surface (39).**
 
 **🔺 OWNER ESCALATION 2026-08-14 — Phase 41 (24/7 background location) is now #1.** The owner asked whether
 member location is tracked 24/7; it is NOT — today's `lib/tracker.ts` records only a **clocked-in shift**
@@ -1118,27 +1120,24 @@ attribute to a session). The owner wants continuous capture, so Phase 41 is pull
    and the consent/notice model. Then `tsc`/`test` green + a real multi-device check (`tracker.ts` has NO test
    coverage — device-only). See `docs/PLAN-2026-08-14.md` §Phase 41/42.
 2. **Phase 39 — the master surface.** Build the Master-only monitoring surface (performance + location + salary,
-   no task UI), reusing the now-gated location screens (Phase 40). Gate strictly on the REAL
-   `user.role === 'super_admin'` (Phase-20 pattern). Depends on 38/40 (both done) + the data endpoints from
-   41/42 (location), 44 (salary), 45 (performance). See `docs/PLAN-2026-08-14.md` §Phase 39.
-3. **Phase 45 — completed-tasks report + performance score — the next editor-actionable verify-and-file** (geofence
-   **43** and salary **44** are DONE — **44 verified ALREADY-SATISFIED**: the strict hours/days engine already
-   exists + is owner-locked + live as Backend Phase 25b — `services/payrollEngine.js` (`day_wise`/`hourly`/`base`,
-   working_days = days − Sundays − holidays, ₹1 rounding) + `services/payrollAttendance.js` (owner-locked 8h/4h
-   half-day cutoffs over the live `daylogs`) — and mobile already renders it (`earnings.tsx`/`payroll.tsx`); owner
-   confirmed as-is, so ZERO code and no `[api]` ask, `docs/spec/PHASE-44.md`). **Phase 45** wants a per-member
-   report of what they **completed, when, and how much**, with a **performance score** — count only tasks that
-   were **assigned AND actually completed** (NOT reminders, not self-created-unfinished). This is a backend
-   aggregate — the app never computes it (rule 2). **First verify the real `cgpe-backend-main`** (tags wrong 5×)
-   for an existing completed-assigned-tasks aggregate before filing, and **LOCK the score weights with the owner
-   via AskUserQuestion** — do NOT invent them (rule 4). Then file the shape + score definition + an owner-relay
-   copy; mobile renders it (feeds the master surface, Phase 39). Depends on Phase 34's task-scope clarity (done).
-   See `docs/PLAN-2026-08-14.md` §Phase 45.
+   no task UI), reusing the now-gated location screens (Phase 40) AND the Phase-45 `getTaskReport` reader +
+   `performance.tsx` (already master-gated via `canSeeTeamPerformance`). Gate strictly on the REAL
+   `user.role === 'super_admin'` (Phase-20/40 pattern). Depends on 38/40 (done) + the data endpoints from
+   41/42 (location), 44 (salary, done), 45 (performance, **done** — `getTaskReport`). See `docs/PLAN-2026-08-14.md` §Phase 39.
+3. **Phase 46 — [m] greeting emojis — the next editor-actionable, small & self-contained.** Add tasteful emojis to
+   the greeting copy wherever a greeting is shown (`lib/format.ts` `greeting`, the Home hero, any i18n greeting
+   keys). ⚠️ **i18n trap:** greetings appear in 5 languages — do NOT hand-add an emoji to only the English string;
+   put the emoji where all languages share it (e.g. append in the render, or add to each dictionary's greeting key
+   with owner/human copy — never a machine translation). Keep it tasteful (owner said "tasteful"); this is a
+   polish phase, no contract/backend touch. Then Phase 47 (Viewing-as restricted to one number — a DB
+   `Profile`/capability change, NOT a client phone literal, same trap as Phase 38) and finally **48** (biometric-only
+   session restore, security review). See `docs/PLAN-2026-08-14.md` §Phase 46/47/48.
 
-Revised order after the escalation: **41→42** (location, now first), **39** (master surface), geofence **43**,
-salary/tasks **44→45**, polish **46/47** (greeting emojis, Viewing-as restricted to one number), and finally
-**48** (biometric, security review). Full dependency order and the `cgpe-api`/owner-DB asks per phase are in
-`docs/PLAN-2026-08-14.md`.
+**Phase 45 is now DONE (backend SHIPPED + verified, mobile reader + render built) — the last verify-and-file report
+phase is closed.** Remaining device checks: **41 part-2** (24/7 recorder), **43** (per-member geofence), **45** (the
+two performance screens — needs cgpe-api's `:3001` restart for live data). Revised order: **41→42** (location),
+**39** (master surface), polish **46/47**, then **48** (biometric). Full dependency order + `cgpe-api`/owner-DB asks
+per phase in `docs/PLAN-2026-08-14.md`.
 
 ---
 
