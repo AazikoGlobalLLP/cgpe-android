@@ -6,6 +6,26 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-14 — Phase 43 SHIPPED by cgpe-api same-day (Backend Phase 50) + VERIFIED against real code; mobile confirmed zero-change
+
+**Context.** The Phase 43 filing (below) was answered by `cgpe-api` the same day as Backend Phase 50. Per the
+courier rule ("re-read the producer's real code before wiring the app side — tags wrong 5×"), verified rather
+than trusting the "mobile owes zero change" summary.
+
+**Decision.** Verified in their source and confirmed mobile owes zero change — no `src/` edit. Checked:
+`getMemberGeofence(userId)` (`utils/geofence.js:91-112`) resolves member `payroll_profiles.start_location` →
+office → default, centre-only (org radius/enforce kept), `+source`; clock-in enforces the caller's fence
+(`routes/timeTracker.js:322-323`); `GET /geofence` returns it with the **unchanged** `{lat,lng,radius_m,label,
+enforce}` shape + additive `source` (`:1274-1277`); the flagged `PUT /geofence` 2000→200 default bug is fixed
+(`:1296-1298`). Mobile's `getGeofence`/`checkGeofence` (`src/data/api.ts:1707/1788`) map the fixed shape and
+ignore `source` (inert); the `label`→"Your assigned location" is inert too (clock-in copy is distance-based).
+
+**Consequence.** No `src/` change → **no gate re-run** (baseline stands: `tsc` 0, `npm test` 467/467, lint 0/12).
+RE-VERIFIED note filed under the (cgpe-api-owned, already-ticked) INBOX item, grepped back durable. Phase 43 is
+now backend-live-pending-restart; the only remaining mobile task is a **device check** (member inside pin clocks
+in; ~201 m away refused with the measured distance) once an admin sets a `start_location`. Docs: `docs/spec/
+PHASE-43.md` §8.
+
 ## 2026-08-14 — Phase 43 (per-member 200 m clock-in fence) is a pure `[api]` phase; VERIFIED + FILED, zero mobile build
 
 **Context.** Owner backlog Phase 43: each member has their own set location and clock-in is allowed only within

@@ -112,3 +112,31 @@ inside their pin clocks in; 201 m away is refused with the measured distance).
 `cgpe-api` enforces clock-in against the caller's own 200 m fence with a global fallback, exposes a set + a
 self-read path, and a device check confirms a member is allowed inside their pin and refused outside it with the
 measured distance. No mobile code required unless the served fence shape changes.
+
+## 8. SHIPPED by `cgpe-api` (Backend Phase 50) + VERIFIED — 2026-08-14
+
+Filed same day; `cgpe-api` shipped it the same day as **Backend Phase 50**, implementing all five points as
+recommended. **Verified against their real code** (not the summary), and mobile owes **zero change** — confirmed:
+
+- `getMemberGeofence(userId)` (`utils/geofence.js:91-112`) — member `payroll_profiles.start_location` → global
+  `office_geofence` → `DEFAULT_OFFICE`; **centre-only** per-member, org `radius_m`/`enforce` kept (one radius
+  knob, no invented number); returns the same shape `+source ∈ member|office`.
+- **Clock-in enforces the caller's fence** — `getMemberGeofence(userProfile.user_id)` →
+  `checkClockGeofence(lat,lng,acc,memberFence)` (`routes/timeTracker.js:322-323`); clock-out likewise
+  (`:504-505`, still non-blocking per Phase 7). `checkClockGeofence(...,fence?)` is backward-compatible and the
+  `min(acc,100)` tolerance / `>300 m`-reject logic is unchanged (`:122-145`).
+- **`GET /geofence`** returns the caller's own effective fence, **shape unchanged** `{lat,lng,radius_m,label,
+  enforce}` + additive `source` (`:1274-1277`).
+- **Set the pin:** the existing admin `PUT /api/payroll/profiles/:userId {start_location:{lat,lng}}` — no new
+  endpoint. (`attendanceRules.geo`, written by `PUT /admin/rules/:userId`, is a different field and still drives
+  only the break fence.)
+- **Flagged bug fixed:** `PUT /geofence` default `radius_m` is now `DEFAULT_OFFICE.radius_m` (200), no more
+  2000 m 10× widening (`:1296-1298`).
+
+**Mobile confirmed inert:** `getGeofence`/`checkGeofence` (`src/data/api.ts:1707/1788`) map the fixed
+`{lat,lng,radius_m,label,enforce}` shape and **ignore `source`**; the caller's own fence flows through and the
+403 `message`/`distance_m` renders verbatim — **no `src/` change**. The `label`→"Your assigned location" is also
+inert (our clock-in copy is distance-based, not label-based). **Remaining: a device check only** — a member
+inside their pin clocks in; ~201 m away is refused with the measured distance — after an admin sets a member's
+`start_location` and the `:3001` restart lands. INBOX box is `cgpe-api`'s (already ticked); mobile RE-VERIFIED
+note filed underneath (grepped back durable).

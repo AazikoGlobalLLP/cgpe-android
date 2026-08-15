@@ -14,7 +14,22 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**Phase 43 — [api]+[m] Per-member set location + 200 m clock-in enforcement. VERIFIED + FILED to `cgpe-api`, no mobile build — 2026-08-14.**
+**Phase 43 — [api]+[m] Per-member set location + 200 m clock-in enforcement. FILED → cgpe-api SHIPPED (Backend Phase 50) → VERIFIED same-day; mobile owes ZERO change, device check only — 2026-08-14.**
+`cgpe-api` shipped the filed ask the same day as **Backend Phase 50**, all five points as recommended, and it is
+**verified against their real code** (courier re-read, not the summary): `getMemberGeofence(userId)`
+(`utils/geofence.js:91-112`, member `payroll_profiles.start_location` → office → default, centre-only, org
+radius/enforce kept, `+source`); clock-in enforces it (`routes/timeTracker.js:322-323`), clock-out too
+(`:504-505`, non-blocking); `checkClockGeofence(...,fence?)` backward-compatible, `min(acc,100)`/`>300 m` rules
+unchanged; `GET /geofence` returns the caller's own fence, **shape unchanged** + additive `source` (`:1274-1277`);
+set-pin via existing `PUT /payroll/profiles/:userId`; the flagged `PUT /geofence` 2000→200 default bug fixed
+(`:1296-1298`). **Mobile inert:** `getGeofence`/`checkGeofence` (`src/data/api.ts:1707/1788`) map the fixed shape
+and ignore `source`, so the caller's own fence flows through with the 403 verbatim — **no `src/` change, no gate
+re-run** (baseline: `tsc` 0, `npm test` 467/467, lint 0/12). RE-VERIFIED note filed under the (cgpe-api-owned,
+already-ticked) INBOX item, grepped back durable. **Remaining: device check only** — member inside pin clocks in,
+~201 m away refused with the measured distance — once an admin sets a `start_location` + the `:3001` restart lands.
+Full path: `docs/spec/PHASE-43.md` §8; DECISIONS 2026-08-14 (top).
+
+**Phase 43 (original filing) — VERIFIED + FILED to `cgpe-api`, no mobile build — 2026-08-14.**
 Owner backlog Phase 43 (Group E): each team member has their OWN set location; clock-in only within 200 m of that
 pin, not the single shared office fence. **Verified against real code + `contracts/` (both trees, not tags):**
 clock-in enforces ONE global office fence keyed to nobody — `checkClockGeofence(lat,lng,accuracy)` has no
