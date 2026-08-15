@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 49 added: final APK + one-click link, then OTA-only updates (with an honest native-change caveat)
+
+**Context.** The owner asked, in plain terms, for the very last deliverable: after everything is done, build ONE final
+APK, hand a single one-click download link, and make that the LAST link ever — every future update should reach
+installed phones "directly from code" with no new link. The obvious-but-dishonest move is to promise "no more links,
+ever." That is false: over-the-air (OTA) updates can ship only the JavaScript/asset layer.
+
+**Decision.** Added **Phase 49 (Group I — Ship)** to `docs/PLAN-2026-08-14.md`: pre-flight (gates green + device
+backlog cleared + `git push` fixed) → wire `expo-updates`/EAS Update on the `production` profile → `eas build -p
+android --profile production` (signed APK for a direct download) → thereafter `eas update` ships JS/content changes OTA.
+**Wrote the hard limit into the plan explicitly:** OTA cannot ship a native change (new module, permission, SDK/RN bump,
+icon/package/signing) — that always needs a fresh APK. Concretely, Phase 41's tracker already added a native module
+(`expo-intent-launcher`) + permissions, so at least one more native build is due before the "final" APK. Marked
+**Phase 41 as the owner's #1 next priority.**
+
+**Consequence.** The roadmap now has a defined end state and an honest promise: "last link ever" = for JS/content
+updates, not native ones. Owner must fix the `git push` 403 (all commits are local) and hold the signing key. Docs-only
+change, no gate impact. Commit `c4f40bb` (local — push 403s).
+
+## 2026-08-15 — Phase 39: the master monitoring surface is a HUB reached from More, not a per-member card or a tab
+
+**Context.** Owner backlog Phase 39 wanted a dedicated master view of each member's performance / location / salary,
+no task UI. Verified first that every one of those lenses ALREADY exists as its own screen and is ALREADY master-gated
+(`agent-map`/`agent-track`, `performance?view=team`, `payroll`, `team/[id]`) — they were just scattered in the More
+menu. So the question was purely shape, and two shapes were genuinely undecided.
+
+**Decision.** Locked with the owner via AskUserQuestion: **(1) shape = a monitoring HUB** — one new `/monitor` screen
+with a lens grid (Locations first — "most important" — Movement, Performance, Payroll) over the `getTeam()` roster,
+each item opening its existing screen; NOT a per-member unified card (that needs per-member location/payroll deep-links
+that don't exist = new backend). **(2) entry = pushed from More** (a master-only "Monitor" row at the top of Master
+control), NOT a bottom tab (`nav.tabs` is DB-driven — a master-only tab would need an `[api]`/RBAC change, out of a
+pure `[m]` scope). Gated on the REAL `super_admin` via a NEW pure `canMonitorTeam(user)` — parallel to
+`canSeeLiveLocation`/`canSeeTeamPerformance`, kept a separate predicate so the three can't drift; the hub is a
+convenience entry only, each destination keeps its own gate. No task UI (explicit owner constraint). The hub invents
+nothing — no scores/salary of its own (server-owned on the destinations), only roster identity + live duty.
+
+**Consequence.** Gates green (`tsc` 0, `npm test` 491/491 (+4), eslint new/touched 0 errors). No contract change — pure
+`[m]` over existing endpoints. Device check carried (real-master reach + admin/leader refusal). Commit `2750794`
+(local — push 403s). Full path: `docs/spec/PHASE-39.md`.
+
 ## 2026-08-15 — Phase 46: greeting emoji rendered as its own element, not folded into `greet.*`
 
 **Context.** Owner backlog Phase 46: add a tasteful emoji to the greeting copy. The greeting renders in five languages

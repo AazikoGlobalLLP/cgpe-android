@@ -1,47 +1,57 @@
-# HANDOFF — CGPE Connect (Android) — Phase 46 — 2026-08-15
+# HANDOFF — CGPE Connect (Android) — Phase 39 — 2026-08-15
 
-Phase 46 (tasteful greeting emoji) built in one small, self-contained `[m]` change — no backend, no
-contract, no i18n-dictionary touch. The whole point was to add the emoji **without** falling into the
-i18n trap the last handoff flagged, and it renders in all five languages from a single glyph.
+Phase 39 (the master-only monitoring surface — the owner's "main side") built as one small, self-contained
+`[m]` change: a new `/monitor` hub screen that gathers the already-existing, already-master-gated lenses
+(location, movement, performance, salary) plus the team roster into one dedicated master landing, with **no task
+UI**. No backend, no contract, no i18n change. Also added **Phase 49** to the roadmap (final APK + one-click link →
+OTA-only updates). **Owner has marked Phase 41 (24/7 background location) as the #1 next priority.**
 
 ## Done
-- **The Home greeting header now shows a time-of-day emoji** beside the greeting word: 🌅 in the
-  morning (before 12), ☀️ in the afternoon (12–17), 🌆 in the evening (17+) — matched to the same
-  cutoffs the greeting text already uses. It appears identically in all five languages
-  (en / ગુજરાતી / हिन्दी / Hinglish / Roman Gujarati) because it is rendered as its own element, not
-  baked into any translated string. A screen reader still reads the greeting, not the decorative glyph.
+- **A master (real `super_admin`) now has a single "Monitor" surface.** More → Master control → **Monitor** opens
+  `/monitor`: a 2×2 lens grid (**Locations** first — the owner's "most important" — Movement, Performance, Payroll,
+  each opening its existing screen) over the team roster (on-duty KPIs + rows tapping into each member's detail).
+  No task UI. A real admin or leader never sees the Monitor tile, and a deep-link to `/monitor` shows "Owner access
+  only" — the gate is the real role, never the folded tier.
+- **The roadmap now ends with Phase 49** — the ship step: after everything is built + device-verified, cut one
+  final signed APK, hand a one-click download link (the last link ever), then push all future JS/content updates
+  over-the-air. The honest limit is written down: OTA covers only the JS/asset layer; a native change still needs a
+  fresh APK.
 
 ## Files changed
-- `src/app/(tabs)/home.tsx` — derived `greetEmoji` beside `greet` (same time-of-day branch), and
-  rendered it as a standalone `<Txt>` after `{greet},` in the header row, wrapped in a `View` with
-  `accessibilityElementsHidden` / `importantForAccessibility="no-hide-descendants"` so the emoji is
-  skipped by assistive tech. No dictionary/format.ts change.
+- `src/app/monitor.tsx` — NEW. The master monitoring hub: `canMonitorTeam` gate → lens grid → `getTeam()` roster
+  (rows → `/team/[id]`). Invents nothing; outage-honest via `useDataHealth()`.
+- `src/store/roles.ts` — NEW pure `canMonitorTeam(user) = user?.role === 'super_admin'`, parallel to
+  `canSeeLiveLocation` / `canSeeTeamPerformance` (kept separate so the three gates can't drift).
+- `src/store/__tests__/roles.test.ts` — +4 cases pinning `canMonitorTeam` across all 6 roles + null.
+- `src/app/(tabs)/more.tsx` — fixed master-only "Monitor" row at the top of the Master-control group (no navKey).
+- `docs/spec/PHASE-39.md` — NEW spec. `docs/PHASES.md` — Phase 39 "Now" block. `docs/PLAN-2026-08-14.md` — NEW
+  Phase 49 (Group I — Ship) + execution order + owner/ops asks.
 
 ## Decisions made
-- **Emoji rendered as its own element, never concatenated into `greet.*`** — the i18n trap: adding an
-  emoji to only the English string (or string-concatenating it) would leave four languages without it
-  and could break Hindi/Gujarati word order. Rendering it separately means one glyph serves all five.
-- **Time-of-day glyphs (🌅 / ☀️ / 🌆), chosen off the existing hour cutoffs** — no new copy, no machine
-  translation, and it stays coherent as the day changes. Not invented numbers/colours — reuses the
-  greeting's own `hour < 12 / < 17` branch.
-- **Decorative-only for a11y** — the emoji carries no meaning the greeting text doesn't already convey,
-  so it is hidden from screen readers rather than announced as "sunrise".
+- **Shape = a monitoring HUB, reached pushed from More** (both owner-locked via AskUserQuestion). Not a per-member
+  unified card (would need per-member location/payroll deep-links that don't exist = new backend); not a bottom tab
+  (`nav.tabs` is DB-driven, a master-only tab needs an `[api]`/RBAC change).
+- **`canMonitorTeam` added even though it is byte-identical to the other two `super_admin` predicates** — the file
+  already keeps them separate "so they can't drift"; a distinct name documents what is gated and is pinned on its own.
+- **Phase 49 records the OTA hard limit explicitly** — "last link ever" holds for JS/content updates only; native
+  changes (Phase 41's tracker module already being one) still need a rebuild. Do not over-promise zero rebuilds.
 
 ## Known broken / deliberately skipped
-- **Device visual check CARRIED** (native-only): confirm the emoji renders and vertically aligns with
-  the greeting text on a real handset, light/dark at 390px. Trivial for a static glyph, but web/tests
-  don't exercise native emoji rendering.
-- **`git push` still 403s** — this commit (`153ecc6`) plus the local Phase-45 commits (`5dc5eab`,
-  `6e6033a`, `32158bb`) are local-only; credential `reactjsaaziko` has no write access. Needs a human
-  credential swap.
-- Carried from before: Phase 41 part-2 (24/7 recorder) + Phase 43 (per-member geofence) + Phase 45
-  (both performance screens) device checks — all native/backend-live-gated, not editor-buildable.
+- **Device check CARRIED for Phase 39** (native + backend-live-gated): a real `super_admin` reaches the hub, the four
+  lenses open, roster taps open the detail; a real admin + leader find the tile gone and a deep-link shows "Owner
+  access only". Needs Phase 38's DB promotion for a live master + cgpe-api's `:3001` restart for a live roster.
+- **`git push` still 403s** — this commit (`2750794`) + `c4f40bb` (Phase 49 doc) + the local Phase-45/46 commits are
+  local-only; credential `reactjsaaziko` has no write access. Needs a human credential swap. **This blocks Phase 49.**
+- Carried device/backend checks: 41 part-2 (24/7 recorder), 42 (route colouring, blocked on 41), 43 (geofence), 45
+  (both performance screens), 46 (emoji alignment). All native/backend-live-gated, not editor-buildable.
 
 ## Next session starts here
-- Phase 47/39: the owner-backlog next item is Phase 39 (the master monitoring surface) — and it can
-  **reuse** the Phase-45 `getTaskReport` reader + `performance.tsx` (already master-gated) rather than
-  rebuilding. Otherwise pick the next unbuilt owner-backlog item from `docs/PLAN-2026-08-14.md`.
+- **Phase 41 — 24/7 background location — is the owner's #1 priority.** Its remaining work (`tracker.ts` device
+  slice / battery-opt / boot re-arm) is **device + EAS-build-gated, NOT editor-buildable** — the editor half
+  (41a + 41a-iii-b) is already built and device-unverified (`16e75ae`). So the next real step is a fresh EAS/dev-client
+  build on a real handset + the §12.7 acceptance matrix (`docs/spec/PHASE-41.md` §12). If working editor-only, the
+  next editor-actionable item is **Phase 47** (Viewing-as → one number — first confirm the flag mechanism with the
+  owner/backend; DB capability, never a phone literal).
 - First command: `/boot`
-- Watch out for: **verify the backend in real code before building** (tags wrong 5×) — and for any
-  master/admin surface, gate on the REAL `super_admin` role via `canSeeLiveLocation`/
-  `canSeeTeamPerformance`, never the folded tier, or data leaks to every admin/leader (the Phase-40 rule).
+- Watch out for: **Phase 41 is #1 by owner priority but is device/build-gated** — do not "build" it in the editor
+  again; it needs a handset. And **every commit is local (push 403s)** — flag the push as the blocker for Phase 49.

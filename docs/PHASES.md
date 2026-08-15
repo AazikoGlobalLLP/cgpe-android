@@ -1126,10 +1126,18 @@ recorder, EDITOR-BUILT / DEVICE-UNVERIFIED, `16e75ae`), **43** (per-member 200 m
 (strict salary from hours/days — VERIFIED already-satisfied by Backend Phase 25b, owner-confirmed as-is, ZERO
 code), and **45** (completed-tasks report + performance score — filed → `cgpe-api` SHIPPED same-day as Backend
 Phase 53 → VERIFIED against real code → mobile READER + RENDER built: `performance.tsx` self + master-only team,
-owner-locked visibility) — see `## Now`. What remains is device verification (41 part-2, 43, **45**) and the
-master surface (39).**
+owner-locked visibility) — see `## Now`, AND **39** (Master monitoring HUB `monitor.tsx` — DONE 2026-08-15,
+commit `2750794`). What remains is **device verification** (41 part-2, 43, 45, 46, 39), **Phase 41's on-device
+build** (owner's #1), **47** (Viewing-as → one number, needs an owner/backend flag decision), **48** (biometric),
+and finally **49** (final APK + one-click link → OTA-only updates, the very last step). Owner marked **Phase 41
+#1** (2026-08-15) — but its remainder is device/build-gated, not editor code.**
 
-**🔺 OWNER ESCALATION 2026-08-14 — Phase 41 (24/7 background location) is now #1.** The owner asked whether
+**🔺 OWNER ESCALATION — Phase 41 (24/7 background location) is #1. RE-CONFIRMED 2026-08-15 (Phase 39 now done).**
+⚠️ **Phase 41's remaining work is DEVICE + EAS-BUILD-GATED, NOT editor-buildable** — the editor half (41a + 41a-iii-b
+parts 1 & 2) is already built and device-unverified (`16e75ae`). So "#1 priority" here means the next **on-device**
+session (fresh EAS/dev-client build + the §12.7 acceptance matrix on a real handset), not more editor code. If working
+editor-only, the next editor-actionable item is **Phase 47** (Viewing-as → one number, needs the owner/backend flag
+decision first). The owner asked whether
 member location is tracked 24/7; it is NOT — today's `lib/tracker.ts` records only a **clocked-in shift**
 (`startTracking(sid)` on clock-in → `stopTracking` on clock-out; it survives app-close/background during the
 shift via the Android foreground service, but records nothing between shifts and refuses any fix it can't
@@ -1161,11 +1169,12 @@ attribute to a session). The owner wants continuous capture, so Phase 41 is pull
    any handset (Samsung/Xiaomi aggressive battery killers included), or (b) literally always-on beyond shifts —
    and the consent/notice model. Then `tsc`/`test` green + a real multi-device check (`tracker.ts` has NO test
    coverage — device-only). See `docs/PLAN-2026-08-14.md` §Phase 41/42.
-2. **Phase 39 — the master surface.** Build the Master-only monitoring surface (performance + location + salary,
-   no task UI), reusing the now-gated location screens (Phase 40) AND the Phase-45 `getTaskReport` reader +
-   `performance.tsx` (already master-gated via `canSeeTeamPerformance`). Gate strictly on the REAL
-   `user.role === 'super_admin'` (Phase-20/40 pattern). Depends on 38/40 (done) + the data endpoints from
-   41/42 (location), 44 (salary, done), 45 (performance, **done** — `getTaskReport`). See `docs/PLAN-2026-08-14.md` §Phase 39.
+2. **Phase 39 — the master surface. ✅ DONE 2026-08-15 (commit `2750794`, local).** Built the Master-only monitoring
+   HUB `src/app/monitor.tsx` (owner-locked shape, pushed from More) — a lens grid (Locations/Movement/Performance/
+   Payroll, each opening its existing master-gated screen) over the `getTeam()` roster, no task UI, gated on the REAL
+   `super_admin` via new pure `canMonitorTeam`. Reused the Phase-40 location screens + Phase-45 `performance.tsx`
+   rather than rebuilding. Gates green (491/491). Device check carried. See `## Now` + `docs/spec/PHASE-39.md`.
+   **Next editor-actionable is Phase 47** (Viewing-as → one number — needs owner/backend flag decision).
 3. **Phase 47 — [db]+[sec] Viewing-as restricted to one number — the next editor-actionable after Phase 46.**
    Owner backlog Phase 47: keep the "Viewing-as" (act-as-another-role) affordance for **one specific number only**.
    ⚠️ **Same trap as Phase 38:** this is a DB `Profile.role`/capability change (or a backend gate on the real
