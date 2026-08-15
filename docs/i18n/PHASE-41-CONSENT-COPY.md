@@ -55,16 +55,20 @@ shared. Kept separate from the shift recorder's existing "Recording your field r
 | `consent.serviceTitle` | CGPE Connect | | | | |
 | `consent.serviceBody` | Location on for work | | | | |
 
-## Blocked-app screen (anti-circumvention — PHASE-41 §5, built later in 41d)
+## Blocked-app screen (anti-circumvention — PHASE-41 §5) — ✅ LANDED & WIRED (41d, 2026-08-15)
 
-Shown when location is required but turned off. Drafted here so it goes to the translator in one pass;
-it is only wired when 41d is built.
+**Superseded:** this section is no longer a draft. The owner supplied the five-language copy
+(`translation-v.01.txt`), it is wired in `src/i18n/index.tsx` (`consent.blockedTitle` / `blockedBody`
+/ `blockedAction`, all five languages), and 41d's `src/ui/LocationBlock.tsx` renders it. **The live
+copy in `src/i18n` is the source of truth** — the English column below is kept for reference only; do
+not treat the blank language columns here as outstanding work, and do not edit copy here (edit
+`src/i18n` + `translation-v.01.txt`, or the two drift).
 
-| Key | English source | ગુજરાતી | हिन्दी | Hinglish | Roman Gujarati |
-|---|---|---|---|---|---|
-| `consent.blockedTitle` | Turn location back on to use CGPE Connect | | | | |
-| `consent.blockedBody` | Location sharing is required for this app. Please turn location and the "Allow all the time" permission back on to continue. | | | | |
-| `consent.blockedAction` | Open settings | | | | |
+| Key | English source (reference — live copy is in `src/i18n`) |
+|---|---|
+| `consent.blockedTitle` | Turn location back on to use CGPE Connect |
+| `consent.blockedBody` | Location sharing is required for this app. Please turn location and the "Allow all the time" permission back on to continue. |
+| `consent.blockedAction` | Open settings |
 
 ---
 
