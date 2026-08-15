@@ -202,7 +202,29 @@ honest, never covert:
   periodic task's battery cost stays within the §3 budget (measured over a real day on 3+ handsets). The
   prompt-boot native `BootReceiver` remains a possible later tightening if the ~15-min post-reboot gap
   matters. Full path: DECISIONS 2026-08-15 (top).
-- **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4). *Not started.*
+- 🔨 **41c — battery + activity: BUILT IN EDITOR, DEVICE-UNVERIFIED (2026-08-15).** Motion-adaptive GPS
+  sampling via an in-house **`expo-sensors` Accelerometer** classifier (owner chose this source over the
+  native Google-AR module, AskUserQuestion 2026-08-15). Read the SDK-57 accelerometer docs first (AGENTS.md):
+  `{x,y,z}` in g, so the **rotation-invariant magnitude std-dev** is a clean still-vs-moving signal and the
+  plain Accelerometer needs **no permission** (`ACTIVITY_RECOGNITION` deliberately NOT added — it is only for
+  the step-counter / Google-AR path). Built: (a) `expo-sensors` 57.0.2 (no config-plugin/permission change).
+  (b) NEW pure `src/lib/motion.ts` + `motion.test.ts` (+16): `classifyMotion` (still/moving/null),
+  `samplingProfile` (**MOVING** = today's Balanced/60s/30m cadence unchanged; **STILL** lengthens only the
+  time intervals to 5 min — accuracy/distance stay usable), `debounceMotion` (hysteresis, anti-churn), and
+  `resolveMotion` (**a stale `still` fails safe to `moving`** so an old reading can never under-sample and
+  lose a route). (c) `tracker.ts` — the classifier runs alongside the recorder, started/stopped at the SAME
+  `startService`/`stopUpdates` chokepoints as the 41b watchdog; persists only confirmed transitions to
+  `track.motion`; `startService` reads that state to choose the sampling profile. **SCOPE (honest):** the
+  profile is applied at each service (re)start, **NOT via a mid-session restart** (that would fight 41b's
+  reliability + flicker the notification); and the accelerometer **pauses in the background**, so `still`
+  rarely fires for a pocketed phone — **true background adaptivity needs the native Activity Recognition
+  source (§4, option 3).** Per **§12.8 this is the lever to MEASURE on-device before investing more**.
+  **NUMBERS are PROPOSED DEFAULTS pending owner lock** (spec fixes none): STILL time-interval 5 min,
+  still/moving threshold 0.05 g — each a single named constant. Gates: `tsc` 0 · `npm test` **540/540** (+16)
+  · eslint 0 on touched files. Commit `25d3d5b` (local — push 403s). **Needs a native APK build** (new module,
+  NOT OTA). **DEVICE-UNVERIFIED acceptance gate:** the §3 battery measurement over a real day on 3+ handsets
+  decides whether STILL helps enough or whether to escalate to option 3 / mid-session reconfigure. Full path:
+  DECISIONS 2026-08-15 (top).
 - **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5). *Not started.*
 - Gates each: `tsc` 0 · `npm test` green · no new lint errors · **on-device** matrix
   (Samsung/Xiaomi/OnePlus/Pixel + one iPhone; battery-drain measured).

@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 41c — [m] motion-adaptive GPS sampling (expo-sensors classifier). BUILT IN EDITOR, DEVICE-UNVERIFIED — 2026-08-15.**
+The next Phase-41 sub-phase after 41b (§3/§4): "sparse when still, denser when moving." **Owner chose the activity
+SOURCE via AskUserQuestion (2026-08-15): `expo-sensors` Accelerometer classifier now** (over a pure-seam-only build
+and over the native Google-AR module — accepting it's coarser + device-unverifiable). **Read the SDK-57 accelerometer
+docs first (AGENTS.md):** `{x,y,z}` in g, so the **rotation-invariant magnitude std-dev** is a clean still/moving
+signal and the plain Accelerometer needs **no permission** (`ACTIVITY_RECOGNITION` deliberately NOT added — it's only
+for the step-counter / Google-AR path, so no permission-creep). Built: (a) `expo-sensors` 57.0.2 (no plugin/permission
+change). (b) NEW pure `src/lib/motion.ts` + `motion.test.ts` (+16): `classifyMotion`, `samplingProfile` (**MOVING** =
+today's Balanced/60s/30m cadence unchanged; **STILL** lengthens only the time intervals to 5 min), `debounceMotion`
+(anti-churn hysteresis), `resolveMotion` (**a stale `still` fails safe to `moving`** so an old reading never
+under-samples + drops a route). (c) `tracker.ts` — the classifier runs alongside the recorder, started/stopped at the
+SAME `startService`/`stopUpdates` chokepoints as the 41b watchdog; persists only confirmed transitions to
+`track.motion`; `startService` reads it to choose the profile. **SCOPE (honest):** profile applied at each service
+(re)start, **NOT mid-session** (would fight 41b + flicker the notification); accelerometer **pauses in background**, so
+`still` rarely fires for a pocketed phone — true background adaptivity needs the native AR source (§4 option 3). **Per
+§12.8 this is the lever to MEASURE on-device before investing more.** **NUMBERS = PROPOSED DEFAULTS pending owner lock**
+(spec fixes none): STILL 5 min, threshold 0.05 g — each one named constant. Gates green: `tsc` 0 · `npm test`
+**540/540** (+16) · eslint 0 on touched files. Commit `25d3d5b` (local — push 403s). **No contract change.** **Needs a
+native APK build** (new module, NOT OTA). **DEVICE-UNVERIFIED:** the §3 battery measurement over a real day on 3+
+handsets is the acceptance gate + decides whether to escalate. Full path: `docs/spec/PHASE-41.md` §8 (41c); DECISIONS
+2026-08-15 (top). Next Phase-41 sub-phase: 41d (anti-circumvention) — not started.
+
 **Phase 41b — [m] reliability watchdog (re-arm after OEM kill + reboot). BUILT IN EDITOR, DEVICE-UNVERIFIED — 2026-08-15.**
 The next Phase-41 sub-phase after 41a (§8). Keeps the 24/7 recorder alive against the two things the foreground
 service alone can't survive: an aggressive-OEM Doze kill (§2.4) and a reboot (expo-location's task doesn't survive

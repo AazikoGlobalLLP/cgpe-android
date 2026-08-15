@@ -6,6 +6,39 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 41c BUILT (editor): motion-adaptive sampling via expo-sensors; applied at restart, not mid-session; numbers pending lock
+
+**Context.** 41c (PHASE-41 §3/§4) is "sparse when still, denser when moving." §4 left the activity SOURCE
+open (expo-sensors DIY vs a native Google Activity Recognition module) and §12.8 frames adaptive sampling as
+a lever to pull only IF the on-device battery measurement shows the 24/7 service over budget. The spec fixes
+NO sampling numbers. Via AskUserQuestion (2026-08-15) the owner chose **"expo-sensors classifier now"** over
+the pure-seam-only and the native-AR options — build a complete 41c in the editor, accepting it is coarser
+and device-unverifiable. Read the SDK-57 accelerometer docs first (AGENTS.md): `{x,y,z}` in g, plain
+Accelerometer needs no permission.
+
+**Decision.** In-house Accelerometer classifier. The signal is the **rotation-invariant std-dev of the
+sample magnitude** (gravity contributes ~1g in any orientation, so spread = real movement) → still/moving.
+Kept the safety-critical logic PURE + tested in `src/lib/motion.ts` (`classifyMotion`, `samplingProfile`,
+`debounceMotion`, `resolveMotion`), because `tracker.ts` is device-only (no stub). Three deliberate calls:
+(1) **`ACTIVITY_RECOGNITION` NOT added** — the plain Accelerometer doesn't need it and adding an unused
+dangerous permission is permission-creep; it's only for the step-counter / Google-AR path. (2) **Profile
+applied at each service (re)start, NOT via a mid-session stop+start** — a live reconfigure would fight 41b's
+reliability work and flicker the foreground notification, and (3) the accelerometer **pauses in the
+background**, so `still` rarely activates for a pocketed phone anyway — mid-session churn would buy almost
+nothing. (3) **A stale `still` fails safe to `moving`** (`resolveMotion`, 5-min freshness) so an out-of-date
+reading can never under-sample and drop a route; `moving` (the denser, safe direction) never expires.
+
+**Consequence.** A real, tested, wired classifier that is honestly a **foundation**: its real-world effect
+is limited (foreground-only classification + restart-time application), which is exactly why §12.8 says to
+MEASURE battery on-device before investing more. The upgrade path if the measurement demands it: the native
+Activity Recognition source (§4 option 3) for true background still/walking/driving, and/or mid-session
+reconfigure. **NUMBERS are PROPOSED DEFAULTS pending an owner lock** (spec has none): STILL time-interval
+5 min (×5 the MOVING 60 s; only the time intervals lengthen, accuracy+distance stay usable), still/moving
+threshold 0.05 g (derived: still noise ≈0.02 g, walking ≫0.1 g). Each is one named constant. One new native
+module ⇒ needs a native APK build, NOT OTA. Gates green: `tsc` 0 · `npm test` 540/540 (+16) · eslint 0 on
+touched files. Commit `25d3d5b` (local — push 403s). DEVICE-UNVERIFIED. Full path: `docs/spec/PHASE-41.md`
+§8 (41c).
+
 ## 2026-08-15 — Phase 41b BUILT (editor): reliability watchdog; ONE watchdog covers both OEM-kill AND reboot, no native BootReceiver
 
 **Context.** 41b's job (PHASE-41 §2.3/§2.4) is to keep the 24/7 recorder alive against the two things the
