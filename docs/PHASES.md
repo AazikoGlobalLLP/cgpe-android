@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 45 — [api]+[m] Per-member completed-tasks report + performance score. VERIFIED gap (genuinely new) → score LOCKED with owner → FILED to cgpe-api; no mobile build yet — 2026-08-15.**
+Owner backlog Phase 45 (Group F): a per-member report of **what they completed, when, how much** + a **performance
+score**, counting **only manager-assigned AND actually-completed** tasks — NOT reminders, NOT self-created, NOT
+cancelled. **Verified against real code first (tags wrong 5×): nothing computes this.** `GET /team/task-overview`
+(`team.js:27`) is close but its `done` counts `cancelled` (`DONE`, `:23`) and its denominator includes self-created
+tasks + reminders; `StaffScore` (`staffScores.js`) is **manually typed** by an admin, not derived; `reports.js`/
+`dashboard.js`/`tasks.js` compute no per-member score. The raw data IS in `team_tasks` (`assigneeName`,
+`createdBy`/`createdById`, `type`, `priority`, `status`, `dueAt`, and `statusHistory:[{status,at,by}]` at `:240` →
+**when** completed). **Score LOCKED with owner (AskUserQuestion, 2026-08-15) — not invented:** (1) importance +
+timeliness — `score = round(100 × earned/possible)`, per task `possible = P1:3/P2:2/P3:1`, `earned = ×1.0` on time /
+`×0.5` late / `0` unfinished, **null when no tasks (never 0%)**; (2) **cancelled ≠ completed** (dropped from both sets);
+(3) **only manager-assigned** — self-created never counts (recommended test `creator ≠ assignee`, justified by
+`tasks.js:241` stamping `assigneeName = actor`); (4) **per calendar month**; (+ exclude reminders/Unassigned; on-time =
+completion `<= dueAt`, no due date ⇒ on time). Filed a top-of-queue `→ cgpe-api · from cgpe-mobile` INBOX ask (grepped
+back durable, 1 hit) with the locked defs + a recommended `GET /team/task-report?month=YYYY-MM` shape; flagged **one
+open definition point** (which date stamps the month — recommend due-month) for cgpe-api + owner to confirm. **No `src/`
+change → no gate re-run** (baseline: `tsc` 0, `npm test` 467/467, lint 0 errors / 12 warnings). Live only when cgpe-api
+ships the aggregate (+ `api.md`/`models.md`) and a later `[m]` phase renders it (`getTaskReport` + a per-member surface
+feeding Phase 39) + a device check. Full path: `docs/spec/PHASE-45.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 44 — [api]+[m] Strict salary from working hours/days. VERIFIED — ALREADY SATISFIED end to end; owner confirmed the live formula as-is; ZERO change — 2026-08-15.**
 Owner backlog Phase 44 (Group F): salary computed **from actual working hours/days**, shown as **one amount**
 (rule 2 — a backend payroll-engine formula; the app never multiplies). **Verified against real code (both trees):
