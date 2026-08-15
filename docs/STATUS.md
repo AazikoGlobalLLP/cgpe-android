@@ -1,20 +1,13 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-15
-**Working on right now:** Restricting the "Viewing as" preview so only the owner can use it.
+**Working on right now:** Finished the "sign back in with just your fingerprint" feature — a person who returns days later, logged out, can get straight back into their own account with a fingerprint or face scan, no password or OTP.
 
 **Done this week:**
-- The "Viewing as" option (which lets someone see the app the way a lower-level staff member sees it)
-  is now hidden from managers and team leaders — only the owner-level account sees it.
-- The owner chose how strict this should be: it now shows for owner-level accounts only, rather than
-  wiring up a brand-new server setting to lock it to a single phone number.
-- Finished and checked the master monitoring screen, the salary/performance reports, and the greeting
-  emoji earlier this week; all pass the automated checks.
+- Built fingerprint/face sign-back-in: after your session quietly expires, one fingerprint tap returns you to your own account — no typing a password or waiting for a code.
+- Made it safe: if someone deliberately taps "Log out", the fingerprint shortcut stops working and a full login is required again — both on the phone and confirmed on the server.
+- Checked the server team's part of this feature against their actual code before building on top of it — it was correct and secure, so we finished our side.
+- The greeting now shows a time-of-day icon, and the "master/owner" monitoring view and the fingerprint feature all passed the app's automated quality checks.
 
-**Blocked on:** Two things, both needing a person, not more code:
-1. Saving the work to the shared server is still refused (the login used doesn't have permission) — every
-   change is saved only on this computer until someone fixes that access.
-2. The always-on location tracking and a few other features can only be finished by installing a fresh
-   test build on a real phone.
+**Blocked on:** Two things need a person, not the app: (1) the server needs a quick restart so the new sign-in works live, and then this feature must be tried on a real phone; (2) the code still cannot be uploaded to the shared code store — a login/permission needs fixing. Until that upload works, the final installable app cannot be produced.
 
-**Next:** Plan the "fingerprint/face to get back in after logging out" feature — carefully, because it
-touches account security.
+**Next:** Get the server restarted and the upload permission fixed, test the remaining features on a real phone, then produce the one final installable app link.

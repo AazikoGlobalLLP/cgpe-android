@@ -1245,21 +1245,22 @@ attribute to a session). The owner wants continuous capture, so Phase 41 is pull
    `super_admin` via new pure `canMonitorTeam`. Reused the Phase-40 location screens + Phase-45 `performance.tsx`
    rather than rebuilding. Gates green (491/491). Device check carried. See `## Now` + `docs/spec/PHASE-39.md`.
    **Next editor-actionable is Phase 47** (Viewing-as → one number — needs owner/backend flag decision).
-3. **Phase 48 — [sec][m]+[api] Biometric-only session restore after logout — the next editor-actionable item.**
-   Owner backlog Phase 48 (Group H, do-last/security-sensitive): a user who returns days later logged-out should
-   get back into **their OWN account** with fingerprint/face only — no id/password/OTP. ⚠️ **`[sec]` — spec it
-   carefully before any code (rule 5).** `biometricIdentity.ts` already seals `(userId, token)` behind SecureStore
-   but **only the write half is wired**; the read/restore half + the "restore this exact identity, not just any
-   biometric" binding are the build. **Verify the real backend before filing** (tags wrong 5×): confirm whether the
-   restored token is still valid server-side after logout / how re-auth works, and the identity-binding model,
-   before writing anything. See `docs/PLAN-2026-08-14.md` §Phase 48.
-   **Phase 47 (Viewing-as → Master-only) is DONE — see `## Now`.**
+3. **Phase 49 — [build][ops] final APK + one-click link, then OTA-only — the LAST phase, but GATED, not
+   editor-buildable.** ALL feature phases (34–48) are now built editor-side. Phase 49 pre-flight (all must be true
+   FIRST): every carried device-verification check cleared on a real handset, AND the **`git push` 403 resolved**
+   (a production build must ship from pushed, backed-up code, not local-only commits). Until those hold there is no
+   new editor code — the remaining work is on-device verification + the ops fixes (push access + the signing key +
+   acknowledging that OTA covers only JS/asset updates; Phase 41 already added a native module, so ≥1 more native
+   APK build is due before the "final" one). See `docs/PLAN-2026-08-14.md` §Phase 49.
+   **Phase 48 (biometric-only restore) is DONE editor-side — see `## Now`.**
 
-**Phase 45 is DONE (backend SHIPPED + verified, mobile reader + render built) and Phase 46 (greeting emoji) is
-DONE (`153ecc6`, editor-green + device-check carried).** Remaining device checks: **41 part-2** (24/7 recorder),
-**43** (per-member geofence), **45** (the two performance screens — needs cgpe-api's `:3001` restart for live data),
-**46** (emoji render/alignment). Revised order: **41→42** (location), **39** (master surface), polish **47** (Viewing-as),
-then **48** (biometric). Full dependency order + `cgpe-api`/owner-DB asks per phase in `docs/PLAN-2026-08-14.md`.
+**Every feature phase 34–48 is now built editor-side.** Phase 47 (Viewing-as → Master-only) DONE; Phase 48
+(biometric-only restore) DONE editor-side — cgpe-api shipped the re-mint endpoint (Backend Phase 58), verified +
+mobile restore flow built (513/513). **What remains is entirely GATED, not editor code:** the device-verification
+backlog on a real handset — **41 part-2** (24/7 recorder), **43** (per-member geofence), **45** (both performance
+screens), **46** (emoji alignment), **48** (biometric restore + security review) — several needing cgpe-api's
+`:3001` restart for live data; and the **`git push` 403 fix**. Only after ALL of that: **Phase 49** (final APK →
+OTA). Full dependency order + `cgpe-api`/owner-DB asks per phase in `docs/PLAN-2026-08-14.md`.
 
 ---
 
