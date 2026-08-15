@@ -14,6 +14,27 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 41b — [m] reliability watchdog (re-arm after OEM kill + reboot). BUILT IN EDITOR, DEVICE-UNVERIFIED — 2026-08-15.**
+The next Phase-41 sub-phase after 41a (§8). Keeps the 24/7 recorder alive against the two things the foreground
+service alone can't survive: an aggressive-OEM Doze kill (§2.4) and a reboot (expo-location's task doesn't survive
+one, §2.3). **Read the SDK-57 `expo-background-task` docs first (AGENTS.md):** a registered periodic task is
+**restored by WorkManager after a reboot**, so **ONE watchdog covers BOTH cases — no hand-written native
+`BootReceiver`** (deviation from §2.3's literal recommendation, owner may veto; re-arm lands within ~15 min of boot,
+not seconds — DECISIONS 2026-08-15). Built: (a) `expo-background-task` 57.0.10 (WorkManager on Android), its config
+plugin auto-added to `app.json`; `RECEIVE_BOOT_COMPLETED` added. (b) `tracker.ts` — `WATCHDOG_TASK` at module scope +
+`watchdogTick` (headless, storage-driven: re-arm / idle / retire), `ensureWatchdog`/`retireWatchdog` **paired to the
+`startService`/`stopUpdates` chokepoints** so the watchdog's lifetime tracks the recorder's (retire when nothing to
+record → stops waking the device, §3 battery). (c) NEW pure `src/lib/watchdog.ts` + `watchdog.test.ts` (+11) pinning
+the one safety invariant — **re-arm iff a live shift OR 24/7 armed** (never resurrect un-consented off-shift
+recording; never miss a silent kill) — because `tracker.ts` is device-only (no expo-location/task-manager stub). Gates
+green: `tsc` 0 · `npm test` **524/524** (+11) · eslint 0 on touched files. Commit `71d15a3` (local — push 403s). **No
+contract change** (pure mobile reliability layer over the shipped Phase 43 backend). **Needs a native APK build** (new
+module + permission, NOT OTA — compounds with the expo-intent-launcher build already due from 41a part 2).
+**DEVICE-UNVERIFIED acceptance gate (on a handset):** OEM task-kill → watchdog re-arms within ~one interval; reboot →
+restored + re-arms; off-shift+un-armed → retire stops the wakeups; and the extra periodic task's battery cost stays in
+the §3 budget (measured over a real day on 3+ handsets). Full path: `docs/spec/PHASE-41.md` §8 (41b); DECISIONS
+2026-08-15 (top). Next Phase-41 sub-phases: 41c (battery + activity), 41d (anti-circumvention) — not started.
+
 **Phase 48 UPDATE — cgpe-api SHIPPED (Backend Phase 58) → VERIFIED against real code → mobile restore flow BUILT + tested — 2026-08-15.**
 `cgpe-api` shipped the filed ask as **Backend Phase 58**: PUBLIC `POST /api/auth/refresh-biometric` + a 30-day
 device-bound `refresh_token` allow-list (`models/RefreshToken`) issued at login/verify-otp + revoke-on-logout.

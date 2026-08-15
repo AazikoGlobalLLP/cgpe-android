@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 41b BUILT (editor): reliability watchdog; ONE watchdog covers both OEM-kill AND reboot, no native BootReceiver
+
+**Context.** 41b's job (PHASE-41 §2.3/§2.4) is to keep the 24/7 recorder alive against the two things the
+foreground service alone cannot survive: an aggressive-OEM Doze kill, and a device reboot (expo-location's
+task does not survive a reboot). The spec §2.3 recommended a hand-written native Kotlin `BootReceiver` (+
+`RECEIVE_BOOT_COMPLETED`) for the reboot case, and §2.4 a periodic `expo-background-task` watchdog for the
+kill case. I read the SDK-57 `expo-background-task` docs first (AGENTS.md): registered tasks are "saved in
+persistent storage and restored once the app is initialized… if the device reboots, background tasks will
+resume" — i.e. WorkManager restores the periodic task after a reboot.
+
+**Decision.** Build ONE watchdog (`expo-background-task`, 15-min floor) that covers BOTH cases, and do NOT
+hand-write a native `BootReceiver`. Whenever the watchdog runs — on its interval, or when WorkManager
+restores it after a reboot — it checks `hasStartedLocationUpdatesAsync` and re-arms the recorder if it
+should be live but isn't. The re-arm decision is the pure `watchdogAction({armed,hasShift,running})` →
+`rearm`/`idle`/`retire`, lifted into `src/lib/watchdog.ts` and pinned by `watchdog.test.ts` (+11), because
+`tracker.ts` is device-only (no expo-location/task-manager stub). Register/retire are paired to the
+`startService`/`stopUpdates` chokepoints so the watchdog's lifetime exactly tracks the recorder's; `retire`
+(nothing to record) unregisters it so it stops waking the device (§3 battery). Added `RECEIVE_BOOT_COMPLETED`
+explicitly (WorkManager also brings it) to make the reboot-persistence contract explicit; `expo install`
+auto-added the `expo-background-task` config plugin to `app.json`.
+
+**Consequence.** Reboot re-arm lands within ~one watchdog interval (~15 min), not within seconds as a native
+BootReceiver could — an accepted v1 trade (boring/debuggable over blind, unverifiable Kotlin; my standing
+"cannot debug clever" rule). Consistent with §2's stated "honest ceiling" that ~100% survival is not
+softwarely guaranteed. **Owner may veto** and ask for the prompt-boot native receiver later; the watchdog
+stays regardless (it is the kill-case defence). One new native module + a new permission ⇒ this needs a
+native APK build, NOT OTA (compounds with the expo-intent-launcher build already due from 41a part 2). The
+whole §2 re-arm behaviour + the §3 battery cost of the extra periodic task are a real-handset acceptance
+gate — DEVICE-UNVERIFIED. Gates green: `tsc` 0 · `npm test` 524/524 (+11) · eslint 0 on touched files.
+Commit local (push 403s). Full path: `docs/spec/PHASE-41.md` §8 (41b).
+
 ## 2026-08-15 — Phase 48 BUILT: cgpe-api shipped the re-mint endpoint (Backend Phase 58), mobile restore flow wired + tested
 
 **Context.** cgpe-api reported the filed Phase-48 `[api]` ask done. Per protocol I verified their real

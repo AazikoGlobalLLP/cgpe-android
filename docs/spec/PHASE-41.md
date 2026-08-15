@@ -183,9 +183,27 @@ honest, never covert:
     reconciliations: DECISIONS 2026-08-14 (top). **Not yet wired:** `stopAmbientTracking` → sign-out/withdrawal
     (self-heals via the next flush; later slice). The consent screen + read + gate render/resolve standalone;
     `/consent` stays web-demoable.
-- **41b — reliability:** boot-receiver config plugin + watchdog task (§2).
-- **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4).
-- **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5).
+- 🔨 **41b — reliability: BUILT IN EDITOR, DEVICE-UNVERIFIED (2026-08-15).** The watchdog that re-arms the
+  recorder after an OEM-Doze kill (§2.4) AND after a reboot (§2.3). Read the SDK-57 `expo-background-task`
+  docs first (AGENTS.md): a registered periodic task is persisted and **restored by WorkManager after a
+  reboot**, so ONE watchdog covers both cases — **no hand-written native `BootReceiver`** (deviation from
+  §2.3's literal recommendation; DECISIONS 2026-08-15). Built: (a) `expo-background-task` 57.0.10 installed,
+  its config plugin auto-added to `app.json`; `RECEIVE_BOOT_COMPLETED` added explicitly. (b) `tracker.ts` —
+  `WATCHDOG_TASK` defined at module scope; `watchdogTick` (headless, storage-driven) re-arms / idles /
+  retires per the pure `watchdogAction`; `ensureWatchdog`/`retireWatchdog` paired to the
+  `startService`/`stopUpdates` chokepoints so the watchdog's lifetime tracks the recorder's (retire when
+  nothing to record, §3 battery). (c) NEW pure `src/lib/watchdog.ts` + `watchdog.test.ts` (+11) pinning the
+  one safety invariant (re-arm **iff** a live shift OR 24/7 armed — never resurrect un-consented off-shift
+  recording, never miss a silent kill), since `tracker.ts` is device-only (no stub). Gates: `tsc` 0 ·
+  `npm test` **524/524** (+11) · eslint 0 on touched files. Commit local (push 403s). **Needs a native APK
+  build** (new module + permission, NOT OTA). **DEVICE-UNVERIFIED acceptance gate (§12.7-style, on a
+  handset):** kill the service via OEM task-killer → watchdog re-arms within ~one interval; reboot → the
+  watchdog is restored and re-arms; `retire` stops the wakeups when off-shift + un-armed; and the extra
+  periodic task's battery cost stays within the §3 budget (measured over a real day on 3+ handsets). The
+  prompt-boot native `BootReceiver` remains a possible later tightening if the ~15-min post-reboot gap
+  matters. Full path: DECISIONS 2026-08-15 (top).
+- **41c — battery + activity:** motion-adaptive sampling + activity recognition (§3/§4). *Not started.*
+- **41d — anti-circumvention:** permission/mock/gap detection + app-gating + master alerts (§5). *Not started.*
 - Gates each: `tsc` 0 · `npm test` green · no new lint errors · **on-device** matrix
   (Samsung/Xiaomi/OnePlus/Pixel + one iPhone; battery-drain measured).
 
