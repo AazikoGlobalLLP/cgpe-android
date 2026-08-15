@@ -239,12 +239,18 @@ honest, never covert:
     loud opt-out) + `stopAmbientTracking`. **Safe against false alarms:** `armed`-gated, skips a FAILED permission read
     (never signals on uncertainty), and fires once per revocation (the armed flag clears). Commit `5fe05bc`. Device check:
     revoke "Allow all the time" → masters get one alert, recorder stops.
-  - 🔨 **Permission-monitor + app-block — BRAIN BUILT, SCREEN awaits owner copy.** Pure `locationBlockReason`
-    (services_off / foreground_denied / background_denied, most-fundamental first, consented-only; battery-opt excluded —
-    unreadable from JS §12.3) is built + tested and ready to wire behind `PermissionMonitor`. The **SCREEN is NOT built**:
-    it needs **5-language HUMAN copy** for the "turn location back on" gate (machine translation forbidden, PHASE-19 §4) +
-    an owner trigger confirmation (which permissions block; immediate vs a grace period). Wiring is a small follow-up once
-    copy lands. Commit `5fe05bc` (brain + test).
+  - 🔨 **Permission-monitor + app-block — BRAIN BUILT + TRIGGER LOCKED, SCREEN awaits owner copy.** Pure
+    `locationBlockReason` (services_off / foreground_denied / background_denied, most-fundamental first, consented-only;
+    battery-opt excluded — unreadable from JS §12.3) is built + tested and ready to wire behind `PermissionMonitor`.
+    **Trigger LOCKED by owner (AskUserQuestion 2026-08-15): block IMMEDIATELY when ANY of the three is off** for a
+    consented user — which is exactly a non-null `locationBlockReason`, so no code change is owed. The **SCREEN is the ONLY
+    thing left**: it needs **5-language HUMAN copy** for the "turn location back on" gate (machine translation forbidden,
+    PHASE-19 §4) — English proposed, awaiting gu/hi/hi-en/gu-en: `block.title` "Location is required" · `block.body.services`
+    "Location is switched off on your phone. CGPE Connect needs it on to work. Turn on Location in your phone settings, then
+    come back." · `block.body.permission` "CGPE Connect needs location set to 'Allow all the time'. Open Settings, allow
+    location, then come back." · `block.cta.settings` "Open settings" · `block.cta.recheck` "I've turned it on". Once the
+    copy lands: add the 5 keys (bump the parity test), build the block screen, and gate it in `PermissionMonitor` on
+    `locationBlockReason !== null`. Commit `5fe05bc` (brain + test).
   - ✅ **Gap detection → master alert — `[api]` FILED to cgpe-api (2026-08-15).** Verified cgpe-backend has **no**
     silent-user/gap detector (grep, not tags); grounded the ask in its real patterns (`locationRetention` scheduler
     `server.js:197`; master-notify `metadata.kind` `timeTracker.js:1425`; `location_tracks` points). Filed a top-of-queue
