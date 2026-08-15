@@ -1,60 +1,56 @@
-# HANDOFF — CGPE Connect (Android) — Phase 43 — 2026-08-14
+# HANDOFF — CGPE Connect (Android) — Phase 44 — 2026-08-15
 
-Filed the per-member clock-in geofence ask to `cgpe-api`, they **shipped it the same day** (Backend Phase 50), and
-this session **verified their real code** and confirmed mobile owes **zero change**. A pure `[api]` phase for
-mobile end to end — no `src/` change, gates untouched. The courier workflow (verify → file → owner relays →
-`cgpe-api` ships → mobile verifies) ran to completion inside the day, for the second time.
+Verified Phase 44 (strict salary from working hours/days) against the real backend and found it **already
+satisfied end to end** — the strict engine exists, is owner-locked, and is live (Backend Phase 25b), and both
+mobile payroll screens already render it. Showed the owner the exact live formula (AskUserQuestion) and they chose
+**"correct as-is."** A pure verify-and-document phase: **no `[api]` ask** (nothing missing), **no mobile build**,
+**no contract change**, gates untouched. Third same-shape outcome after Phases 38/43 — verify first, don't invent.
 
 ## Done
-- **Each team member can now clock in only within 200 m of their OWN assigned location**, not one shared office
-  fence — enforced server-side (`cgpe-api` Backend Phase 50), and the mobile app already consumes it with **no
-  code change** (it reads whatever fence the server serves and the server is the clock-in authority).
-- Verified in `cgpe-api`'s real source (not the summary): `getMemberGeofence(userId)` resolves the caller's fence
-  (member `payroll_profiles.start_location` → global office → default, **centre-only**, org radius/enforce kept);
-  clock-in enforces it; `GET /geofence` returns the caller's own fence with the **unchanged**
-  `{lat,lng,radius_m,label,enforce}` shape + an additive `source`; the flagged `PUT /geofence` 2000→200 default
-  bug is fixed.
-- Confirmed the mobile side is inert: `getGeofence`/`checkGeofence` map the fixed shape and ignore `source`; the
-  `label`→"Your assigned location" is inert (our clock-in copy is distance-based).
+- **Salary is already computed server-side strictly from actual working hours/days and shown as one amount**,
+  on both the staff self-view (`earnings.tsx`) and the admin roster (`payroll.tsx`). Verified the formula in real
+  code (both trees): a full day counts at ≥8h worked, half at ≥4h, nothing below 4h (owner-locked fixed cutoffs);
+  `day_wise` = (salary ÷ working_days) × present_days, `hourly` = (salary ÷ working_days ÷ office_hours[8.5]) ×
+  worked_hours, `base` = flat; working_days = days − Sundays − holidays; payable rounded to ₹1. The figures come
+  from the **live `daylogs`**, joined by the member's Profile ObjectId `_id`. The phone never does the sums — it
+  renders the server's `payable`.
+- Owner confirmed the live formula is what they want, so the phase closed with zero change.
 
 ## Files changed
-- `docs/spec/PHASE-43.md` — NEW: the finding, the backend gap, recommended design, and §8 (SHIPPED + VERIFIED).
-- `docs/PHASES.md` — `## Now` Phase 43 entry (filed → shipped → verified, mobile zero-change).
-- `docs/DECISIONS.md` — two entries (the pure-`[api]` decision; the same-day-ship verification).
-- `docs/STATUS.md` — manager-facing: per-person clock-in location delivered + verified; device check remains.
-- `contracts/INBOX.md` (outside the git repo) — filed the `→ cgpe-api` ask, then a `cgpe-mobile RE-VERIFIED`
-  note under `cgpe-api`'s answer. Both grepped back durable.
-- **No `src/` change.** Commits: `1a880f0` (filing docs), `2f55d85` (verification docs) — **local only, push 403s**.
+- `docs/spec/PHASE-44.md` — NEW: the verified finding (engine, cutoffs, join, exposure, mobile render, decisions).
+- `docs/PHASES.md` — `## Now` Phase 44 entry (VERIFIED already-satisfied); `## Next 3` re-pointed to Phase 45.
+- `docs/DECISIONS.md` — one entry (2026-08-15): Phase 44 already-satisfied, owner-confirmed, zero change.
+- `docs/STATUS.md` — manager-facing rewrite: salary-from-hours request confirmed already built + working.
+- **No `src/` change.** Commit `b761628` (local only — push 403s). No `contracts/` change (nothing crossed a
+  repo boundary — no INBOX/CHANGELOG edit, no session to notify).
 
 ## Decisions made
-- **Phase 43 for mobile is pure `[api]`, build nothing** — clock-in is already server-authoritative and the app
-  reads the fence shape-agnostically, so a per-member fence served through the existing `GET /geofence` just
-  works. The Phase 27/38 "pure backend, mobile fail-open consumes" pattern. (DECISIONS 2026-08-14.)
-- **Verify the producer's real code before concluding, even on a "SHIPPED" claim** — tags/summaries have been
-  wrong 5×; read `utils/geofence.js` + `routes/timeTracker.js` and confirmed all five points + the flagged bug.
-- **Recommended but did not dictate the source field** — `PayrollProfile.start_location` (the contract's own
-  "clock-in pin"); `cgpe-api` took the recommendation, kept the radius as the single shared org knob (centre-only
-  per-member), non-regressive fallback. Mechanism was theirs.
+- **Phase 44 is closed as already-satisfied — do NOT file an `[api]` ask.** The plan told this session to "file
+  the exact inputs/rounding" of the salary formula, but that formula already exists, is owner-locked (Backend
+  Phase 25b, 2026-08-11), and is live. A "please build a salary formula" ask would be wrong — the plan text
+  predates knowledge that Backend Phase 25b had shipped it. (DECISIONS 2026-08-15.)
+- **Do NOT invent an alternative cutoff, rate, or working-days basis.** The owner was shown the exact live
+  formula and chose "correct as-is." A future change to the 8h/4h cutoffs or the Sat/Sun/holiday basis is a
+  **new** `[api]` ask carrying the owner's exact numbers — never a mobile guess (rule 2 / rule 4).
+- **Verify the producer's real code before filing, even when the roadmap says `[api]`** — the plan named Phase 44
+  an `[api]` filing, but reading `services/payrollEngine.js` + `payrollAttendance.js` + `routes/payroll.js` showed
+  it was already done. Same lesson as the 5× wrong tags.
 
 ## Known broken / deliberately skipped
-- **Phase 43 device check is CARRIED** — not editor-verifiable: a member standing at their assigned pin clocks
-  in; ~201 m away is refused with the measured distance. Needs an admin to set a member `start_location` + a
-  `cgpe-api` `:3001` restart, then a handset. Until a pin is set, a member falls back to the office fence (never
-  locked out).
-- **Phase 41a-iii-b part 2 is EDITOR-BUILT but DEVICE-UNVERIFIED** (commit `16e75ae`, prior session) — the unified
-  24/7 recorder in `tracker.ts`; its acceptance gate is the §12.7 handset matrix (EAS build + 3+ OEMs + battery
-  over a real day). `tracker.ts` has no test stub. Untouched this session.
-- **`git push` still 403s** — commits `1a880f0`, `2f55d85`, and the earlier `16e75ae` are local only (human-owned
-  credential swap). `.claude/settings.json` + two untracked `.txt` files are pre-existing and deliberately left
-  unstaged.
+- **`git push` still 403s** — commit `b761628` (and the prior `16e75ae`, `1a880f0`, `2f55d85`, …) are local only;
+  needs a human credential swap (`reactjsaaziko` has no write access to `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`).
+- **Payroll-screen device check is CARRIED** (not new to Phase 44) — `earnings.tsx`/`payroll.tsx` against
+  production data on a real handset, light/dark at 390 px. Editor gates are green; this is the existing device gate.
+- **Phase 41a-iii-b part 2 remains DEVICE-UNVERIFIED** (commit `16e75ae`) — the unified 24/7 recorder; its
+  acceptance gate is the §12.7 handset matrix (EAS build + 3+ OEMs + battery over a real day). Untouched this session.
+- **Phase 43 device check carried** — a member inside their assigned pin clocks in; ~201 m away is refused with
+  the measured distance — once an admin sets a `start_location` and the `:3001` restart lands.
 
 ## Next session starts here
-- Two live tracks, both device-gated for building but the board has editor-actionable verify-and-file work:
-  **Phase 44** (strict salary from hours/days — a `cgpe-api` payroll-engine formula; the app never multiplies)
-  and **Phase 45** (completed-tasks report + performance score) are the next editor-actionable `[api]` filings;
-  the build phases (41a-iii-b part 2 device matrix, 42 route-colouring) need a handset / 41 live.
+- Phase 45: verify the real `cgpe-backend-main` for a completed-assigned-tasks aggregate + performance score, then
+  **LOCK the score weights with the owner (AskUserQuestion) before filing** — do NOT invent the weights.
 - First command: `/boot`
-- Watch out for: **do not "build" a per-member fence, a salary formula, or a per-day rate on the phone** — Phase
-  43 needed zero mobile code and salary is a backend formula (rule 2, the app never multiplies). And for Phase
-  44/45, verify the real `cgpe-backend-main` before filing (tags wrong 5×) — `payroll_profiles.salary_amount` +
-  the `computeRangeSalary` engine exist, but there was no strict hours/days formula last check.
+- Watch out for: **do not invent the performance-score weights, and count only tasks that were assigned AND
+  actually completed — NOT reminders, not self-created-unfinished** (owner's hard rule, PLAN §Phase 45). And, as
+  with 44, **verify the backend before filing** — an aggregate may already exist (tags wrong 5×). The app renders
+  the score; it never computes it (rule 2).
