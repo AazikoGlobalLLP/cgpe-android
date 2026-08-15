@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 50 — [api]+[m] Dual-office geofence + out-of-range / early-clock-out REASON capture → super-admin. SPEC + `[api]` FILED, no build — 2026-08-15.**
+New owner request (post-backlog): a member may clock in/out from **either of two Surat offices** (Adajan / Katargam), 200 m
+each; an **out-of-range** clock-in OR clock-out is **allowed but must carry a reason** → **super_admin notified**; an
+**early** clock-out (before shift end) must **also** carry a reason → super_admin. **Verified real code (both trees, not
+tags):** today the backend **REFUSES** out-of-range clock-in (`timeTracker.js:259` → `403`), knows only **one** office
+(`utils/geofence.js`), stores **no reason**, and raises **no** such alert — so this **reverses the refuse model** and is
+**backend-first** (the server 403s before a reason could be captured; mobile can't do it alone, same posture as Phase 43).
+Office pins go in the **panel/DB**, never client literals (Phase 7 removed exactly that). **"early" has a grounded meaning:
+before `shiftEnd`, already in `timeTracker.js:133`.** Wrote `docs/spec/PHASE-50.md` and filed a top-of-queue
+`→ cgpe-api · from cgpe-mobile` INBOX ask (grepped back durable) recommending a **list of ≥2 org offices** + `in_range` =
+within radius of ANY + accept a `reason` on clock-in/out + a new `metadata.kind` super-admin notify (reusing Phase-43's
+per-master pattern), with **5 open points FLAGGED as the owner's calls** (the two office coordinates → panel; "early" =
+before shiftEnd?; two-offices-replace-vs-add per-member pins; reason mandatory?; combined-vs-separate prompt). **No `src/`
+change → no gate re-run** (baseline `tsc` 0 / `npm test` 552 / eslint 0). **Live only when cgpe-api ships it + the pins are
+set + the owner confirms the 5 points** — then mobile threads `reason` + builds the prompt UI (needs 5-language human copy)
++ a device check. Full path: `docs/spec/PHASE-50.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 41d — [m][sec] anti-circumvention (§5). 3 of 4 parts BUILT/FILED; only the app-block SCREEN awaits owner copy — 2026-08-15.**
 The last Phase-41 sub-phase (§5). Owner approved pursuing all remaining parts (AskUserQuestion 2026-08-15). Verified
 feasibility against real code (not tags): `expo-location.LocationObject.mocked` exists (SDK 57), `setLocationConsent`

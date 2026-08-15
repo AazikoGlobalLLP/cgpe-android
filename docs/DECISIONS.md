@@ -6,6 +6,27 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 50 (new owner request): dual-office geofence + out-of-range / early-clock-out reason → super-admin. SPEC + [api], no build
+
+**Context.** Owner asked (2026-08-15): clock in/out from EITHER of two Surat offices (200 m); an out-of-range
+clock-in/out is ALLOWED but must carry a reason → super_admin; an early clock-out must also carry a reason →
+super_admin.
+
+**Decision.** Do NOT build on mobile yet — capture it as Phase 50 (spec `docs/spec/PHASE-50.md`) + a filed `[api]`.
+Reasons, all rule-grounded: (1) **Backend-first** — verified the server currently **403s** an out-of-range clock-in
+(`timeTracker.js:259`), so a reason can never be captured client-side; it knows only ONE office; it stores no reason
+and raises no such alert. This REVERSES the refuse model → a backend contract change, not a mobile-only wire-up (same
+posture as Phase 43). (2) **No client coordinate literals** — the two office pins belong in the panel/DB; Phase 7
+specifically removed a hardcoded Surat geofence pin, so hardcoding these would repeat a corrected anti-pattern. Filed
+the two ADDRESSES for the owner/panel to geocode. (3) **Don't invent the unknowns** — "early", reason-mandatory,
+two-offices-vs-per-member, combined-vs-separate prompt are undefined; flagged all as owner-to-confirm (Phase-45
+pattern) rather than guessing. "early" recommended = before `shiftEnd` (already in `timeTracker.js:133`, grounded).
+(4) **Reason-prompt UI needs 5-language human copy** (same i18n blocker as 41d app-block) — can't build the prompt yet.
+
+**Consequence.** The feature is specced + the backend ask is filed with the design + open points; mobile builds only
+after cgpe-api ships + the pins are set + the owner confirms the 5 flagged points. No `src/` change this turn.
+Full path: `docs/spec/PHASE-50.md`; INBOX ask filed 2026-08-15.
+
 ## 2026-08-15 — Phase 41d continued: consent-withdrawal signal BUILT (owner-approved), app-block brain built, gap-detector [api] FILED
 
 **Context.** After the mock-rejection build (below), the owner approved (AskUserQuestion 2026-08-15) pursuing the
