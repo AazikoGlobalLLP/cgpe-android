@@ -215,6 +215,14 @@ export default function More() {
   const adminGroup: { title: string; items: Entry[] } | null = isAdmin ? {
     title: caps.tier === 'master' ? 'Master control' : 'Admin',
     items: ([
+      // The dedicated monitoring hub (Phase 39) — master-only, the owner's "main side". It gathers
+      // location / performance / salary + the roster in one place. Fixed and master-gated (real
+      // super_admin), like the location + performance tiles below; the SCREEN re-gates on the real
+      // role, this tile is only the affordance. No navKey — it is not a server nav module (like
+      // Payroll), so it is never reorderable-away or in nav.hidden.
+      ...(caps.tier === 'master'
+        ? [{ icon: 'eye' as IconName, label: 'Monitor', value: 'Team oversight', href: '/monitor' as Href }]
+        : []),
       {
         icon: 'people-circle' as IconName,
         label: caps.overseeAdmins ? 'All teams and admins' : 'Team members',

@@ -14,6 +14,32 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 39 — [m][sec] Master-only monitoring surface ("the main side"). BUILT 2026-08-15.** The owner-backlog
+Group-C centrepiece (`PLAN §Phase 39`), now that its deps are all built (38 master role · 40 location gate · 44
+salary · 45 performance). **Verified first: every lens already exists as its own screen and is already gated in
+More's Master-control group** — they were just scattered (`/agent-map`+`/agent-track` location, `/performance?view=team`
+scores, `/payroll` salary, `/team`→`/team/[id]` activity). So Phase 39 adds **no new data path** — it is a
+**consolidated master landing**. Owner-locked via AskUserQuestion (2026-08-15): **shape = a monitoring HUB** (not a
+per-member unified card — that would need per-member location/payroll deep-links that don't exist, i.e. new backend)
+reached **pushed from More** (not a bottom tab — `nav.tabs` is DB-driven, a master-only tab needs an `[api]`/RBAC
+change). Built NEW `src/app/monitor.tsx` — gate → a 2×2 lens grid (**Locations first — the owner's "most important"** —
+Movement, Performance, Payroll, each `router.push` to its existing screen) → the team roster (`getTeam()`, on-duty
+KPIs + an in-the-field summary, rows tap to `/team/[id]`). **NO task UI** (explicit owner constraint). **Gated on the
+REAL `super_admin`** via NEW pure `canMonitorTeam(user)` in `store/roles.ts` (parallel to `canSeeLiveLocation`/
+`canSeeTeamPerformance`, all three `super_admin`, kept separate so they can't drift) — the hub bails to an honest
+"Owner access only" `EmptyState`, waiting for `ready` so a real master isn't flashed the refusal on restore; **each
+destination screen keeps its own gate** (the hub is a convenience entry, not the authority). More wiring: a fixed
+master-only **"Monitor"** row at the TOP of the Master-control group (no `navKey` — not a server nav module, like
+Payroll). **The hub invents nothing** — no scores/salary of its own (server-owned on the destinations), only roster
+identity + live duty (already a real cross-reference in `getTeam()`), honest on outage via `useDataHealth()`. NEW
+`roles.test.ts` cases pin `canMonitorTeam` across all 6 roles + null (admits only `super_admin`, refuses admin+leader,
+agrees with `tierOf()==='master'`). Gates green: `tsc` 0 · `npm test` **491/491** (+4) · `eslint` on the new/touched
+files 0 errors (1 pre-existing `more.tsx` `c`-unused warning). Commit local (push 403s). **No contract change** (pure
+`[m]` over existing endpoints). **DEVICE CHECK CARRIED** (native + backend-live-gated): a real `super_admin` opens
+More → Monitor and reaches the hub; the four lenses open; the roster lists members and a tap opens the detail; a real
+admin + a real leader find the tile gone and a deep-link to `/monitor` shows "Owner access only". Full path:
+`docs/spec/PHASE-39.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 46 — [m] Tasteful time-of-day emoji in the Home greeting header. BUILT 2026-08-15.** The next
 editor-actionable owner-backlog item after Phase 45 — small, self-contained, no backend/contract/i18n-dictionary
 touch. Added a time-of-day glyph beside the greeting: 🌅 morning (`hour < 12`) / ☀️ afternoon (`< 17`) / 🌆 evening

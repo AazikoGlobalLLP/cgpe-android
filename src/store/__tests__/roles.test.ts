@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canSeeLiveLocation, canSeeTeamPerformance, tierOf } from '@/store/roles';
+import { canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, tierOf } from '@/store/roles';
 import type { Role, User } from '@/data/types';
 
 /* ------------------------------------------------------------------ *
@@ -85,5 +85,35 @@ describe('canSeeTeamPerformance — Master (super_admin) only (Phase 45)', () =>
       expect(canSeeTeamPerformance(u)).toBe(tierOf(u) === 'master');
     }
     expect(canSeeTeamPerformance(null)).toBe(tierOf(null) === 'master');
+  });
+});
+
+describe('canMonitorTeam — Master (super_admin) only (Phase 39)', () => {
+  // The dedicated monitoring hub (`/monitor`, "the main side") is master-only. Same folded-tier
+  // trap as location/performance: admin/leader must NOT open the oversight surface, so the gate
+  // reads the real role. Kept identical to canSeeLiveLocation/canSeeTeamPerformance by design.
+  it('admits super_admin', () => {
+    expect(canMonitorTeam(withRole('super_admin'))).toBe(true);
+  });
+
+  it('refuses every non-master role, incl. admin AND leader (the folded-tier trap)', () => {
+    for (const role of ALL_ROLES) {
+      if (role === 'super_admin') continue;
+      expect(canMonitorTeam(withRole(role))).toBe(false);
+    }
+    expect(canMonitorTeam(withRole('admin'))).toBe(false);
+    expect(canMonitorTeam(withRole('leader'))).toBe(false);
+  });
+
+  it('refuses a null/unauthenticated user', () => {
+    expect(canMonitorTeam(null)).toBe(false);
+  });
+
+  it('agrees exactly with the master tier for every role', () => {
+    for (const role of ALL_ROLES) {
+      const u = withRole(role);
+      expect(canMonitorTeam(u)).toBe(tierOf(u) === 'master');
+    }
+    expect(canMonitorTeam(null)).toBe(tierOf(null) === 'master');
   });
 });

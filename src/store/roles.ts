@@ -76,6 +76,23 @@ export function canSeeTeamPerformance(user: User | null): boolean {
   return user?.role === 'super_admin';
 }
 
+/**
+ * Monitoring-hub gate (Phase 39) — who may open the dedicated master monitoring surface
+ * (`/monitor`, "the main side").
+ *
+ * The hub gathers the master-only lenses (live location, movement replay, team performance, the
+ * salary roster) plus the team roster in one place. It is a CONVENIENCE ENTRY, not the security
+ * authority — every destination screen keeps its own gate (`agent-map`/`agent-track`/`performance`
+ * on this same real-role rule, payroll on the admin endpoint). But the hub itself reads `user.role`
+ * DIRECTLY and admits only `super_admin`, for the same folded-tier reason as its siblings above:
+ * `tierOf()` folds `leader` into the admin tier, so a tier/caps gate would open the whole
+ * monitoring surface to every admin and leader. Kept as its own predicate (identical body to the
+ * two above) so the three gates can be reasoned about — and pinned — independently and can't drift.
+ */
+export function canMonitorTeam(user: User | null): boolean {
+  return user?.role === 'super_admin';
+}
+
 export function capabilitiesOf(user: User | null, viewAs?: Tier | null): Capabilities {
   const real = tierOf(user);
   // "View as" preview: you can only ever preview a LOWER tier than you actually hold.
