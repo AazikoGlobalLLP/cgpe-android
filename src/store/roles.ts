@@ -93,6 +93,22 @@ export function canMonitorTeam(user: User | null): boolean {
   return user?.role === 'super_admin';
 }
 
+/**
+ * "Viewing as" gate (Phase 47) — who may open the tier-preview affordance in More.
+ *
+ * Owner-locked (2026-08-15): only the Master (real `super_admin`) may preview another side; every
+ * admin and leader loses the row. Reads `user.role` DIRECTLY, never the folded tier or
+ * `capabilitiesOf`, for the same reason as the three gates above: the "Viewing as" row used to be
+ * gated on `capabilitiesOf(user).manageTeam`, which is true for the WHOLE admin tier — and
+ * `tierOf()` folds `leader` into that tier — so a caps gate showed the affordance to every admin and
+ * leader. Master is `super_admin` and nothing else. Reading the REAL role (not the preview caps)
+ * also keeps the row visible while a master is previewing a lower tier, so they can switch back.
+ * Kept as its own predicate (identical body to the three above) so the gates can't drift.
+ */
+export function canViewAs(user: User | null): boolean {
+  return user?.role === 'super_admin';
+}
+
 export function capabilitiesOf(user: User | null, viewAs?: Tier | null): Capabilities {
   const real = tierOf(user);
   // "View as" preview: you can only ever preview a LOWER tier than you actually hold.

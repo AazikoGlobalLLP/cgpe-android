@@ -18,7 +18,7 @@ import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { arrangeMoreSections, useAppUi } from '@/store/appUi';
-import { capabilitiesOf, TIER_THEME } from '@/store/roles';
+import { capabilitiesOf, canViewAs, TIER_THEME } from '@/store/roles';
 import type { Tier } from '@/store/roles';
 import { APP } from '@/constants/config';
 import * as api from '@/data/api';
@@ -281,10 +281,11 @@ export default function More() {
 
   /* Personal local features — FIXED (PHASE-26 D-3). Not server nav modules (no navKey, not in the
      catalogue, never in nav.hidden), so each keeps its OWN gate. `My earnings` is self-scoped and
-     shown to every member (Phase 16); `Viewing as` needs the user's REAL manage-team capability so a
-     previewing admin cannot use it to climb back up. Payroll stays in the admin group above. */
+     shown to every member (Phase 16); `Viewing as` is Master-only (Phase 47, owner-locked
+     2026-08-15) via `canViewAs` — the REAL `super_admin` role, never the folded tier/caps, so no
+     admin or leader sees it. Payroll stays in the admin group above. */
   const personalItems: Entry[] = [
-    ...(realCaps.manageTeam ? [{
+    ...(canViewAs(user) ? [{
       icon: 'swap-horizontal' as IconName,
       label: 'Viewing as',
       value: caps.label,

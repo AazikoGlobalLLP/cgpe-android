@@ -14,6 +14,29 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 47 — [m][sec] "Viewing as" is Master-only. BUILT 2026-08-15.** The next editor-actionable owner-backlog
+item (PLAN §Phase 47). **First step was verification, not code** (spec-mandated, same DB-not-phone-literal trap as
+Phase 38): read the real code and confirmed "Viewing as" is **pure client-side state** (`auth.tsx:56`, never
+persisted, reset on logout) driving a **downward-only preview** (`capabilitiesOf` clamps the previewed tier `≤` the
+real tier at `roles.ts:100`, so it can never escalate). Its row lived in More's fixed Personal tail gated on
+`realCaps.manageTeam` — true for the whole admin tier, into which `tierOf()` folds `leader` — so **every admin and
+leader saw it**. The owner backlog says "except one number" (`9106988376`), but rule 1 forbids a phone literal and
+that number is one of the THREE Phase-38 masters, so a truly-one-account gate would need a NEW per-profile backend
+capability flag (`[api]`). **Owner-locked via AskUserQuestion (2026-08-15): gate on the real `super_admin` role** —
+the pure-`[m]`, ship-today option, accepting the trade-off that all three masters keep it while every admin/leader
+loses it (chosen over filing a new backend flag). Built NEW pure `canViewAs(user)=user?.role==='super_admin'` in
+`store/roles.ts` (parallel to `canSeeLiveLocation`/`canSeeTeamPerformance`/`canMonitorTeam`, all four `super_admin`,
+kept separate so they can't drift); `more.tsx` gates the Personal-tail row on `canViewAs(user)` (the REAL role, not
+the preview `caps`, so the row stays visible while a master previews a lower tier and can switch back). The preview
+sheet/pills/`applyView` are unchanged — only reachable once `viewAs` is set, which now only a master can do; `realCaps`
+still drives the sheet's option filter (`more.tsx:425`) so it is not orphaned. NEW `roles.test.ts` cases pin
+`canViewAs` across all 6 roles + null (admits only `super_admin`, refuses admin AND leader specifically, agrees with
+`tierOf()==='master'`). Gates green: `tsc` 0 · `npm test` **495/495** (+4) · `eslint` on the touched files 0 errors
+(1 pre-existing `more.tsx:129` `c`-unused warning). Commit local (push 403s). **No contract change, no `[api]` ask**
+(pure `[m]` gate). **DEVICE CHECK CARRIED** (native + Phase-38-live-gated): a real admin + a real leader find the
+"Viewing as" row gone; a real `super_admin` still previews Admin/Team and switches back. Full path:
+`docs/spec/PHASE-47.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 39 — [m][sec] Master-only monitoring surface ("the main side"). BUILT 2026-08-15.** The owner-backlog
 Group-C centrepiece (`PLAN §Phase 39`), now that its deps are all built (38 master role · 40 location gate · 44
 salary · 45 performance). **Verified first: every lens already exists as its own screen and is already gated in

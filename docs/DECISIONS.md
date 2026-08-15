@@ -6,6 +6,29 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 47: "Viewing as" gated on the real super_admin role, not a per-account flag or a phone literal
+
+**Context.** Owner backlog Phase 47 asks to keep the "Viewing as" (tier-preview) row for "one number only"
+(`9106988376`). Rule 1 forbids a phone literal in `src/` (the email literal was removed in Phase 11 for exactly this
+reason), and that number is one of the THREE accounts promoted to `super_admin` in Phase 38 — so the app has no
+per-account field distinguishing one master from another. Hitting literally-one-account would need a NEW per-profile
+capability flag on the backend `Profile`, surfaced to the app (an `[api]` ask, Phase-38 courier shape). Verified first
+that "Viewing as" is harmless to widen or narrow: it is pure client state (`auth.tsx:56`, never persisted, reset on
+logout) and a downward-only preview (`capabilitiesOf` clamps to `≤` the real tier, `roles.ts:100`) — it can never
+escalate. The old gate `realCaps.manageTeam` showed it to the whole admin tier (leader folded in).
+
+**Decision.** Owner chose (AskUserQuestion, 2026-08-15) to **gate on the real `super_admin` role** — a pure-`[m]`,
+ship-today change — over filing a new backend flag, accepting that all three master accounts keep the row while every
+admin and leader loses it. Built NEW pure `canViewAs(user)=user?.role==='super_admin'` in `store/roles.ts` (parallel
+to the Phase 39/40/45 `super_admin` predicates, kept separate so they can't drift); `more.tsx` gates the Personal-tail
+row on it, reading the REAL role so a master previewing a lower tier still sees the row to switch back. +4 `roles.test.ts`
+cases.
+
+**Consequence.** No `[api]` ask, no contract change, no phone literal. If the owner later wants exactly-one-account,
+file the per-profile flag to `cgpe-api` and swap `canViewAs` to read `user.<flag>` — the app-side seam is already a
+single predicate. Gates: `tsc` 0 · `npm test` 495/495 (+4) · eslint 0 errors (1 pre-existing `more.tsx` warning).
+Commit local (push 403s). Full path: `docs/spec/PHASE-47.md`.
+
 ## 2026-08-15 — Phase 49 added: final APK + one-click link, then OTA-only updates (with an honest native-change caveat)
 
 **Context.** The owner asked, in plain terms, for the very last deliverable: after everything is done, build ONE final

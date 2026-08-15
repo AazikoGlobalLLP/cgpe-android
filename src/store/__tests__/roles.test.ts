@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, tierOf } from '@/store/roles';
+import { canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, canViewAs, tierOf } from '@/store/roles';
 import type { Role, User } from '@/data/types';
 
 /* ------------------------------------------------------------------ *
@@ -115,5 +115,36 @@ describe('canMonitorTeam — Master (super_admin) only (Phase 39)', () => {
       expect(canMonitorTeam(u)).toBe(tierOf(u) === 'master');
     }
     expect(canMonitorTeam(null)).toBe(tierOf(null) === 'master');
+  });
+});
+
+describe('canViewAs — Master (super_admin) only (Phase 47)', () => {
+  // Owner-locked (2026-08-15): the "Viewing as" tier-preview row in More is master-only. Before
+  // this phase it was gated on capabilitiesOf().manageTeam, which is true for the whole admin tier
+  // (and tierOf() folds leader into it), so every admin and leader saw it — exactly the folded-tier
+  // trap. The gate now reads the real role, identical to the three siblings above.
+  it('admits super_admin', () => {
+    expect(canViewAs(withRole('super_admin'))).toBe(true);
+  });
+
+  it('refuses every non-master role, incl. admin AND leader (the folded-tier trap)', () => {
+    for (const role of ALL_ROLES) {
+      if (role === 'super_admin') continue;
+      expect(canViewAs(withRole(role))).toBe(false);
+    }
+    expect(canViewAs(withRole('admin'))).toBe(false);
+    expect(canViewAs(withRole('leader'))).toBe(false);
+  });
+
+  it('refuses a null/unauthenticated user', () => {
+    expect(canViewAs(null)).toBe(false);
+  });
+
+  it('agrees exactly with the master tier for every role', () => {
+    for (const role of ALL_ROLES) {
+      const u = withRole(role);
+      expect(canViewAs(u)).toBe(tierOf(u) === 'master');
+    }
+    expect(canViewAs(null)).toBe(tierOf(null) === 'master');
   });
 });
