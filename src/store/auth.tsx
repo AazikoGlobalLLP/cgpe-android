@@ -12,15 +12,30 @@ import { resetHealth } from '@/data/health';
 // would keep showing the previous person's language until the app was next foregrounded.
 import { refreshI18nUser } from '@/i18n';
 // Hardware-bound biometric identity. A biometric unlock must resolve to the account that was
-// genuinely authenticated ON THIS INSTALL, never to whoever happens to be cached.
-import { clearBoundIdentity, saveBoundIdentity } from '@/lib/biometricIdentity';
+// genuinely authenticated ON THIS INSTALL, never to whoever happens to be cached. Phase 48 wires
+// the READ half (`resolveBoundIdentity`) to restore a session from the sealed 30-day refresh
+// credential after a silent token expiry — fingerprint only, no id/OTP.
+import {
+  clearBoundIdentity,
+  getLastResolveOutcome,
+  isBiometricPoolIntact,
+  resolveBoundIdentity,
+  saveBoundIdentity,
+} from '@/lib/biometricIdentity';
 import type { User } from '@/data/types';
 import type { Tier } from '@/store/roles';
 
 const TOKEN_KEY = 'cgpe.token';
 const USER_KEY = 'cgpe.user';
 const BIO_KEY = 'cgpe.biometric';
+// The 30-day refresh credential (backend Phase 58), kept in SecureStore like the access token.
+// It is the plaintext copy used ONLY to revoke server-side on an explicit logout; the biometric
+// RESTORE path reads its own copy from the biometric-gated keystore binding, not from here.
+const REFRESH_KEY = 'cgpe.refresh';
 const isWeb = Platform.OS === 'web';
+
+/** Result of a biometric-only restore attempt, for the login screen to word its response. */
+export type BiometricRestoreResult = 'ok' | 'declined' | 'error' | 'unavailable';
 
 type AuthState = {
   user: User | null;
@@ -43,6 +58,18 @@ type AuthState = {
   deleteAccount: () => Promise<void>;
   setBiometric: (on: boolean) => Promise<boolean>;
   authenticateBiometric: () => Promise<boolean>;
+  /**
+   * Whether this device can offer a fingerprint-only restore right now — a sealed refresh
+   * credential from a prior login exists, the biometric pool is intact, and quick-unlock is on.
+   * Cheap and never prompts; the login screen calls it to decide whether to show the affordance.
+   */
+  canBiometricRestore: () => Promise<boolean>;
+  /**
+   * Phase 48: restore the sealed session with fingerprint/face only, no id/password/OTP. Opens
+   * the biometric-gated binding, exchanges its refresh credential for a fresh access token, and
+   * starts the session. Never fabricates a session — every non-'ok' path routes to manual login.
+   */
+  restoreBiometricSession: () => Promise<BiometricRestoreResult>;
 };
 
 const AuthContext = createContext<AuthState>({} as AuthState);
@@ -117,7 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { alive = false; };
   }, []);
 
-  const persist = async (u: User, token: string) => {
+  const persist = async (u: User, token: string, refreshToken?: string) => {
     api.setAuthToken(token);
     api.setCurrentUser(u.id, u.name);
     resetSessionGuard();   // re-arm expiry detection for the new session
@@ -125,14 +152,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setExpiredNotice(null);
     await storage.set(TOKEN_KEY, token);
     await storage.set(USER_KEY, JSON.stringify(u));
+    // Keep the plaintext refresh credential only to revoke it server-side on an explicit logout.
+    // A fresh auth supersedes any prior session, so a missing one clears the stale copy.
+    if (refreshToken) await storage.set(REFRESH_KEY, refreshToken);
+    else await storage.remove(REFRESH_KEY);
     setUser(u);
     refreshI18nUser();   // adopt this account's saved language
-    /* Re-bind the biometric record on EVERY successful sign-in, so the sealed
-     * (user id + token) pair always matches the live session. Binding only at the moment the
-     * toggle is switched on would leave a stale token sealed after the next password login,
-     * and a quick-unlock would then restore a session the server has already expired. */
-    if (biometricEnabled && !isWeb) {
-      await saveBoundIdentity(u.id, token).catch(() => false);
+    /* Re-seal the biometric record on EVERY successful auth (login OR biometric restore), so the
+     * sealed credential always matches the live one. Phase 48: what is sealed is the 30-day
+     * REFRESH token, not the 24h access token — the access token dies before the "return 2 days
+     * later" scenario, and the refresh credential ROTATES on each restore, so a stale seal would
+     * fail closed next time. Seal only when we actually have one (a login without a refresh token
+     * leaves any prior binding untouched — it may still be valid server-side). */
+    if (biometricEnabled && !isWeb && refreshToken) {
+      await saveBoundIdentity(u.id, refreshToken).catch(() => false);
     }
   };
 
@@ -178,11 +211,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await purgeUserScopedCaches();
     await storage.remove(TOKEN_KEY);
     await storage.remove(USER_KEY);
+    await storage.remove(REFRESH_KEY);   // the plaintext refresh copy dies with the session
     setUser(null);
     setViewAsState(null);   // never carry a "view as" impersonation across sessions
     refreshI18nUser();      // drop back to the device default for the next person
     // Destroy the sealed identity. Leaving it would let the next person on this handset
-    // biometric-unlock straight back into the account that just signed out.
+    // biometric-unlock straight back into the account that just signed out. This is what makes
+    // "an explicit logout forces a full login" true locally (Phase 48 D-2); the server-side
+    // revoke in `logout()` enforces the same on the wire.
     await clearBoundIdentity().catch(() => {});
   };
 
@@ -197,18 +233,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearExpiredNotice: () => setExpiredNotice(null),
     setViewAs: (t: Tier | null) => setViewAsState(t),
     async login(id, pw) {
-      const { user: u, token } = await api.login(id, pw);
+      const { user: u, token, refreshToken } = await api.login(id, pw);
       setRestoredSession(false); // fresh login — don't immediately app-lock
-      await persist(u, token);
+      await persist(u, token, refreshToken);
     },
     async loginOtp(phone, code) {
       const res = await api.verifyOtp(phone, code);
       if (!res) return false;
       setRestoredSession(false);
-      await persist(res.user, res.token);
+      await persist(res.user, res.token, res.refreshToken);
       return true;
     },
     async logout() {
+      // Revoke the biometric refresh credential server-side FIRST, while the access token is still
+      // valid so `protect` passes — so a deliberate sign-out can never be undone by a biometric
+      // restore, even if the sealed credential leaked (Phase 48 D-2). Best-effort; `clear()` drops
+      // the local binding regardless.
+      if (!isWeb) {
+        const rt = await storage.get(REFRESH_KEY);
+        if (rt) await api.serverLogout(rt);
+      }
       await clear();
     },
     async deleteAccount() {
@@ -240,17 +284,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       await storage.set(BIO_KEY, on ? '1' : '0');
       setBiometricEnabled(on);
-      /* Bind or destroy the hardware-sealed identity alongside the preference. Flipping the
-       * toggle without this leaves the two out of step: quick-unlock ON with nothing sealed
-       * (so unlock resolves to nobody), or OFF with a live sealed record still on the device. */
+      /* Seal or destroy the hardware-bound RESTORE credential alongside the preference (Phase 48).
+       * What is sealed is the 30-day refresh token (if this session has one), NOT the access
+       * token. App-lock on foreground only needs a live fingerprint (`authenticateBiometric`), so
+       * a session with no refresh credential still enables the lock — biometric restore simply
+       * waits for the next login that carries one. */
       if (!isWeb) {
         if (on) {
-          const tok = await storage.get(TOKEN_KEY);
-          if (user && tok) {
-            const bound = await saveBoundIdentity(user.id, tok).catch(() => false);
-            // Could not seal it: do not claim quick-unlock is on when it is not.
-            if (!bound) { await storage.set(BIO_KEY, '0'); setBiometricEnabled(false); return false; }
-          }
+          const rt = await storage.get(REFRESH_KEY);
+          if (user && rt) await saveBoundIdentity(user.id, rt).catch(() => false);
         } else {
           await clearBoundIdentity().catch(() => {});
         }
@@ -294,6 +336,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } catch {
         return false; // fail closed
       }
+    },
+    async canBiometricRestore() {
+      if (isWeb) return false;
+      if (!biometricEnabled) return false;
+      // A sealed refresh credential from a prior login exists (REFRESH_KEY is written beside the
+      // seal, survives a silent expiry, and is removed on logout / a declined restore) AND the
+      // biometric pool is usable. Both cheap; neither prompts.
+      const [rt, intact] = await Promise.all([storage.get(REFRESH_KEY), isBiometricPoolIntact()]);
+      return !!rt && intact;
+    },
+    async restoreBiometricSession() {
+      if (isWeb) return 'unavailable';
+      // Open the biometric-gated binding. This is the ONE prompt; it returns the sealed
+      // (userId, refreshToken) or null. A null carries no identity — never a fallback.
+      const bound = await resolveBoundIdentity();
+      if (!bound) {
+        const outcome = getLastResolveOutcome();
+        // Transient (user cancelled, prompt timed out, sensor busy) → let them tap again.
+        if (outcome === 'cancelled' || outcome === 'timeout' || outcome === 'unavailable') return 'error';
+        // No usable binding (none/reinstalled/invalidated/corrupt/unsupported) → manual sign-in.
+        return 'unavailable';
+      }
+      const res = await api.refreshBiometricSession(bound.refreshToken);
+      if (res.status === 'ok') {
+        // Just authenticated with biometric — do NOT app-lock on top of it (restoredSession=false).
+        setRestoredSession(false);
+        await persist(res.user, res.token, res.refreshToken);
+        return 'ok';
+      }
+      if (res.status === 'declined') {
+        // The sealed credential is dead server-side (revoked on logout, or past its 30-day window,
+        // or reuse-tripped). Destroy the local binding + plaintext copy so we stop offering an
+        // unlock that cannot work, and demand a real login.
+        await clearBoundIdentity().catch(() => {});
+        await storage.remove(REFRESH_KEY);
+        return 'declined';
+      }
+      return 'error'; // network / 5xx — keep the binding, offer Retry
     },
   };
 

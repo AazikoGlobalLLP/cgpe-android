@@ -643,7 +643,10 @@ const isUnreachable = (e: any) =>
   e?.name === 'AbortError' ||
   (typeof e?.message === 'string' && /fetch|network|Failed to fetch|Load failed|timeout/i.test(e.message));
 
-export async function login(id: string, pw: string): Promise<{ user: User; token: string }> {
+export async function login(
+  id: string,
+  pw: string,
+): Promise<{ user: User; token: string; refreshToken?: string }> {
   try {
     const { ok, status, json } = await req('/auth/login', {
       method: 'POST',
@@ -656,7 +659,13 @@ export async function login(id: string, pw: string): Promise<{ user: User; token
       // No health call here. `reportSuccess` is per-endpoint since Phase 3 and would only
       // clear `/auth/login`; the whole-list clear a fresh session wants is `resetHealth()`,
       // which `store/auth.tsx:124` already runs on the sign-in path.
-      return { user: adaptUser(data.user), token: data.token };
+      // `refresh_token` (backend Phase 58, 30d) is optional — the login still succeeds without
+      // it; biometric restore is simply unavailable until the next login that carries one.
+      return {
+        user: adaptUser(data.user),
+        token: data.token,
+        refreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : undefined,
+      };
     }
     // The server answered and refused. Surface its own wording where it gave one.
     throw new Error(json?.error || json?.message || 'Invalid credentials. Please check and try again.');
@@ -691,7 +700,10 @@ export async function sendOtp(phone: string): Promise<{ ok: boolean; message: st
  * Verify a login OTP. Only the server can decide whether a code is valid; this function
  * has no local opinion about it. Returns null when the code is wrong or expired.
  */
-export async function verifyOtp(phone: string, code: string): Promise<{ user: User; token: string } | null> {
+export async function verifyOtp(
+  phone: string,
+  code: string,
+): Promise<{ user: User; token: string; refreshToken?: string } | null> {
   try {
     const { ok, json } = await req('/auth/verify-otp', {
       method: 'POST',
@@ -702,12 +714,97 @@ export async function verifyOtp(phone: string, code: string): Promise<{ user: Us
       sessionReal = true;
       resetSessionGuard();
       // See `login()` — the fresh-session clear is `resetHealth()` in `store/auth.tsx:124`.
-      return { user: adaptUser(data.user), token: data.token };
+      return {
+        user: adaptUser(data.user),
+        token: data.token,
+        refreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : undefined,
+      };
     }
     return null;
   } catch (e: any) {
     if (isUnreachable(e)) throw new NetworkError();
     return null;
+  }
+}
+
+/**
+ * Restore a session from the biometric-sealed refresh credential (Phase 48, backend Phase 58).
+ *
+ * PUBLIC on the wire — the access token is dead by design after a silent 24h expiry, so this
+ * sends NO Authorization header (`authToken` is null by the time the user is back at the login
+ * screen). The server verifies the refresh credential against its allow-list and, on success,
+ * mints a fresh 24h access token AND a ROTATED refresh credential (the presented one is revoked).
+ * Three honest outcomes, never a fabricated session:
+ *   - 'ok'       : { user, token, refreshToken } — re-seal the NEW refreshToken, start the session.
+ *   - 'declined' : refused (revoked on logout / past its 30-day window / unknown / reuse) — a flat
+ *                  400/401. An ANSWER, not a fault: the caller drops the dead binding and asks for
+ *                  a manual sign-in. Raises no outage banner.
+ *   - 'error'    : dead network, a 5xx/503, or a 200 whose body is not the required shape. Keep the
+ *                  binding and offer Retry — re-scanning a fingerprint is useless if the net is down.
+ *
+ * Uses low-level `req()` (not `tryReal`) so it has no health-channel side effects — this runs on
+ * the pre-session login screen, which shows its own Banner, exactly like `login()`/`sendOtp()`.
+ */
+export type BiometricRestore =
+  | { status: 'ok'; user: User; token: string; refreshToken: string }
+  | { status: 'declined' }
+  | { status: 'error' };
+
+export async function refreshBiometricSession(
+  refreshToken: string,
+  deviceId?: string,
+): Promise<BiometricRestore> {
+  if (typeof refreshToken !== 'string' || refreshToken.length === 0) return { status: 'declined' };
+  try {
+    const { ok, status, json } = await req('/auth/refresh-biometric', {
+      method: 'POST',
+      body: JSON.stringify({
+        refresh_token: refreshToken,
+        ...(deviceId ? { device_id: deviceId } : {}),
+      }),
+    });
+    if (ok) {
+      const data = json?.data ?? json;
+      // Require BOTH the fresh access token and a rotated refresh credential to re-seal. Starting
+      // a session without the rotated credential would leave the keystore holding a now-revoked
+      // token that fails closed on the next restore — treat a partial body as a contract fault.
+      if (data?.token && data?.user && typeof data?.refresh_token === 'string') {
+        sessionReal = true;
+        resetSessionGuard();
+        return {
+          status: 'ok',
+          user: adaptUser(data.user),
+          token: data.token,
+          refreshToken: data.refresh_token,
+        };
+      }
+      return { status: 'error' };
+    }
+    // 400 (missing) / 401 (INVALID_REFRESH — revoked/expired/unknown/reuse) are ANSWERS: the
+    // credential is dead, sign in manually. Anything else (5xx/503) is a fault → retryable.
+    if (status === 400 || status === 401) return { status: 'declined' };
+    return { status: 'error' };
+  } catch {
+    // Dead network / abort. Keep the binding; retryable, not a refusal.
+    return { status: 'error' };
+  }
+}
+
+/**
+ * Best-effort server-side revoke of the biometric refresh credential on explicit logout (Phase 48
+ * / backend Phase 58). Sent WHILE still authenticated (the access token is still valid), so
+ * `protect` passes and the server revokes that credential's allow-list row — enforcing "an
+ * explicit logout forces a full login" on the wire, not just by clearing the local keystore.
+ * Never throws: a failed revoke must never block sign-out (the local binding is destroyed anyway).
+ */
+export async function serverLogout(refreshToken?: string | null): Promise<void> {
+  try {
+    await req('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify(refreshToken ? { refresh_token: refreshToken } : {}),
+    });
+  } catch {
+    // ignore — sign-out proceeds regardless
   }
 }
 

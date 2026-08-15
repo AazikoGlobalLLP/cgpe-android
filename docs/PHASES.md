@@ -14,6 +14,29 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 48 UPDATE — cgpe-api SHIPPED (Backend Phase 58) → VERIFIED against real code → mobile restore flow BUILT + tested — 2026-08-15.**
+`cgpe-api` shipped the filed ask as **Backend Phase 58**: PUBLIC `POST /api/auth/refresh-biometric` + a 30-day
+device-bound `refresh_token` allow-list (`models/RefreshToken`) issued at login/verify-otp + revoke-on-logout.
+**Verified against their real `routes/auth.js` + `models/RefreshToken.js` line by line (not the summary):** public
+(no `protect`), `jwt.verify` WITHOUT `ignoreExpiration` (>30d refused at the JWT layer), **`typ:'refresh'` refuses a
+replayed access token** (`:1388`), allow-list must exist + un-revoked + not-past-expiry, **rotate-on-use** (`:1424`),
+**reuse of a revoked token revokes the whole chain** (`:1401`), flat `401 INVALID_REFRESH` / `400` missing / `503`
+DB-down, token never logged, 30d TTL index. cgpe-api chose the refresh-token model (not the weaker sliding-session)
+precisely for the server-side revocation D-2 needs. **Mobile BUILT (5 files, no contract change, no native dep):**
+(a) `lib/biometricIdentity.ts` now seals the **30-day refresh token** not the 24h access token (`RECORD_VERSION` 1→2
+orphans v1 records fail-closed; all install-scope/reinstall hardening untouched); (b) `data/api.ts` NEW
+`refreshBiometricSession()` (three-outcome `ok`/`declined`/`error` over public `req()`, requires a rotated
+credential on 200 else `error`, 400/401→declined with NO expiry cascade since no bearer is sent) + `serverLogout()` +
+`login`/`verifyOtp` thread `refresh_token` additively; (c) `store/auth.tsx` re-seals the refresh token on every auth,
+NEW `restoreBiometricSession()`/`canBiometricRestore()`, `logout()` revokes server-side before `clear()`, silent
+expiry still keeps the binding (D-2); (d) `app/(auth)/login.tsx` a gated "Unlock with fingerprint" affordance →
+restore → home / honest fallback; (e) NEW `api-refresh-biometric.test.ts` (18). Gates green: `tsc` 0 · `npm test`
+**513/513** (+18) · eslint 0 errors (3 pre-existing warnings, none new). Commit local (push 403s). **No contract
+change** (pure consumer of Phase 58). **DEVICE + SECURITY REVIEW CARRIED** (native-only + needs cgpe-api's `:3001`
+restart): restore after a real >24h expiry; explicit logout blocks restore (binding gone AND server refresh revoked);
+>30d refused; cross-device rejection; enrolment-change fail-closed; + the [sec] review against the running server.
+JS-only, so it stays OTA-eligible for Phase 49. Full path: `docs/spec/PHASE-48.md` §6; DECISIONS 2026-08-15 (top).
+
 **Phase 48 — [sec][m]+[api] Biometric-only session restore after logout. VERIFIED gap → owner-locked model → FILED to cgpe-api; no mobile build yet — 2026-08-15.**
 The next editor-actionable owner-backlog item (PLAN §Phase 48, Group H "do last"). Scenario: return 2 days later
 logged-out → back into your OWN account with fingerprint/face only, no id/OTP. **First step was verification + owner

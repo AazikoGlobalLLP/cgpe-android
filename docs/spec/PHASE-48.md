@@ -1,7 +1,20 @@
 # Phase 48 — [sec][m]+[api] Biometric-only session restore after logout
 
-**Status: SPEC-LOCKED + `[api]` FILED. No mobile code built yet — the restore flow depends on a
-backend re-mint endpoint that does not exist today. 2026-08-15.**
+**Status: BUILT (editor-side). cgpe-api SHIPPED the re-mint endpoint (Backend Phase 58) → VERIFIED
+against their real code → mobile restore flow wired + tested. Device + security review carried
+(needs the `:3001` restart). 2026-08-15.**
+
+> **UPDATE 2026-08-15 (later) — cgpe-api shipped Backend Phase 58; mobile BUILT.** Verified every
+> security property against their real `routes/auth.js` + `models/RefreshToken.js` (not the summary):
+> `POST /auth/refresh-biometric` is PUBLIC (no `protect`), body `{ refresh_token, device_id? }` →
+> `{ user, token, refresh_token }`; `jwt.verify` WITHOUT `ignoreExpiration` (a >30d token is refused
+> at the JWT layer too); a **`typ:'refresh'` check refuses a replayed access token** (`:1388`); the
+> allow-list row must exist + be un-revoked + not past expiry; **rotate-on-use** (`:1424`); **reuse of
+> a revoked token revokes the whole chain** (`:1401`); flat `401 INVALID_REFRESH` on every failure,
+> `400` missing / `503` DB-down; login/verify-otp issue `refresh_token` **additively**; logout revokes
+> it server-side, scoped to `{ jti, user_id }`; token never logged; `refresh_tokens` has a 30d TTL
+> index. It matches the ask exactly, and cgpe-api chose the refresh-token model (not the weaker
+> sliding-session) precisely for the server-side revocation D-2 needs. Mobile build below (§6).
 
 Owner backlog Phase 48 (Group H, "security-sensitive, do last"). Scenario, verbatim from the owner:
 a user logs in, closes the app, returns **2 days later logged-out**, and should get back into **their
@@ -137,9 +150,48 @@ re-mint — both must hold.
 ---
 
 ## 5. Deliberately NOT in this phase
-- **No mobile code yet** — building the restore flow against a non-existent endpoint is untested dead
-  code that 404s. File first, verify the shipped contract, then build (Phase 43/45 pattern).
 - **No change to the silent-expiry vs explicit-logout invariant beyond D-2** — the existing
   destroy-on-logout is deliberate and stays.
 - **No `expo-crypto` / CSPRNG for the install marker** — unchanged; the marker is a same-install
   correlator, never trusted on its own (the compared value lives inside the encrypted record).
+- **No auto-restore at cold start** — restore is offered on the LOGIN screen (a tapped affordance),
+  not fired silently before the user sees it. A cold start with a stale access token still flashes
+  home then bounces to login on the first 401 (existing behaviour); the restore is offered there.
+- **No new native module / permission** — this build is JS-only (no `app.json` change), so it stays
+  OTA-eligible for Phase 49 (unlike the Phase-41 tracker).
+
+---
+
+## 6. Mobile build record (2026-08-15)
+Five files, no contract change (pure consumer of shipped Backend Phase 58), no new native dep.
+- **`lib/biometricIdentity.ts`** — the sealed value is now the **30-day refresh token**, not the
+  24h access token (`BoundIdentity.refreshToken`, `BindingRecord.refreshToken`); `RECORD_VERSION`
+  bumped **1→2** so every v1 record (holding a dead access token) is orphaned fail-closed. All the
+  install-scope / reinstall / enrolment-change hardening is untouched — only the sealed secret changed.
+- **`data/api.ts`** — NEW `refreshBiometricSession(refreshToken, deviceId?)`: three-outcome result
+  (`ok` / `declined` / `error`) over low-level `req()` (public call, no bearer, no health side effect);
+  requires BOTH a fresh access token AND a rotated refresh credential on a 200 (a partial body → `error`,
+  never a session); 400/401 → `declined` (an answer, no cascade — verified no bearer means `reportAuth`
+  can't trip expiry), 5xx/network → `error` (retryable). NEW `serverLogout(refreshToken?)` (best-effort
+  revoke). `login`/`verifyOtp` now thread `refresh_token` out additively.
+- **`store/auth.tsx`** — `persist(u, token, refreshToken?)` stores the plaintext refresh copy (revoke-only)
+  + **re-seals the refresh token on every auth** (login OR restore — it rotates, so a stale seal fails
+  closed); NEW `restoreBiometricSession()` (resolve binding → exchange → persist, or clear the dead binding
+  on `declined`) + `canBiometricRestore()` (cheap, never prompts); `logout()` **revokes server-side** before
+  `clear()`; `clear()` drops `REFRESH_KEY`; `setBiometric` seals the refresh token and no longer refuses the
+  toggle when a session has none (app-lock only needs a live fingerprint). Silent expiry still does NOT clear
+  the binding (that is what makes restore possible).
+- **`app/(auth)/login.tsx`** — a prominent **"Unlock with fingerprint"** affordance (+ "or sign in"
+  divider) shown only when `canBiometricRestore()`; tap → `restoreBiometricSession()` → home on `ok`,
+  honest wording + drop the affordance on `declined`/`unavailable`, retryable banner on `error`.
+- **`data/__tests__/api-refresh-biometric.test.ts`** (18) — pins the request shape (public, no bearer),
+  the three outcomes, the partial-200→error rule, the 401-no-cascade property, `serverLogout`, and the
+  additive `refresh_token` threading on `login`/`verifyOtp`.
+
+Gates: `tsc` 0 · `npm test` **513/513** (+18) · eslint 0 errors (3 pre-existing warnings on the touched
+files, none new). Commit local (push 403s).
+
+**DEVICE + SECURITY REVIEW CARRIED** (native-only + needs cgpe-api's `:3001` restart for the live
+endpoint): §4 acceptance 1-5 on a real handset — restore after a real >24h expiry, explicit logout blocks
+restore (binding gone AND server refresh revoked), >30d refused, cross-device rejection, enrolment-change
+fail-closed; plus the [sec] review of rotation/revoke/no-logging against the running server.

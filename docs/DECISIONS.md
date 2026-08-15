@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 48 BUILT: cgpe-api shipped the re-mint endpoint (Backend Phase 58), mobile restore flow wired + tested
+
+**Context.** cgpe-api reported the filed Phase-48 `[api]` ask done. Per protocol I verified their real
+`routes/auth.js` + `models/RefreshToken.js` line by line (not the summary): PUBLIC `POST
+/auth/refresh-biometric` (no `protect`), `jwt.verify` without `ignoreExpiration` (>30d refused), a
+`typ:'refresh'` check that refuses a replayed access token, an allow-list row (exist + un-revoked + not
+past expiry), rotate-on-use, reuse-of-revoked revokes the whole chain, flat `401 INVALID_REFRESH` / `400`
+/ `503`, additive `refresh_token` at login/verify-otp, revoke-on-logout scoped to `{jti,user_id}`, token
+never logged, 30d TTL index. It matches the ask exactly; they chose the refresh-token model over the
+weaker sliding-session for the revocation D-2 needs. So the backend was perfect → I built the mobile side.
+
+**Decision.** Built the mobile restore flow (5 files, no contract change, no native dep — JS-only so it
+stays OTA-eligible). **The sealed value became the 30-day refresh token, not the 24h access token**
+(`biometricIdentity.ts` `BoundIdentity.refreshToken`/`RECORD_VERSION` 1→2 to orphan v1 access-token
+records fail-closed) — the access token dies before the "2 days later" scenario and the server refuses a
+non-refresh token, so sealing it would be dead weight. `refreshBiometricSession()` uses low-level `req()`
+(public, no bearer, no health side effect) with a three-outcome result: `ok` **requires a rotated
+refresh_token on the 200** (a partial body → `error`, never a session — a stale seal would fail closed
+next time); `declined` on 400/401 (an answer, and verified it can't cascade into a session-expiry because
+no bearer is sent, so `reportAuth` never trips); `error` on 5xx/network (retryable). D-2 is enforced on
+BOTH sides: `logout()` calls `serverLogout(refreshToken)` to revoke server-side before `clear()` destroys
+the local binding; silent expiry still keeps the binding so restore works. `setBiometric` no longer
+refuses the toggle when a session lacks a refresh token (app-lock only needs a live fingerprint; the seal
+is a separate, restore-only concern). The login screen shows a gated "Unlock with fingerprint" affordance.
+
+**Consequence.** Phase 48 is BUILT editor-side; device + security review carried (needs cgpe-api's `:3001`
+restart for the live endpoint). Gates: `tsc` 0 · `npm test` 513/513 (+18, `api-refresh-biometric.test.ts`)
+· eslint 0 errors (3 pre-existing warnings, none new). Commit local (push 403s). With 48 built, only Phase
+49 (final APK → OTA) remains, gated on all-device-verification + the `git push` fix. Full path:
+`docs/spec/PHASE-48.md` §6.
+
 ## 2026-08-15 — Phase 48: biometric-only session restore = restore-not-create, silent-expiry-only, 30-day window, needs a new backend re-mint endpoint
 
 **Context.** Owner backlog Phase 48 ([sec], do last): return 2 days later logged-out → back into your OWN

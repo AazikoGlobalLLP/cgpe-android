@@ -78,6 +78,7 @@ export default function Login() {
 
   const {
     login, loginOtp, biometricEnabled, biometricAvailable, authenticateBiometric,
+    canBiometricRestore, restoreBiometricSession,
     expiredNotice, clearExpiredNotice,
   } = useAuth();
 
@@ -88,6 +89,9 @@ export default function Login() {
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [loading, setLoading] = useState(false);
+  /** Phase 48: whether to offer fingerprint-only restore, and whether one is in flight. */
+  const [canRestore, setCanRestore] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   const [idErr, setIdErr] = useState('');
   const [pwErr, setPwErr] = useState('');
@@ -104,6 +108,17 @@ export default function Login() {
     alive.current = true;
     return () => { alive.current = false; };
   }, []);
+
+  /** Phase 48: offer fingerprint-only restore only when this device holds a sealed refresh
+   *  credential from a prior login and the biometric pool is intact. Cheap; never prompts. */
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const ok = await canBiometricRestore().catch(() => false);
+      if (on) setCanRestore(ok);
+    })();
+    return () => { on = false; };
+  }, [canBiometricRestore]);
 
   /** Typing means the notices have been read. Clearing them here keeps the card from
    *  accumulating stale explanations above a form the user is actively correcting. */
@@ -231,6 +246,48 @@ export default function Login() {
     router.replace('/(tabs)/home');
   }, [otp, phone, loginOtp, router]);
 
+  /** Phase 48: fingerprint-only restore. One biometric prompt → exchange the sealed refresh
+   *  credential for a fresh session, no id/password/OTP. Every non-'ok' path routes to manual
+   *  sign-in with honest wording; a session is never fabricated. */
+  const onBiometricRestore = useCallback(async () => {
+    if (restoring) return;
+    setFailure(null);
+    if (expiredNotice) clearExpiredNotice();
+    haptics.tap();
+    setRestoring(true);
+    const res = await restoreBiometricSession();
+    if (!alive.current) return;
+    if (res === 'ok') {
+      // Session restored. Navigation is a global side effect, like the password path below.
+      haptics.success();
+      router.replace('/(tabs)/home');
+      return;
+    }
+    setRestoring(false);
+    if (res === 'declined') {
+      // The sealed credential is dead (revoked on logout, or past its 30-day window). It has been
+      // destroyed; drop the affordance and ask for a real sign-in.
+      setCanRestore(false);
+      haptics.warn();
+      setFailure({
+        kind: 'refused',
+        message: 'Quick unlock is no longer available. Please sign in with your password or OTP.',
+      });
+      return;
+    }
+    if (res === 'unavailable') {
+      // Nothing to restore on this device — drop the affordance and let them sign in normally.
+      setCanRestore(false);
+      return;
+    }
+    // 'error' — could not reach the server, or a transient prompt failure. Keep the affordance.
+    haptics.error();
+    setFailure({
+      kind: 'network',
+      message: 'Could not unlock right now. Check your connection and try again.',
+    });
+  }, [restoring, expiredNotice, clearExpiredNotice, restoreBiometricSession, router]);
+
   /** Retry re-runs whatever the user was actually doing, so the Banner's action is never
    *  a dead end that just dismisses itself. */
   const retry = mode === 'password' ? doPassword : otpSent ? doVerifyOtp : doSendOtp;
@@ -335,6 +392,24 @@ export default function Login() {
                   message={expiredNotice}
                   onDismiss={clearExpiredNotice}
                 />
+              ) : null}
+
+              {canRestore ? (
+                <>
+                  <Button
+                    label="Unlock with fingerprint"
+                    icon="finger-print"
+                    onPress={onBiometricRestore}
+                    loading={restoring}
+                    size="lg"
+                    full
+                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                    <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+                    <Txt size={font.cap} color={c.muted}>or sign in</Txt>
+                    <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
+                  </View>
+                </>
               ) : null}
 
               <Segmented options={MODES} value={mode} onChange={pickMode} full />

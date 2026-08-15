@@ -12,10 +12,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * their own finger, and lands in Y's client book.
  *
  * THE FIX. The identity is not inferred at unlock time; it is *bound* at sign-in time. The
- * (userId, token) pair that the server actually authenticated is sealed into a keystore entry
- * that only a biometric unlock can open. `resolveBoundIdentity` is the single door: it either
- * returns the exact pair that was sealed, or it returns null. There is no third answer and no
- * plaintext fallback, so a biometric unlock can never synthesise a user out of stale state.
+ * (userId, refreshToken) pair that the server actually authenticated is sealed into a keystore
+ * entry that only a biometric unlock can open. `resolveBoundIdentity` is the single door: it
+ * either returns the exact pair that was sealed, or it returns null. There is no third answer and
+ * no plaintext fallback, so a biometric unlock can never synthesise a user out of stale state.
+ *
+ * WHAT IS SEALED IS THE 30-DAY REFRESH CREDENTIAL, NOT THE 24h ACCESS TOKEN (Phase 48). The
+ * scenario this serves is "return 2 days later, logged-out, unlock with fingerprint only". The
+ * access token dies after 24h (backend `JWT_EXPIRE`), so it cannot drive a two-day-later restore;
+ * the thing worth sealing is the long-lived refresh credential the server issues beside it, which
+ * `POST /auth/refresh-biometric` exchanges for a fresh access token (backend Phase 58). The seal
+ * carries the SAME guarantee either way — it resolves only to the account genuinely authenticated
+ * on THIS install — the value inside it is simply the credential the restore flow actually needs.
  *
  * TWO INDEPENDENT LOCKS, BECAUSE ONE IS NOT ENOUGH.
  *
@@ -39,10 +47,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
  * No React, no UI, no throwing: every path returns a value the caller can branch on.
  */
 
-/** The sealed pair. Both halves come back together or not at all. */
+/**
+ * The sealed pair. Both halves come back together or not at all. `refreshToken` is the long-lived
+ * (30-day) refresh credential — NOT the 24h access token — so it can restore a session days after
+ * the access token has expired (Phase 48). See the module header for why.
+ */
 export type BoundIdentity = {
   userId: string;
-  token: string;
+  refreshToken: string;
 };
 
 /**
@@ -81,8 +93,14 @@ const KEYCHAIN_SERVICE = 'cgpe.biometric.identity.v1';
 const BINDING_KEY = 'cgpe.bio.identity.v1';
 const INSTALL_KEY = 'cgpe.bio.install.v1';
 
-/** Bump to orphan every previously written record if the shape ever changes. */
-const RECORD_VERSION = 1;
+/**
+ * Bump to orphan every previously written record if the shape ever changes. Bumped 1→2 for
+ * Phase 48: v1 records sealed the 24h ACCESS token, which the biometric-restore flow cannot use
+ * (it is dead within a day and `/auth/refresh-biometric` refuses a non-refresh token). Orphaning
+ * them forces a fresh sign-in that re-seals the 30-day refresh credential — fail-closed, never a
+ * v1 record silently mis-read as a refresh token.
+ */
+const RECORD_VERSION = 2;
 
 /**
  * A biometric prompt can sit on screen indefinitely if the user walks away. Without a bound
@@ -110,7 +128,7 @@ if (!isWeb) {
 type BindingRecord = {
   v: number;
   userId: string;
-  token: string;
+  refreshToken: string;
   install: string;
   boundAt: number;
 };
@@ -290,12 +308,12 @@ function parseRecord(raw: string): BindingRecord | null {
   const r = data as Partial<Record<keyof BindingRecord, unknown>>;
   if (r.v !== RECORD_VERSION) return null;
   if (typeof r.userId !== 'string' || r.userId.length === 0) return null;
-  if (typeof r.token !== 'string' || r.token.length === 0) return null;
+  if (typeof r.refreshToken !== 'string' || r.refreshToken.length === 0) return null;
   if (typeof r.install !== 'string' || r.install.length === 0) return null;
   return {
     v: RECORD_VERSION,
     userId: r.userId,
-    token: r.token,
+    refreshToken: r.refreshToken,
     install: r.install,
     boundAt: typeof r.boundAt === 'number' ? r.boundAt : 0,
   };
@@ -330,15 +348,17 @@ export async function isBiometricPoolIntact(): Promise<boolean> {
 }
 
 /**
- * Seal (userId, token) behind the biometric gate. Call this on every successful sign-in.
+ * Seal (userId, refreshToken) behind the biometric gate. Call this on every successful sign-in
+ * and on every biometric restore (the refresh credential ROTATES on each use, so the newest one
+ * must always be the sealed one — a stale refresh token would fail closed on the next restore).
  *
  * Returns false rather than throwing on any refusal, so the caller can simply leave
  * quick-unlock switched off and carry on with a normal session.
  */
-export async function saveBoundIdentity(userId: string, token: string): Promise<boolean> {
+export async function saveBoundIdentity(userId: string, refreshToken: string): Promise<boolean> {
   if (isWeb || !Secure) return false;
   if (typeof userId !== 'string' || userId.length === 0) return false;
-  if (typeof token !== 'string' || token.length === 0) return false;
+  if (typeof refreshToken !== 'string' || refreshToken.length === 0) return false;
   if (!(await isBiometricPoolIntact())) return false;
 
   const install = await ensureInstallId();
@@ -347,7 +367,7 @@ export async function saveBoundIdentity(userId: string, token: string): Promise<
   const record: BindingRecord = {
     v: RECORD_VERSION,
     userId,
-    token,
+    refreshToken,
     install,
     boundAt: Date.now(),
   };
@@ -389,8 +409,11 @@ export async function saveBoundIdentity(userId: string, token: string): Promise<
 /**
  * The ONLY way a biometric unlock may produce a user.
  *
- * Returns the exact pair sealed at sign-in, so the caller signs in as precisely that person and
- * never as "whoever was here last". Any doubt at all resolves to null.
+ * Returns the exact (userId, refreshToken) pair sealed at sign-in, so the caller restores
+ * precisely that person's session and never "whoever was here last". Any doubt at all resolves
+ * to null. The caller exchanges the returned refresh credential for a fresh access token via
+ * `POST /auth/refresh-biometric`; if the server refuses it (revoked on logout, or past its 30-day
+ * window), the caller falls back to manual sign-in.
  */
 export async function resolveBoundIdentity(): Promise<BoundIdentity | null> {
   // Collapse concurrent calls. AppLock arms on cold start and again on foreground, and those
@@ -481,7 +504,7 @@ async function resolveOnce(): Promise<BoundIdentity | null> {
   }
 
   lastOutcome = 'ok';
-  return { userId: record.userId, token: record.token };
+  return { userId: record.userId, refreshToken: record.refreshToken };
 }
 
 /**
