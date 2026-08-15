@@ -61,6 +61,21 @@ export function canSeeLiveLocation(user: User | null): boolean {
   return user?.role === 'super_admin';
 }
 
+/**
+ * Team-performance gate (Phase 45) — who may see EVERY member's performance score.
+ *
+ * Only the Master (real `super_admin`) may see the whole team's scores; each member always sees
+ * their OWN (that view carries no gate — the server self-scopes it). Reads `user.role` DIRECTLY,
+ * never the folded tier or `capabilitiesOf`, for the exact reason `canSeeLiveLocation` does: a
+ * performance roster is monitoring data, and `tierOf()` folds `leader` into the admin tier, so a
+ * tier/caps gate would leak every member's score to every admin and leader. Owner-locked
+ * (2026-08-15): "team members see their own; super_admin sees all." A "view as" preview still
+ * holds the real role, so a master previewing a lower tier keeps access — the screen is theirs.
+ */
+export function canSeeTeamPerformance(user: User | null): boolean {
+  return user?.role === 'super_admin';
+}
+
 export function capabilitiesOf(user: User | null, viewAs?: Tier | null): Capabilities {
   const real = tierOf(user);
   // "View as" preview: you can only ever preview a LOWER tier than you actually hold.

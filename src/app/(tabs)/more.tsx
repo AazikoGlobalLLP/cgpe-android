@@ -228,6 +228,9 @@ export default function More() {
         ? [
             { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href, navKey: 'agent-map' },
             { icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' },
+            // Team performance (Phase 45) — the whole roster's scores, master-only. The SCREEN
+            // gates on the real super_admin role, so this tile follows the same rule.
+            { icon: 'ribbon' as IconName, label: 'Team performance', value: 'Scores', href: '/performance?view=team' as Href, navKey: 'performance' },
           ]
         : []),
       { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href, navKey: 'analytics' },
@@ -281,6 +284,9 @@ export default function More() {
       right: viewAs ? <Pill label="Preview" tone="warning" small /> : undefined,
     }] : []),
     { icon: 'wallet' as IconName, label: 'My earnings', value: 'Salary and days', href: '/earnings' as Href },
+    // My performance (Phase 45) — the member's OWN completed-tasks score. Self-scoped by the
+    // server (`?scope=own`), so it carries no gate and is shown to every member, like My earnings.
+    { icon: 'ribbon' as IconName, label: 'My performance', value: 'Task score', href: '/performance' as Href },
   ];
 
   /* One ordered list of everything grouped: fixed admin first, then the config-driven content

@@ -51,6 +51,25 @@ warnings unrelated). Commit local (push 403s). **No contract change** (pure cons
 report/score surface + who-can-see-it gating (master/admin only, the Phase-40 role-gating class) is the next build,
 plus a device check once cgpe-api's `:3001` restart lands. Full path: `docs/spec/PHASE-45.md`; DECISIONS 2026-08-15 (top).
 
+**Phase 45 RENDER BUILT — the `performance.tsx` screen (self + master-only team) + More-tab wiring + gate. Owner-locked visibility. 2026-08-15.**
+Owner locked visibility (AskUserQuestion, 2026-08-15): **every member sees their OWN score; only `super_admin` sees
+the whole team.** Built NEW `src/app/performance.tsx` — one screen, two views by `?view=` param: **self** (`/performance`,
+`getTaskReport(month,{scope:'own'})`, no gate — server self-scopes to the token) renders the caller's score hero
+(0–100 + Meter) + Assigned/Completed/On-time/Late KPIs + their completed-tasks list; **team** (`/performance?view=team`,
+`{scope:'all'}`) renders the ranked roster (score badge + counts per member, tap to expand completed tasks) + team
+totals, **gated on the REAL `super_admin` role** via NEW pure `canSeeTeamPerformance(user)` in `store/roles.ts`
+(parallel to `canSeeLiveLocation` — never the folded tier, so an admin/leader can't see everyone's score; waits for
+`ready` before the "Owner access only" refusal so a real master isn't flashed it). **The app renders, never recomputes**
+(rule 2): `score:null` → em dash + "no tasks", never a fabricated 0%; only the server's on-time/late fact is coloured.
+More-tab wiring: master-only **"Team performance"** tile in the Master-control group (beside Agent locations, same
+real-role authority) + **"My performance"** tile in the Personal tail (beside My earnings, ungated). NEW `roles.test.ts`
+cases pin `canSeeTeamPerformance` across all 6 roles + null (admits only `super_admin`, refuses admin+leader). Gates
+green: `tsc` 0 · `npm test` **487/487** (+4) · lint 0 errors (1 pre-existing more.tsx warning). Commit local (push
+403s). **No contract change** (pure consumer of Phase 53). **DEVICE CHECK CARRIED** (native-only + backend-live-gated):
+a real member sees only their own score; a real `super_admin` sees the ranked roster; a real admin/leader deep-linking
+`?view=team` gets "Owner access only", never a roster — once cgpe-api's `:3001` restart lands so the endpoint returns
+live data. Full path: `docs/spec/PHASE-45.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 44 — [api]+[m] Strict salary from working hours/days. VERIFIED — ALREADY SATISFIED end to end; owner confirmed the live formula as-is; ZERO change — 2026-08-15.**
 Owner backlog Phase 44 (Group F): salary computed **from actual working hours/days**, shown as **one amount**
 (rule 2 — a backend payroll-engine formula; the app never multiplies). **Verified against real code (both trees):

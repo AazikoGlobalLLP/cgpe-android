@@ -6,6 +6,27 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 45 RENDER built: self + master-only team performance screen; visibility owner-locked
+
+**Context.** With the backend live and the reader in, the render needed two product decisions I must not guess (it is
+per-person performance data, the Phase-40 privacy class): who sees it, and where it lives.
+
+**Decision.** Owner locked (AskUserQuestion, 2026-08-15): **each member sees their OWN score; only `super_admin` sees
+the whole team.** Built ONE screen `src/app/performance.tsx` with two views by `?view=` param — self (`/performance`,
+`scope:'own'`, ungated because the server self-scopes to the token) and team (`/performance?view=team`, `scope:'all'`,
+gated). Added NEW pure `canSeeTeamPerformance(user) = user.role === 'super_admin'` in `store/roles.ts` — the roster gate
+reads the REAL role, never the folded tier (an admin/leader must not see everyone's score; identical reasoning to
+`canSeeLiveLocation`). Screen waits for `ready` before the "Owner access only" refusal (agent-map pattern). Wired two
+More-tab tiles: "Team performance" (master-only, in the Master-control group) + "My performance" (ungated, Personal
+tail). Pinned the gate across all roles in `roles.test.ts`.
+
+**Consequence.** Gates green (`tsc` 0, `npm test` 487/487, lint 0 errors). No contract change (pure consumer). The app
+renders the server's score/counts and NEVER recomputes (rule 2) — `score:null` shows an em dash + "no tasks", never a
+fabricated 0%; only the server's on-time/late fact is coloured, so the screen invents no pass/fail threshold. Device
+check carried (native + backend-live-gated on cgpe-api's `:3001` restart). If the owner later wants managers/leaders to
+see their own team's scores, that is a gate widening (`scope` already supports a leader's team server-side) — a new
+decision, not a mobile guess. Full path: `docs/spec/PHASE-45.md`.
+
 ## 2026-08-15 — Phase 45 backend SHIPPED (cgpe-api Phase 53) + VERIFIED + month-basis owner-confirmed + mobile reader built
 
 **Context.** Same day as filing, `cgpe-api` shipped `GET /api/team/task-report` (Backend Phase 53). Their reply

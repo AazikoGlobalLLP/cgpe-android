@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canSeeLiveLocation, tierOf } from '@/store/roles';
+import { canSeeLiveLocation, canSeeTeamPerformance, tierOf } from '@/store/roles';
 import type { Role, User } from '@/data/types';
 
 /* ------------------------------------------------------------------ *
@@ -55,5 +55,35 @@ describe('canSeeLiveLocation — Master (super_admin) only (Phase 40)', () => {
       expect(canSeeLiveLocation(u)).toBe(tierOf(u) === 'master');
     }
     expect(canSeeLiveLocation(null)).toBe(tierOf(null) === 'master');
+  });
+});
+
+describe('canSeeTeamPerformance — Master (super_admin) only (Phase 45)', () => {
+  // The team-performance ROSTER is owner-locked to super_admin; each member's OWN score is
+  // ungated (server self-scoped). Same folded-tier trap as location: admin/leader must NOT see
+  // everyone's score, so the gate reads the real role, exactly like canSeeLiveLocation.
+  it('admits super_admin', () => {
+    expect(canSeeTeamPerformance(withRole('super_admin'))).toBe(true);
+  });
+
+  it('refuses every non-master role, incl. admin AND leader (the folded-tier trap)', () => {
+    for (const role of ALL_ROLES) {
+      if (role === 'super_admin') continue;
+      expect(canSeeTeamPerformance(withRole(role))).toBe(false);
+    }
+    expect(canSeeTeamPerformance(withRole('admin'))).toBe(false);
+    expect(canSeeTeamPerformance(withRole('leader'))).toBe(false);
+  });
+
+  it('refuses a null/unauthenticated user', () => {
+    expect(canSeeTeamPerformance(null)).toBe(false);
+  });
+
+  it('agrees exactly with the master tier for every role', () => {
+    for (const role of ALL_ROLES) {
+      const u = withRole(role);
+      expect(canSeeTeamPerformance(u)).toBe(tierOf(u) === 'master');
+    }
+    expect(canSeeTeamPerformance(null)).toBe(tierOf(null) === 'master');
   });
 });
