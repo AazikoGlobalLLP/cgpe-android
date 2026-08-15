@@ -996,12 +996,14 @@ biometric-only session restore after logout. **These are PLANNED, not built.** C
 the plan (do not violate): role-by-identity = DB `Profile.role`, **never** a client phone literal (Phase 11);
 the app **never computes money** (salary is a backend formula); **verify the real backend before filing**
 (tags wrong 5×); never invent numbers/fields; flag security-sensitive items. **The three audits, the first
-feature, the head of the master chain AND the location gate are now DONE — Phases 34 (backend-fixed, `cgpe-api`
-Phase 40), 35 (AppLock touch-freeze, mobile-fixed), 36 (hardcoded-vs-DB sweep — bucket-a EMPTY, no code change),
-37 (notification mark-read + bell dot, `[m]` only), 38 (master role via DB `Profile.role`, VERIFIED + filed to
-`cgpe-api`/owner — owner-confirmed full `super_admin`, zero code) and 40 (live-location visibility gated to real
-`super_admin`, `[m]` only, `canSeeLiveLocation` predicate + tests) — see `## Now`. The rest of the master chain
-is next.**
+feature, the head of the master chain, the location gate, the consent layer AND the per-member geofence are now
+DONE — Phases 34 (backend-fixed, `cgpe-api` Phase 40), 35 (AppLock touch-freeze, mobile-fixed), 36 (hardcoded-vs-DB
+sweep — bucket-a EMPTY, no code change), 37 (notification mark-read + bell dot, `[m]` only), 38 (master role via DB
+`Profile.role`, VERIFIED + filed, zero code), 40 (live-location visibility gated to real `super_admin`, `[m]`
+only), **41a** (consent data layer + 5-lang copy + screen + boot gate) + **41a-iii-b part 2** (unified 24/7
+recorder, EDITOR-BUILT / DEVICE-UNVERIFIED, `16e75ae`), and **43** (per-member 200 m clock-in fence — filed →
+`cgpe-api` SHIPPED same-day as Backend Phase 50 → VERIFIED against real code, mobile ZERO change) — see `## Now`.
+What remains is device verification (41 part-2, 43) and the master surface + salary/task cluster (39, 44, 45).**
 
 **🔺 OWNER ESCALATION 2026-08-14 — Phase 41 (24/7 background location) is now #1.** The owner asked whether
 member location is tracked 24/7; it is NOT — today's `lib/tracker.ts` records only a **clocked-in shift**
@@ -1039,9 +1041,13 @@ attribute to a session). The owner wants continuous capture, so Phase 41 is pull
    no task UI), reusing the now-gated location screens (Phase 40). Gate strictly on the REAL
    `user.role === 'super_admin'` (Phase-20 pattern). Depends on 38/40 (both done) + the data endpoints from
    41/42 (location), 44 (salary), 45 (performance). See `docs/PLAN-2026-08-14.md` §Phase 39.
-3. **Then geofence 43, salary/tasks 44→45** (per-member 200 m clock-in fence; strict backend salary from
-   hours/days; completed-tasks report + performance score) — the money/attendance cluster. See
-   `docs/PLAN-2026-08-14.md` §Phase 43+.
+3. **Salary/tasks 44→45 — the next editor-actionable `[api]` filings** (geofence **43 is DONE** — shipped by
+   `cgpe-api` as Backend Phase 50, verified, mobile zero-change, device check carried). **Phase 44** (strict
+   salary from hours/days) and **Phase 45** (completed-tasks report + performance score) are backend payroll/report
+   formulas — the app never multiplies (rule 2). Verify the real `cgpe-backend-main` first (tags wrong 5×;
+   `payroll_profiles.salary_amount` + `computeRangeSalary` exist, but no strict hours/days formula last check),
+   file the exact inputs/rounding + an owner-relay copy, then mobile renders the result. See
+   `docs/PLAN-2026-08-14.md` §Phase 44+.
 
 Revised order after the escalation: **41→42** (location, now first), **39** (master surface), geofence **43**,
 salary/tasks **44→45**, polish **46/47** (greeting emojis, Viewing-as restricted to one number), and finally

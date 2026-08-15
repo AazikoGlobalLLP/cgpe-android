@@ -1,83 +1,60 @@
-# HANDOFF — CGPE Connect (Android) — Phase 41a-iii-b part 2 — 2026-08-14
+# HANDOFF — CGPE Connect (Android) — Phase 43 — 2026-08-14
 
-Built the whole `tracker.ts` 24/7-recorder slice **in the editor** this session, after the owner chose (via
-AskUserQuestion) "write it all now" over deferring to the device. Gates are green, but **none of it is
-device-verified** — `tracker.ts` has no test stub, the acceptance gate is a handset matrix (§12.7), and the
-file's own header warns a mistake "looks fine in foreground, breaks only after a process kill." So this is a
-complete, reviewable, gate-green slice that a build-and-device session must now prove (or correct) on real phones.
+Filed the per-member clock-in geofence ask to `cgpe-api`, they **shipped it the same day** (Backend Phase 50), and
+this session **verified their real code** and confirmed mobile owes **zero change**. A pure `[api]` phase for
+mobile end to end — no `src/` change, gates untouched. The courier workflow (verify → file → owner relays →
+`cgpe-api` ships → mobile verifies) ran to completion inside the day, for the second time.
 
-## Done (editor-built, DEVICE-UNVERIFIED)
-- **One unified 24/7 recorder** (PHASE-41 §12.1). The single background service now records continuously once
-  consent is granted; **clock-in/out no longer start/stop it — they only flip attribution.** Each flushed batch
-  is posted as the **shift** (`/track/points`) when a shift `sid` is set, or as **off-duty ambient**
-  (`postAmbientPoints`, `off_duty`) when it isn't. Clock-out seals the shift but the service keeps recording
-  ambient.
-- **Non-consented users are byte-identical to today** (§12.1 graceful degradation): service starts on clock-in,
-  stops on clock-out, `/track/points` only. 24/7 is purely additive and engages only under granted consent; a
-  fail-open (`error`) consent read arms nothing.
-- **Consent grant arms the recorder** (`consent.tsx` Agree → `startAmbientTracking({prompt:true, notif})`), and
-  **an already-consented user is armed on boot without a prompt** (`_layout.tsx` ConsentGate).
-- **Battery-opt exemption** requested after the background grant (Android, best-effort, once per install), and a
-  **neutral "location on for work" foreground notification** in the user's own language (persisted at arm time
-  because a headless restart has no i18n).
+## Done
+- **Each team member can now clock in only within 200 m of their OWN assigned location**, not one shared office
+  fence — enforced server-side (`cgpe-api` Backend Phase 50), and the mobile app already consumes it with **no
+  code change** (it reads whatever fence the server serves and the server is the clock-in authority).
+- Verified in `cgpe-api`'s real source (not the summary): `getMemberGeofence(userId)` resolves the caller's fence
+  (member `payroll_profiles.start_location` → global office → default, **centre-only**, org radius/enforce kept);
+  clock-in enforces it; `GET /geofence` returns the caller's own fence with the **unchanged**
+  `{lat,lng,radius_m,label,enforce}` shape + an additive `source`; the flagged `PUT /geofence` 2000→200 default
+  bug is fixed.
+- Confirmed the mobile side is inert: `getGeofence`/`checkGeofence` map the fixed shape and ignore `source`; the
+  `label`→"Your assigned location" is inert (our clock-in copy is distance-based).
 
 ## Files changed
-- `src/lib/tracker.ts` — the unified recorder: `ingest` attribution routing; NEW `deliverAmbient`, `localDate`,
-  `ambientArmed`, `readNotif`/`writeNotif`, `startService` (extracted); repurposed `startTracking`/`stopTracking`
-  (armed vs. not); NEW exports `startAmbientTracking`/`stopAmbientTracking`; battery-opt step in
-  `ensureBackgroundPermission`; NEW markers `track.ambient`/`track.notif`/`track.batteryOptAsked`.
-- `src/app/consent.tsx` — onAgree arms 24/7 (`prompt:true`, resolved notif) before Home; header comment updated
-  (no longer "not auto-gated").
-- `src/app/_layout.tsx` — ConsentGate boot-arms (`prompt:false`) on `ok+granted`; tracker import switched to a
-  named import (still evaluates the module side effect); `useT` added.
-- `app.json` — `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` permission (NOTE: `RECEIVE_BOOT_COMPLETED` + boot-receiver
-  plugin are **41b**, deliberately NOT added here).
-- `package.json` / `package-lock.json` — `expo-intent-launcher@57.0.1` (via `npx expo install`).
-- `docs/PHASES.md` · `docs/DECISIONS.md` · `docs/STATUS.md` · `docs/spec/PHASE-41.md` (§8, §12 status) — this phase.
+- `docs/spec/PHASE-43.md` — NEW: the finding, the backend gap, recommended design, and §8 (SHIPPED + VERIFIED).
+- `docs/PHASES.md` — `## Now` Phase 43 entry (filed → shipped → verified, mobile zero-change).
+- `docs/DECISIONS.md` — two entries (the pure-`[api]` decision; the same-day-ship verification).
+- `docs/STATUS.md` — manager-facing: per-person clock-in location delivered + verified; device check remains.
+- `contracts/INBOX.md` (outside the git repo) — filed the `→ cgpe-api` ask, then a `cgpe-mobile RE-VERIFIED`
+  note under `cgpe-api`'s answer. Both grepped back durable.
+- **No `src/` change.** Commits: `1a880f0` (filing docs), `2f55d85` (verification docs) — **local only, push 403s**.
 
-## Decisions made (full detail: DECISIONS.md 2026-08-14 top)
-- Read `track.ambient` **fresh from storage** per attribution branch, not a once-per-JS-start module flag —
-  avoids a headless-wake race that could tear the 24/7 service down.
-- `startAmbientTracking` takes the resolved `notif` strings as a param (tracker has no i18n; §12.4 needs them
-  captured at arm time).
-- Battery-opt fires **once per install** (a flag) — reconciles §12.3 (step in the shared permission ladder) with
-  §12.7.5 ("appears once"). **Side effect (flag this):** a plain **shift** clock-in now also fires the one-time
-  battery-opt prompt.
-- `expo-intent-launcher` is a **top-level static import** (web/iOS shim is `export default {}`), keeping lint at
-  0 errors / 12 warnings.
-- Boundary-batch slop accepted for v1 (≤ one ~60 s interval mis-attributed across a clock event).
-
-## Gates
-`tsc` **0** · `npm test` **467/467** (unchanged — `tracker.ts` has no stub, wiring is presentational) · lint
-**0 errors / 12 warnings** (baseline). **No contract change** (pure consumer of shipped Phase 43) → no
-INBOX/CHANGELOG. Commit local; **`git push` still 403s** (human-owned credential swap).
+## Decisions made
+- **Phase 43 for mobile is pure `[api]`, build nothing** — clock-in is already server-authoritative and the app
+  reads the fence shape-agnostically, so a per-member fence served through the existing `GET /geofence` just
+  works. The Phase 27/38 "pure backend, mobile fail-open consumes" pattern. (DECISIONS 2026-08-14.)
+- **Verify the producer's real code before concluding, even on a "SHIPPED" claim** — tags/summaries have been
+  wrong 5×; read `utils/geofence.js` + `routes/timeTracker.js` and confirmed all five points + the flagged bug.
+- **Recommended but did not dictate the source field** — `PayrollProfile.start_location` (the contract's own
+  "clock-in pin"); `cgpe-api` took the recommendation, kept the radius as the single shared org knob (centre-only
+  per-member), non-regressive fallback. Mechanism was theirs.
 
 ## Known broken / deliberately skipped
-- **NOTHING here is device-verified.** `tsc`/`npm test`/lint green ≠ working for `tracker.ts` (§12.0).
-- **`stopAmbientTracking` is exported but not wired to sign-out / consent-withdrawal** — no withdrawal UI exists
-  yet, and both self-heal via the next ambient flush (`signed-out` / `consent_required` → stop). A later slice.
-- **41b not started:** `RECEIVE_BOOT_COMPLETED` + boot-receiver config plugin (reboot persistence) and the
-  watchdog re-arm are 41b, not this phase — so a device **reboot** does not yet re-arm the recorder.
-- **`isTracking()` now means "service running (shift OR 24/7)"** — reads true for an armed, not-clocked-in user.
-  It has **zero consumers** in `src` (verified by grep), so no UI regression; left as-is.
+- **Phase 43 device check is CARRIED** — not editor-verifiable: a member standing at their assigned pin clocks
+  in; ~201 m away is refused with the measured distance. Needs an admin to set a member `start_location` + a
+  `cgpe-api` `:3001` restart, then a handset. Until a pin is set, a member falls back to the office fence (never
+  locked out).
+- **Phase 41a-iii-b part 2 is EDITOR-BUILT but DEVICE-UNVERIFIED** (commit `16e75ae`, prior session) — the unified
+  24/7 recorder in `tracker.ts`; its acceptance gate is the §12.7 handset matrix (EAS build + 3+ OEMs + battery
+  over a real day). `tracker.ts` has no test stub. Untouched this session.
+- **`git push` still 403s** — commits `1a880f0`, `2f55d85`, and the earlier `16e75ae` are local only (human-owned
+  credential swap). `.claude/settings.json` + two untracked `.txt` files are pre-existing and deliberately left
+  unstaged.
 
-## Next session starts here (BUILD + DEVICE)
-- **First: build an installable app** — `eas build -p android --profile preview` (new native module +
-  permission mean Expo Go / the current binary will NOT exercise this; a fresh dev-client/APK is required).
-- **Then walk the §12.7 acceptance matrix on 3+ handsets** (Samsung / Xiaomi / OnePlus / Pixel):
-  1. Grant consent → neutral 24/7 notification appears in the user's language.
-  2. Off-duty + moving → points land as **ambient / `off_duty:true`** (confirm via master surface or DB).
-  3. Clock in → points attribute to the **shift**; clock out → shift sealed, recording **drops to ambient
-     without the service stopping**.
-  4. Swipe the app away → the service survives and keeps recording.
-  5. Battery-opt prompt appears **once** after the background grant.
-  6. Withdraw consent server-side → next ambient flush gets 403 → service **stops** + buffer dropped.
-  7. **Fail-open:** a consent-read error on boot arms **no** recording.
-  8. **Battery drain measured over a real working day** — the §3 hard gate; target small single-digit %. If it
-     exceeds that, motion-adaptive sampling (**41c**) is the fix, not shipping as-is.
-- Also fold in **part 1's** owed on-device UX check (non-granted user → `/consent`, no Home flash/loop, survives
-  restored-route cold start).
-- Watch out for: `tracker.ts` is the danger zone — verify AFTER swiping the app away / a process kill, not just
-  in the foreground. If the shift recorder regressed for a non-consenting user, that's a byte-identical-path bug
-  to hunt first.
+## Next session starts here
+- Two live tracks, both device-gated for building but the board has editor-actionable verify-and-file work:
+  **Phase 44** (strict salary from hours/days — a `cgpe-api` payroll-engine formula; the app never multiplies)
+  and **Phase 45** (completed-tasks report + performance score) are the next editor-actionable `[api]` filings;
+  the build phases (41a-iii-b part 2 device matrix, 42 route-colouring) need a handset / 41 live.
 - First command: `/boot`
+- Watch out for: **do not "build" a per-member fence, a salary formula, or a per-day rate on the phone** — Phase
+  43 needed zero mobile code and salary is a backend formula (rule 2, the app never multiplies). And for Phase
+  44/45, verify the real `cgpe-backend-main` before filing (tags wrong 5×) — `payroll_profiles.salary_amount` +
+  the `computeRangeSalary` engine exist, but there was no strict hours/days formula last check.
