@@ -17,3 +17,36 @@ export function dropMocked<T extends { mocked?: boolean }>(fixes: T[]): T[] {
   if (!Array.isArray(fixes)) return [];
   return fixes.filter((f) => f?.mocked !== true);
 }
+
+/**
+ * PHASE 41d §5 — consent-withdrawal signal. True when a consented 24/7 user has had the OS background
+ * location permission revoked: the app should treat that as WITHDRAWING consent — tell the server (Phase
+ * 43 notifies every super_admin, so the opt-out is loud, not silent) and stop the recorder. Gated on
+ * `armed` so a user who never consented is never signalled, and so it fires only for the 24/7 case.
+ */
+export function shouldSignalWithdrawal(input: { armed: boolean; bgGranted: boolean }): boolean {
+  return input.armed && !input.bgGranted;
+}
+
+/**
+ * PHASE 41d §5 — permission-monitor / app-block reason. `null` = the app may run; otherwise the reason
+ * the app must be blocked behind a "turn location back on" screen (whose copy is owner-supplied in 5
+ * languages — the SCREEN is not wired until that copy lands; this decision is the copy-independent brain).
+ * Ordered most-fundamental first: services off ⇒ nothing else matters. Only a consented (`armed`) user is
+ * ever blocked. Battery-opt exemption is intentionally absent — it is unreadable from JS (§12.3), so it
+ * cannot gate the block.
+ */
+export type BlockReason = 'services_off' | 'foreground_denied' | 'background_denied' | null;
+
+export function locationBlockReason(input: {
+  armed: boolean;
+  servicesEnabled: boolean;
+  fgGranted: boolean;
+  bgGranted: boolean;
+}): BlockReason {
+  if (!input.armed) return null;
+  if (!input.servicesEnabled) return 'services_off';
+  if (!input.fgGranted) return 'foreground_denied';
+  if (!input.bgGranted) return 'background_denied';
+  return null;
+}

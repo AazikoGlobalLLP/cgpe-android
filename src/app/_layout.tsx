@@ -17,9 +17,9 @@ import 'react-native-gesture-handler';
  * `startAmbientTracking`, which the boot gate below calls to arm the 24/7 recorder for an
  * already-consented user (PHASE-41 §12.5).
  */
-import { startAmbientTracking } from '@/lib/tracker';
+import { startAmbientTracking, syncConsentWithPermission } from '@/lib/tracker';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -121,6 +121,31 @@ function ConsentGate() {
  * returns the input palette by reference when density is comfortable/absent — so a role with
  * neither accent nor a compact density gets the exact base palette and this memo never churns.
  */
+/**
+ * PHASE 41d §5 — the permission monitor. On every app foreground it asks the tracker to reconcile the
+ * OS location permission with the recorder: if a consented 24/7 user has revoked background location,
+ * that is treated as a withdrawal (POST consent=false → every master notified, recorder stopped —
+ * `syncConsentWithPermission`). Mounted once at the root beside `ConsentGate`; headless, native-only, no
+ * setState. Gated on `user` so it runs only for a signed-in account and re-subscribes for the next one.
+ *
+ * The app-BLOCK half of §5 (a "turn location back on" gate) is deliberately NOT wired here yet: its
+ * screen needs owner-supplied 5-language copy (machine translation is forbidden). The decision brain
+ * `locationBlockReason` is built + tested (antiCircumvention.ts); wiring the screen behind this monitor
+ * is a small follow-up once the copy lands.
+ */
+function PermissionMonitor() {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (Platform.OS === 'web' || !user) return; // native-only, signed-in only
+    void syncConsentWithPermission(); // check immediately on mount / sign-in
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void syncConsentWithPermission();
+    });
+    return () => sub.remove();
+  }, [user]);
+  return null;
+}
+
 function BrandTheme({ children }: { children: React.ReactNode }) {
   const base = useTheme();
   const { config } = useAppUi();
@@ -168,6 +193,9 @@ function RootNav() {
       {/* Redirects a signed-in, not-yet-consented user to the mandatory /consent notice.
           Fail-open, fires once per session, native-only — see ConsentGate above. */}
       <ConsentGate />
+      {/* PHASE 41d §5: on foreground, treat a revoked OS location permission as a consent withdrawal
+          (notify masters + stop recording). Native-only, headless — see PermissionMonitor above. */}
+      <PermissionMonitor />
       <AppLock />
       {/* Hold the animated splash until the auth session AND the Geist faces are ready,
           so the first painted frame is never in the fallback system face. */}

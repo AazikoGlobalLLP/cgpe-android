@@ -34,7 +34,7 @@ import * as BackgroundTask from 'expo-background-task';
 import { Accelerometer } from 'expo-sensors';
 import { storage } from './storage';
 import { watchdogAction } from './watchdog';
-import { dropMocked } from './antiCircumvention';
+import { dropMocked, shouldSignalWithdrawal } from './antiCircumvention';
 import {
   classifyMotion,
   debounceMotion,
@@ -914,6 +914,26 @@ export async function stopAmbientTracking(): Promise<void> {
     await storage.remove(STATE_KEY);
     await storage.remove(AMBIENT_KEY);
   });
+}
+
+/**
+ * PHASE 41d §5 — the consent-withdrawal signal. Called on app foreground: if a consented 24/7 user has
+ * had the OS background-location permission revoked (they turned it off in Settings), treat that as a
+ * withdrawal — POST consent=false so the server notifies every master (a loud, transparent opt-out) and
+ * stop the recorder. Best-effort, never throws, native-only.
+ *
+ * SAFE AGAINST FALSE ALARMS: it fires only for an `armed` (consented) user; a FAILED permission read is
+ * skipped (never signals on uncertainty, so a transient error can't spam masters); and `stopAmbientTracking`
+ * clears the armed flag, so a real revocation fires the master alert exactly once, not on every foreground.
+ */
+export async function syncConsentWithPermission(): Promise<void> {
+  if (!isNative) return;
+  if (!(await ambientArmed())) return; // only a consented 24/7 user can withdraw
+  const bg = await Location.getBackgroundPermissionsAsync().catch(() => null);
+  if (!bg) return; // could not read the permission — never signal a withdrawal on an uncertain read
+  if (!shouldSignalWithdrawal({ armed: true, bgGranted: bg.granted })) return;
+  await api.setLocationConsent(false).catch(() => {}); // Phase 43: notifies every super_admin
+  await stopAmbientTracking(); // clears AMBIENT_KEY → this fires once per revocation, and stops recording
 }
 
 /** True if the background route service is currently running. */
