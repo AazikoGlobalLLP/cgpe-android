@@ -6,6 +6,30 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 44 (strict salary from hours/days) is ALREADY SATISFIED; verified, owner-confirmed as-is, zero change
+
+**Context.** Owner backlog Phase 44: salary computed from actual working hours/days, shown as one amount. The plan
+told this session to "file the exact inputs/rounding" of the formula to `cgpe-api` (rule 2 — the app never
+multiplies). Before filing, verified whether a strict hours/days formula already existed (the plan text predates
+recent backend work; `[api]` tags have been wrong 5×).
+
+**Decision.** File **nothing** and build **nothing** — the strict engine already exists, is owner-locked, and is
+live. Verified in real code (both trees): `services/payrollEngine.js` (Backend Phase 25b, locked 2026-08-11) —
+`base` flat, `day_wise = (salary/working_days)×present_days`, `hourly = (salary/working_days/office_hours[8.5])×
+worked_hours`, `working_days = days − Sundays − holidays`, `payable` rounded to ₹1; `services/payrollAttendance.js`
+reduces the **live `daylogs`** with owner-locked fixed cutoffs (≥8h full / ≥4h half / <4h absent, spec row 15);
+`routes/payroll.js` `buildRoster()` joins by Profile ObjectId `_id` (`:335`). Exposed self-scoped via
+`/payroll/my-earnings` (`user_id` forced to token, above the admin gate) and admin-scoped via `/payroll/compute`,
+both on the same engine. Mobile already renders it (`earnings.tsx` Phase 16/28, `payroll.tsx` Phase 20) — the
+server `payable` as one amount plus the hours/days basis, never multiplying. The owner was shown the exact live
+formula via AskUserQuestion (2026-08-15) and chose **"correct as-is."**
+
+**Consequence.** No `[api]` INBOX ask (nothing missing — a "please build a salary formula" ask would be wrong),
+no `src/` change → **no gate re-run** (baseline stands: `tsc` 0, `npm test` 467/467, lint 0/12). A future change to
+the 8h/4h cutoffs or the Sat/Sun/holiday working-days basis would be a **new** `[api]` ask carrying the owner's
+exact numbers — never a mobile guess (rule 2 / rule 4 / never invent). Only the existing carried payroll-screen
+device check remains. Docs: `docs/spec/PHASE-44.md`.
+
 ## 2026-08-14 — Phase 43 SHIPPED by cgpe-api same-day (Backend Phase 50) + VERIFIED against real code; mobile confirmed zero-change
 
 **Context.** The Phase 43 filing (below) was answered by `cgpe-api` the same day as Backend Phase 50. Per the

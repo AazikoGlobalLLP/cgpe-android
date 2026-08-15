@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**Phase 44 — [api]+[m] Strict salary from working hours/days. VERIFIED — ALREADY SATISFIED end to end; owner confirmed the live formula as-is; ZERO change — 2026-08-15.**
+Owner backlog Phase 44 (Group F): salary computed **from actual working hours/days**, shown as **one amount**
+(rule 2 — a backend payroll-engine formula; the app never multiplies). **Verified against real code (both trees):
+the strict hours/days engine already exists, is owner-locked, and is live** — Backend **Phase 25b** (locked
+2026-08-11). `services/payrollEngine.js`: `base` = flat; `day_wise` = `(salary/working_days)×present_days`;
+`hourly` = `(salary/working_days/office_hours[8.5])×worked_hours`; `working_days = days − Sundays − holidays`
+(Sat works, Sun only weekly off); full precision, `payable` rounded to **₹1**. `services/payrollAttendance.js`
+reduces the **live `daylogs`** to the inputs with **owner-locked fixed cutoffs** (spec row 15): worked ≥8h → full
+day (1.0), ≥4h → half (0.5), <4h → absent (0); `worked_hours` = actual seconds/3600. `routes/payroll.js`
+`buildRoster()` joins daylogs by the member's Profile **ObjectId `_id`** (`:335`, the correct join, does not
+replicate the attendance-calendar string/ObjectId bug), buckets per month. Exposed via `GET /payroll/my-earnings`
+(**self**: `protect`-only above `authorize('admin')`, `user_id` forced to token, `:41/:50/:84`) and
+`GET /payroll/compute` (**admin**) — both reuse the same engine, so no second formula. **Mobile already renders
+it:** `earnings.tsx` (Phase 16/28) shows `payable` + present/working days + worked hours + segment + office hours,
+never multiplying (`earnings.tsx:27-30`); `payroll.tsx` (Phase 20) shows per-member present/working days + the
+server `payable` + a roster total (a sum of server payables). **Owner shown the exact live formula via
+AskUserQuestion (2026-08-15) → chose "correct as-is."** So: **no `[api]` ask** (nothing missing — the plan text
+predates Backend Phase 25b shipping), **do NOT invent an alternative** cutoff/rate (a future change = a new `[api]`
+ask with the owner's exact numbers), **no mobile build**. **No `src/` change → no gate re-run** (baseline: `tsc`
+0, `npm test` 467/467, lint 0 errors / 12 warnings). Only the existing carried payroll-screen device check remains
+(not new to Phase 44). Full path: `docs/spec/PHASE-44.md`; DECISIONS 2026-08-15 (top).
+
 **Phase 43 — [api]+[m] Per-member set location + 200 m clock-in enforcement. FILED → cgpe-api SHIPPED (Backend Phase 50) → VERIFIED same-day; mobile owes ZERO change, device check only — 2026-08-14.**
 `cgpe-api` shipped the filed ask the same day as **Backend Phase 50**, all five points as recommended, and it is
 **verified against their real code** (courier re-read, not the summary): `getMemberGeofence(userId)`
