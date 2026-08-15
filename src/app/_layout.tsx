@@ -34,6 +34,7 @@ import { ConfirmProvider } from '@/ui/Confirm';
 import { ToastProvider } from '@/ui/feedback';
 import { Splash } from '@/ui/Splash';
 import { AppLock } from '@/ui/AppLock';
+import { LocationBlock } from '@/ui/LocationBlock';
 import { JobsProvider } from '@/store/jobs';
 import { AppUiProvider, useAppUi } from '@/store/appUi';
 import { JobPill } from '@/ui/JobPill';
@@ -196,6 +197,10 @@ function RootNav() {
       {/* PHASE 41d §5: on foreground, treat a revoked OS location permission as a consent withdrawal
           (notify masters + stop recording). Native-only, headless — see PermissionMonitor above. */}
       <PermissionMonitor />
+      {/* PHASE 41d §5: block a consented 24/7 user behind a "turn location back on" notice while
+          location is off (owner-locked immediate trigger). Overlay, native-only — see LocationBlock.
+          Below AppLock's zIndex so the biometric device lock always wins if both are up. */}
+      <LocationBlock />
       <AppLock />
       {/* Hold the animated splash until the auth session AND the Geist faces are ready,
           so the first painted frame is never in the fallback system face. */}

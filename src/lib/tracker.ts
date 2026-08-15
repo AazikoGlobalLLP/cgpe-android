@@ -26,7 +26,7 @@
  * id and the auth token are all read back from storage on every wake. A buffer kept in a
  * module variable would be lost on the common path, not the rare one.
  */
-import { Platform } from 'react-native';
+import { Platform, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -34,7 +34,7 @@ import * as BackgroundTask from 'expo-background-task';
 import { Accelerometer } from 'expo-sensors';
 import { storage } from './storage';
 import { watchdogAction } from './watchdog';
-import { dropMocked, shouldSignalWithdrawal } from './antiCircumvention';
+import { dropMocked, shouldSignalWithdrawal, locationBlockReason, type BlockReason } from './antiCircumvention';
 import {
   classifyMotion,
   debounceMotion,
@@ -934,6 +934,59 @@ export async function syncConsentWithPermission(): Promise<void> {
   if (!shouldSignalWithdrawal({ armed: true, bgGranted: bg.granted })) return;
   await api.setLocationConsent(false).catch(() => {}); // Phase 43: notifies every super_admin
   await stopAmbientTracking(); // clears AMBIENT_KEY → this fires once per revocation, and stops recording
+}
+
+/**
+ * PHASE 41d §5 — the app-block evaluation. Reads the live OS location state for a consented 24/7
+ * user and returns the pure `locationBlockReason` (services_off / foreground_denied /
+ * background_denied / null). Native + consented (`armed`) only.
+ *
+ * FAIL-OPEN, on purpose: any read error resolves `null`, so a transient permission-read failure can
+ * never trap staff behind the block screen — the same safety posture as `needsConsentGate` and
+ * `syncConsentWithPermission` (never act against the user on an uncertain read).
+ *
+ * COMPOSITION WITH THE WITHDRAWAL SIGNAL (spec-literal, owner-chosen 2026-08-15): a REVOKED background
+ * permission is owned by `syncConsentWithPermission` (withdrawal → every master notified + disarm),
+ * which clears the armed flag — so once that has run this returns `null` for the permission case and
+ * the block clears. The block screen therefore lands durably on device-Location-OFF (services), while
+ * permission revocation routes through the loud withdrawal path + the /consent wall on the next open.
+ */
+export async function evaluateLocationBlock(): Promise<BlockReason> {
+  if (!isNative) return null;
+  try {
+    if (!(await ambientArmed())) return null; // only a consented 24/7 user is ever blocked
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+    const fg = await Location.getForegroundPermissionsAsync();
+    const bg = await Location.getBackgroundPermissionsAsync();
+    return locationBlockReason({
+      armed: true,
+      servicesEnabled,
+      fgGranted: fg.granted,
+      bgGranted: bg.granted,
+    });
+  } catch {
+    return null; // uncertain read → never block
+  }
+}
+
+/**
+ * PHASE 41d §5 — open the settings page that lets the user clear the block. `services_off` is the
+ * system Location on/off toggle, so it opens LOCATION_SOURCE_SETTINGS (Android); a permission denial
+ * lives on this app's details page, so `Linking.openSettings()` (both platforms — Android app info →
+ * Permissions, iOS the app's Settings pane). Best-effort: a missing activity or OEM quirk is swallowed
+ * so it can never throw into the block overlay — the user can still reach settings by hand.
+ */
+export async function openLocationSettings(reason: BlockReason): Promise<void> {
+  if (!isNative) return;
+  try {
+    if (Platform.OS === 'android' && reason === 'services_off') {
+      await IntentLauncher.startActivityAsync(IntentLauncher.ActivityAction.LOCATION_SOURCE_SETTINGS);
+      return;
+    }
+    await Linking.openSettings();
+  } catch {
+    // Activity unavailable / rejected — never fail the block screen over the settings shortcut.
+  }
 }
 
 /** True if the background route service is currently running. */
