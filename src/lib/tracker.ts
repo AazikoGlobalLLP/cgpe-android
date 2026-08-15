@@ -34,6 +34,7 @@ import * as BackgroundTask from 'expo-background-task';
 import { Accelerometer } from 'expo-sensors';
 import { storage } from './storage';
 import { watchdogAction } from './watchdog';
+import { dropMocked } from './antiCircumvention';
 import {
   classifyMotion,
   debounceMotion,
@@ -581,7 +582,11 @@ async function ingest(locations: Location.LocationObject[]): Promise<void> {
   const state = await readState();
   let lastAt = state.lastAt;
 
-  for (const loc of locations) {
+  // PHASE 41d anti-circumvention (§5): drop OS-flagged mock-provider fixes so a fake-GPS app cannot
+  // spoof a location into the record. A spoofer's points vanish here and therefore surface as a
+  // coverage GAP to the backend silent-user detector ([api], filed) — transparent, never fabricated.
+  const real = dropMocked(locations);
+  for (const loc of real) {
     const c = loc?.coords;
     if (!c || !Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) continue;
     const at = Number(loc.timestamp) || Date.now();
