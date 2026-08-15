@@ -6,6 +6,29 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-15 — Phase 41d PART BUILT (editor): mock-location rejection; the other three §5 parts are owner-input / backend
+
+**Context.** §5 anti-circumvention has four parts: (1) permission-monitor + app-block, (2) mock-location rejection,
+(3) backend silent-user gap-detector → master alert, (4) consent-withdrawal auto-signal. Verified feasibility
+against real code, not tags: `expo-location.LocationObject.mocked?:boolean` exists (SDK 57); `setLocationConsent`
+exists; Phase-43 withdrawal-notify is live (`timeTracker.js:1425`); and cgpe-backend has **no** gap-detector (grep).
+
+**Decision.** Build only the part with no blockers — **mock-location rejection** — and hold the rest for owner input.
+Pure `dropMocked` in `src/lib/antiCircumvention.ts` (tested), wired into `ingest` so a fake-GPS fix never enters the
+record. Chose **drop** over **label** (spec says "reject/label") because labelling would need a new backend field,
+whereas dropping needs nothing AND is self-enforcing: a spoofer whose fixes are dropped goes silent, which the
+backend gap-detector (part 3) flags — transparent, no fabricated data. Deliberately did NOT build the other three:
+part 1's app-block needs **5-language human copy** (machine translation forbidden) + a trigger spec-lock; part 4's
+auto-signal auto-notifies ALL masters (a blast-radius policy call + device-only wiring — a bad read could spam
+spurious withdrawal alerts); part 3 is backend-owned with an undefined policy threshold ("X hours") I must not
+invent (Phase-45 pattern: file with a recommended-and-flagged number once the owner sets it).
+
+**Consequence.** The mobile-buildable anti-spoof is done + tested; §5's real enforcement centre of gravity is the
+backend gap-detector + the owner-supplied app-block copy, so 41d is genuinely mostly NOT a mobile-editor build. Next
+steps are owner decisions (app-block copy/trigger, withdrawal-signal policy, gap-detector threshold) — then file the
+`[api]` and/or build the signal. Gates: `tsc` 0 · `npm test` 546/546 (+6) · eslint 0. Commit `08dd00f` (local — push
+403s). DEVICE-UNVERIFIED (fake-GPS app on a handset). Full path: `docs/spec/PHASE-41.md` §8 (41d).
+
 ## 2026-08-15 — Phase 41c BUILT (editor): motion-adaptive sampling via expo-sensors; applied at restart, not mid-session; numbers pending lock
 
 **Context.** 41c (PHASE-41 §3/§4) is "sparse when still, denser when moving." §4 left the activity SOURCE
