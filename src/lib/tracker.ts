@@ -30,7 +30,9 @@ import { Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import * as IntentLauncher from 'expo-intent-launcher';
+import * as BackgroundTask from 'expo-background-task';
 import { storage } from './storage';
+import { watchdogAction } from './watchdog';
 import * as api from '@/data/api';
 
 const isNative = Platform.OS !== 'web';
@@ -40,6 +42,18 @@ const isNative = Platform.OS !== 'web';
  * orphans any service already running on a device that upgraded mid-shift, so it stays put.
  */
 const ROUTE_TASK = 'cgpe-field-route';
+
+/**
+ * PHASE 41b — the reliability watchdog (§2.3/§2.4). A DISTINCT task from ROUTE_TASK: this one is a
+ * periodic `expo-background-task` (WorkManager on Android), not a location subscription. Its only
+ * job is to re-arm ROUTE_TASK when the OS has killed the foreground service (aggressive OEM Doze) or
+ * the device rebooted (expo-location's task does not survive a reboot). WorkManager restores this
+ * periodic task after a reboot, so one watchdog covers both cases without a native BootReceiver.
+ * Renaming it orphans a schedule already registered on an upgraded device, so it stays put.
+ */
+const WATCHDOG_TASK = 'cgpe-track-watchdog';
+/** 15 min is the Android floor for a periodic background task (expo-background-task, SDK 57). */
+const WATCHDOG_INTERVAL_MIN = 15;
 
 const STATE_KEY = 'track.state';
 /** Written by the previous (foreground-watch) implementation. Cleaned up, never read. */
@@ -271,15 +285,44 @@ async function deliverAmbient(pts: PointTuple[]): Promise<api.AmbientDelivery> {
 }
 
 /**
+ * PHASE 41b — register the periodic watchdog if it is not already registered. Idempotent (guarded by
+ * `isTaskRegisteredAsync`) so re-arming never churns the WorkManager schedule. Best-effort: the
+ * watchdog is a reliability booster layered on the foreground service, never a hard requirement, so a
+ * device without background-task support still records — it just loses the auto-re-arm.
+ */
+async function ensureWatchdog(): Promise<void> {
+  try {
+    if (await TaskManager.isTaskRegisteredAsync(WATCHDOG_TASK)) return;
+    await BackgroundTask.registerTaskAsync(WATCHDOG_TASK, { minimumInterval: WATCHDOG_INTERVAL_MIN });
+  } catch {
+    // No background-task scheduler on this device/build: the foreground service still records.
+  }
+}
+
+/** PHASE 41b — stop the watchdog waking the device. Paired with a real recorder teardown. */
+async function retireWatchdog(): Promise<void> {
+  try {
+    if (await TaskManager.isTaskRegisteredAsync(WATCHDOG_TASK)) await BackgroundTask.unregisterTaskAsync(WATCHDOG_TASK);
+  } catch {
+    // Nothing further we can do from JS.
+  }
+}
+
+/**
  * Start the ONE background location foreground-service if it is not already running, with the given
  * notification. Extracted from `startTracking` (PHASE-41 §12.1: one unified recorder) so the shift
- * and 24/7 paths share identical sampling options and differ only in the notification wording. The
- * `already` guard means a running service is never restarted, so clocking in over a running 24/7
- * service keeps that service — and its neutral notification — exactly as it was.
+ * and 24/7 paths share identical sampling options and differ only in the notification wording. A
+ * running service is never restarted, so clocking in over a running 24/7 service keeps that service —
+ * and its neutral notification — exactly as it was. The watchdog is (re-)ensured on every call
+ * (PHASE 41b): registering here, the single place the recorder starts, means the re-arm check exists
+ * whenever recording is live, and self-heals a watchdog that somehow went missing.
  */
 async function startService(notif: Notif): Promise<void> {
   const already = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK).catch(() => false);
-  if (already) return;
+  if (already) {
+    await ensureWatchdog();
+    return;
+  }
   await Location.startLocationUpdatesAsync(ROUTE_TASK, {
     // Balanced is a deliberate battery choice: these people are out all day and a route replay does
     // not need lane-level precision.
@@ -308,6 +351,10 @@ async function startService(notif: Notif): Promise<void> {
       killServiceOnDestroy: false,
     },
   });
+  // PHASE 41b: the recorder is now live — arm the watchdog that keeps it alive through OEM kills and
+  // reboots. After `startLocationUpdatesAsync` so a failed start never leaves a watchdog with nothing
+  // to guard (that call throws on a mis-provisioned service and this line is skipped).
+  await ensureWatchdog();
 }
 
 /**
@@ -316,6 +363,11 @@ async function startService(notif: Notif): Promise<void> {
  */
 async function stopUpdates(): Promise<void> {
   running = false;
+  // PHASE 41b: this is a genuine teardown (clock-out without 24/7, consent withdrawal, sign-out, or
+  // the unattributable case) — every caller of stopUpdates is stopping the recorder for real, so the
+  // watchdog must retire too, otherwise it would wake and re-arm what we just tore down. The armed
+  // clock-out path keeps recording and does NOT call stopUpdates, so ambient's watchdog survives.
+  await retireWatchdog();
   try {
     const started = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK);
     if (started) {
@@ -361,6 +413,49 @@ if (!TaskManager.isTaskDefined(ROUTE_TASK)) {
       }
     });
   });
+}
+
+/**
+ * PHASE 41b — the watchdog task, defined at module scope so a headless wake (WorkManager, including
+ * the post-reboot restore) finds it registered. Runs every ~15 min: it re-arms the recorder if the
+ * OS killed it, leaves it alone if healthy, or retires itself when there is nothing left to record.
+ */
+if (!TaskManager.isTaskDefined(WATCHDOG_TASK)) {
+  TaskManager.defineTask(WATCHDOG_TASK, async () => {
+    try {
+      await serial(watchdogTick);
+      return BackgroundTask.BackgroundTaskResult.Success;
+    } catch {
+      // A failed tick must not disable the schedule; WorkManager retries at the next interval.
+      return BackgroundTask.BackgroundTaskResult.Failed;
+    }
+  });
+}
+
+/**
+ * One watchdog check. Reads intent from persisted storage (a fresh headless context has no module
+ * state), asks the OS whether the service is actually running, and acts on the pure decision
+ * (`watchdogAction`). Runs inside `serial` so it cannot race a concurrent location-batch ingest.
+ */
+async function watchdogTick(): Promise<void> {
+  const armed = await ambientArmed();
+  const state = await readState();
+  const isRunning = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK).catch(() => false);
+  const action = watchdogAction({ armed, hasShift: !!state.sid, running: isRunning });
+  if (action === 'rearm') {
+    // Killed by the OS or lost to a reboot. Bring the recorder back with the neutral, pre-resolved
+    // notification — a headless restart has no i18n context (§12.4). Attribution resumes on its own:
+    // `ingest` reads `state.sid` at flush time, so the re-armed service posts to the open shift if
+    // there is one, otherwise as ambient.
+    await startService(await readNotif());
+    running = true;
+  } else if (action === 'retire') {
+    // Neither a shift nor 24/7 is active. Nothing to guard — stop waking the device (§3 battery). A
+    // stray service still running here is torn down by the next `ingest`, which owns dropping the
+    // unattributable buffer safely; the watchdog only stops watching.
+    await retireWatchdog();
+  }
+  // 'idle': recorder healthy, nothing to do.
 }
 
 /** Body of the location task. Runs inside `serial`, so it owns the persisted state exclusively. */
