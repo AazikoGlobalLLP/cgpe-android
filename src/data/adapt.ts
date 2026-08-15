@@ -111,6 +111,15 @@ export function adaptClient(raw: any): Client {
   const mode = String(raw.mode || pd.premium_frequency || '').trim();
   const city = String((raw.address && raw.address.city) || raw.city || '').trim();
 
+  // A policy whose maturity date is already in the PAST has run its full term — it is matured, not
+  // in force. The lic-import doc carries no reliable status field (this used to be hardcoded
+  // 'in_force' for every policy, so a policy that matured years ago still read "In force"). Derive
+  // the one status we CAN know for certain: past maturity ⇒ 'matured' (an existing contract status
+  // with its own label, types.ts). lapsed/paid_up need data the doc doesn't carry, so anything not
+  // yet matured stays 'in_force' exactly as before.
+  const matDays = daysUntil(maturity);
+  const status: Policy['status'] = matDays != null && matDays < 0 ? 'matured' : 'in_force';
+
   const policy: Policy = {
     id: policyNo || String(raw._id || raw.id || Math.random()),
     plan,
@@ -121,13 +130,12 @@ export function adaptClient(raw: any): Client {
     startDate: iso(commencement),
     maturityDate: iso(maturity),
     nextRenewal: iso(fupDate), // fupDate drives premium-due
-    status: 'in_force',
+    status,
   };
 
   const segment: Client['segment'] = [];
   if (monthMatches(fupDate)) segment.push('renewal_due');
   if (monthMatches(dob)) segment.push('birthday');
-  const matDays = daysUntil(maturity);
   if (matDays != null && matDays >= 0 && matDays <= 90) segment.push('maturity_soon');
   if (!segment.length) segment.push('cross_sell');
 

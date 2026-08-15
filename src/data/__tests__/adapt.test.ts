@@ -140,7 +140,7 @@ describe('adaptClient', () => {
         startDate: '',
         maturityDate: '',
         nextRenewal: '',
-        status: 'in_force',   // hardcoded; adaptClient can never emit any other status
+        status: 'in_force',   // no maturity date ⇒ can't be known matured ⇒ stays in_force
       }],
       segment: ['cross_sell'],
       since: '-',
@@ -213,6 +213,25 @@ describe('adaptClient', () => {
     // `matDays >= 0` — a matured policy is not "maturing soon".
     const out = adaptClient({ _id: 'c5', name: 'x', maturityDate: new Date(2026, 2, 14) });
     expect(out.segment).toEqual(['cross_sell']);
+  });
+
+  it('marks a policy whose maturity date has passed as matured, not in_force', () => {
+    // The reported bug: a policy that matured years ago (e.g. Mar 2023) still showed "In force"
+    // because the status was hardcoded. NOW is 15 Mar 2026, so this maturity is ~3 years past.
+    const past = adaptClient({ _id: 'c6', name: 'x', maturityDate: new Date(2023, 2, 1) });
+    expect(past.policies[0].status).toBe('matured');
+
+    // One day before NOW is still past ⇒ matured.
+    const yesterday = adaptClient({ _id: 'c7', name: 'x', maturityDate: new Date(2026, 2, 14) });
+    expect(yesterday.policies[0].status).toBe('matured');
+
+    // A future maturity date is still in force.
+    const future = adaptClient({ _id: 'c8', name: 'x', maturityDate: new Date(2030, 0, 1) });
+    expect(future.policies[0].status).toBe('in_force');
+
+    // No maturity date at all ⇒ cannot be known matured ⇒ stays in_force.
+    const none = adaptClient({ _id: 'c9', name: 'x' });
+    expect(none.policies[0].status).toBe('in_force');
   });
 
   it('skips a too-short phone candidate and keeps scanning the rest', () => {
