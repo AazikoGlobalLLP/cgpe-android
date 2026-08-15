@@ -136,7 +136,8 @@ export default function ClientDetail() {
       { label: 'Annual premium', value: inrShort(client.totalPremium), icon: 'cash-outline', tone: 'success' },
       { label: 'Policies', value: String(client.policies.length), icon: 'documents-outline', tone: 'primary' },
     ];
-    const due = dueToken(p?.nextRenewal);
+    // A matured policy has run its full term — no premium is due, so don't raise a "days late" alarm on it.
+    const due = p && p.status !== 'matured' ? dueToken(p.nextRenewal) : null;
     if (due) out.push({ label: 'Premium due', value: due.label, icon: 'time-outline', tone: due.tone });
     const mat = monthYear(p?.maturityDate);
     if (mat) out.push({ label: 'Maturity', value: mat, icon: 'flag-outline', tone: 'accent' });
@@ -306,7 +307,9 @@ export default function ClientDetail() {
 
 function PolicySection({ p, index, count }: { p: Policy; index: number; count: number }) {
   const status = POLICY_STATUS[p.status] ?? POLICY_STATUS.in_force;
-  const due = dueToken(p.nextRenewal);
+  const matured = p.status === 'matured';
+  // A matured policy has no next premium — suppress the due date + "days late" pill entirely.
+  const due = matured ? null : dueToken(p.nextRenewal);
   const hasNumber = !!p.number && p.number !== '—';
   const started = dateOr(p.startDate);
   const matures = dateOr(p.maturityDate);
@@ -325,7 +328,7 @@ function PolicySection({ p, index, count }: { p: Policy; index: number; count: n
       {p.frequency ? <DataRow label="Mode" value={p.frequency} /> : null}
       {started ? <DataRow label="Commenced" value={started} numeric /> : null}
       {matures ? <DataRow label="Maturity" value={matures} numeric /> : null}
-      {nextDue ? (
+      {nextDue && !matured ? (
         <DataRow
           label="Next premium"
           value={nextDue}
