@@ -513,6 +513,10 @@ export default function Home() {
 
   const hour = new Date().getHours();
   const greet = hour < 12 ? t('greet.morning') : hour < 17 ? t('greet.afternoon') : t('greet.evening');
+  // A tasteful time-of-day emoji, chosen once here and rendered as its own element in the header
+  // (never folded into the translated `greet.*` string) so all five languages share it and no
+  // Hindi/Gujarati word order is broken — the i18n trap PHASE-46 was flagged for.
+  const greetEmoji = hour < 12 ? '🌅' : hour < 17 ? '☀️' : '🌆';
 
   const caps = capabilitiesOf(user, viewAs);
   const isTeam = caps.tier === 'team';
@@ -1796,6 +1800,9 @@ export default function Home() {
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
               <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{greet},</Txt>
+              <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                <Txt size={font.sub} numberOfLines={1}>{greetEmoji}</Txt>
+              </View>
               {/* Department identity badge — server-driven `theme.badge_label` (≤12 chars), shown only
                   when the role's config carries one. Its colours are the brand `primary` family, so a
                   department accent (if set) tints the badge to match the rest of its layout; azure
