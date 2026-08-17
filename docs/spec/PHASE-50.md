@@ -10,9 +10,10 @@ which is *our* Phase 43 — different numbering, do not conflate.
 
 ## 1. The request (owner, 2026-08-15, verbatim intent)
 
-A team member may clock in from **either of two offices**, within **200 m**:
-- **Office A** — "9th Floor, Citadel, opp. Star Bazar, Jalaram Society, Adajan Gam, Adajan, Surat, Gujarat 395009"
-- **Office B** — "9, Parisar Apartment, Sumul Dairy Rd, Suryapur Gate, Katargam, Surat, Gujarat 395008"
+A team member may clock in from **either of two offices**, within **200 m**. **Exact pins owner-supplied 2026-08-17**
+(set in the panel/DB via `PUT /geofence` `offices[]`, NOT client literals):
+- **Office 01 (Adajan)** — lat `21.208267`, lng `72.839960` — 9th Floor, Citadel, opp. Star Bazar, Jalaram Society, Adajan Gam, Adajan, Surat 395009
+- **Office 02 (Katargam)** — lat `21.187084`, lng `72.797604` — 9, Parisar Apartment, Sumul Dairy Rd, Suryapur Gate, Katargam, Surat 395008
 
 Three new rules:
 1. **Out-of-range clock-IN or clock-OUT** (outside 200 m of *both* offices) is **allowed**, but the member is
