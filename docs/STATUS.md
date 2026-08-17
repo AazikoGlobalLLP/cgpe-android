@@ -1,15 +1,12 @@
 # Status — CGPE Connect (Android)
-**Updated:** 17 August 2026
-**Working on right now:** Reordered the plan so the next big feature (clock-in from either office) is the top priority, and prepared a simple phone-testing guide for the commissions screen.
+**Updated:** 2026-08-17
+**Working on right now:** Making sure staff location is still recorded when the phone's app is closed, and finishing the new two-office attendance rules.
 
 **Done this week:**
-- Finished and double-checked the Commissions screen upgrade: an advisor now sees their progress toward the next award level and a "This year by product" breakdown. Confirmed the figures line up correctly with the server, end to end.
-- Wrote a plain, step-by-step phone-testing guide for that screen, so it can be checked on a real advisor's phone before it's called finished.
-- Reordered the roadmap at the owner's request: the "clock in from either of two offices, with a reason if you're out of range or leaving early" feature is now the #1 priority.
+- The attendance system now supports **two offices** — staff can check in from whichever office is nearest. If someone checks in or out from outside the office, or leaves early, the app now asks them for a reason and the owner gets alerted. The behind-the-scenes app work for this is finished and tested.
+- Sent the owner a **new version of the app (1.9.0)** to test whether location keeps recording after the app is fully closed — this needed a fresh app build, not a quick update.
+- Locked in the exact map locations of the two offices, and wrote up the alert rules for the owner's automation person.
 
-**Blocked on:**
-- The two-offices feature can't be built on the app yet — the server team has to build their side first, the two office locations have to be set up, and a few small choices need to be confirmed. This mainly needs the owner to pass the request to the server team and answer those few questions.
-- The commissions screen is still waiting on a real-phone test before it's marked finished — that's the owner's call once tested.
-- Publishing the code to the shared repository still fails (a login/permission issue that needs a person to fix) — the work is saved safely on this machine meanwhile.
+**Blocked on:** The owner testing the new app on a real phone (with the correct battery/permission settings turned on), and supplying the wording for the "reason" pop-up in all five languages.
 
-**Next:** Owner to test the commissions screen on a real advisor's phone and confirm it looks right, and to pass the two-offices request to the server team. The full 24/7-location phone testing stays scheduled for last, as requested.
+**Next:** Confirm closed-app location works on a real phone, then add the reason pop-up on screen and the new map view options (satellite view, and seeing who has the app installed).

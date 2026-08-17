@@ -6,6 +6,35 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-17 — Phase 50 shipped+built; app-closed location (Phase 41) made owner #1 and fixed-forward with a v1.9.0 APK
+
+**Context.** In one boot: the owner confirmed all Phase-50 §6 decisions, `cgpe-api` shipped them (Backend Phase 64), and
+mobile built the consumer. Then the owner sent a batch of new requests and re-prioritised: the **app-closed background
+location bug is now #1** ("app band ho toh location nahi milti — real testing"), plus 6 feature asks (satellite toggle,
+red/green on/off-duty, app-installed view, map points + in/out-path toggles) and the two exact office coordinates.
+
+**Decision.** (1) **Phase 50** — verified `cgpe-api`'s real Phase-64 code field-for-field (all 6 owner points; nearest
+office, server-enforced `REASON_REQUIRED`, `EARLY_CLOCKOUT_GRACE_MIN=15`, n8n+in-app super_admin-only alert without
+coordinates, additive `offices[]`), then built the editor-buildable mobile half (commit `6b2da6f`): `getGeofence` reads
+`offices[]`, `checkGeofence` measures the **nearest** office (a real correctness fix — the old single-pin pre-check would
+refuse someone standing at office B, which the server allows, breaking the Phase-7 "never refuse what the server allows"
+rule), `clockIn`/`clockOut` thread `reason` + map `REASON_REQUIRED`. The `home.tsx` reason-prompt UI is **deferred** —
+it needs 5-language HUMAN copy (machine translation forbidden) + a device. (2) **App-closed location** — diagnosed as the
+Phase-41 native-build gap: the recorder is written and correctly configured (app.json perms/plugins + package.json deps
+all committed), but the installed APK predated the native modules, so background recording could never run. **Fixed
+forward by cutting a fresh EAS preview APK v1.9.0** (version bumped from 1.8.0 so the owner can confirm the new build
+on-device; commit `ddbb33e`; build `86c1406c`) rather than any editor change — a JS/OTA update cannot add native modules.
+(3) **App-installed signal = "recent location points"** (owner AskUserQuestion). (4) The two office pins
+(Adajan `21.208267,72.839960`, Katargam `21.187084,72.797604`) are set in the **panel/DB** via `PUT /geofence`
+`offices[]`, never client literals.
+
+**Consequence.** Gates green on the mobile build (`tsc` 0 · `npm test` 576 · eslint 0 errors). The app-closed fix is now
+a **device test** owed by the owner (install v1.9.0 + Location "Allow all the time" + Battery "Unrestricted" + Auto-start
+ON — a miss here is usually settings, not code). Still owed next: the `home.tsx` reason-prompt UI + 5-lang copy; the
+mobile map toggles (satellite + points, pure mobile); and 2 backend asks to file after verifying real code — app-installed
+(recent-points) and an off-duty (ambient) points **read** (the app has no such read today, so the red/green Phase-42
+colouring and the map in/out-path toggle are blocked on it). All commits local (`git push` still 403s).
+
 ## 2026-08-17 — Phase 50 set to #1 (backend-first, blocked); Phase 62 kept PENDING until owner confirms device test
 
 **Context.** Owner re-prioritised the queue: make Phase 50 (dual-office geofence + out-of-range / early-clock-out

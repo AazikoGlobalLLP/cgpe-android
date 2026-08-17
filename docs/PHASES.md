@@ -14,6 +14,13 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**⚡ LATEST (owner, 2026-08-17, end of session):** owner re-prioritised again — **the app-closed (background) location
+bug is now #1**. Diagnosed as the Phase-41 native-build gap (installed APK predated the modules); cut a fresh **v1.9.0**
+EAS APK (build `86c1406c`) + device checklist → **owner is testing it on a handset.** Also captured **6 new feature
+requests** (satellite toggle, red/green on/off-duty, app-installed view, map points + in/out-path toggles) — triaged in
+[[owner-backlog-2026-08-17-map-and-app-presence]] and `## Next 3`. Phase 50's mobile data-layer is now BUILT (below);
+its home reason-prompt UI + 5-lang copy remain.
+
 **PRIORITY (owner, 2026-08-17):** **Phase 50 (dual-office geofence + out-of-range / early-clock-out reason →
 super-admin) is #1.** **cgpe-api SHIPPED it (Backend Phase 64, 2026-08-17) — VERIFIED against their real code** (all 6
 owner points; both mobile recommendations taken). **Mobile data-layer BUILT + tested** (commit `6b2da6f`): `getGeofence`
@@ -1346,27 +1353,28 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-17 handoff — owner re-prioritised AGAIN: Phase 50 is now #1; Phase 62 kept PENDING its device pass; Phase 41 device-verify stays LAST):**
-1. **Phase 50 (dual-office + out-of-range/early-clock-out reason → super-admin) — NOW #1 (owner, 2026-08-17).**
-   BACKEND-FIRST and currently blocked: nothing to build in `src/` until `cgpe-api` ships the two-office fence +
-   reason capture + super-admin notify, the two office pins are set in the panel, AND the owner confirms the 5 flagged
-   points (`docs/spec/PHASE-50.md` §6). **Owner action required:** relay both filed `[api]`s to `cgpe-api` (Phase 50 +
-   the §5 gap-detector) and answer the 5 open decisions. Only then does mobile thread `reason` + build the prompt
-   (needs 5-language human copy) + a device check.
-2. **Phase 62 on-device visual pass — PENDING (contract already GO-LIVE VERIFIED against live `:3001`).** Build is DONE
-   (`fc92573`), gates re-confirmed green this session (`tsc` 0 · `npm test` 557/557), and the cross-repo contract is
-   correct field-for-field against the live backend. The ONLY thing left is the device visual — walk
-   `docs/spec/PHASE-62-DEVICE-CHECK.md` on a real advisor handset (tier card + "This year by product" bars render and
-   `Σ byProduct === ytd`; a non-advisor sees neither). **Do NOT mark passed until the owner personally confirms
-   "testing pass hai".** No advisor token exists in the editor, so do NOT re-verify with an unauthenticated call — a
-   device miss would be an account/role issue, not a client bug.
-3. **Phase 49 — final APK + one-click link → OTA-only.** GATED: the `git push` 403 resolved (a production build must
-   ship from pushed, backed-up code) AND the device checks cleared.
+**CURRENT next 3 (2026-08-17 late handoff — owner re-prioritised AGAIN: app-closed location is now #1; Phase 50 backend SHIPPED + mobile data-layer BUILT):**
+1. **Phase 41 app-closed location — NOW #1 (owner, 2026-08-17). Fresh APK cut; DEVICE TEST owed by owner.** Diagnosed:
+   the 24/7 recorder was written but the installed APK predated its native modules. Cut a fresh EAS preview APK **v1.9.0**
+   (build `86c1406c`, direct `.apk` `https://expo.dev/artifacts/eas/eUcZu5h738F4LbqmNqUHK7k2RZxE7FqlY14A6DY_VXk.apk`) +
+   handed the owner a device checklist (Location=Allow-all-the-time, Battery=Unrestricted + accept the once-per-install
+   popup, Auto-start ON). **A miss here is usually the OEM battery/auto-start settings, not code.** When the owner reports
+   the result, that's the acceptance gate (background records; swipe-away gaps up to ~15 min then the watchdog re-arms).
+2. **Phase 50 — home reason-prompt UI + 5-language copy (data-layer already BUILT `6b2da6f`).** Backend Phase 64 shipped
+   & verified; `clockIn`/`clockOut` thread `reason` and map `REASON_REQUIRED`; `checkGeofence` is nearest-of-offices. Left:
+   turn the `home.tsx:835` hard-refuse into a Sheet prompt that re-sends with the reason (consume `needsReason`), with
+   owner-supplied 5-language HUMAN copy, + a device check. **Go-live also needs owner/ops:** set the two pins via
+   `PUT /geofence` `offices[]` (Adajan `21.208267,72.839960` · Katargam `21.187084,72.797604`), set
+   `N8N_ATTENDANCE_WEBHOOK_URL`, `:3001` restart. n8n behaviour spec already handed to the owner.
+3. **New owner backlog (2026-08-17) — see [[owner-backlog-2026-08-17-map-and-app-presence]] / memory + `docs/spec` TBD.**
+   Pure-mobile now: **satellite-view toggle** + **points show/hide toggle** on the map (`LeafletMap.tsx`/agent-track).
+   Backend-first (file after verifying real code): **app-installed view** (signal = **recent location points**, owner
+   choice) and an **off-duty (ambient) points READ** — the app has none today, and it's the blocker for the **red/green
+   on-duty/off-duty colouring (old Phase 42)** and the **per-employee clock-in/out path toggle**.
 
-**DE-PRIORITISED to LAST (owner, 2026-08-17): Phase 41 on-device verification.** Editor-complete (41a–41d built; native
-APK `7cdc351d` cut) — needs only a handset. Walk `docs/spec/PHASE-41-DEVICE-CHECKLIST.md` (16-row matrix) whenever the
-phones are free; it blocks nothing and sits at the bottom of the queue. Also close the WiFi question with the owner's
-on-phone `https://cgpe.in/internal/api/health` test (diagnosed environmental, not app — DECISIONS 2026-08-15).
+**Phase 62 on-device visual pass — still PENDING** (contract GO-LIVE VERIFIED; build `fc92573`; walk
+`docs/spec/PHASE-62-DEVICE-CHECK.md`; do NOT mark passed until the owner confirms "testing pass hai").
+**Phase 49 — final APK → OTA-only** still GATED on the `git push` 403 + device checks clearing.
 
 _History below is retained for context; where it lists 41b–41d / 47 / 48 as pending, those are now editor-done (see `## Now`)._
 
