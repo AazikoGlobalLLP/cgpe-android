@@ -6,6 +6,25 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-17 — Phase 50 set to #1 (backend-first, blocked); Phase 62 kept PENDING until owner confirms device test
+
+**Context.** Owner re-prioritised the queue: make Phase 50 (dual-office geofence + out-of-range / early-clock-out
+reason → super-admin) the #1 priority, keep Phase 62 PENDING until the owner personally confirms the on-phone test
+passes, and asked for a plain-language device-check doc they can walk after logging into the app. Phase 41 stays LAST.
+
+**Decision.** (1) Phase 62 stays **PENDING**, not "done", until the owner confirms "testing pass hai" — the build and
+cross-repo contract are verified correct (gates re-run green this session: `tsc` 0 · `npm test` 557/557 · `fc92573`
+intact), but the native advisor-login visual pass is the owner's to sign off; do not close it from the editor. Wrote
+`docs/spec/PHASE-62-DEVICE-CHECK.md` (Test A advisor / Test B non-advisor / Test C edge + a sign-off that stays open
+until the owner ticks it). (2) Phase 50 is **#1 but not yet actionable** — priority ≠ buildable. It is backend-first
+(`docs/spec/PHASE-50.md`): `cgpe-api` must ship the two-office fence + reason capture + super-admin notify, the two
+office pins must be set in the panel, and the owner must confirm the 5 flagged §6 points before any mobile build. The
+next real Phase-50 move is an **owner action** (relay the two already-filed `[api]`s), not a mobile change.
+
+**Consequence.** No `src/` change this session — docs only. Next session: if the owner has relayed the `[api]`s and
+answered §6, verify `cgpe-api`'s real shipped code first (tags wrong 5×) before threading `reason`; otherwise there is
+no mobile Phase-50 build to start. Do not mark Phase 62 done from the editor.
+
 ## 2026-08-17 — Phase 62 go-live verified by cross-repo code-read (not a live authed call)
 
 **Context.** Owner confirmed `cgpe-api` is now running on `:3001` (Backend Phase 62 live) and asked to

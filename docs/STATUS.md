@@ -1,16 +1,15 @@
 # Status — CGPE Connect (Android)
 **Updated:** 17 August 2026
-**Working on right now:** Finished the commissions screen upgrade the owner asked to prioritise, and parked the phone-testing job for later.
+**Working on right now:** Reordered the plan so the next big feature (clock-in from either office) is the top priority, and prepared a simple phone-testing guide for the commissions screen.
 
 **Done this week:**
-- Upgraded the Commissions screen: an advisor now sees their progress toward the next MDRT award level and a clear "This year by product" breakdown showing which policy types earned how much. The numbers all come straight from the server — the app never invents or recalculates a figure.
-- Made the screen lighter and faster: it used to make two separate requests to the server for this information; it now gets everything in one, because the server was updated to send it together.
-- Kept it honest for the right people: only advisors see the award-level card, so a manager or back-office user never sees a meaningless "0% to the first level".
-- Checked a batch of recent server fixes and confirmed they need no change on the app side.
-- Handed the owner a ready-to-use testing guide for the 24/7 location feature: which phones are needed, step by step what to do, what to expect, and a checklist to tick off.
+- Finished and double-checked the Commissions screen upgrade: an advisor now sees their progress toward the next award level and a "This year by product" breakdown. Confirmed the figures line up correctly with the server, end to end.
+- Wrote a plain, step-by-step phone-testing guide for that screen, so it can be checked on a real advisor's phone before it's called finished.
+- Reordered the roadmap at the owner's request: the "clock in from either of two offices, with a reason if you're out of range or leaving early" feature is now the #1 priority.
 
 **Blocked on:**
-- The new commissions numbers only appear once the server team restarts their service — until then the app safely shows the old, simpler version.
+- The two-offices feature can't be built on the app yet — the server team has to build their side first, the two office locations have to be set up, and a few small choices need to be confirmed. This mainly needs the owner to pass the request to the server team and answer those few questions.
+- The commissions screen is still waiting on a real-phone test before it's marked finished — that's the owner's call once tested.
 - Publishing the code to the shared repository still fails (a login/permission issue that needs a person to fix) — the work is saved safely on this machine meanwhile.
 
-**Next:** Once the server is restarted, do a quick check on a real advisor's phone that the new commissions figures show correctly. The full 24/7-location phone testing is now scheduled for last, as the owner requested.
+**Next:** Owner to test the commissions screen on a real advisor's phone and confirm it looks right, and to pass the two-offices request to the server team. The full 24/7-location phone testing stays scheduled for last, as requested.

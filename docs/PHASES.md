@@ -14,10 +14,15 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**PRIORITY (owner, 2026-08-17):** the backend-shipped task is **#1** (done — Phase 62 below). **Phase 41 on-device
-verification is DE-PRIORITISED to LAST / least-priority** (owner: "pending, do it last") — it is editor-complete and
-only needs a handset; it now sits at the bottom of the queue and does not block anything. Walk
-`docs/spec/PHASE-41-DEVICE-CHECKLIST.md` (or the plain-language guide) whenever the phones are available.
+**PRIORITY (owner, 2026-08-17, updated):** **Phase 50 (dual-office geofence + out-of-range / early-clock-out reason
+→ super-admin) is now #1** — but it is **BACKEND-FIRST and currently blocked** (see Phase 50 below): the two `[api]`
+asks are filed in `contracts/INBOX.md` and need **the owner to relay them to `cgpe-api` and confirm the 5 flagged
+owner-decisions** (`docs/spec/PHASE-50.md` §6) before any mobile build. Nothing to build in `src/` until that lands.
+**Phase 62** is BUILT + go-live-verified and sits **PENDING its on-device visual pass** — walk
+`docs/spec/PHASE-62-DEVICE-CHECK.md` on a real advisor handset; **do NOT mark it passed until the owner personally
+confirms "testing pass hai".** **Phase 41 on-device verification stays LAST / least-priority** (owner: "pending, do it
+last") — editor-complete, needs only a handset, blocks nothing; walk `docs/spec/PHASE-41-DEVICE-CHECKLIST.md` (or the
+plain-language guide) whenever the phones are available.
 
 **Phase 62 — [m] Commissions screen consumes `/my-summary` `target` (MDRT tier) + `byProduct`. BUILT — owner #1, 2026-08-17.**
 `cgpe-api` shipped **Backend Phase 62** (2026-08-17): `GET /api/commissions/my-summary` now additive-returns **`target`**
@@ -1322,16 +1327,20 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-17 handoff — owner re-prioritised; Phase 41 device-verify moved to LAST):**
-1. **Phase 62 on-device visual pass (contract already GO-LIVE VERIFIED against live `:3001`).** The build is DONE
-   (`fc92573`) and — as of the 2026-08-17 verification session — the cross-repo contract is confirmed correct
-   field-for-field against the now-live backend (see `## Now`). The ONLY thing left is the device visual: on a real
-   advisor handset, confirm the MDRT tier card + "This year by product" bars render and reconcile (`Σ byProduct ===
-   ytd`), and that a non-advisor sees neither. No advisor token exists in the editor, so do NOT re-verify with an
-   unauthenticated call — a device miss would be an account/role issue, not a client bug.
-2. **Phase 50 (dual-office + out-of-range/early-clock-out reason).** Backend-gated: after `cgpe-api` ships it + the two
-   office pins are set in the panel + the owner confirms the 5 flagged points → mobile threads `reason` + builds the
-   prompt (needs 5-language copy). Owner must relay both filed `[api]`s to `cgpe-api` (Phase 50 + the §5 gap-detector).
+**CURRENT next 3 (2026-08-17 handoff — owner re-prioritised AGAIN: Phase 50 is now #1; Phase 62 kept PENDING its device pass; Phase 41 device-verify stays LAST):**
+1. **Phase 50 (dual-office + out-of-range/early-clock-out reason → super-admin) — NOW #1 (owner, 2026-08-17).**
+   BACKEND-FIRST and currently blocked: nothing to build in `src/` until `cgpe-api` ships the two-office fence +
+   reason capture + super-admin notify, the two office pins are set in the panel, AND the owner confirms the 5 flagged
+   points (`docs/spec/PHASE-50.md` §6). **Owner action required:** relay both filed `[api]`s to `cgpe-api` (Phase 50 +
+   the §5 gap-detector) and answer the 5 open decisions. Only then does mobile thread `reason` + build the prompt
+   (needs 5-language human copy) + a device check.
+2. **Phase 62 on-device visual pass — PENDING (contract already GO-LIVE VERIFIED against live `:3001`).** Build is DONE
+   (`fc92573`), gates re-confirmed green this session (`tsc` 0 · `npm test` 557/557), and the cross-repo contract is
+   correct field-for-field against the live backend. The ONLY thing left is the device visual — walk
+   `docs/spec/PHASE-62-DEVICE-CHECK.md` on a real advisor handset (tier card + "This year by product" bars render and
+   `Σ byProduct === ytd`; a non-advisor sees neither). **Do NOT mark passed until the owner personally confirms
+   "testing pass hai".** No advisor token exists in the editor, so do NOT re-verify with an unauthenticated call — a
+   device miss would be an account/role issue, not a client bug.
 3. **Phase 49 — final APK + one-click link → OTA-only.** GATED: the `git push` 403 resolved (a production build must
    ship from pushed, backed-up code) AND the device checks cleared.
 

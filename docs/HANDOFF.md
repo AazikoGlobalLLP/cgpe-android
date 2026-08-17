@@ -1,50 +1,50 @@
-# HANDOFF — CGPE Connect (Android) — Phase 62 (go-live VERIFIED against live :3001) — 2026-08-17
+# HANDOFF — CGPE Connect (Android) — Phase 62 (device-check written) + Phase 50 re-prioritised to #1 — 2026-08-17
 
-Verification-only session. The owner confirmed `cgpe-api` is now running on `:3001` (Backend Phase 62
-live) and asked to verify everything, then hand off. No `src/` change — Phase 62's build was already
-committed (`fc92573`) last session; this session proved the cross-repo contract matches the now-live
-backend field-for-field and re-confirmed the green gates.
+Docs-only session. No `src/` change. The owner re-prioritised the queue: **Phase 50 is now #1**, **Phase 62
+stays PENDING** its on-device visual pass (owner will confirm when testing passes), and Phase 41 device-verify
+stays LAST. Independently re-verified the Phase 62 committed tree before parking it, then wrote the plain-language
+on-phone check the owner asked for.
 
 ## Done
-- **Phase 62 is verified go-live-ready against the live backend.** With `cgpe-api` up on `:3001`
-  (health 200 · ~160 ms · IPv4), the two additive `/commissions/my-summary` keys the Commissions
-  screen consumes — `target` (MDRT tier) and `byProduct` — were confirmed to match the mobile mapping
-  **field-for-field against the real code on both sides**, so a real advisor account will see the tier
-  card + "This year by product" bars drive off one call with no shape drift.
-- **Gates re-run green on the exact committed tree:** `tsc --noEmit` clean · `npm test` **557/557** ·
-  commit `fc92573` intact, `src/` unchanged.
-- **The one drift-risk was checked and is correct:** `next_premium` maps via `numOrNull` (preserves
-  `null` at the TOT top tier), NOT `fin`, so a top-tier advisor never sees a fake "0% to Quarter MDRT";
-  `target === null` / legacy scalar `0` collapses whole-object-to-null; product bars render
-  `p.amount / ytd` (server numbers, never re-summed — rule 2); the second `/advisor/performance` fetch
-  is gone (only comment references remain).
+- **Independently re-confirmed Phase 62 is green on the exact committed tree** (not trusting the prior handoff):
+  `tsc --noEmit` clean · `npm test` **557/557** (31 files) · code commit `fc92573` intact under docs HEAD.
+  Re-read the full chain field-for-field — `types.ts:140-163`, `api.ts:1343-1352` (`next_premium`→`numOrNull`
+  preserves `null` at TOT; odd `target`→`null`; nameless `byProduct` rows dropped), live backend
+  `commissions.js:319-345` (snake_case wire, `Σ amount === ytd`, `target` object or `null`), and
+  `commissions.tsx` (tier card gated to advisor/`learn_advisor` at `:195`; product bar = `amount/ytd` at `:275`,
+  never re-summed; TOT → no fake progress). All match.
+- **Wrote `docs/spec/PHASE-62-DEVICE-CHECK.md`** — a plain-language, owner-runnable on-phone check (Test A advisor,
+  Test B non-advisor, Test C edge, plus a sign-off that stays PENDING until the owner confirms "testing pass hai").
+- **Re-prioritised the queue per owner:** Phase 50 → #1, Phase 62 kept PENDING device-verify, Phase 41 stays LAST —
+  in `PHASES.md` `## Now` (PRIORITY block) and `## Next 3`.
 
 ## Files changed
-- None in `src/` — verification-only session.
-- `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/PHASES.md` — this handoff (status + records only).
+- `docs/spec/PHASE-62-DEVICE-CHECK.md` — NEW. Plain-language on-phone check for the Commissions screen; stays PENDING.
+- `docs/PHASES.md` — `## Now` PRIORITY block + `## Next 3` re-ordered (Phase 50 #1; Phase 62 PENDING; Phase 41 last).
+- `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/STATUS.md` — this handoff (status + records only).
 
 ## Decisions made
-- **Verified the Phase 62 go-live via cross-repo code-read, not a live authed call** — no advisor token
-  is available in this environment, so the meaningful, rule-5 verification is field-for-field between
-  `cgpe-backend-main/routes/commissions.js` (+`utils/mdrtTiers.js`) and mobile `api.ts`/`types.ts`/
-  `commissions.tsx`. That contract is confirmed correct; only the on-device visual pass remains.
+- **Phase 62 stays PENDING, not "done", until the owner personally confirms the device test passes** (owner request).
+  The build + cross-repo contract are verified correct; only the native advisor-login visual pass remains, and it is
+  the owner's to sign off. Do not close Phase 62 from the editor.
+- **Phase 50 is #1 even though it is backend-first and blocked.** Priority ≠ actionable: there is nothing to build in
+  `src/` until `cgpe-api` ships the two-office fence + the owner confirms `docs/spec/PHASE-50.md` §6. The next real
+  move on Phase 50 is an **owner action** (relay the two filed `[api]`s), not a mobile build.
 
 ## Known broken / deliberately skipped
-- **On-device visual confirmation still owed** — a real advisor login on a handset (tier card + bars
-  render; `Σ byProduct === ytd`; a non-advisor sees neither). Not doable from the editor; the contract
-  underneath it is now verified, so this is a low-risk visual check.
-- **`git push` still 403s** — `fc92573` + the two prior docs commits are local only. Blocks Phase 49
-  (a production build must ship from pushed, backed-up code), not the Phase 62 go-live. Needs a human
-  to fix the `reactjsaaziko` credential's write access.
-- **Phase 50** (dual-office geofence + out-of-range/early-clock-out reason) — backend-first; the two
-  `[api]` asks are filed in `contracts/INBOX.md` but need the owner to relay them to `cgpe-api` and
-  confirm the 5 flagged owner-decisions before any mobile build.
+- **Phase 62 on-device visual pass still owed** — no advisor token in the editor; native + authenticated only. Walk
+  `docs/spec/PHASE-62-DEVICE-CHECK.md`. A device miss would be an account/role issue, not a client bug.
+- **Phase 50 blocked on the owner** — must relay both filed `[api]`s to `cgpe-api` (Phase 50 dual-office fence +
+  the §5 gap-detector) and answer the 5 flagged owner-decisions. No mobile build until that lands.
+- **`git push` still 403s** — `fc92573` + all docs commits are local only. Blocks Phase 49 (a production build must
+  ship from pushed, backed-up code). Needs a human to fix the `reactjsaaziko` credential's write access.
 - **Phase 41 on-device verification** — parked LAST (owner); editor-complete, APK `7cdc351d` ready.
 
 ## Next session starts here
-- Phase 62: on a real advisor handset, confirm the tier card + "This year by product" bars render and
-  `Σ byProduct === ytd`, and a non-advisor sees neither — then Phase 62 is fully closed.
+- **Phase 50 (#1) is owner-gated** — if the owner has relayed the `[api]`s and confirmed §6, re-read `cgpe-api`'s
+  real shipped code first (tags wrong 5×), then thread `reason` through `clockIn`/`clockOut` + build the prompt.
+  Otherwise there is no mobile build to do; help with Phase 62's device check or wait.
 - First command: `/boot`
-- Watch out for: **no advisor token exists in the editor** — the go-live check is a device-only visual
-  pass; do not try to "verify" it with an unauthenticated call. The contract is already proven correct
-  against live `:3001`, so a device miss would be an account/role issue, not a client bug.
+- Watch out for: **priority ≠ actionable.** Phase 50 is #1 but backend-first and blocked — do not start a mobile
+  build against a not-yet-shipped endpoint (Phase 43/45 file-first pattern). And do NOT mark Phase 62 "done" from
+  the editor — it stays PENDING until the owner confirms the device test passed.
