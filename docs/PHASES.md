@@ -36,8 +36,15 @@ row's share of `ytd`; the app renders, never re-sums — rule 2); `MdrtTierProgr
 contract change** (pure consumer). Gates: `tsc` 0 · `npm test` **557** (+5 in `api-commissions.test.ts`) · eslint 0 errors
 (2 pre-existing `api.ts` warnings). Commit `fc92573` (local — push 403s). INBOX Phase-62 item replied (box left for
 `cgpe-admin`, multi-recipient). Also **Phase 61** (QA-sweep 500→4xx + 1000/page cap) verified **mobile-unaffected**
-(status-branching already honest; all lists ≤500/page) — no `src/` change. **Live once `cgpe-api`'s `:3001` restart lands.**
-Device visual check (native): an advisor sees the tier card + per-product bars; a non-advisor sees neither.
+(status-branching already honest; all lists ≤500/page) — no `src/` change. **GO-LIVE VERIFIED 2026-08-17:**
+owner confirmed `cgpe-api` is now running on `:3001`; the contract was re-verified **field-for-field against the
+live backend's real code on both sides** (`routes/commissions.js` `/my-summary` `:319-352` + `utils/mdrtTiers.js`
+vs mobile `api.ts:1342-1364` + `types.ts:140-163` + `commissions.tsx`) — `target`/`byProduct` shapes match,
+`next_premium` preserved `null` at TOT, product bars render `amount/ytd` (no re-sum), second `/advisor/performance`
+call gone; gates re-run green (`tsc` 0 · `npm test` **557/557** · `fc92573` intact). **Only remaining = the
+on-device visual pass** (native, no advisor token in editor): a real advisor sees the tier card + per-product
+bars and `Σ byProduct === ytd`; a non-advisor sees neither. A device miss would be an account/role issue, not a
+client bug (see DECISIONS 2026-08-17, top).
 
 **Owner bug fix — matured policies read "Matured", not "In force" (+ no false premium-due). BUILT & SHIPPED in an APK — 2026-08-15.**
 Owner sent a Client 360 screenshot: a policy with maturity **Mar 2023** still read "In force". Root cause: `adaptClient`
@@ -1316,10 +1323,12 @@ exercise.
 ## Next 3
 
 **CURRENT next 3 (2026-08-17 handoff — owner re-prioritised; Phase 41 device-verify moved to LAST):**
-1. **Phase 62 render polish + go-live check (once `cgpe-api` `:3001` restart lands).** The build is DONE (commit
-   `fc92573`) — `/my-summary` `target` + `byProduct` are consumed. When the backend restart makes the two keys live,
-   confirm on a real advisor account that the MDRT tier card + the "This year by product" bars render and reconcile
-   (`Σ byProduct === ytd`), and that a non-advisor sees neither. Editor work is complete; this is a live-data check only.
+1. **Phase 62 on-device visual pass (contract already GO-LIVE VERIFIED against live `:3001`).** The build is DONE
+   (`fc92573`) and — as of the 2026-08-17 verification session — the cross-repo contract is confirmed correct
+   field-for-field against the now-live backend (see `## Now`). The ONLY thing left is the device visual: on a real
+   advisor handset, confirm the MDRT tier card + "This year by product" bars render and reconcile (`Σ byProduct ===
+   ytd`), and that a non-advisor sees neither. No advisor token exists in the editor, so do NOT re-verify with an
+   unauthenticated call — a device miss would be an account/role issue, not a client bug.
 2. **Phase 50 (dual-office + out-of-range/early-clock-out reason).** Backend-gated: after `cgpe-api` ships it + the two
    office pins are set in the panel + the owner confirms the 5 flagged points → mobile threads `reason` + builds the
    prompt (needs 5-language copy). Owner must relay both filed `[api]`s to `cgpe-api` (Phase 50 + the §5 gap-detector).

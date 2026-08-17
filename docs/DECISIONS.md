@@ -6,6 +6,24 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-17 — Phase 62 go-live verified by cross-repo code-read (not a live authed call)
+
+**Context.** Owner confirmed `cgpe-api` is now running on `:3001` (Backend Phase 62 live) and asked to
+verify Phase 62 end-to-end before handoff. The definitive go-live check is an authenticated advisor
+call to `GET /api/commissions/my-summary` — but no advisor token exists in the editor environment.
+
+**Decision.** Verified the go-live the only rigorous way available: field-for-field against the real
+code on both sides (`cgpe-backend-main/routes/commissions.js` `/my-summary` `:319-352` + `utils/mdrtTiers.js`
+vs mobile `api.ts:1342-1364` + `types.ts:140-163` + `commissions.tsx`). Confirmed: `target`/`byProduct`
+shapes match; `next_premium` preserved as `null` at TOT (`numOrNull`, not `fin`); whole-object-or-null
+degrade on a non-object `target`; product bars render `amount/ytd` (no re-sum, rule 2); the second
+`/advisor/performance` fetch is removed. Gates re-run green (`tsc` 0 · `npm test` 557/557 · `fc92573`
+intact). No `src/` change. The remaining on-device visual pass (real advisor login) is left for a
+handset session — a device miss there would be an account/role issue, not a client bug.
+
+**Consequence.** Phase 62 is contract-verified go-live-ready; only the device visual confirmation is
+outstanding. Do not attempt to "verify" go-live with an unauthenticated call next session.
+
 ## 2026-08-17 — Commissions tier card reads `/my-summary.target`; drop the second `/advisor/performance` call (Phase 62)
 
 **Context.** `cgpe-api` shipped Backend Phase 62: `GET /api/commissions/my-summary` now additive-returns

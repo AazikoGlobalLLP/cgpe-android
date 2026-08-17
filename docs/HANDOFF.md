@@ -1,58 +1,50 @@
-# HANDOFF — CGPE Connect (Android) — Phase 62 (commissions target + byProduct) — 2026-08-17
+# HANDOFF — CGPE Connect (Android) — Phase 62 (go-live VERIFIED against live :3001) — 2026-08-17
 
-Owner-driven session. Two instructions: (1) de-prioritise Phase 41 on-device verification to **last**,
-and (2) make the **backend-shipped task #1** and complete it. The backend update was `cgpe-api`'s
-**Backend Phase 62** — the commissions screen's `target` (MDRT tier) + `byProduct` breakdown are now
-live on `GET /api/commissions/my-summary`. Built and shipped the mobile side. Also handed the owner a
-walkable device-test guide for Phase 41 (published as an artifact) before it was parked.
+Verification-only session. The owner confirmed `cgpe-api` is now running on `:3001` (Backend Phase 62
+live) and asked to verify everything, then hand off. No `src/` change — Phase 62's build was already
+committed (`fc92573`) last session; this session proved the cross-repo contract matches the now-live
+backend field-for-field and re-confirmed the green gates.
 
 ## Done
-- **The Commissions screen now shows the MDRT-tier target and a per-product breakdown from one call.**
-  An advisor sees their tier card (next-tier premium + progress) sourced straight from the commissions
-  summary, and a new **"This year by product"** section where each bar is that product's share of the
-  year-to-date total. A non-advisor (admin/payroll/leader) sees neither — no meaningless "₹0 · 0% to
-  Quarter MDRT". The app renders the server's numbers and never re-sums.
-- **One fewer network call:** the tier card previously made a second request to `/advisor/performance`.
-  Backend Phase 62 shares the FYC basis, so the tier now rides on `/my-summary` and the second call is gone.
-- **Phase 61 (backend QA-sweep hardening) verified mobile-unaffected** — the app's status-branching is
-  already honest and every list it requests is ≤500/page, under the new 1000/page cap. No code change.
-- **Phase 41 device-testing guide handed to the owner** (artifact) — 16 checks, 4 Android phones
-  (Shivam/Ved/Pavitra field + a Master watcher), steps + expected results + a tick-off grid; iOS not needed.
+- **Phase 62 is verified go-live-ready against the live backend.** With `cgpe-api` up on `:3001`
+  (health 200 · ~160 ms · IPv4), the two additive `/commissions/my-summary` keys the Commissions
+  screen consumes — `target` (MDRT tier) and `byProduct` — were confirmed to match the mobile mapping
+  **field-for-field against the real code on both sides**, so a real advisor account will see the tier
+  card + "This year by product" bars drive off one call with no shape drift.
+- **Gates re-run green on the exact committed tree:** `tsc --noEmit` clean · `npm test` **557/557** ·
+  commit `fc92573` intact, `src/` unchanged.
+- **The one drift-risk was checked and is correct:** `next_premium` maps via `numOrNull` (preserves
+  `null` at the TOT top tier), NOT `fin`, so a top-tier advisor never sees a fake "0% to Quarter MDRT";
+  `target === null` / legacy scalar `0` collapses whole-object-to-null; product bars render
+  `p.amount / ytd` (server numbers, never re-summed — rule 2); the second `/advisor/performance` fetch
+  is gone (only comment references remain).
 
 ## Files changed
-- `src/data/types.ts` — `Commission.target` is now `CommissionTarget | null` (was scalar `0`); added
-  `CommissionProduct` + `Commission.byProduct`.
-- `src/data/api.ts` — `getCommissionSummary` maps `target` (camel-cased off the wire; odd/absent → `null`)
-  and `byProduct` (nameless rows dropped, absent → `[]`); dropped the stale `target:0` mapping + comment.
-- `src/app/commissions.tsx` — tier card driven off the summary's `target` (second `getMdrtTier` call
-  removed), advisor-gate kept, always-blank "Monthly target" meter removed, new "This year by product"
-  section added, `MdrtTierProgress` → pure `MdrtTierCard(tier)`.
-- `src/data/__tests__/api-commissions.test.ts` — +5 cases (target object mapping, target null, odd
-  target→null, byProduct verbatim + Σ===ytd, malformed byProduct dropped). Suite 552→557.
-- `docs/PHASES.md` — Phase 62 added to `## Now`; `## Next 3` re-ordered; Phase 41 device-verify → last.
-- `../contracts/INBOX.md` — replied under both 2026-08-17 `from cgpe-api` items (not committed; the
-  contracts dir is untracked by design).
+- None in `src/` — verification-only session.
+- `docs/HANDOFF.md`, `docs/DECISIONS.md`, `docs/PHASES.md` — this handoff (status + records only).
 
 ## Decisions made
-- **Drive the tier card from `/my-summary.target`, drop the second `/advisor/performance` call** — the
-  backend explicitly shares the FYC basis (Phase 62), so one call suffices. Kept the advisor/`learn_advisor`
-  gate so a non-advisor never sees a meaningless "0% to Quarter MDRT". See DECISIONS 2026-08-17.
-- **`getMdrtTier` kept exported + tested, just not called by this screen** — it is a legitimate
-  `/advisor/performance` reader; removing it (and its 13-test file) is churn for no gain.
-- **`target` labelled as a PREMIUM/production goal, not a rupee-commission target** — per the backend's
-  explicit ⚠️; there is no commission-amount target in the data, so none is invented (rule 1/2).
+- **Verified the Phase 62 go-live via cross-repo code-read, not a live authed call** — no advisor token
+  is available in this environment, so the meaningful, rule-5 verification is field-for-field between
+  `cgpe-backend-main/routes/commissions.js` (+`utils/mdrtTiers.js`) and mobile `api.ts`/`types.ts`/
+  `commissions.tsx`. That contract is confirmed correct; only the on-device visual pass remains.
 
 ## Known broken / deliberately skipped
-- **Not yet live on device** — the two keys appear only after `cgpe-api` restarts `:3001`. Until then
-  `/my-summary` returns the old body and the mapping falls back cleanly (`target:null`, `byProduct:[]`).
-- **Phase 41 device verification is untouched and now parked LAST** (owner) — editor-complete, needs a
-  handset; APK `7cdc351d` + `docs/spec/PHASE-41-DEVICE-CHECKLIST.md` are ready when the phones are.
-- **`git push` still 403s** — commits `fc92573`, `e3341da` are local only. Blocks Phase 49, not this.
-- **Phase 50** (dual-office + reason) still backend-gated; owner must relay the two filed `[api]`s.
+- **On-device visual confirmation still owed** — a real advisor login on a handset (tier card + bars
+  render; `Σ byProduct === ytd`; a non-advisor sees neither). Not doable from the editor; the contract
+  underneath it is now verified, so this is a low-risk visual check.
+- **`git push` still 403s** — `fc92573` + the two prior docs commits are local only. Blocks Phase 49
+  (a production build must ship from pushed, backed-up code), not the Phase 62 go-live. Needs a human
+  to fix the `reactjsaaziko` credential's write access.
+- **Phase 50** (dual-office geofence + out-of-range/early-clock-out reason) — backend-first; the two
+  `[api]` asks are filed in `contracts/INBOX.md` but need the owner to relay them to `cgpe-api` and
+  confirm the 5 flagged owner-decisions before any mobile build.
+- **Phase 41 on-device verification** — parked LAST (owner); editor-complete, APK `7cdc351d` ready.
 
 ## Next session starts here
-- Phase 62 go-live check: once `cgpe-api`'s `:3001` restart lands, confirm on a real advisor account that
-  the tier card + per-product bars render and `Σ byProduct === ytd`. Editor work is done.
+- Phase 62: on a real advisor handset, confirm the tier card + "This year by product" bars render and
+  `Σ byProduct === ytd`, and a non-advisor sees neither — then Phase 62 is fully closed.
 - First command: `/boot`
-- Watch out for: **a device miss here is almost certainly the backend not restarted, not a client bug** —
-  `/my-summary` only returns `target`/`byProduct` after `cgpe-api`'s `:3001` restart (the standing OPS trap).
+- Watch out for: **no advisor token exists in the editor** — the go-live check is a device-only visual
+  pass; do not try to "verify" it with an unauthenticated call. The contract is already proven correct
+  against live `:3001`, so a device miss would be an account/role issue, not a client bug.
