@@ -1,15 +1,16 @@
 # Status — CGPE Connect (Android)
-**Updated:** 15 August 2026
-**Working on right now:** Fixing issues the owner spotted in the live app and getting an installable test build onto phones.
+**Updated:** 17 August 2026
+**Working on right now:** Finished the commissions screen upgrade the owner asked to prioritise, and parked the phone-testing job for later.
 
 **Done this week:**
-- Fixed a real problem the owner noticed: policies that had already matured (finished) were still showing as "In force". Now any finished policy correctly shows "Matured", and it no longer nags for a premium that isn't due. This applies across the whole app, not just the one client.
-- Built an installable app file (APK) and shared a download link, so the owner can put the latest version on a phone and try it.
-- Ran an automated end-to-end test that clicked through every screen of the app in a real browser — all 33 checks passed, and it recorded a video and screenshots to review.
-- Looked into the "doesn't work on WiFi" report: the app and server are both healthy and fast, and the app does NOT require mobile data. The problem is that the specific WiFi couldn't reach our server (a network/router issue), so there's a quick 30-second phone test for the owner to pinpoint it.
+- Upgraded the Commissions screen: an advisor now sees their progress toward the next MDRT award level and a clear "This year by product" breakdown showing which policy types earned how much. The numbers all come straight from the server — the app never invents or recalculates a figure.
+- Made the screen lighter and faster: it used to make two separate requests to the server for this information; it now gets everything in one, because the server was updated to send it together.
+- Kept it honest for the right people: only advisors see the award-level card, so a manager or back-office user never sees a meaningless "0% to the first level".
+- Checked a batch of recent server fixes and confirmed they need no change on the app side.
+- Handed the owner a ready-to-use testing guide for the 24/7 location feature: which phones are needed, step by step what to do, what to expect, and a checklist to tick off.
 
 **Blocked on:**
+- The new commissions numbers only appear once the server team restarts their service — until then the app safely shows the old, simpler version.
 - Publishing the code to the shared repository still fails (a login/permission issue that needs a person to fix) — the work is saved safely on this machine meanwhile.
-- The 24/7 location feature needs to be tested on real phones over a full day before it can be called finished.
 
-**Next:** Test the new app build on a few real phones, and confirm the WiFi issue is the network (not the app) using the quick phone test.
+**Next:** Once the server is restarted, do a quick check on a real advisor's phone that the new commissions figures show correctly. The full 24/7-location phone testing is now scheduled for last, as the owner requested.

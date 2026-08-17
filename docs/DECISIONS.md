@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-17 — Commissions tier card reads `/my-summary.target`; drop the second `/advisor/performance` call (Phase 62)
+
+**Context.** `cgpe-api` shipped Backend Phase 62: `GET /api/commissions/my-summary` now additive-returns
+`target` (the advisor's next-MDRT-tier premium object, or `null`) and `byProduct` (this-year earned
+commissions grouped by product, `Σ amount === ytd`), computed from the SAME FYC basis as
+`GET /api/advisor/performance` via a shared `utils/fyc.js`. Owner flagged this **mobile #1**. Before this,
+the commissions screen showed the MDRT tier via a SEPARATE `getMdrtTier` call to `/advisor/performance/:id`
+(gated to advisor/`learn_advisor`), and the screen's scalar `target` field had no source (always `0`, so
+the "Monthly target" meter was permanently blank). Verified against real backend code first (rule 5):
+`routes/commissions.js` `/my-summary` (target `:338-345`, byProduct `:322-330`), `utils/fyc.js`,
+`utils/mdrtTiers.js`, and `api.md`/`CHANGELOG.md` — all agree.
+
+**Decision.** (1) Drive the tier card off the summary's `target` and **remove the second
+`/advisor/performance` call** — the backend explicitly shares the FYC sum so the two surfaces can never
+disagree, and one call is enough (backend's stated intent). (2) **Keep the advisor/`learn_advisor` gate**:
+for a non-advisor, FYC = 0 and the backend still returns a non-null `target` with `achieved_premium:0`, so
+un-gating would show a meaningless "₹0 · 0% to Quarter MDRT" — the exact thing the old gate guarded against.
+(3) **Remove the always-blank scalar "Monthly target" meter** (its `target` was never populated). (4) **Add
+a "This year by product" section** rendering `byProduct` — each bar = the row's share of `ytd`; the app
+renders, never re-sums (rule 2). (5) **Keep `getMdrtTier` exported + tested** — it is a legitimate
+`/advisor/performance` reader; deleting it + its 13-test file is churn for no gain. `target` is labelled a
+PREMIUM/production goal, not a rupee-commission target (backend ⚠️; no commission-amount target exists).
+
+**Consequence.** Commissions shows the tier + per-product breakdown from one call; a non-advisor sees
+neither. Behavioural note: the tier card now shares the summary's fate (an outage hides both) instead of
+being independent — acceptable now that `/my-summary` is the built, canonical source (the independence
+mattered only while `/my-summary` was unbuilt). No contract change (pure consumer). Gates: `tsc` 0 ·
+`npm test` **557** (+5) · eslint 0 errors (2 pre-existing `api.ts` warnings). Commit `fc92573` (local —
+push 403s). Live only after `cgpe-api`'s `:3001` restart. Also this session: Phase 41 on-device
+verification de-prioritised to LAST (owner); Phase 61 (backend QA-sweep) verified mobile-unaffected.
+
 ## 2026-08-15 — Matured policy status is DERIVED client-side from the maturity date (owner bug report)
 
 **Context.** The owner sent a Client 360 screenshot: a policy with maturity **Mar 2023** still read

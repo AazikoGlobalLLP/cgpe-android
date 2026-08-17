@@ -1315,21 +1315,21 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-15 handoff — app-block SCREEN now wired):**
-1. **Device-verify ALL of Phase 41 (owner's #1).** 41a–41d are now FULLY EDITOR-BUILT (incl. the 41d app-block
-   overlay, wired this session — commit `dd6a4c3`). This needs a native EAS/dev-client build — two new native modules
-   (`expo-background-task`, `expo-sensors`) + the `RECEIVE_BOOT_COMPLETED` permission, so **NOT OTA** — then the §12.7
-   device matrix + the §3 battery measurement over a real day on 3+ handsets, PLUS the app-block overlay check
-   (Location-off raises it, "Open settings" lands right, return clears it, Android back can't escape). Pure
-   build-and-verify; **no editor code left in Phase 41.** **A native APK is now CUT** (build `7cdc351d`, v1.8.0 —
-   `eas build` works from here despite the push-403) and there is a walkable **`docs/spec/PHASE-41-DEVICE-CHECKLIST.md`**
-   (16-row matrix, each anchored to code + observable) — use both. Also close the WiFi question with the owner's
-   on-phone `https://cgpe.in/internal/api/health` test (diagnosed environmental, not app — DECISIONS 2026-08-15).
-2. **Phase 50 (dual-office + out-of-range/early-clock-out reason).** After cgpe-api ships it + the two office pins are
-   set in the panel + the owner confirms the 5 flagged points → then mobile threads `reason` + builds the prompt (needs
-   5-language copy). Owner must relay both filed `[api]`s to cgpe-api (Phase 50 + the §5 gap-detector).
-3. **Phase 49 — final APK + one-click link → OTA-only.** GATED: every device check cleared AND the `git push` 403
-   resolved (a production build must ship from pushed, backed-up code).
+**CURRENT next 3 (2026-08-17 handoff — owner re-prioritised; Phase 41 device-verify moved to LAST):**
+1. **Phase 62 render polish + go-live check (once `cgpe-api` `:3001` restart lands).** The build is DONE (commit
+   `fc92573`) — `/my-summary` `target` + `byProduct` are consumed. When the backend restart makes the two keys live,
+   confirm on a real advisor account that the MDRT tier card + the "This year by product" bars render and reconcile
+   (`Σ byProduct === ytd`), and that a non-advisor sees neither. Editor work is complete; this is a live-data check only.
+2. **Phase 50 (dual-office + out-of-range/early-clock-out reason).** Backend-gated: after `cgpe-api` ships it + the two
+   office pins are set in the panel + the owner confirms the 5 flagged points → mobile threads `reason` + builds the
+   prompt (needs 5-language copy). Owner must relay both filed `[api]`s to `cgpe-api` (Phase 50 + the §5 gap-detector).
+3. **Phase 49 — final APK + one-click link → OTA-only.** GATED: the `git push` 403 resolved (a production build must
+   ship from pushed, backed-up code) AND the device checks cleared.
+
+**DE-PRIORITISED to LAST (owner, 2026-08-17): Phase 41 on-device verification.** Editor-complete (41a–41d built; native
+APK `7cdc351d` cut) — needs only a handset. Walk `docs/spec/PHASE-41-DEVICE-CHECKLIST.md` (16-row matrix) whenever the
+phones are free; it blocks nothing and sits at the bottom of the queue. Also close the WiFi question with the owner's
+on-phone `https://cgpe.in/internal/api/health` test (diagnosed environmental, not app — DECISIONS 2026-08-15).
 
 _History below is retained for context; where it lists 41b–41d / 47 / 48 as pending, those are now editor-done (see `## Now`)._
 
