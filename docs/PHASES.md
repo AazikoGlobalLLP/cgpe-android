@@ -14,6 +14,31 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**PRIORITY (owner, 2026-08-17):** the backend-shipped task is **#1** (done — Phase 62 below). **Phase 41 on-device
+verification is DE-PRIORITISED to LAST / least-priority** (owner: "pending, do it last") — it is editor-complete and
+only needs a handset; it now sits at the bottom of the queue and does not block anything. Walk
+`docs/spec/PHASE-41-DEVICE-CHECKLIST.md` (or the plain-language guide) whenever the phones are available.
+
+**Phase 62 — [m] Commissions screen consumes `/my-summary` `target` (MDRT tier) + `byProduct`. BUILT — owner #1, 2026-08-17.**
+`cgpe-api` shipped **Backend Phase 62** (2026-08-17): `GET /api/commissions/my-summary` now additive-returns **`target`**
+(the advisor's next-MDRT-tier premium `{current,next,next_premium,to_next,achieved_premium,basis}` or `null`) and
+**`byProduct`** (`[{product,amount,count}]`, this-year earned, `Σ amount === ytd`). Owner flagged mobile **#1**.
+**Verified against real code first** (rule 5, tags wrong 5×): `routes/commissions.js` `/my-summary` (target `:338-345`,
+byProduct `:322-330`), `utils/fyc.js`, `utils/mdrtTiers.js`, and `api.md` `/my-summary` row + CHANGELOG 2026-08-17 — all
+match. **Built (4 files):** `types.ts` — `Commission.target` is now `CommissionTarget|null` (was scalar `0`) + new
+`CommissionProduct`/`Commission.byProduct`; `api.ts` `getCommissionSummary` maps both defensively (odd/absent `target`→
+`null`, absent `byProduct`→`[]`; dropped the stale `target:0`); `commissions.tsx` drives the **MDRT tier card off the
+summary's `target`** and **drops the second `getMdrtTier`/`/advisor/performance` call** (shared FYC basis → one call),
+keeps the advisor/`learn_advisor` gate (a non-advisor with FYC=0 never sees a meaningless "₹0 · 0% to Quarter MDRT"),
+removes the always-blank scalar "Monthly target" meter, and adds a **"This year by product"** section (each bar = the
+row's share of `ytd`; the app renders, never re-sums — rule 2); `MdrtTierProgress`→pure `MdrtTierCard(tier)`.
+`getMdrtTier` stays exported + tested (a legitimate `/advisor/performance` reader), just no longer called here. **No
+contract change** (pure consumer). Gates: `tsc` 0 · `npm test` **557** (+5 in `api-commissions.test.ts`) · eslint 0 errors
+(2 pre-existing `api.ts` warnings). Commit `fc92573` (local — push 403s). INBOX Phase-62 item replied (box left for
+`cgpe-admin`, multi-recipient). Also **Phase 61** (QA-sweep 500→4xx + 1000/page cap) verified **mobile-unaffected**
+(status-branching already honest; all lists ≤500/page) — no `src/` change. **Live once `cgpe-api`'s `:3001` restart lands.**
+Device visual check (native): an advisor sees the tier card + per-product bars; a non-advisor sees neither.
+
 **Owner bug fix — matured policies read "Matured", not "In force" (+ no false premium-due). BUILT & SHIPPED in an APK — 2026-08-15.**
 Owner sent a Client 360 screenshot: a policy with maturity **Mar 2023** still read "In force". Root cause: `adaptClient`
 (`src/data/adapt.ts`) hard-coded `status:'in_force'` on EVERY policy. Fixed: status is now **derived from the maturity
