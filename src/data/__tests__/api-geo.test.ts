@@ -41,6 +41,23 @@ const fenceReply = (over: Partial<typeof FENCE> = {}) =>
   reply(200, { success: true, data: { ...FENCE, ...over } });
 
 /**
+ * PHASE 50: getGeofence now returns the primary pin PLUS an `offices` list (in-range = within the
+ * NEAREST). A legacy single-office wire body (no `offices`) derives exactly one office from the
+ * primary pin, so this helper builds the expected returned object for the single-office cases.
+ */
+const withOffices = (
+  f: Partial<typeof FENCE> & typeof FENCE,
+  offices?: { lat: number; lng: number; label: string }[],
+) => ({ ...f, offices: offices ?? [{ lat: f.lat, lng: f.lng, label: f.label }] });
+
+/** A two-office wire body: office A = the Surat pin, office B = `metresNorth` metres north of it. */
+const twoOfficeReply = (metresNorth: number, labelB = 'Katargam') =>
+  reply(200, { success: true, data: { ...FENCE, offices: [
+    { lat: FENCE.lat, lng: FENCE.lng, label: FENCE.label },
+    { lat: FENCE.lat + M(metresNorth), lng: FENCE.lng, label: labelB },
+  ] } });
+
+/**
  * Metres north, expressed in degrees of latitude. Along a meridian the haversine collapses to
  * `R * Δφ` exactly, so this is a closed-form inverse of `distanceMeters` rather than a restatement
  * of it — and it pins R = 6371000 from the outside.
@@ -140,7 +157,7 @@ describe('getGeofence — an unknown fence is unknown, not a guess', () => {
     expect(await api.getGeofence()).toBeNull();
 
     fetchSpy.mockResolvedValueOnce(fenceReply());
-    expect(await api.getGeofence()).toEqual(FENCE);
+    expect(await api.getGeofence()).toEqual(withOffices(FENCE));
     expect(fetchSpy).toHaveBeenCalledTimes(2);
   });
 
@@ -168,13 +185,44 @@ describe('getGeofence — an unknown fence is unknown, not a guess', () => {
     expect(second).not.toBe(first);
   });
 
-  it('unwraps `data` and reads the five documented fields', async () => {
+  it('unwraps `data` and reads the five documented fields (plus the derived office)', async () => {
     await withFence({ lat: 12.9, lng: 77.6, radius_m: 350, label: 'Bengaluru branch' });
-    expect(await api.getGeofence()).toEqual({
+    expect(await api.getGeofence()).toEqual(withOffices({
       lat: 12.9, lng: 77.6, radius_m: 350, label: 'Bengaluru branch', enforce: true,
-    });
+    }));
     const [url] = fetchSpy.mock.calls[0] as [string];
     expect(url).toContain('/time-tracker/geofence');
+  });
+
+  it('PHASE 50: consumes the additive offices[] list and keeps the legacy primary as office[0]', async () => {
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValueOnce(twoOfficeReply(2000));
+    const g = await api.getGeofence();
+    expect(g?.offices).toEqual([
+      { lat: FENCE.lat, lng: FENCE.lng, label: FENCE.label },
+      { lat: FENCE.lat + M(2000), lng: FENCE.lng, label: 'Katargam' },
+    ]);
+    // The legacy top-level lat/lng stays = the first office, so single-office display is unchanged.
+    expect(g?.lat).toBe(FENCE.lat);
+    expect(g?.lng).toBe(FENCE.lng);
+  });
+
+  it('PHASE 50: a legacy single-office body (no offices[]) derives exactly one office from the primary', async () => {
+    await withFence();
+    expect((await api.getGeofence())?.offices).toEqual([
+      { lat: FENCE.lat, lng: FENCE.lng, label: FENCE.label },
+    ]);
+  });
+
+  it('PHASE 50: drops malformed office entries, falling back to the primary pin if none survive', async () => {
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValueOnce(reply(200, { success: true, data: { ...FENCE, offices: [
+      { lat: 'x', lng: FENCE.lng, label: 'bad-lat' },
+      { label: 'no coords at all' },
+    ] } }));
+    expect((await api.getGeofence())?.offices).toEqual([
+      { lat: FENCE.lat, lng: FENCE.lng, label: FENCE.label },
+    ]);
   });
 
   it('reads `enforce` the way the server writes it — anything but an explicit false is on', async () => {
@@ -244,6 +292,26 @@ describe('checkGeofence — the fence is known', () => {
     expect(await api.checkGeofence(FENCE.lat + M(100), FENCE.lng)).toEqual({
       allowed: true, known: true, distance_m: 100, radius_m: 200, message: 'Within the office area',
     });
+  });
+
+  it('PHASE 50: allows a fix at the SECOND office though it is far from the first — nearest wins', async () => {
+    // THE REGRESSION THIS PINS: measuring against office[0] only would put this fix ~3.1 km out and
+    // REFUSE it, locking out everyone standing at office B — a clock-in the server (which fences on
+    // the NEAREST office) would allow. That is the exact "never refuse what the server allows" rule.
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValue(twoOfficeReply(3000)); // office B is 3 km north of office A
+    const res = await api.checkGeofence(FENCE.lat + M(3100), FENCE.lng); // 100 m past office B
+    expect(res.allowed).toBe(true);
+    expect(res.distance_m).toBe(100); // distance to the NEAREST office (B), not the 3100 m to A
+  });
+
+  it('PHASE 50: denies a fix outside BOTH offices, reporting the distance to the NEARER', async () => {
+    api.setAuthToken('test-token');
+    fetchSpy.mockResolvedValue(twoOfficeReply(3000));
+    // 1200 m north of A ⇒ 1200 m from A, 1800 m from B. Nearer is A at 1200 m.
+    const res = await api.checkGeofence(FENCE.lat + M(1200), FENCE.lng);
+    expect(res.allowed).toBe(false);
+    expect(res.distance_m).toBe(1200);
   });
 
   it('denies a point outside it, and says how much closer to move rather than quoting a fence', async () => {

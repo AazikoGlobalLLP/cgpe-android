@@ -1890,7 +1890,13 @@ export async function search(q: string) {
 /* ============================ Real feature actions ========================= */
 
 /* ------------------------------------------------------- Office geofence */
-export type Geofence = { lat: number; lng: number; radius_m: number; label: string; enforce: boolean };
+export type Geofence = {
+  lat: number; lng: number; radius_m: number; label: string; enforce: boolean;
+  // PHASE 50: the org may run more than one office (Adajan + Katargam) and in-range means within
+  // the radius of the NEAREST. Always at least one entry — the primary pin — so single-office
+  // callers and a not-yet-deployed backend behave exactly as before.
+  offices: { lat: number; lng: number; label: string }[];
+};
 
 /**
  * The office fence — or `null`, meaning we could not learn it. PHASE 7.
@@ -1928,14 +1934,26 @@ export async function getGeofence(): Promise<Geofence | null> {
     (d) => d && Number.isFinite(d.lat) && Number.isFinite(d.lng) && Number(d.radius_m) > 0,
   );
   if (!real) return null;
+  const lat = Number(real.lat);
+  const lng = Number(real.lng);
+  const label = String(real.label || 'Office');
+  // PHASE 50: consume the additive `offices:[{lat,lng,label}]` the server now returns
+  // (`routes/timeTracker.js` GET /geofence), keeping only well-formed entries. A legacy
+  // single-office body (no `offices`, e.g. before the Phase-64 deploy) degrades to the one
+  // primary pin, so the nearest-of-many logic below is a no-op until a second office exists.
+  const rawOffices = Array.isArray(real.offices) ? real.offices : [];
+  const offices = rawOffices
+    .filter((o: any) => o && Number.isFinite(Number(o.lat)) && Number.isFinite(Number(o.lng)))
+    .map((o: any) => ({ lat: Number(o.lat), lng: Number(o.lng), label: String(o.label || label) }));
   return {
-    lat: Number(real.lat),
-    lng: Number(real.lng),
+    lat,
+    lng,
     radius_m: Number(real.radius_m),
-    label: String(real.label || 'Office'),
+    label,
     // Mirrors the server's own reading of the flag (`utils/geofence.js:62`): anything but an
     // explicit false means the fence is on.
     enforce: real.enforce !== false,
+    offices: offices.length ? offices : [{ lat, lng, label }],
   };
 }
 
@@ -2009,7 +2027,12 @@ export async function checkGeofence(lat?: number, lng?: number, accuracy?: numbe
   if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) {
     return { allowed: false, known: true, distance_m: null, radius_m: g.radius_m, message: 'Enable location to clock in.' };
   }
-  const dist = distanceMeters(lat, lng, g.lat, g.lng);
+  // PHASE 50: distance to the NEAREST office — in-range means within radius of ANY of them, which
+  // is exactly what the server now decides (`utils/geofence.checkNearestGeofence`). For a
+  // single-office org this equals the old one-pin measurement. `g.offices` always holds at least
+  // the primary pin (see getGeofence), so this never reduces an empty list. This is the fix that
+  // stops the pre-check refusing someone standing at the SECOND office, which the server allows.
+  const dist = Math.min(...g.offices.map((o) => distanceMeters(lat, lng, o.lat, o.lng)));
   const acc = Number(accuracy);
   const tol = Number.isFinite(acc) ? Math.max(0, Math.min(acc, 100)) : 0;
   // How far past the fence this fix is, with the accuracy credit already spent. <= 0 is inside.
@@ -2035,15 +2058,23 @@ export async function checkGeofence(lat?: number, lng?: number, accuracy?: numbe
 
 /** Attendance clock-in with GPS -> POST /api/time-tracker/clock-in. Returns the
  *  server geofence verdict (403 → blocked with distance) and the session id. */
-export async function clockIn(coords: { lat?: number; lng?: number; accuracy?: number; city?: string }): Promise<{ ok: boolean; message?: string; blocked?: boolean; distance_m?: number; sessionId?: string; reason?: WriteFailure }> {
+export async function clockIn(coords: { lat?: number; lng?: number; accuracy?: number; city?: string }, reasonText?: string): Promise<{ ok: boolean; message?: string; blocked?: boolean; needsReason?: boolean; outOfRange?: boolean; distance_m?: number; sessionId?: string; reason?: WriteFailure }> {
   if (FORCE_DEMO) { await wait(300); return { ok: true }; }
   if (!sessionReal) return { ok: false, reason: 'network' };
   try {
+    // PHASE 50: an out-of-range clock-in is now ALLOWED but must carry a non-empty reason, enforced
+    // server-side. Send `reason` only when the caller supplies one. Two distinct refusals come
+    // back: a 403 (`LOCATION_RESTRICTION`) still means the location is UNDETERMINABLE and cannot be
+    // attributed at all; a 400 `REASON_REQUIRED` means "known, but outside the fence — tell me why".
+    const rt = typeof reasonText === 'string' ? reasonText.trim() : '';
     const { ok, status, json } = await req('/time-tracker/clock-in', {
       method: 'POST',
-      body: JSON.stringify({ ...coords, source: 'mobile' }),
+      body: JSON.stringify({ ...coords, source: 'mobile', ...(rt ? { reason: rt } : {}) }),
     });
     if (status === 403) return { ok: false, blocked: true, message: json?.message, distance_m: json?.distance_m };
+    if (status === 400 && json?.error === 'REASON_REQUIRED') {
+      return { ok: false, needsReason: true, outOfRange: true, message: json?.message, distance_m: json?.distance_m };
+    }
     if (!ok) return { ok: false, reason: 'server', message: json?.message };
     const sessionId = json?.data?.session?._id || json?.data?.sessionId || json?.sessionId;
     return { ok: true, message: json?.message, sessionId: sessionId ? String(sessionId) : undefined };
@@ -2055,12 +2086,20 @@ export async function clockIn(coords: { lat?: number; lng?: number; accuracy?: n
     return { ok: false, reason: 'network' };
   }
 }
-export async function clockOut(coords: { lat?: number; lng?: number; accuracy?: number; city?: string } = {}): Promise<{ ok: boolean; blocked?: boolean; message?: string; distance_m?: number; reason?: WriteFailure }> {
+export async function clockOut(coords: { lat?: number; lng?: number; accuracy?: number; city?: string } = {}, reasonText?: string): Promise<{ ok: boolean; blocked?: boolean; message?: string; needsReason?: boolean; outOfRange?: boolean; early?: boolean; distance_m?: number; reason?: WriteFailure }> {
   if (FORCE_DEMO) { await wait(200); return { ok: true }; }
   if (!sessionReal) return { ok: false, reason: 'network' };
   try {
-    const { ok, status, json } = await req('/time-tracker/clock-out', { method: 'POST', body: JSON.stringify({ ...coords, source: 'mobile' }) });
+    // PHASE 50: an out-of-range OR early clock-out is ALLOWED but must carry a non-empty reason
+    // (server-enforced). The 400 `REASON_REQUIRED` body names which rule(s) fired
+    // (`out_of_range` / `early`) and the distance, so the screen can ask for exactly the right
+    // reason and re-send. (`LOCATION_REQUIRED` — no coordinates at all — stays a plain failure.)
+    const rt = typeof reasonText === 'string' ? reasonText.trim() : '';
+    const { ok, status, json } = await req('/time-tracker/clock-out', { method: 'POST', body: JSON.stringify({ ...coords, source: 'mobile', ...(rt ? { reason: rt } : {}) }) });
     if (status === 403) return { ok: false, blocked: true, message: json?.message, distance_m: json?.distance_m };
+    if (status === 400 && json?.error === 'REASON_REQUIRED') {
+      return { ok: false, needsReason: true, outOfRange: !!json?.out_of_range, early: !!json?.early, message: json?.message, distance_m: json?.distance_m };
+    }
     if (!ok) return { ok: false, reason: 'server', message: json?.message };
     return { ok: true };
   } catch {
