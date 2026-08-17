@@ -9,8 +9,9 @@
  * told apart by `req()` (not `tryReal`, which would collapse the envelope):
  *   - a 200 object            → `{ status:'ok', summary }`, every ₹ passed through unchanged;
  *   - a 5xx / network / shape → `{ status:'error' }`, banner raised (503) — but a 403/404 answer must not.
- * `tier` is intentionally absent from this endpoint (it lives on `/advisor/performance/:id`), and
- * `target` has no source, so the mapped summary always carries `target:0`.
+ * Since backend Phase 62 the summary also carries `target` (the next-MDRT-tier premium object, or `null`)
+ * and `byProduct` (this-year earnings grouped by product, Σ amount === ytd). Both are mapped defensively:
+ * an odd/absent `target` → `null`, an absent `byProduct` → `[]`.
  *
  * FETCH IS STUBBED at the one boundary `api.ts` calls, so the real `req`/health paths run. `api.ts`
  * holds mutable module state with no reset export, so every test re-imports it (CLAUDE.md).
@@ -25,9 +26,14 @@ let fetchSpy: ReturnType<typeof vi.fn>;
 
 const reply = (status: number, body: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 
-/** A `/my-summary` `data` payload exactly as the backend serialises it (earned aggregate, no tier). */
+/** A `/my-summary` `data` payload exactly as the backend serialises it (Phase 62: +target, +byProduct). */
 const csum = (over: Record<string, unknown> = {}) => ({
   thisMonth: 48200, lastMonth: 41000, pending: 12500, ytd: 305000,
+  target: { current: 'Quarter MDRT', next: 'Half MDRT', next_premium: 750000, to_next: 270000, achieved_premium: 480000, basis: 'fyc_premium' },
+  byProduct: [
+    { product: 'Endowment', amount: 180000, count: 12 },
+    { product: 'Term', amount: 125000, count: 8 },
+  ],
   history: [
     { month: 'May', amount: 30000 },
     { month: 'Jun', amount: 41000 },
@@ -81,10 +87,50 @@ describe('getCommissionSummary — the aggregate', () => {
     expect(r.status === 'ok' && r.summary.ytd).toBe(199999);
   });
 
-  it('always sets target:0 — /my-summary carries no target, so it is never invented', async () => {
+  it('maps the target object (next-MDRT-tier premium), camel-casing the wire snake_case', async () => {
     serve(200, { success: true, data: csum() });
     const r = await api.getCommissionSummary();
-    expect(r.status === 'ok' && r.summary.target).toBe(0);
+    expect(r.status === 'ok' && r.summary.target).toEqual({
+      current: 'Quarter MDRT', next: 'Half MDRT', nextPremium: 750000, toNext: 270000, achievedPremium: 480000,
+    });
+  });
+
+  it('leaves target:null when the server sends no target (non-advisor / failed FYC read)', async () => {
+    serve(200, { success: true, data: csum({ target: null }) });
+    const r = await api.getCommissionSummary();
+    expect(r.status === 'ok' && r.summary.target).toBeNull();
+  });
+
+  it('degrades an odd/partial target to null rather than a half-built object', async () => {
+    serve(200, { success: true, data: csum({ target: 'oops' }) });
+    const r = await api.getCommissionSummary();
+    expect(r.status === 'ok' && r.summary.target).toBeNull();
+  });
+
+  it('maps byProduct rows verbatim (server-sorted, Σ amount === ytd) — the app never re-sums', async () => {
+    serve(200, { success: true, data: csum() });
+    const r = await api.getCommissionSummary();
+    expect(r.status === 'ok' && r.summary.byProduct).toEqual([
+      { product: 'Endowment', amount: 180000, count: 12 },
+      { product: 'Term', amount: 125000, count: 8 },
+    ]);
+    // reconciliation is the server's guarantee, asserted here as a contract check
+    const sum = r.status === 'ok' ? r.summary.byProduct.reduce((s, p) => s + p.amount, 0) : -1;
+    expect(sum).toBe(r.status === 'ok' ? r.summary.ytd : NaN);
+  });
+
+  it('drops malformed byProduct rows (missing/empty product) and defaults absent byProduct to []', async () => {
+    serve(200, { success: true, data: csum({ byProduct: [
+      { product: 'Term', amount: 125000, count: 8 },
+      { product: '', amount: 999, count: 1 },   // no product name — dropped
+      { amount: 500, count: 2 },                 // no product key — dropped
+    ] }) });
+    const r = await api.getCommissionSummary();
+    expect(r.status === 'ok' && r.summary.byProduct).toEqual([{ product: 'Term', amount: 125000, count: 8 }]);
+
+    serve(200, { success: true, data: csum({ byProduct: undefined }) });
+    const r2 = await api.getCommissionSummary();
+    expect(r2.status === 'ok' && r2.summary.byProduct).toEqual([]);
   });
 
   it('preserves history order (ascending oldest→newest) and shape', async () => {
@@ -135,7 +181,7 @@ describe('getCommissionSummary — 200-zeros is an empty state, not an error', (
     serve(200, { success: true, data: { thisMonth: 0, lastMonth: 0, pending: 0, ytd: 0, history: [], recent: [] } });
     const r = await api.getCommissionSummary();
     expect(r.status).toBe('ok');
-    expect(r).toMatchObject({ status: 'ok', summary: { thisMonth: 0, lastMonth: 0, pending: 0, ytd: 0, history: [], recent: [] } });
+    expect(r).toMatchObject({ status: 'ok', summary: { thisMonth: 0, lastMonth: 0, pending: 0, ytd: 0, history: [], recent: [], target: null, byProduct: [] } });
     const h = health.getHealth();
     expect(h.degraded).toBe(false);
     expect(h.failures).not.toContain('/commissions/my-summary');

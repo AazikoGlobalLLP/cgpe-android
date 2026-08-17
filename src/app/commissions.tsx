@@ -39,8 +39,14 @@ import { fmtDate, inr, inrShort } from '@/lib/format';
  *
  * NOTHING IS DERIVED THAT THE SERVER DID NOT SEND. No projected payout, no annualised run
  * rate, no "on track for" figure. Growth appears only when there is a real previous month to
- * divide by, and the target meter only when a target actually came back. An invented number
+ * divide by. The MDRT-tier target and the per-product breakdown both arrive fully computed on
+ * `/my-summary` (backend Phase 62) — the app renders them, never recomputes. An invented number
  * on a commission screen is a promise about someone's income.
+ *
+ * THE MDRT TIER IS THE "TARGET". Since Phase 62 the summary carries `target` = the advisor's next
+ * MDRT tier premium, the SAME figure as `/advisor/performance` (shared FYC basis), so the tier card
+ * now reads it straight off the summary — one call, not two. It is a PREMIUM/production goal, not a
+ * rupee-commission target, and is gated to advisor-track roles for whom FYC premium means something.
  * ------------------------------------------------------------------ */
 
 /** The empty shell omits several fields outright, so nothing is trusted to be a number. */
@@ -105,10 +111,25 @@ export default function Commissions() {
   const lastMonth = num(data?.lastMonth);
   const pending = num(data?.pending);
   const ytd = num(data?.ytd);
-  const target = num(data?.target);
 
   // Hooks run unconditionally, ahead of every state branch below.
   const shownMonth = useCountUp(thisMonth);
+
+  // The MDRT-tier "target" now rides on the summary (Phase 62). Mapped to the card's shape; `null`
+  // when the server sent no target (non-advisor / failed FYC read), which — with the role gate above
+  // — is why an admin/payroll never sees a meaningless "₹0, 0% to Quarter MDRT" card.
+  const tier: MdrtTier | null = useMemo(() => {
+    const tg = data?.target;
+    if (!tg) return null;
+    return { current: tg.current, next: tg.next, nextPremium: tg.nextPremium, toNext: tg.toNext, totalPremium: tg.achievedPremium };
+  }, [data]);
+
+  // Per-product breakdown of this year's earned commissions (server-grouped, Σ === ytd).
+  const byProduct = useMemo(() => {
+    const b = data?.byProduct;
+    if (!Array.isArray(b)) return [];
+    return b.filter((p) => p && typeof p.product === 'string' && p.product && Number.isFinite(p.amount));
+  }, [data]);
 
   /** Six months is what the backend returns and what fits a phone without shrinking labels. */
   const series = useMemo(() => {
@@ -168,9 +189,12 @@ export default function Commissions() {
           />
         }
       >
-        {/* Tier progress is its own element on its own endpoint — it shows real data even while the
-            earned ledger stays backend-blocked, so it lives ABOVE the ledger's loading/blank fork. */}
-        {tierAdvisorId ? <MdrtTierProgress advisorId={tierAdvisorId} /> : null}
+        {/* Tier progress reads off the summary's `target` (Phase 62), gated to advisor-track roles.
+            It lives ABOVE the ledger's blank fork so an advisor with no commissions still sees the
+            ladder at ₹0; on the ledger's own load it shows its skeleton, and null on error/non-advisor. */}
+        {tierAdvisorId ? (
+          loading ? <TierSkeleton /> : tier ? <MdrtTierCard tier={tier} /> : null
+        ) : null}
 
         {loading ? (
           <LedgerSkeleton />
@@ -215,25 +239,6 @@ export default function Commissions() {
                   )}
                 </View>
 
-                {target > 0 ? (
-                  <View style={{
-                    marginTop: spacing.lg,
-                    paddingTop: spacing.md,
-                    borderTopWidth: StyleSheet.hairlineWidth,
-                    borderTopColor: c.hairline,
-                  }}>
-                    <Meter
-                      label="Monthly target"
-                      value={thisMonth / target}
-                      valueLabel={`${inrShort(thisMonth)} of ${inrShort(target)}`}
-                      tone={thisMonth >= target ? 'success' : 'primary'}
-                    />
-                  </View>
-                ) : (
-                  <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md }}>
-                    No monthly target is set on your profile.
-                  </Txt>
-                )}
               </Card>
             </Appear>
 
@@ -255,8 +260,30 @@ export default function Commissions() {
               </Row>
             </Appear>
 
+            {/* ---------------- By product ----------------
+                Server-grouped this-year earnings; the bar is each product's share of YTD (Σ === ytd),
+                so the app never sums anything itself. Only rendered when the server returned rows. */}
+            {byProduct.length > 0 ? (
+              <Appear index={2}>
+                <View>
+                  <SectionHeader title="This year by product" />
+                  <Card style={{ gap: spacing.md }}>
+                    {byProduct.map((p, i) => (
+                      <Meter
+                        key={`${p.product}-${i}`}
+                        label={p.count > 0 ? `${p.product} · ${p.count} ${p.count === 1 ? 'credit' : 'credits'}` : p.product}
+                        value={ytd > 0 ? num(p.amount) / ytd : 0}
+                        valueLabel={inrShort(num(p.amount))}
+                        tone="primary"
+                      />
+                    ))}
+                  </Card>
+                </View>
+              </Appear>
+            ) : null}
+
             {/* ---------------- Trend ---------------- */}
-            <Appear index={2}>
+            <Appear index={3}>
               <View>
                 <SectionHeader title={series.length > 1 ? `Last ${series.length} months` : 'Year to date'} />
                 <Card>
@@ -309,7 +336,7 @@ export default function Commissions() {
             </Appear>
 
             {/* ---------------- Recent credits ---------------- */}
-            <Appear index={3}>
+            <Appear index={4}>
               <View>
                 <SectionHeader title="Recent commissions" />
                 {recent.length === 0 ? (
@@ -357,43 +384,21 @@ export default function Commissions() {
 }
 
 /* ================================================================== *
- * MDRT tier progress — a SEPARATE element from the monthly meter above.
+ * MDRT tier progress — a SEPARATE element from the money ledger below.
  *
  * The ladder is server-authoritative (`utils/mdrtTiers.js`, six owner-confirmed thresholds) and
- * bucketed from the advisor's cumulative FYC premium — an ANNUAL goal, a different unit than the
- * "Monthly target" meter, so its figure is NEVER fed into that meter (INBOX 2026-08-12).
+ * bucketed from the advisor's cumulative FYC premium — an ANNUAL production goal, a different unit
+ * than the earned-commission figures, so it stands as its own card.
  *
- * Its own endpoint (`GET /advisor/performance/:advisorId`) is independent of the earned ledger, so
- * this shows real data even while commissions stays backend-blocked. It is a BONUS element: on any
- * error it renders nothing rather than a second error box — the global HealthBanner already speaks
- * for a real outage, and a 403/404 answer is suppressed and silent. Every ₹ is the server's.
+ * Since backend Phase 62 the tier rides on the commissions summary's `target` (shared FYC basis with
+ * `/advisor/performance`, so the two surfaces can never disagree) — the caller passes it in, and this
+ * component is pure. It renders only when a real tier came back for an advisor-track role; a non-advisor
+ * or a failed FYC read leaves `target:null`, so this card never shows a meaningless "₹0, 0% to Quarter
+ * MDRT". Every ₹ is the server's.
  * ================================================================== */
 
-function MdrtTierProgress({ advisorId }: { advisorId: string }) {
+function MdrtTierCard({ tier }: { tier: MdrtTier }) {
   const c = useTheme();
-  const [tier, setTier] = useState<MdrtTier | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const alive = useRef(true);
-  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-
-  const load = useCallback(async (current?: () => boolean) => {
-    const r = await api.getMdrtTier(advisorId);
-    if (!alive.current || (current && !current())) return;
-    setTier(r.status === 'ok' ? r.tier : null);
-    setLoading(false);
-  }, [advisorId]);
-
-  // Refetched on focus, like the ledger: FYC premium moves as policies are approved elsewhere.
-  useFocusEffect(useCallback(() => {
-    let active = true;
-    void load(() => active);
-    return () => { active = false; };
-  }, [load]));
-
-  if (loading) return <TierSkeleton />;
-  if (!tier) return null;   // 5xx/network/403 — silent; the global banner covers a genuine outage
-
   const { current, next, nextPremium, toNext, totalPremium } = tier;
   const atTop = next == null || nextPremium == null;      // TOT — nothing above
   const progress = !atTop && (nextPremium as number) > 0 ? totalPremium / (nextPremium as number) : 0;

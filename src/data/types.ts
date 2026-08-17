@@ -131,12 +131,34 @@ export interface CommissionMonth {
   amount: number;
 }
 
+/**
+ * The commission-screen "target" — the advisor's NEXT MDRT tier premium (backend Phase 62).
+ * It is a PREMIUM / production goal toward the next tier, NOT a rupee-commission target: there is
+ * no commission-amount target in the data. Same FYC basis as `/advisor/performance` `mdrt_tier`, so
+ * the two surfaces never disagree. `null` for a caller with no FYC read (e.g. the premium query failed).
+ */
+export interface CommissionTarget {
+  current: string | null;      // highest tier reached; null below Quarter MDRT
+  next: string | null;         // next tier up; null at TOT (top)
+  nextPremium: number | null;  // rupee FYC target for `next`; null at TOT
+  toNext: number;              // max(0, nextPremium − achievedPremium); 0 at TOT
+  achievedPremium: number;     // the advisor's cumulative FYC premium (approved Sale + active Client)
+}
+
+/** One row of `byProduct` — this-year earned commissions grouped by product. Σ amount === ytd. */
+export interface CommissionProduct {
+  product: string;
+  amount: number;
+  count: number;
+}
+
 export interface Commission {
   thisMonth: number;
   lastMonth: number;
   pending: number;
   ytd: number;
-  target: number;
+  target: CommissionTarget | null;
+  byProduct: CommissionProduct[];
   history: CommissionMonth[];
   recent: { id: string; client: string; plan: string; amount: number; date: string }[];
 }

@@ -1290,11 +1290,14 @@ export async function toggleReminder(id: string): Promise<boolean> {
  * unpaid balance; `thisMonth`/`lastMonth`/`ytd`/`history` sum earned rows (every status except
  * `cancelled`/`disputed`). Every ₹ is the server's own summed rows — the app never multiplies.
  *
- * WHAT IT DOES AND DOES NOT CARRY. It is exactly the EARNED money the `Commission` type needs
- * (`thisMonth/lastMonth/pending/ytd/history/recent`) and nothing else. `tier` is intentionally
- * OMITTED by the backend (re-deriving `total_premium` here would fork that figure), so the MDRT
- * tier element stays on its own endpoint — `getMdrtTier` / Phase 23. `target` has no source at all,
- * so it is left `0` and the screen shows "no monthly target set" — an honest blank, not a guess.
+ * WHAT IT CARRIES. The EARNED money (`thisMonth/lastMonth/pending/ytd/history/recent`) plus, since
+ * backend Phase 62 (2026-08-17, D-87): `target` — the advisor's NEXT MDRT tier premium
+ * `{ current, next, next_premium, to_next, achieved_premium, basis }` or `null` — and `byProduct` —
+ * this-year earned commissions grouped by product `[{ product, amount, count }]` with `Σ amount === ytd`.
+ * Both are server-computed from the SAME FYC basis as `/advisor/performance`, so the tier can never
+ * differ between the two surfaces; the screen no longer needs a second `getMdrtTier` call for the tier.
+ * `target` is a PREMIUM/production goal, NOT a rupee-commission target — the screen labels it so.
+ * Every ₹ is the server's own summed rows; the app never multiplies or invents a figure.
  *
  * TWO OUTCOMES, told apart — `req()` not `tryReal`, so a shape miss reports rather than silently
  * collapsing the envelope. There is NO `data:null` empty here: an advisor with no commissions gets a
@@ -1333,6 +1336,20 @@ export async function getCommissionSummary(): Promise<CommissionSummaryResult> {
             date: typeof r.date === 'string' ? r.date : '',
           }))
       : [];
+    // `target` is the next-MDRT-tier premium goal (object) or `null`; camel-cased off the wire's
+    // snake_case. Defended field-by-field so a partial/odd object degrades to `null`, never a crash.
+    const str = (v: unknown): string | null => (typeof v === 'string' && v ? v : null);
+    const numOrNull = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    const t: any = data.target;
+    const target: Commission['target'] = isObj(t)
+      ? { current: str(t.current), next: str(t.next), nextPremium: numOrNull(t.next_premium), toNext: fin(t.to_next), achievedPremium: fin(t.achieved_premium) }
+      : null;
+    // `byProduct`: this-year earned rows grouped by product, server-sorted amount desc (Σ === ytd).
+    const byProduct: Commission['byProduct'] = Array.isArray(data.byProduct)
+      ? data.byProduct
+          .filter((p: any) => p && typeof p.product === 'string' && p.product)
+          .map((p: any) => ({ product: p.product as string, amount: fin(p.amount), count: fin(p.count) }))
+      : [];
     return {
       status: 'ok',
       summary: {
@@ -1340,7 +1357,8 @@ export async function getCommissionSummary(): Promise<CommissionSummaryResult> {
         lastMonth: fin(data.lastMonth),
         pending: fin(data.pending),
         ytd: fin(data.ytd),
-        target: 0,                 // NOT carried by /my-summary — no source, so an honest blank
+        target,
+        byProduct,
         history,
         recent,
       },
