@@ -14,15 +14,17 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**PRIORITY (owner, 2026-08-17, updated):** **Phase 50 (dual-office geofence + out-of-range / early-clock-out reason
-→ super-admin) is now #1** — but it is **BACKEND-FIRST and currently blocked** (see Phase 50 below). **UPDATE 2026-08-17:
-the owner CONFIRMED all §6 decisions** — nearest-office auto-detect, reason MANDATORY (button dead until filled),
-**15-min early-clock-out grace buffer**, out-of-range attendance marks IMMEDIATELY, alert via **n8n to super_admin-only
-(the 3 promoted accounts)** — and the owner-confirmed spec was appended under the Phase 50 `[api]` ask in
-`contracts/INBOX.md` (`docs/spec/PHASE-50.md` §6, updated). **The owner is now relaying it to `cgpe-api` directly and
-will update mobile when it's picked up / shipped.** Still nothing to build in `src/` until cgpe-api ships the two-office
-fence + reason capture + n8n notify AND the two office pins are set in the panel — then mobile threads `reason` + builds
-the prompt (needs 5-language human copy) + device-checks.
+**PRIORITY (owner, 2026-08-17):** **Phase 50 (dual-office geofence + out-of-range / early-clock-out reason →
+super-admin) is #1.** **cgpe-api SHIPPED it (Backend Phase 64, 2026-08-17) — VERIFIED against their real code** (all 6
+owner points; both mobile recommendations taken). **Mobile data-layer BUILT + tested** (commit `6b2da6f`): `getGeofence`
+consumes the additive `offices[]`; `checkGeofence` now measures the **NEAREST** office (fixes a real office-B pre-check
+lockout — the old single-pin check refused someone standing at office B, which the server allows); `clockIn`/`clockOut`
+thread an optional `reason` + map the new `REASON_REQUIRED` (400) to a distinct `needsReason`/`outOfRange`/`early`
+outcome, kept apart from the 403 `blocked`. Gates green (`tsc` 0 · `npm test` **576** (+19, NEW `api-clock.test.ts`) ·
+eslint 0 errors). **REMAINING (2 gates, neither blocking the sibling sessions):** (1) the `home.tsx` **reason-prompt UI**
++ its **5-language HUMAN copy** (machine translation forbidden — owner to supply, like the consent copy) + a device
+check; (2) **owner/ops for go-live:** set the two office pins via `PUT /geofence` `offices[]`, set
+`N8N_ATTENDANCE_WEBHOOK_URL`, `:3001` restart. Detail: Phase 50 entry below + `docs/spec/PHASE-50.md`.
 **Phase 62** is BUILT + go-live-verified and sits **PENDING its on-device visual pass** — walk
 `docs/spec/PHASE-62-DEVICE-CHECK.md` on a real advisor handset; **do NOT mark it passed until the owner personally
 confirms "testing pass hai".** **Phase 41 on-device verification stays LAST / least-priority** (owner: "pending, do it
@@ -76,7 +78,19 @@ matrix (~15 m) was offered, not run. **WiFi "network error" diagnosed as ENVIRON
 IPv4-only; NO mobile-data requirement in `src/`) — awaiting the owner's on-phone `health`-URL test before any app-side
 change. Details: DECISIONS 2026-08-15.
 
-**Phase 50 — [api]+[m] Dual-office geofence + out-of-range / early-clock-out REASON capture → super-admin. SPEC + `[api]` FILED, no build — 2026-08-15.**
+**Phase 50 — [api]+[m] Dual-office geofence + out-of-range / early-clock-out REASON capture → super-admin. Owner CONFIRMED §6 → cgpe-api SHIPPED (Backend Phase 64) → VERIFIED → mobile data-layer BUILT; home UI + 5-lang copy + device remain — 2026-08-17.**
+**UPDATE 2026-08-17:** owner confirmed all §6 (nearest-office auto, reason MANDATORY, 15-min early buffer, immediate mark,
+n8n→super_admin-only). `cgpe-api` shipped **Backend Phase 64**, VERIFIED field-for-field against their real
+`utils/geofence.js` (`getOfficeGeofences`/`getMemberOffices`/`checkNearestGeofence`) + `routes/timeTracker.js`
+(clock-in/out `REASON_REQUIRED`, `EARLY_CLOCKOUT_GRACE_MIN=15`, `alertMastersClockFlag` n8n+in-app super_admin-only with
+coordinates asserted-absent, `GET /geofence` additive `offices[]`) — all 6 points match. **Mobile data-layer BUILT +
+tested** (commit `6b2da6f`, local — push 403s, no contract change): `getGeofence` reads `offices[]`; `checkGeofence`
+measures the NEAREST office (fixes the office-B pre-check lockout); `clockIn`/`clockOut` thread `reason` + map
+`REASON_REQUIRED`→`needsReason`. `tsc` 0 · `npm test` **576** (NEW `api-clock.test.ts` + nearest-of-two cases) · eslint 0
+errors. **Remaining:** (1) `home.tsx` reason-prompt UI + 5-language HUMAN copy + device check; (2) owner/ops — set the two
+office pins via `PUT /geofence` `offices[]`, set `N8N_ATTENDANCE_WEBHOOK_URL`, `:3001` restart. Original filing below.
+
+**Phase 50 (original filing) — SPEC + `[api]` FILED, no build — 2026-08-15.**
 New owner request (post-backlog): a member may clock in/out from **either of two Surat offices** (Adajan / Katargam), 200 m
 each; an **out-of-range** clock-in OR clock-out is **allowed but must carry a reason** → **super_admin notified**; an
 **early** clock-out (before shift end) must **also** carry a reason → super_admin. **Verified real code (both trees, not
