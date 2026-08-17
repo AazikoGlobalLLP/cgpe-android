@@ -15,9 +15,14 @@ Each phase touches ≤8 files and produces one demoable thing.
 ## Now
 
 **PRIORITY (owner, 2026-08-17, updated):** **Phase 50 (dual-office geofence + out-of-range / early-clock-out reason
-→ super-admin) is now #1** — but it is **BACKEND-FIRST and currently blocked** (see Phase 50 below): the two `[api]`
-asks are filed in `contracts/INBOX.md` and need **the owner to relay them to `cgpe-api` and confirm the 5 flagged
-owner-decisions** (`docs/spec/PHASE-50.md` §6) before any mobile build. Nothing to build in `src/` until that lands.
+→ super-admin) is now #1** — but it is **BACKEND-FIRST and currently blocked** (see Phase 50 below). **UPDATE 2026-08-17:
+the owner CONFIRMED all §6 decisions** — nearest-office auto-detect, reason MANDATORY (button dead until filled),
+**15-min early-clock-out grace buffer**, out-of-range attendance marks IMMEDIATELY, alert via **n8n to super_admin-only
+(the 3 promoted accounts)** — and the owner-confirmed spec was appended under the Phase 50 `[api]` ask in
+`contracts/INBOX.md` (`docs/spec/PHASE-50.md` §6, updated). **The owner is now relaying it to `cgpe-api` directly and
+will update mobile when it's picked up / shipped.** Still nothing to build in `src/` until cgpe-api ships the two-office
+fence + reason capture + n8n notify AND the two office pins are set in the panel — then mobile threads `reason` + builds
+the prompt (needs 5-language human copy) + device-checks.
 **Phase 62** is BUILT + go-live-verified and sits **PENDING its on-device visual pass** — walk
 `docs/spec/PHASE-62-DEVICE-CHECK.md` on a real advisor handset; **do NOT mark it passed until the owner personally
 confirms "testing pass hai".** **Phase 41 on-device verification stays LAST / least-priority** (owner: "pending, do it

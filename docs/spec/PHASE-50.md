@@ -1,6 +1,8 @@
 # PHASE 50 — Dual-office geofence + out-of-range / early-clock-out reason capture → super-admin
 
-**Status: SPEC + `[api]` FILED, no build — 2026-08-15.** New owner request (post-backlog). Mobile-phase
+**Status: SPEC + `[api]` FILED; owner CONFIRMED all §6 decisions 2026-08-17 (buffer 15 min, reason mandatory, immediate
+mark, n8n → super_admin-only). Still BACKEND-FIRST — no mobile build until cgpe-api ships + the two office pins are set.**
+New owner request (post-backlog). Mobile-phase
 numbering; the backend's own "Phase 50" comment (`timeTracker.js:317`) refers to *their* per-member fence,
 which is *our* Phase 43 — different numbering, do not conflate.
 
@@ -44,14 +46,15 @@ alone (same posture as Phase 43: enforcement is server-owned).
 
 - **`in_range` = within 200 m of EITHER office** (min distance to the two org offices ≤ 200 m). Radius stays one org
   knob (200 m), unchanged.
-- **Out-of-range clock-in/out is ALLOWED** (reverses today's refuse) **but requires a non-empty reason**; the event is
-  recorded `out_of_range:true` with `distance_m` + `reason`, and a **super-admin notification** is raised.
-- **Early clock-out (before `shiftEnd`) requires a reason**; recorded `early:true` with `reason` + a super-admin
-  notification. (Out-of-range AND early can co-occur → one event, both flags, one or two reasons — owner to confirm
-  whether that's one combined reason prompt or two.)
-- **Reason is mandatory to proceed** when triggered (else the clock action is not completed) — owner to confirm (vs.
-  optional). The reason is free text; the super admin sees who / when / distance / which rule / the text — never used
-  to *refuse*, only to record + notify (transparent, matches the §5 "loud not silent" posture).
+- **Out-of-range clock-in/out is ALLOWED** (reverses today's refuse) **but requires a non-empty reason**; the
+  attendance **marks IMMEDIATELY** (never held/queued), recorded `out_of_range:true` with `distance_m` + `reason`, and
+  a **super-admin alert is raised via n8n** (§6.5).
+- **Early clock-out = before `shiftEnd` MINUS a 15-minute grace buffer** (owner-locked, §6.2) requires a reason;
+  recorded `early:true` with `reason` + the same n8n super-admin alert. Out-of-range AND early can co-occur → one
+  event, both flags; mobile shows ONE combined reason prompt (§6 recommendation).
+- **Reason is MANDATORY to proceed** when triggered (the clock action does not complete without it) — §6.3. The reason
+  is free text; the super admin sees who / when / distance / which rule / the text — never used to *refuse*, only to
+  record + notify (transparent, matches the §5 "loud not silent" posture).
 
 ## 4. Backend changes needed — `[api]` (filed to cgpe-api 2026-08-15)
 
@@ -73,16 +76,28 @@ stop REFUSING out-of-range — instead record `out_of_range`/`early` + `reason` 
 - **i18n copy (5 languages, HUMAN)** for the prompt(s) — the same copy blocker as the 41d app-block: net-new keys need
   gu/hi/hi-en/gu-en (machine translation forbidden, PHASE-19 §4). List when built.
 
-## 6. Flagged-open — OWNER decisions (recorded, to confirm; I will not invent these)
+## 6. OWNER DECISIONS — CONFIRMED 2026-08-17 (was flagged-open; now locked)
 
-1. **Office coordinates** — the two addresses (§1) must be set as pins **in the panel/backend** with their real
-   lat/lng (panel geocodes, or owner enters). No client coordinate literal.
-2. **"Early" definition** — recommend **before `shiftEnd`** (already in `timeTracker.js:133`); owner to confirm (vs a
-   worked-hours threshold like Phase-44's 8 h full-day).
-3. **Two offices vs per-member pins** — do the two org offices REPLACE the Phase-43 per-member `start_location`, or is
-   in-range = (either office) OR (member pin)? Owner/cgpe-api to decide.
-4. **Reason mandatory?** — block the clock action until a reason is given (recommended), or allow skip?
-5. **Combined vs separate** — if a clock-out is both out-of-range AND early, one reason prompt or two?
+1. **Nearest office, auto** — the member is checked against BOTH offices; `in_range` = within 200 m of the **nearer**
+   one (backend returns `in_range` + the **min** `distance_m`). The app shows/attributes the nearest office. No client
+   coordinate literal — the two office pins (§1 addresses) are set in the **panel/DB** by the owner (still pending).
+2. **"Early" = clock-out before `shiftEnd` MINUS a 15-minute grace buffer** (owner-locked **15 min**, 2026-08-17).
+   Clocking out within the last 15 min of the shift is NOT early (no reason). Earlier than `shiftEnd − 15 min` →
+   `early:true` → reason required. The 15 is one named config/constant (backend + mobile), not scattered.
+3. **Reason is MANDATORY** — an out-of-range clock-in/out **or** an early clock-out cannot complete without a
+   non-empty reason. Mobile blocks the button; backend also requires it server-side when a flag is set (can't bypass).
+4. **Out-of-range attendance marks IMMEDIATELY** — never held/queued/rejected. The clock event is recorded right away
+   with `out_of_range:true` + `distance_m` + `reason`; the attendance is valid and the reason is recorded alongside.
+5. **Alert delivery = n8n, recipients = super_admin ONLY (the 3 promoted accounts).** On either flag the super-admin
+   alert goes **through n8n** (same pattern as the campaign/WhatsApp n8n webhooks), not only an in-app DB notification,
+   to `role:'super_admin'` profiles only (the 3 Phase-38 masters — DB `Profile.role`, no phone literals). It carries
+   who / when / which rule / `distance_m` / the reason text — **never coordinates.**
+
+**Recommendations still flagged for cgpe-api (not owner-blocking):**
+- **Two offices vs per-member `start_location`** — recommend in-range = within 200 m of EITHER org office, keeping the
+  Phase-43 per-member pin as a fallback when unset. cgpe-api's call whether to keep the member pin in the OR.
+- **Combined vs separate reason** — if a clock-out is BOTH out-of-range AND early, mobile shows ONE combined reason
+  prompt and sends one `reason` with both flags set (least friction). cgpe-api to say if it wants two.
 
 ## 7. Done when
 
