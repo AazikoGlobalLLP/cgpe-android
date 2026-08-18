@@ -21,6 +21,22 @@ requests** (satellite toggle, red/green on/off-duty, app-installed view, map poi
 [[owner-backlog-2026-08-17-map-and-app-presence]] and `## Next 3`. Phase 50's mobile data-layer is now BUILT (below);
 its home reason-prompt UI + 5-lang copy remain.
 
+**⚡ PHASE 51 BUILT (2026-08-18) — map satellite-view toggle + show/hide-points toggle + event-typed pin colours.**
+Pure-mobile, no contract change, commit `8eb4858` (local — push 403s). `src/ui/LeafletMap.tsx` gains a **hybrid satellite**
+base (Esri World Imagery + Esri label overlay, no API key) togglable against the CartoDB street tiles, a **show/hide
+points** toggle (hides the marker layer; route line + arrows stay), and a 3-button top-right control stack; `agent-map.tsx`
+**pin colours** are now event-typed (clock-in **green** `c.success`, clock-out **red** `c.danger`), legend updated.
+Satellite/points state lives in the outer `LeafletMap` so it survives a theme flip; re-asserted on the ready handshake.
+Honest ceiling: Apple/Google tiles need paid SDK/keys — Esri is the best key-free source ("Imagery © Esri" credit in
+satellite mode). Gates: `tsc` 0 · `npm test` **576** · eslint 0 errors on touched files. **JS-only → rides the next
+build/OTA, no separate APK** (deliberately not cutting one mid-v1.9.0 background-location device test). Spec:
+`docs/spec/PHASE-51.md`. **Phase 52 (Break button + 8h30m gate + optional reason + orange break pins) SPEC LOCKED
+(`docs/spec/PHASE-52.md`) but BLOCKED:** needs owner 5-language break copy + two `[api]` asks filed 2026-08-18
+(A: optional `reason` on `/break/start`; B: per-member break-location READ for the orange pins). Verified real backend:
+`/break/start`+`/break/stop` already exist and record location, `DayLog.breaks[].startLoc/endLoc` already persist — just
+no reason field and no map-facing read. `getClockState()` already returns `isOnBreak`+clock-in time, so the 8h30m gate is
+client-side.
+
 **PRIORITY (owner, 2026-08-17):** **Phase 50 (dual-office geofence + out-of-range / early-clock-out reason →
 super-admin) is #1.** **cgpe-api SHIPPED it (Backend Phase 64, 2026-08-17) — VERIFIED against their real code** (all 6
 owner points; both mobile recommendations taken). **Mobile data-layer BUILT + tested** (commit `6b2da6f`): `getGeofence`
@@ -1366,11 +1382,14 @@ exercise.
    owner-supplied 5-language HUMAN copy, + a device check. **Go-live also needs owner/ops:** set the two pins via
    `PUT /geofence` `offices[]` (Adajan `21.208267,72.839960` · Katargam `21.187084,72.797604`), set
    `N8N_ATTENDANCE_WEBHOOK_URL`, `:3001` restart. n8n behaviour spec already handed to the owner.
-3. **New owner backlog (2026-08-17) — see [[owner-backlog-2026-08-17-map-and-app-presence]] / memory + `docs/spec` TBD.**
-   Pure-mobile now: **satellite-view toggle** + **points show/hide toggle** on the map (`LeafletMap.tsx`/agent-track).
-   Backend-first (file after verifying real code): **app-installed view** (signal = **recent location points**, owner
-   choice) and an **off-duty (ambient) points READ** — the app has none today, and it's the blocker for the **red/green
-   on-duty/off-duty colouring (old Phase 42)** and the **per-employee clock-in/out path toggle**.
+3. **New owner backlog (2026-08-17) — see [[owner-backlog-2026-08-17-map-and-app-presence]].** ✅ **DONE (Phase 51,
+   2026-08-18):** satellite-view toggle + points show/hide toggle + event-typed pin colours (commit `8eb4858`, above).
+   🔒 **Phase 52 (Break button) SPEC LOCKED, BLOCKED** on owner 5-language break copy + `[api]` A (reason on break-start)
+   + `[api]` B (per-member break-location read for orange pins) — filed 2026-08-18. Owner supplied the break UX in the
+   Phase-51 approval: 2 buttons after clock-in (Break + Clock-out), 8h30m confirm gate, optional reason, in=green /
+   break=orange / out=red. Still **backend-first** (file after verifying real code): **app-installed view** (signal =
+   **recent location points**, owner choice) and an **off-duty (ambient) points READ** — the app has none today, the
+   blocker for the **red/green on-duty/off-duty colouring (old Phase 42)** and the **per-employee clock-in/out path toggle**.
 
 **Phase 62 on-device visual pass — still PENDING** (contract GO-LIVE VERIFIED; build `fc92573`; walk
 `docs/spec/PHASE-62-DEVICE-CHECK.md`; do NOT mark passed until the owner confirms "testing pass hai").
