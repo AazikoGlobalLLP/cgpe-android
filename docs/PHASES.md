@@ -20,6 +20,35 @@ Direct APK: `https://expo.dev/artifacts/eas/ls-3QFiTrj-GuDt-6ot-Q7dQOuYkDcMLlt2I
 checklist: `docs/spec/PHASE-51-52-DEVICE-CHECK.md`. **Orange break pins (§C) need the backend `:3001` restart on Backend
 Phase 66 to show.** `git push` still 403s — every commit local.
 
+**⚡⚡ NEW OWNER ISSUE BATCH 2026-08-18 → Phases 53–58, all VERIFIED against real code** (workflow `wf_d89dc600-86e`,
+6 parallel investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-18.md`. Owner priorities:
+**tasks (#1)** + **iOS (mandatory)**. NONE built yet — this session scoped them; next session executes.
+- **Phase 53 — [m]+[api] Task mismatch (owner #1).** (a) claiming a ticket writes only the tickets doc, never mirrors
+  into `team_tasks`, so it never shows in the task list → **[api]** mirror ticket-assign into `team_tasks`
+  (`routes/tickets.js` PUT, pattern `routes/tasks.js:225-258`); (b) reopen re-buckets undated tasks by touch-time
+  (`adaptTeamTask` `dueDate` falls back to `updated_at`, `api.ts:306`) + the "today" denominator counts done tasks
+  (`tasks.tsx:214`/`home.tsx:1107`) → **[m]** fix both. Scope both · M.
+- **Phase 54 — [api] Lead "could not be opened" (403).** `GET /leads/:id` strict self-check (`leads.js:266`) 403s the
+  teammate/firm leads the LIST returns for a leader/member — the leader-tier trap. Fix: detail uses the same
+  `visibilityScope/canSee` as the list (`utils/scope.js`), + parity on `PUT /:id:455`. **Mobile zero-change** (Lead has
+  no `advisor_id`). Scope backend · S · quick. (Also corrects a stale `api.ts:908` comment.)
+- **Phase 55 — [m] Network resilience** (the "doesn't work on my WiFi/phone" complaint). `req()` has a **4.5 s** hard
+  timeout (`config.ts:65`), **zero retry**, no error-kind, no self-test; `login()` uses the same 4.5 s so a slow net
+  can't sign in; `uploadFile` has no AbortController. Fix: timeout→~12–15 s, bounded retry+backoff (GET+login, not
+  writes), distinguish timeout/DNS/TLS, `/health` "Test connection", abort uploads. Scope mobile · M. DNS/captive-
+  portal/firewall stay network-side (test `/health` in the phone browser).
+- **Phase 56 — [m] iOS enablement (owner priority).** App IS buildable (plist via config plugins, `bundleIdentifier`
+  set) but **never built for iOS**; missing = `eas.json` ios profile + an **Apple Developer account ($99/yr, hard
+  prereq)**. Honest 24/7: iOS is first-class for login/data/map/Face ID + on-duty background route while the app runs,
+  but **cannot** match Android always-on after force-quit/reboot (no foreground service; BGTaskScheduler opportunistic).
+  Scope mobile (gated on Apple account) · L.
+- **Phase 57 — [m] Offline support** (read cache + safe write-queue). Built from zero (real-backend-only today). (a)
+  AsyncStorage read cache, versioned/per-user, "Last synced <time>" label (3 states: live/stale/empty); (b) additive-
+  draft write queue; (c) clock-in/WhatsApp/monitoring/search/login stay online-only. Scope mobile · XL · design-first.
+- **Phase 58 — createdAt/updatedAt "" — premise NOT reproduced.** The app stamps real ISO locally + omits timestamps
+  on POST (server stamps); the only `''` are read-path sub-field fallbacks in `adapt.ts`. Needs the owner to name one
+  concrete screen+record; likely a display placeholder or a non-app writer (import/n8n/panel), NOT a create-path fix.
+
 **⚡ LATEST (owner, 2026-08-17, end of session):** owner re-prioritised again — **the app-closed (background) location
 bug is now #1**. Diagnosed as the Phase-41 native-build gap (installed APK predated the modules); cut a fresh **v1.9.0**
 EAS APK (build `86c1406c`) + device checklist → **owner is testing it on a handset.** Also captured **6 new feature
@@ -1382,7 +1411,29 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-17 late handoff — owner re-prioritised AGAIN: app-closed location is now #1; Phase 50 backend SHIPPED + mobile data-layer BUILT):**
+**CURRENT next 3 (2026-08-18 handoff — new owner issue batch scoped; owner priorities = tasks #1 + iOS. Full grounded spec `docs/spec/ISSUES-2026-08-18.md`):**
+1. **Phase 53 — Task mismatch (owner #1).** Start with the **mobile half (b)** — buildable now, no backend: in `adaptTeamTask`
+   (`api.ts:306`) stop bucketing undated tasks by `updated_at`, and make the "today" denominator stable (`tasks.tsx:214` +
+   `home.tsx:1107`, identical). Then **file the `[api]` (a)** — mirror a ticket-assign into `team_tasks` (`routes/tickets.js`
+   PUT, pattern `routes/tasks.js:225-258`) so a claimed ticket shows in the task list. Confirm the 4 open product Qs with the
+   owner first (mirror-scope, ticket-task dueAt, what "today's progress" counts).
+2. **Phase 54 — Lead "could not be opened" (`[api]`, quick, high-impact).** File the ask: `GET /api/leads/:id` (+ `PUT :455`)
+   must authorize with the same `visibilityScope/canSee` as the list. **Mobile is zero-change** — verify that and file, then
+   the pipeline leads open. Also fix the stale `api.ts:908` comment while nearby.
+3. **Phase 55 — Network resilience (`[m]`, fixes "doesn't work on my WiFi/phone").** Raise `REQUEST_TIMEOUT` (`config.ts:65`)
+   4.5→~12–15 s, add bounded retry+backoff in `req()` (GET+login only), distinguish timeout/DNS/TLS, add a `/health` "Test
+   connection", give `uploadFile` an AbortController. First get the owner's on-phone `/health`-in-browser result to split
+   app-side vs network-side.
+
+**⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
+iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability
+is confirmed first-class EXCEPT the guaranteed-24/7-after-force-quit/reboot tracker (Android-only). Phase 57 (offline, XL) and
+Phase 58 (createdAt, needs owner repro) sit after.
+
+---
+
+**SUPERSEDED (2026-08-17 next-3, all now done/stale — kept for history):**
+**Old next 3 (2026-08-17 late handoff):**
 1. **Phase 41 app-closed location — NOW #1 (owner, 2026-08-17). Fresh APK cut; DEVICE TEST owed by owner.** Diagnosed:
    the 24/7 recorder was written but the installed APK predated its native modules. Cut a fresh EAS preview APK **v1.9.0**
    (build `86c1406c`, direct `.apk` `https://expo.dev/artifacts/eas/eUcZu5h738F4LbqmNqUHK7k2RZxE7FqlY14A6DY_VXk.apk`) +

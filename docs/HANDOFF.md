@@ -1,51 +1,60 @@
-# HANDOFF — CGPE Connect (Android) — Phase 50 (data-layer BUILT) + Phase 41 (v1.9.0 APK cut) — 2026-08-17
+# HANDOFF — CGPE Connect (Android) — Phases 51 & 52 SHIPPED + Phases 53–58 SCOPED — 2026-08-18
 
-Active session. Owner confirmed Phase 50's decisions, `cgpe-api` shipped it, mobile built the tested data-layer half;
-then the owner re-prioritised: **the app-closed (background) location bug is now #1**, so a fresh **v1.9.0 native APK**
-was cut for the device test. Also captured a batch of 6 new owner feature requests (triaged, mostly not yet built).
+Two features shipped end-to-end (map toggles + the Break feature, incl. consuming backend Phase 66), a **v1.10.0 APK**
+was cut, and a new **7-item owner issue batch** was investigated against the real code and turned into grounded
+Phases 53–58. Owner priorities for next: **tasks (#1)** and **iOS (mandatory)**.
 
 ## Done
-- **Phase 50 backend VERIFIED + mobile data-layer BUILT (commit `6b2da6f`, gates green: `tsc` 0 · `npm test` 576 · eslint 0 errors).**
-  `cgpe-api` shipped Backend Phase 64; I read their real code field-for-field (not the ticked summary) — nearest-office
-  fence, server-enforced `REASON_REQUIRED`, `EARLY_CLOCKOUT_GRACE_MIN=15`, n8n+in-app super_admin-only alert (no coords),
-  `GET /geofence` additive `offices[]`. Mobile now: `getGeofence` reads `offices[]`; `checkGeofence` measures the
-  **nearest** office (**fixes a real office-B pre-check lockout**); `clockIn`/`clockOut` thread an optional `reason` and
-  map `REASON_REQUIRED` to a distinct `needsReason` outcome. NEW `api-clock.test.ts` + nearest-of-two cases.
-- **Owner CONFIRMED all Phase-50 §6 decisions** (nearest-office auto, reason mandatory, 15-min early buffer, immediate
-  mark, n8n→super_admin-only 3 accounts) — recorded in `contracts/INBOX.md` + `PHASE-50.md` (commit `217ca81`).
-- **Two office pins LOCKED** (owner-supplied): Adajan `21.208267,72.839960` · Katargam `21.187084,72.797604` — in the
-  INBOX ask + spec §1 (set in the panel/DB via `PUT /geofence` `offices[]`, NOT client literals). Commit `ddbb33e`.
-- **App-closed location (owner #1): diagnosed + fixed-forward.** The 24/7 recorder was written but the installed APK
-  predated its native modules (verified app.json perms/plugins + package.json deps are all committed/correct). Cut a
-  fresh EAS preview APK **v1.9.0**, build `86c1406c`, direct APK handed to owner:
-  `https://expo.dev/artifacts/eas/eUcZu5h738F4LbqmNqUHK7k2RZxE7FqlY14A6DY_VXk.apk` + a device checklist (Location=Allow-
-  all-the-time, Battery=Unrestricted + accept the once-per-install popup, Auto-start ON). **Awaiting owner device test.**
-- **n8n workflow behaviour spec** handed to the owner for their n8n dev (payload shape, super_admin-only routing, message templates).
+- **Phase 51 — map upgrades (commit `8eb4858`).** Both maps now have a top-right control stack: a **satellite** toggle
+  (Esri World Imagery + Esri labels, hybrid, no API key), a **show/hide points** toggle (hides markers; route line +
+  arrows stay), and the fit button. Pins are event-coloured: clock-in **green**, clock-out **red**; legend matches.
+  State survives a theme flip. JS-only.
+- **Phase 52 — Break feature (commits `8da2fb8`, `b1cea19`, `53ba448`).** After clock-in, Home shows **Break + Clock
+  out** (End break while on break). Break at ≥8h30m worked asks a confirm first; under it, an **optional-reason** sheet.
+  Clocking out while on break **ends the break first** (else the in-progress break is silently dropped). All break text
+  in **5 languages** (owner copy). Consumed **backend Phase 66** (verified field-for-field): the `reason` is now stored,
+  and **orange break pins** are drawn on the master map from the new `GET /break-locations` (green/orange/red legend).
+- **v1.10.0 APK cut** (EAS build `0c648a0c`) bundling Phases 51+52 on the same native base as v1.9.0 (all JS-only).
+  Direct APK: `https://expo.dev/artifacts/eas/ls-3QFiTrj-GuDt-6ot-Q7dQOuYkDcMLlt2InWDuf0s.apk`. Device checklist:
+  `docs/spec/PHASE-51-52-DEVICE-CHECK.md`.
+- **7-item owner issue batch investigated + scoped into Phases 53–58** (all verified against real code, file:line cited;
+  full spec `docs/spec/ISSUES-2026-08-18.md`). Two backend `[api]` asks filed (lead-scope, ticket→team_tasks mirror).
 
 ## Files changed
-- `src/data/api.ts` — `getGeofence` reads additive `offices[]`; `checkGeofence` measures the nearest office; `clockIn`/`clockOut` thread `reason` + map `REASON_REQUIRED`.
-- `src/data/__tests__/api-geo.test.ts` — `offices[]` read + nearest-of-two cases (incl. the office-B lockout regression).
-- `src/data/__tests__/api-clock.test.ts` — NEW: reason threading + `REASON_REQUIRED` / 403 / plain-error split.
-- `app.json` — version `1.8.0` → `1.9.0` so the owner can confirm the new background-location build on-device.
-- `docs/spec/PHASE-50.md` — §6 → CONFIRMED, §3 updated, §1 office coords, status line.
-- `docs/PHASES.md`, `docs/DECISIONS.md` — board + decision record.
-- `contracts/INBOX.md` (untracked — parent dir not git) — owner-confirmed §6 block + coords + mobile-verification reply under cgpe-api's ticked Phase-64 item.
+- `src/ui/LeafletMap.tsx` — satellite/labels tile layers + `__cgpeTiles`/`__cgpePoints` bridges + `breaks` prop → orange markers.
+- `src/app/agent-map.tsx` — 3-colour legend; fetches `getBreakLocations()` and passes break points to the map.
+- `src/data/api.ts` — `startBreak`/`stopBreak`; `getBreakLocations()` (403-for-others = quiet empty, never fabricates).
+- `src/app/(tabs)/home.tsx` — Break/End-break + Clock-out buttons, 8h30m `useConfirm` gate, optional-reason `Sheet`, clock-out-ends-break-first.
+- `src/i18n/index.tsx` + `__tests__/dictionaries.test.ts` — 9 `break.*` keys × 5 langs (parity 94→103).
+- `src/data/__tests__/api-break.test.ts` — NEW, startBreak/stopBreak/getBreakLocations (591 total).
+- `app.json` — version 1.9.0 → 1.10.0.
+- `docs/` — PHASE-51/52 specs, PHASE-51-52-DEVICE-CHECK, ISSUES-2026-08-18, PHASES board, DECISIONS.
+- `contracts/INBOX.md` (untracked) — 2 new `[api]` asks (lead-scope, ticket-mirror) + Phase-66 verify reply.
 
 ## Decisions made
-- **App-closed location is owner #1 and fixed-forward with a native APK (v1.9.0), not an editor patch** — it needs native modules a JS/OTA update can't add; the device-test + OEM battery/auto-start settings are owed by the owner (a device miss here is usually settings, not code).
-- **App-installed signal = "recent location points"** (owner choice) — a member who recently sent points ⇒ app present. To be filed as a backend ask (verify real code first).
-- **Office pins go in the panel/DB via `PUT /geofence` `offices[]`, never client literals** (Phase 7 rule).
-- **Phase 50 home reason-prompt UI is deferred** — it needs 5-language HUMAN copy (machine translation forbidden) + a device; the tested data-layer seam is ready for it.
+- **Satellite = Esri hybrid, not Apple/Google** (paid SDK/keys) — honest ceiling set to the owner.
+- **Break 8h30m gate = `MIN_SHIFT_MS`** (the payroll office-hours figure, not invented); reason optional + sent
+  additively; clock-out ends the break first because `DayLog.clockOut` discards an in-progress break otherwise.
+- **Verify the code, not the tick** — the owner's "backend done" first pointed at Phase 65 (gap-detector, NOT break);
+  only a re-check found Phase 66 (break) actually shipped.
+- **Scope the 7 new issues from real code before writing rows** (workflow) — so each is grounded, not guessed.
+- **createdAt/updatedAt "" is NOT a create-path bug** — the app already stamps real ISO + omits timestamps on POST; the
+  only `''` are read-path sub-field fallbacks. Needs an owner repro, not a code change.
 
 ## Known broken / deliberately skipped
-- **App-closed location is DEVICE-UNVERIFIED** — awaiting owner's on-device test of v1.9.0 with the settings applied.
-- **Phase 50 home.tsx reason-prompt UI + 5-language copy** — not built (copy blocker + device); the `home.tsx:835` hard-refuse must become a Sheet prompt that re-sends with the reason.
-- **Off-duty (ambient) points have NO mobile read path** — the red/green (Phase 42) + the map in/out-path toggle both need a NEW backend read; not filed yet.
-- **2 backend asks still to file** (verify real code first): app-installed = recent-points signal; off-duty points read. Plus the mobile map toggles (satellite + points) are pure-mobile and unbuilt.
-- **`git push` still 403s** — every commit (`217ca81`,`6b2da6f`,`8d0ffad`,`ddbb33e`) is local only.
-- **Go-live for Phase 50** still needs owner/ops: set the two pins via `PUT /geofence`, set `N8N_ATTENDANCE_WEBHOOK_URL`, `:3001` restart.
+- **Orange break pins go live only after the backend `:3001` restart** on the Phase-66 build (ops, owner to confirm).
+- **Phases 53–58 are SCOPED, not built** — this session investigated + defined them; next session executes.
+- **iOS (Phase 56) is blocked on an Apple Developer account ($99/yr)** — a hard external prereq before any iOS build.
+- **iOS 24/7 background location cannot match Android** (no foreground service; BGTaskScheduler is opportunistic) — the
+  honest limit; everything else on iOS is first-class.
+- **`git push` still 403s** — every commit (`8eb4858`…`0a391fc`) is local only. Needs a human to fix the credential.
 
 ## Next session starts here
-- Phase 41 device-verify (owner #1): confirm the owner's v1.9.0 test result; then build the mobile map toggles (satellite + points) and file the 2 backend asks (app-installed=recent points, off-duty read for red/green + in/out).
-- First command: `/boot`
-- Watch out for: the app-closed fix needs the phone's **battery/auto-start settings**, not just the APK — a device miss is usually settings, not a code bug. And do NOT build the red/green or in/out-path map features until the **off-duty backend read exists** (the app cannot read ambient points today).
+- **Phase 53 (owner #1): Task mismatch.** Build the mobile half now (stop bucketing undated tasks by `updated_at` in
+  `adaptTeamTask` `api.ts:306`; stabilise the "today" denominator in `tasks.tsx:214` + `home.tsx:1107`), and relay the
+  filed `[api]` (mirror ticket-assign → `team_tasks`). Then Phase 54 (lead-open `[api]`, mobile zero-change) + Phase 55
+  (network resilience, mobile-only). **Ask the owner about the Apple Developer account for iOS (Phase 56).**
+- **First command:** `/boot`
+- **Watch out for:** the **leader-tier trap** — `tierOf()` folds `leader` into admin client-side, but the backend gates
+  on the real `Profile.role` and `leader ∉ {admin,super_admin}`; that is the exact cause of the lead-open 403, and any
+  admin-gated surface can 403 a leader. And **never fabricate a server timestamp** for Phase 58.
