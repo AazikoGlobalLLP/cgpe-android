@@ -10,9 +10,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { shadow, useTheme } from '@/theme/theme';
 import { Card, Eyebrow, Grad, Metric, Row, Screen, SectionHeader, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
-import { Button, IconBtn } from '@/ui/controls';
+import { Button, Field, IconBtn } from '@/ui/controls';
 import { Banner, EmptyState, ProgressBar, Skeleton, SkeletonCard } from '@/ui/feedback';
 import type { FeedbackTone } from '@/ui/feedback';
+import { Sheet } from '@/ui/sheet';
+import { useConfirm } from '@/ui/Confirm';
 import { ActionTile, KpiStrip, ListSection, Pill } from '@/ui/data';
 import type { KpiItem, Tone } from '@/ui/data';
 import { Avatar, PersonRow } from '@/ui/identity';
@@ -149,7 +151,11 @@ async function getFix(): Promise<{ lat: number; lng: number; accuracy?: number; 
   } catch { return null; }
 }
 
-type ClockState = { in: boolean; time?: string; place?: string };
+type ClockState = { in: boolean; time?: string; place?: string; onBreak?: boolean };
+
+/** PHASE 52 — the break "minimum done" gate: 8h30m since clock-in, in ms. 8.5h is the payroll
+ *  office-hours figure (`services/payrollEngine.js`), not an invented number. */
+const MIN_SHIFT_MS = 8.5 * 60 * 60 * 1000;
 
 /* ================================================================== *
  * Reading the role config
@@ -541,6 +547,12 @@ export default function Home() {
   const [tickets, setTickets] = useState<api.Ticket[]>([]);
   const [clock, setClock] = useState<ClockState>({ in: false });
   const [clocking, setClocking] = useState(false);
+  // PHASE 52 — break state. `breaking` guards the break calls the way `clocking` guards the
+  // clock ones; `breakSheet`/`breakReason` drive the optional-reason prompt.
+  const [breaking, setBreaking] = useState(false);
+  const [breakSheet, setBreakSheet] = useState(false);
+  const [breakReason, setBreakReason] = useState('');
+  const { confirm } = useConfirm();
   // Lazy initialiser: Date.now() is impure, so it must not run in the render body on every
   // pass (react-hooks/purity). Passing the thunk defers it to mount; the value is identical.
   const [nowTick, setNowTick] = useState(() => Date.now());
@@ -696,7 +708,7 @@ export default function Home() {
       if (!current()) return;
       if (serverClock) {
         const next: ClockState = serverClock.isClockedIn
-          ? { in: true, time: serverClock.since || new Date().toISOString(), place: 'On duty' }
+          ? { in: true, time: serverClock.since || new Date().toISOString(), place: 'On duty', onBreak: serverClock.isOnBreak }
           : { in: false };
         setClock(next);
         AsyncStorage.setItem(clockKey, JSON.stringify(next)).catch(() => {});
@@ -849,6 +861,14 @@ export default function Home() {
       const coords = fix ? { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, city: fix.city } : {};
 
       if (clock.in) {
+        // PHASE 52: if a break is running, END it first so its duration + location are recorded.
+        // The backend's clock-out just nulls `activeBreakStart` (DayLog.clockOut), discarding the
+        // in-progress break — so without this that break time would silently count as worked. Best
+        // effort: a failed break-stop must never prevent ending the shift.
+        if (clock.onBreak) {
+          await api.stopBreak(coords).catch(() => {});
+          if (!mounted.current) return;
+        }
         const res = await api.clockOut(coords);
         if (!mounted.current) return;
         if (res.blocked) {
@@ -950,7 +970,108 @@ export default function Home() {
     } finally {
       if (mounted.current) setClocking(false);
     }
-  }, [clocking, clock.in, clockKey]);
+  }, [clocking, clock.in, clock.onBreak, clockKey]);
+
+  /* ---------- PHASE 52: break ----------
+   * Break start/stop hits the already-live endpoints (`api.startBreak`/`stopBreak`). Location is
+   * best-effort — unlike clock-in, a break is not geofenced (the backend validates only against a
+   * per-member break-fence that is null for everyone), so a missing fix never blocks it. */
+
+  /** Press "Break": if they have already worked their 8h30m minimum, ask whether they'd rather
+   *  clock out; otherwise go straight to the optional-reason sheet. */
+  const pressBreak = useCallback(async () => {
+    if (breaking || clocking) return;
+    const since = clock.time ? Date.parse(clock.time) : NaN;
+    const workedMs = Number.isFinite(since) ? Date.now() - since : 0;
+    if (workedMs >= MIN_SHIFT_MS) {
+      const go = await confirm({
+        title: t('break.minDoneTitle'),
+        message: t('break.minDoneBody'),
+        confirmText: t('break.minDoneConfirm'),
+        cancelText: t('common.cancel'),
+        icon: 'cafe-outline',
+      });
+      if (!go) return;
+    }
+    setBreakReason('');
+    setBreakSheet(true);
+  }, [breaking, clocking, clock.time, confirm, t]);
+
+  /** Start the break — from either the reason sheet's "Start break" (with the typed reason) or
+   *  "Skip" (without). Honest write path: a 403 or a failed write leaves the user NOT on break. */
+  const startBreakNow = useCallback(async (withReason: boolean) => {
+    if (breaking) return;
+    setBreaking(true);
+    haptics.tap();
+    try {
+      const fix = await getFix();
+      if (!mounted.current) return;
+      const webDemo = Platform.OS === 'web' || !api.isRealSession();
+      const coords = fix ? { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, city: fix.city } : {};
+      const res = await api.startBreak(coords, withReason ? breakReason : undefined);
+      if (!mounted.current) return;
+      if (res.blocked) {
+        haptics.warn();
+        setBreakSheet(false);
+        setNotice({ tone: 'warning', title: 'Could not start break', message: res.message || 'You have to be at the office to start a break.' });
+        return;
+      }
+      if (!res.ok && !webDemo) {
+        haptics.error();
+        setBreakSheet(false);
+        setNotice({ tone: 'danger', title: 'Break could not be recorded', message: res.message || 'The server could not be reached. Check your connection and try again.' });
+        return;
+      }
+      const next: ClockState = { ...clock, onBreak: true };
+      setClock(next);
+      AsyncStorage.setItem(clockKey, JSON.stringify(next)).catch(() => {});
+      setBreakSheet(false);
+      setBreakReason('');
+      haptics.success();
+    } catch {
+      if (!mounted.current) return;
+      haptics.error();
+      setBreakSheet(false);
+      setNotice({ tone: 'danger', title: 'Break could not be recorded', message: 'The server could not be reached. Check your connection and try again.' });
+    } finally {
+      if (mounted.current) setBreaking(false);
+    }
+  }, [breaking, breakReason, clock, clockKey]);
+
+  /** End an in-progress break. */
+  const pressEndBreak = useCallback(async () => {
+    if (breaking || clocking) return;
+    setBreaking(true);
+    haptics.tap();
+    try {
+      const fix = await getFix();
+      if (!mounted.current) return;
+      const webDemo = Platform.OS === 'web' || !api.isRealSession();
+      const coords = fix ? { lat: fix.lat, lng: fix.lng, accuracy: fix.accuracy, city: fix.city } : {};
+      const res = await api.stopBreak(coords);
+      if (!mounted.current) return;
+      if (res.blocked) {
+        haptics.warn();
+        setNotice({ tone: 'warning', title: 'Could not end break', message: res.message || 'You have to be at the office to end a break.' });
+        return;
+      }
+      if (!res.ok && !webDemo) {
+        haptics.error();
+        setNotice({ tone: 'danger', title: 'Could not end break', message: res.message || 'The server could not be reached. Check your connection and try again.' });
+        return;
+      }
+      const next: ClockState = { ...clock, onBreak: false };
+      setClock(next);
+      AsyncStorage.setItem(clockKey, JSON.stringify(next)).catch(() => {});
+      haptics.success();
+    } catch {
+      if (!mounted.current) return;
+      haptics.error();
+      setNotice({ tone: 'danger', title: 'Could not end break', message: 'The server could not be reached. Check your connection and try again.' });
+    } finally {
+      if (mounted.current) setBreaking(false);
+    }
+  }, [breaking, clocking, clock, clockKey]);
 
   const completeTask = useCallback(async (task: Task) => {
     // Optimistic: the row has to clear on the same frame as the tap. No haptic yet —
@@ -1967,14 +2088,39 @@ export default function Home() {
                               {dutyLine}
                             </Txt>
                           </View>
-                          <Button
-                            label={clock.in ? t('home.clockOut') : t('home.clockIn')}
-                            icon={clock.in ? 'log-out-outline' : 'location'}
-                            variant={clock.in ? 'outline' : 'primary'}
-                            loading={clocking}
-                            onPress={toggleClock}
-                          />
+                          {!clock.in ? (
+                            <Button
+                              label={t('home.clockIn')}
+                              icon="location"
+                              variant="primary"
+                              loading={clocking}
+                              onPress={toggleClock}
+                            />
+                          ) : null}
                         </Row>
+                        {/* PHASE 52: once on the clock, Break + Clock out sit side by side. */}
+                        {clock.in ? (
+                          <Row style={{ gap: spacing.sm, marginTop: spacing.md }}>
+                            <Button
+                              label={clock.onBreak ? t('break.end') : t('break.start')}
+                              icon={clock.onBreak ? 'play' : 'cafe-outline'}
+                              variant={clock.onBreak ? 'primary' : 'outline'}
+                              loading={breaking}
+                              disabled={clocking}
+                              onPress={clock.onBreak ? pressEndBreak : pressBreak}
+                              style={{ flex: 1 }}
+                            />
+                            <Button
+                              label={t('home.clockOut')}
+                              icon="log-out-outline"
+                              variant="outline"
+                              loading={clocking}
+                              disabled={breaking}
+                              onPress={toggleClock}
+                              style={{ flex: 1 }}
+                            />
+                          </Row>
+                        ) : null}
                       </>
                     ) : null}
                   </Card>
@@ -2037,6 +2183,42 @@ export default function Home() {
           </>
         )}
       </ScrollView>
+
+      {/* PHASE 52: the optional break-reason prompt. Both actions start the break — Skip sends no
+          reason, Start break sends the typed one. Sent additively; stored server-side once the
+          `[api]` Break-A ask ships. */}
+      <Sheet
+        visible={breakSheet}
+        onClose={() => { if (!breaking) setBreakSheet(false); }}
+        title={t('break.reasonTitle')}
+        footer={
+          <Row style={{ gap: spacing.sm }}>
+            <Button
+              label={t('break.reasonSkip')}
+              variant="outline"
+              disabled={breaking}
+              onPress={() => startBreakNow(false)}
+              style={{ flex: 1 }}
+            />
+            <Button
+              label={t('break.reasonStart')}
+              variant="primary"
+              loading={breaking}
+              onPress={() => startBreakNow(true)}
+              style={{ flex: 1 }}
+            />
+          </Row>
+        }
+      >
+        <Field
+          label={t('break.reasonPlaceholder')}
+          value={breakReason}
+          onChange={setBreakReason}
+          multiline
+          maxLength={500}
+          autoFocus
+        />
+      </Sheet>
     </Screen>
   );
 }
