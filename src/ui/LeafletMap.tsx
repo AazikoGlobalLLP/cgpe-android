@@ -238,7 +238,9 @@ function buildPayload(
     const city = p.city ? esc(p.city) : '';
     if (usable(p.inLat, p.inLng)) {
       const t = clock(p.inTime);
-      const bg = p.onDuty ? c.success : c.primary;
+      // PHASE 51: event-typed colour — a clock-in point is always green, a clock-out point (below)
+      // always red. On-duty is still legible: a green pin with no matching red pin = still on duty.
+      const bg = c.success;
       markers.push({
         id: `in:${p.id}`,
         lat: p.inLat as number,
@@ -258,8 +260,8 @@ function buildPayload(
         id: `out:${p.id}`,
         lat: p.outLat as number,
         lng: p.outLng as number,
-        bg: c.faint,
-        fg: ink(c.faint),
+        bg: c.danger,
+        fg: ink(c.danger),
         size: 18,
         glyph: '',
         name,
@@ -400,9 +402,17 @@ function buildHtml(c: Palette): string {
   const dark = c.scheme === 'dark';
 
   const cfg = safeJson({
-    tiles: dark
+    // Street basemap (CartoDB, theme-aware). PHASE 51: joined by a satellite base and a label
+    // overlay so the map can toggle to imagery. Leaflet substitutes {x}/{y}/{z} by NAME, so the
+    // Esri `{z}/{y}/{x}` order is correct — do not "fix" it to {z}/{x}/{y}.
+    tilesStreet: dark
       ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
       : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    // Esri World Imagery — no API key, best key-free high-res source (Apple/Google tiles are not
+    // available without their paid SDK/keys, so this is the honest ceiling).
+    tilesSat: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    // Transparent road/place labels drawn OVER the imagery, so satellite stays "readable at a glance".
+    tilesLabels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
     home: HOME,
     route: c.primary,
     // A halo that separates the line from the tiles: light ground wants a white casing,
@@ -480,10 +490,20 @@ function buildHtml(c: Palette): string {
     "  var state = tileOk > 0 ? true : (tileBad >= 3 ? false : null);",
     "  if (state !== null && state !== tileSent) { tileSent = state; post({type:'tiles', ok: state}); }",
     "}",
-    "var tiles = L.tileLayer(CFG.tiles, { maxZoom: 19, minZoom: 3, keepBuffer: 2, updateWhenIdle: false });",
-    "tiles.on('tileload', function(){ tileOk++; tileReport(); });",
-    "tiles.on('tileerror', function(){ tileBad++; tileReport(); });",
-    "tiles.addTo(map);",
+    // PHASE 51: two base layers (street + satellite) and a transparent label overlay for the
+    // hybrid satellite view. Tile-health is wired to BOTH base layers; the label overlay is
+    // supplementary and never raises the "tiles down" banner on its own.
+    "var TOPT = { maxZoom: 19, minZoom: 3, keepBuffer: 2, updateWhenIdle: false };",
+    "function mkBase(url){ var t = L.tileLayer(url, TOPT);",
+    "  t.on('tileload', function(){ tileOk++; tileReport(); });",
+    "  t.on('tileerror', function(){ tileBad++; tileReport(); });",
+    "  return t; }",
+    "var lp = map.createPane('cgpeLabels'); lp.style.zIndex = 350; lp.style.pointerEvents = 'none';",
+    "var streetLayer = mkBase(CFG.tilesStreet);",
+    "var satLayer = mkBase(CFG.tilesSat);",
+    "var labelLayer = L.tileLayer(CFG.tilesLabels, { maxZoom: 19, minZoom: 3, keepBuffer: 2, updateWhenIdle: false, pane: 'cgpeLabels' });",
+    "var baseSat = false;",
+    "streetLayer.addTo(map);",
     "var routeLayer = L.layerGroup().addTo(map);",
     "var arrowLayer = L.layerGroup().addTo(map);",
     "var markerLayer = L.layerGroup().addTo(map);",
@@ -675,6 +695,21 @@ function buildHtml(c: Palette): string {
     "};",
     "window.__cgpeFit = function(){ fit(true); };",
     "window.__cgpeResize = function(){ map.invalidateSize({ animate: false }); };",
+    // PHASE 51: swap street <-> satellite(+labels). Reset the tile-health counters so the new
+    // base is judged on its own tiles, not the old layer's history.
+    "window.__cgpeTiles = function(sat){",
+    "  sat = !!sat; if (sat === baseSat) return; baseSat = sat;",
+    "  tileOk = 0; tileBad = 0; tileSent = null;",
+    "  if (sat) { map.removeLayer(streetLayer); satLayer.addTo(map); labelLayer.addTo(map); }",
+    "  else { map.removeLayer(satLayer); map.removeLayer(labelLayer); streetLayer.addTo(map); }",
+    "};",
+    // PHASE 51: hide/show the marker layer (pins, waypoints, A/B endpoints, clusters). The route
+    // line and arrows live in their own layers and stay. rebuild() keeps repainting into the
+    // group whether or not it is on the map, so 'hidden' survives zoom and data changes.
+    "window.__cgpePoints = function(show){",
+    "  if (show) { if (!map.hasLayer(markerLayer)) map.addLayer(markerLayer); }",
+    "  else { if (map.hasLayer(markerLayer)) map.removeLayer(markerLayer); }",
+    "};",
     "map.on('zoomend', function(){ rebuild(); drawArrows(); });",
     "window.addEventListener('resize', function(){ map.invalidateSize({ animate: false }); });",
     "window.addEventListener('orientationchange', function(){ setTimeout(function(){ map.invalidateSize({ animate: false }); }, 220); });",
@@ -744,6 +779,12 @@ type CanvasProps = {
   loading: boolean;
   onInteracting?: (active: boolean) => void;
   onRetry: () => void;
+  /** PHASE 51: satellite/points state lives in the outer LeafletMap so it survives a theme flip
+   *  (which remounts this canvas via `key`). Applied on the ready handshake and on every change. */
+  satellite: boolean;
+  pointsShown: boolean;
+  onToggleSatellite: () => void;
+  onTogglePoints: () => void;
 };
 
 /**
@@ -755,7 +796,10 @@ type CanvasProps = {
  * correctly and for free, where an effect resetting them by hand is always one render
  * behind and flashes the previous page's state first.
  */
-function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry }: CanvasProps) {
+function MapCanvas({
+  html, payloadJson, height, loading, onInteracting, onRetry,
+  satellite, pointsShown, onToggleSatellite, onTogglePoints,
+}: CanvasProps) {
   const c = useTheme();
 
   const webRef = useRef<WebView>(null);
@@ -763,12 +807,16 @@ function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry 
   const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const interactRef = useRef<CanvasProps['onInteracting']>(onInteracting);
   const payloadRef = useRef(payloadJson);
+  const satRef = useRef(satellite);
+  const pointsRef = useRef(pointsShown);
 
   // Latest-ref, written after the commit rather than during render. `setLock` and the
   // ready handshake both fire from outside React and must see the newest values.
   useEffect(() => {
     interactRef.current = onInteracting;
     payloadRef.current = payloadJson;
+    satRef.current = satellite;
+    pointsRef.current = pointsShown;
   });
 
   const [phase, setPhase] = useState<'loading' | 'live' | 'failed'>('loading');
@@ -776,6 +824,15 @@ function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry 
 
   const push = useCallback((json: string) => {
     webRef.current?.injectJavaScript(`window.__cgpeSet && window.__cgpeSet(${json});true;`);
+  }, []);
+
+  // PHASE 51: booleans are hard-coded into the source (not interpolated data), so there is no
+  // escaping concern — `injectJavaScript` evaluates its argument as JS.
+  const injectSat = useCallback((sat: boolean) => {
+    webRef.current?.injectJavaScript(`window.__cgpeTiles && window.__cgpeTiles(${sat ? 'true' : 'false'});true;`);
+  }, []);
+  const injectPoints = useCallback((show: boolean) => {
+    webRef.current?.injectJavaScript(`window.__cgpePoints && window.__cgpePoints(${show ? 'true' : 'false'});true;`);
   }, []);
 
   /** Freeze/release the parent scroller. Idempotent, and never left stuck on. */
@@ -800,6 +857,17 @@ function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry 
     if (!readyRef.current) return;   // the ready handshake pushes the first payload itself
     push(payloadJson);
   }, [payloadJson, push]);
+
+  // PHASE 51: re-apply on change. Before the ready handshake these are no-ops; the handshake
+  // applies the current values itself, so a page that reloaded (theme flip) picks the state back up.
+  useEffect(() => {
+    if (!readyRef.current) return;
+    injectSat(satellite);
+  }, [satellite, injectSat]);
+  useEffect(() => {
+    if (!readyRef.current) return;
+    injectPoints(pointsShown);
+  }, [pointsShown, injectPoints]);
 
   // Unmounting mid-gesture must not leave the caller's ScrollView disabled forever. This
   // is reachable: both screens swap the map out while the screen itself stays mounted.
@@ -831,6 +899,10 @@ function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry 
       case 'ready':
         readyRef.current = true;
         push(payloadRef.current);
+        // PHASE 51: a fresh or theme-reloaded page starts on street with points shown; re-assert
+        // whatever the user had chosen before the reload.
+        injectSat(satRef.current);
+        injectPoints(pointsRef.current);
         break;
       case 'drawn':
         setPhase('live');
@@ -845,7 +917,7 @@ function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry 
       default:
         break;
     }
-  }, [push, setLock, onFail]);
+  }, [push, setLock, onFail, injectSat, injectPoints]);
 
   const recenter = useCallback(() => {
     haptics.select();
@@ -936,7 +1008,9 @@ function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry 
           </View>
         </View>
       ) : (
-        <View style={{ position: 'absolute', top: spacing.sm, right: spacing.sm }}>
+        // PHASE 51: the top-right control stack — fit, satellite toggle, points toggle. Siblings of
+        // the responder-capture View above, so a tap here never arms the scroll lock.
+        <View style={{ position: 'absolute', top: spacing.sm, right: spacing.sm, gap: spacing.sm }}>
           <IconBtn
             icon="scan-outline"
             size={40}
@@ -945,8 +1019,34 @@ function MapCanvas({ html, payloadJson, height, loading, onInteracting, onRetry 
             onPress={recenter}
             accessibilityLabel="Fit every point on screen"
           />
+          <IconBtn
+            icon={satellite ? 'map-outline' : 'globe-outline'}
+            size={40}
+            bg={satellite ? c.primarySoft : c.card}
+            color={c.primary}
+            onPress={onToggleSatellite}
+            accessibilityLabel={satellite ? 'Switch to street map' : 'Switch to satellite view'}
+          />
+          <IconBtn
+            icon={pointsShown ? 'eye-outline' : 'eye-off-outline'}
+            size={40}
+            bg={pointsShown ? c.card : c.primarySoft}
+            color={c.primary}
+            onPress={onTogglePoints}
+            accessibilityLabel={pointsShown ? 'Hide location points' : 'Show location points'}
+          />
         </View>
       )}
+
+      {/* PHASE 51: Esri asks for attribution on World Imagery. Shown only while satellite is the
+          active base and the tiles-down banner is not already occupying the bottom edge. */}
+      {satellite && !busy && !tilesDown ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: spacing.sm, bottom: spacing.sm }}>
+          <View style={{ backgroundColor: rgba(c.bg, 0.72), borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+            <Txt size={10} color={c.faint}>Imagery © Esri</Txt>
+          </View>
+        </View>
+      ) : null}
 
       {/* Banner wraps itself in an entrance-animated view, so the positioning belongs on a
           wrapper here rather than on the Banner's own style prop. */}
@@ -977,6 +1077,12 @@ export function LeafletMap({
   const health = useDataHealth();
 
   const [attempt, setAttempt] = useState(0);
+  // PHASE 51: layer state lives here, ABOVE the theme-keyed MapCanvas, so a light/dark flip
+  // (which remounts the canvas) does not throw away the user's satellite/points choice.
+  const [satellite, setSatellite] = useState(false);
+  const [pointsShown, setPointsShown] = useState(true);
+  const toggleSatellite = useCallback(() => { haptics.select(); setSatellite((v) => !v); }, []);
+  const togglePoints = useCallback(() => { haptics.select(); setPointsShown((v) => !v); }, []);
 
   const html = useMemo(() => buildHtml(c), [c]);
   const payload = useMemo(
@@ -1040,6 +1146,10 @@ export function LeafletMap({
       loading={loading}
       onInteracting={onInteracting}
       onRetry={retry}
+      satellite={satellite}
+      pointsShown={pointsShown}
+      onToggleSatellite={toggleSatellite}
+      onTogglePoints={togglePoints}
     />
   );
 }

@@ -25,10 +25,9 @@ import { canSeeLiveLocation } from '@/store/roles';
 /* ------------------------------------------------------------------ *
  * Where the field is, right now.
  *
- * THE LEGEND READS FROM THE PALETTE THE MAP DRAWS WITH. It used to be hard-coded to three
- * colours (#2ee6a6 / #8b83ff / #94a3b8) that LeafletMap never renders — it draws
- * `c.success`, `c.primary` and `c.faint`. A legend that names the wrong colours is worse
- * than no legend.
+ * THE LEGEND READS FROM THE PALETTE THE MAP DRAWS WITH. Phase 51 recoloured the pins by EVENT:
+ * a clock-in point is `c.success` (green), a clock-out point is `c.danger` (red). The legend
+ * names exactly those two. A legend that names a colour the map never renders is worse than none.
  *
  * THE SCROLLVIEW YIELDS TO THE MAP. The map now pans and pinches like a native one, and a
  * map inside a vertical scroller is a fight over every upward drag: without this, dragging
@@ -176,9 +175,8 @@ export default function AgentMap() {
         <Appear index={1}>
           <LeafletMap pins={pins} height={330} onInteracting={setMapBusy} />
           <Row style={{ justifyContent: 'center', gap: spacing.lg, marginTop: spacing.md, flexWrap: 'wrap' }}>
-            <Legend color={c.success} label="On duty" />
-            <Legend color={c.primary} label="Clock-in point" />
-            <Legend color={c.faint} label="Clock-out point" />
+            <Legend color={c.success} label="Clock-in" />
+            <Legend color={c.danger} label="Clock-out" />
           </Row>
           {/* Said once, here, rather than as a badge on the map: the map is small and its
               own chrome should stay out of the way of the pins. */}
