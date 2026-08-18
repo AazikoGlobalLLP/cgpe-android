@@ -2627,6 +2627,58 @@ export async function getAgentLocations(): Promise<AgentPin[]> {
   return recent.filter(Boolean) as AgentPin[];
 }
 
+/* ------------------------------------------------------- Break locations */
+export type BreakPoint = {
+  lat: number; lng: number; at?: string; kind: 'start' | 'end';
+  reason?: string | null; active?: boolean;
+};
+export type MemberBreaks = {
+  userId: string; name: string; role: string; onBreak: boolean; breaks: BreakPoint[];
+};
+
+/**
+ * PHASE 52/66 — per-member break points for the master map (drawn ORANGE). Consumes the Phase-66
+ * `GET /time-tracker/break-locations` read: `{ data: { date, members:[{ user_id, full_name, role,
+ * is_on_break, breaks:[{ lat, lng, at, kind:'start'|'end', accuracy, reason?, active? }] }] } }`
+ * (verified against `routes/timeTracker.js:1074`).
+ *
+ * Master-gated server-side: the whole-map case (no `user_id`) requires super_admin, and a 403 is a
+ * quiet, legitimate "not for you" answer (empty) — NOT an outage, so it never raises the banner;
+ * only a real 5xx/network failure does. The app renders exactly what the server returns; it never
+ * invents a break point.
+ */
+export async function getBreakLocations(userId?: string): Promise<MemberBreaks[]> {
+  if (!sessionReal || FORCE_DEMO) return unavailable('/time-tracker/break-locations', [] as MemberBreaks[]);
+  try {
+    const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+    const { ok, status, json } = await req(`/time-tracker/break-locations${qs}`);
+    if (status === 403) return [];   // non-master asked for others' data — a quiet empty answer
+    if (!ok) return unavailable('/time-tracker/break-locations', [] as MemberBreaks[]);
+    const members: any[] = Array.isArray(json?.data?.members) ? json.data.members : [];
+    return members.map((m): MemberBreaks => ({
+      userId: String(m?.user_id ?? ''),
+      name: String(m?.full_name || 'Member'),
+      role: String(m?.role || ''),
+      onBreak: !!m?.is_on_break,
+      breaks: (Array.isArray(m?.breaks) ? m.breaks : [])
+        .map((b: any): BreakPoint | null => {
+          const lat = num2(b?.lat), lng = num2(b?.lng);
+          if (lat === undefined || lng === undefined) return null;
+          return {
+            lat, lng,
+            at: b?.at ? String(b.at) : undefined,
+            kind: b?.kind === 'end' ? 'end' : 'start',
+            reason: typeof b?.reason === 'string' && b.reason ? b.reason : null,
+            active: !!b?.active,
+          };
+        })
+        .filter(Boolean) as BreakPoint[],
+    }));
+  } catch {
+    return unavailable('/time-tracker/break-locations', [] as MemberBreaks[]);
+  }
+}
+
 /** Generate a family/client report -> POST /api/clients/generate-report. Null on any failure. */
 export async function generateReport(clientName: string): Promise<any | null> {
   return await tryReal<any>('/clients/generate-report', { method: 'POST', body: JSON.stringify({ clientName }) }, isObj);

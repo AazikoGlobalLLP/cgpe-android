@@ -18,16 +18,17 @@ import type { AgentPin } from '@/data/api';
 import type { TeamMember } from '@/data/team';
 import { fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
-import { LeafletMap } from '@/ui/LeafletMap';
+import { LeafletMap, type MapBreak } from '@/ui/LeafletMap';
 import { useAuth } from '@/store/auth';
 import { canSeeLiveLocation } from '@/store/roles';
 
 /* ------------------------------------------------------------------ *
  * Where the field is, right now.
  *
- * THE LEGEND READS FROM THE PALETTE THE MAP DRAWS WITH. Phase 51 recoloured the pins by EVENT:
- * a clock-in point is `c.success` (green), a clock-out point is `c.danger` (red). The legend
- * names exactly those two. A legend that names a colour the map never renders is worse than none.
+ * THE LEGEND READS FROM THE PALETTE THE MAP DRAWS WITH. The pins are coloured by EVENT: clock-in
+ * = `c.success` (green, Phase 51), break = `c.warning` (orange, Phase 66), clock-out = `c.danger`
+ * (red). The legend names exactly those three. A legend that names a colour the map never renders
+ * is worse than none.
  *
  * THE SCROLLVIEW YIELDS TO THE MAP. The map now pans and pinches like a native one, and a
  * map inside a vertical scroller is a fight over every upward drag: without this, dragging
@@ -79,6 +80,7 @@ export default function AgentMap() {
 
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [pins, setPins] = useState<AgentPin[]>([]);
+  const [breaks, setBreaks] = useState<api.MemberBreaks[]>([]);
   const [mine, setMine] = useState<Mine | null>(null);
   const [loading, setLoading] = useState(true);
   /** True while a finger is working the map. Freezes this screen's scroller, nothing else. */
@@ -94,14 +96,17 @@ export default function AgentMap() {
 
   const load = useCallback(async () => {
     if (!isMaster) { setLoading(false); return; }   // never fetch member locations as a non-master
-    const [tm, pn, saved] = await Promise.all([
+    const [tm, pn, saved, brk] = await Promise.all([
       api.getTeam(),
       api.getAgentLocations(),
       AsyncStorage.getItem('clock.' + new Date().toDateString()).catch(() => null),
+      // PHASE 66: break points for the orange pins. A non-master 403 comes back quietly empty.
+      api.getBreakLocations().catch(() => [] as api.MemberBreaks[]),
     ]);
     if (!live.current) return;
     setTeam(tm);
     setPins(pn);
+    setBreaks(brk);
     setMine(readMine(saved));
     setLoading(false);
   }, [isMaster]);
@@ -118,6 +123,13 @@ export default function AgentMap() {
       tracked: people.length,
     };
   }, [pins, team]);
+
+  // PHASE 66: flatten the per-member break lists into the flat point array LeafletMap draws, carrying
+  // each point's member name onto its popup.
+  const breakPoints = useMemo<MapBreak[]>(
+    () => breaks.flatMap((m) => m.breaks.map((b) => ({ ...b, name: m.name }))),
+    [breaks],
+  );
 
   const open = useCallback((id: string) => router.push(`/team/${id}`), [router]);
 
@@ -173,9 +185,10 @@ export default function AgentMap() {
         </Appear>
 
         <Appear index={1}>
-          <LeafletMap pins={pins} height={330} onInteracting={setMapBusy} />
+          <LeafletMap pins={pins} breaks={breakPoints} height={330} onInteracting={setMapBusy} />
           <Row style={{ justifyContent: 'center', gap: spacing.lg, marginTop: spacing.md, flexWrap: 'wrap' }}>
             <Legend color={c.success} label="Clock-in" />
+            <Legend color={c.warning} label="Break" />
             <Legend color={c.danger} label="Clock-out" />
           </Row>
           {/* Said once, here, rather than as a badge on the map: the map is small and its

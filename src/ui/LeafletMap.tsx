@@ -71,9 +71,17 @@ import { LEAFLET_CSS, LEAFLET_JS } from './vendor/leaflet-1.9.4';
 
 export type TrackPathPoint = { lat: number; lng: number; at?: string | number };
 
+/** PHASE 66: one break point to draw ORANGE. `name` labels the popup; `active` = an in-progress break. */
+export type MapBreak = {
+  lat: number; lng: number; at?: string | number; kind: 'start' | 'end';
+  name?: string; reason?: string | null; active?: boolean;
+};
+
 export type LeafletMapProps = {
   pins: AgentPin[];
   path?: TrackPathPoint[];
+  /** PHASE 66: per-member break points, drawn ORANGE. Optional — the map is unchanged without them. */
+  breaks?: MapBreak[];
   height?: number;
   /**
    * Whose route this is. Shown on the trajectory's popups, which otherwise could only say
@@ -229,6 +237,7 @@ function buildPayload(
   c: Palette,
   cluster: boolean,
   reduced: boolean,
+  breaks: MapBreak[],
 ): MapPayload {
   const markers: MapMarker[] = [];
 
@@ -269,6 +278,27 @@ function buildPayload(
         line2: esc(join([city, dayOf(p.outTime)])),
       });
     }
+  }
+
+  /* ---- Break points (Phase 66), drawn ORANGE (clock-in green / break orange / clock-out red) ---- */
+  for (const b of breaks) {
+    if (!usable(b.lat, b.lng)) continue;
+    const t = clock(b.at);
+    const ended = b.kind === 'end';
+    const bg = c.warning;
+    markers.push({
+      id: `brk:${ended ? 'e' : 's'}:${b.lat.toFixed(5)},${b.lng.toFixed(5)}:${b.at ?? ''}`,
+      lat: b.lat,
+      lng: b.lng,
+      bg,
+      fg: ink(bg),
+      // A live, in-progress break sits a touch larger so a manager can pick out who is on break now.
+      size: b.active ? 20 : 15,
+      glyph: '',
+      name: esc(b.name || 'Break'),
+      line1: esc(t ? `${ended ? 'Break ended' : 'Break started'} at ${t}` : (ended ? 'Break ended' : 'Break started')),
+      line2: esc(join([b.reason ? `Reason: ${b.reason}` : '', dayOf(b.at), b.active ? 'On break now' : ''])),
+    });
   }
 
   /* ---- Trajectory ---- */
@@ -1066,6 +1096,7 @@ function MapCanvas({
 export function LeafletMap({
   pins,
   path,
+  breaks = [],
   height = 320,
   pathName = '',
   cluster = true,
@@ -1086,8 +1117,8 @@ export function LeafletMap({
 
   const html = useMemo(() => buildHtml(c), [c]);
   const payload = useMemo(
-    () => buildPayload(pins, path, pathName, c, cluster, reduced),
-    [pins, path, pathName, c, cluster, reduced],
+    () => buildPayload(pins, path, pathName, c, cluster, reduced, breaks),
+    [pins, path, pathName, c, cluster, reduced, breaks],
   );
   // Memoised down to a STRING: `pins={[]}` at a call site builds a new array on every
   // render, and an equal string is what stops that from firing an injection each time.

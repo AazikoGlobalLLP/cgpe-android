@@ -113,3 +113,47 @@ describe('stopBreak', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('getBreakLocations (Phase 66 master read)', () => {
+  it('parses members + break points (start/end, reason, active) from the Phase-66 shape', async () => {
+    fetchSpy.mockResolvedValueOnce(reply(200, { success: true, data: { date: '2026-08-18', members: [
+      { user_id: 'u1', full_name: 'Asha', role: 'advisor', is_on_break: true, breaks: [
+        { lat: 21.2, lng: 72.8, at: '2026-08-18T10:00:00Z', kind: 'start', accuracy: 12, reason: 'lunch' },
+        { lat: 21.21, lng: 72.81, at: '2026-08-18T10:30:00Z', kind: 'end', accuracy: 15 },
+        { lat: 21.22, lng: 72.82, at: '2026-08-18T13:00:00Z', kind: 'start', active: true, reason: 'tea' },
+      ] },
+    ] } }));
+    const res = await api.getBreakLocations();
+    expect(sentUrl()).toContain('/time-tracker/break-locations');
+    expect(res).toHaveLength(1);
+    expect(res[0]).toMatchObject({ userId: 'u1', name: 'Asha', role: 'advisor', onBreak: true });
+    expect(res[0].breaks).toHaveLength(3);
+    expect(res[0].breaks[0]).toEqual({ lat: 21.2, lng: 72.8, at: '2026-08-18T10:00:00Z', kind: 'start', reason: 'lunch', active: false });
+    expect(res[0].breaks[1]).toEqual({ lat: 21.21, lng: 72.81, at: '2026-08-18T10:30:00Z', kind: 'end', reason: null, active: false });
+    expect(res[0].breaks[2].active).toBe(true);
+  });
+
+  it('appends ?user_id= when a specific member is named', async () => {
+    fetchSpy.mockResolvedValueOnce(reply(200, { success: true, data: { members: [] } }));
+    await api.getBreakLocations('u7');
+    expect(sentUrl()).toContain('user_id=u7');
+  });
+
+  it('a 403 (non-master asking for others) is a QUIET empty answer, not an outage', async () => {
+    fetchSpy.mockResolvedValueOnce(reply(403, { success: false, message: 'Access denied' }));
+    const res = await api.getBreakLocations();
+    expect(res).toEqual([]);
+  });
+
+  it('drops break points with non-finite coordinates (never fabricates a pin)', async () => {
+    fetchSpy.mockResolvedValueOnce(reply(200, { success: true, data: { members: [
+      { user_id: 'u1', full_name: 'Asha', role: 'advisor', is_on_break: false, breaks: [
+        { lat: 'x', lng: 72.8, kind: 'start' },
+        { lat: 21.2, lng: 72.8, at: '2026-08-18T10:00:00Z', kind: 'start' },
+      ] },
+    ] } }));
+    const res = await api.getBreakLocations();
+    expect(res[0].breaks).toHaveLength(1);
+    expect(res[0].breaks[0].lat).toBe(21.2);
+  });
+});
