@@ -6,6 +6,38 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-18 — Phase 51 (map toggles) + Phase 52 (Break feature) built end-to-end; backend Phase 66 verified+consumed; v1.10.0 APK cut; new owner issue-batch under investigation
+
+**Context.** Owner answered the map-toggle spec and bundled in a full Break feature + a colour scheme. Later reported the
+backend "task complete"; verifying the real code showed the completed task was first Phase 65 (gap-detector, NOT break),
+and only on a re-check was Phase 66 (the break enhancements) actually shipped — a live example of "a tick is not the code."
+Then owner sent a new 7-item issue batch (task mismatch, offline, network, lead-open error, createdAt/updatedAt "", iOS
+mandatory) and asked for well-defined rows + a handoff.
+
+**Decision.** (1) **Phase 51 (`8eb4858`)** — satellite toggle uses **Esri World Imagery + Esri label overlay** (hybrid, no
+API key); Apple/Google tiles need paid SDK/keys, so that is the honest ceiling (a small "Imagery © Esri" credit shows in
+satellite). Show/hide-points toggles the marker layer (route line + arrows stay). Pins recoloured by EVENT (clock-in green
+`c.success`, clock-out red `c.danger`). Satellite/points state lives in the outer `LeafletMap` so a theme flip (which
+remounts `MapCanvas` via key) keeps the choice; re-asserted on the ready handshake. (2) **Phase 52 Break** — owner supplied
+5-language copy, so the whole flow shipped (`8da2fb8` data+i18n, `b1cea19` home UI): after clock-in the hero shows **Break +
+Clock out** side by side; the **8h30m gate** (`MIN_SHIFT_MS`, the payroll office-hours figure) shows a `useConfirm` first
+only when the minimum is met; the reason is **optional** and sent **additively** (harmless before the backend stored it);
+**clocking out while on break ends the break FIRST**, because `DayLog.clockOut` nulls `activeBreakStart` without recording
+the in-progress break, so that break time would otherwise silently count as worked. (3) **Backend Phase 66 (`6ef26f0`)
+consumed (`53ba448`)** — verified field-for-field: `breakSchema.reason` persists (B1, mobile already sent it → zero
+change) and NEW master-gated `GET /break-locations` (B2) → `getBreakLocations()` draws **ORANGE** break pins (`c.warning`)
+on `agent-map` (legend now green/orange/red); a 403-for-others is a quiet empty answer, never a fabricated pin. cgpe-api
+chose a NEW dedicated endpoint over folding into the un-mastered `/live-locations` (which leaks staff email/role); mobile's
+green pins come from `getAgentLocations` (attendance fan-out), not that leak. (4) **v1.10.0 APK cut** (EAS build
+`0c648a0c`, direct `.apk` `https://expo.dev/artifacts/eas/ls-3QFiTrj-GuDt-6ot-Q7dQOuYkDcMLlt2InWDuf0s.apk`) bundling 51+52
+on the same native base as v1.9.0 (all JS-only) + a device checklist `docs/spec/PHASE-51-52-DEVICE-CHECK.md`. (5) The new
+7-item batch is being scoped by a parallel real-code investigation (workflow `wf_d89dc600-86e`) BEFORE rows are written, so
+each task is grounded, not guessed — owner made **iOS mandatory** and **task mismatch** the two priorities.
+
+**Consequence.** Phase 51 + 52 are complete pending only ops (backend `:3001` restart on the Phase-66 build for the orange
+pins) + an on-device pass. `git push` still 403s — every commit is local. The 7-issue rows + iOS reliability answer land
+once the investigation returns; do not write them from memory.
+
 ## 2026-08-17 — Phase 50 shipped+built; app-closed location (Phase 41) made owner #1 and fixed-forward with a v1.9.0 APK
 
 **Context.** In one boot: the owner confirmed all Phase-50 §6 decisions, `cgpe-api` shipped them (Backend Phase 64), and
