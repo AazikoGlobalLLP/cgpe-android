@@ -1,7 +1,10 @@
 # PHASE-52 — Break button + 8h30m gate + optional reason + orange break pins
 
 **Owner batch 2026-08-17** (bundled into the map-toggle answer, 2026-08-18). Session `cgpe-mobile`.
-Status: **SPEC LOCKED; BLOCKED on (a) 5-language human copy, (b) two `[api]` asks.** Not built yet.
+Status: **BUILT 2026-08-18** — owner supplied the 5-language copy, so the Break UI + the whole client
+flow shipped (commits `8da2fb8` data layer + i18n, `b1cea19` home UI). **Two things still pending, both
+backend:** (B1) the `reason` is *sent* but not yet *stored* server-side; (B2) the **orange break pins**
+on the map need the per-member break-location read. Neither blocks the button working today.
 
 ## Verified against real backend code (rule 5 — tags wrong 5×)
 
