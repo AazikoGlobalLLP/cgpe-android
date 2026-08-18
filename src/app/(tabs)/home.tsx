@@ -30,7 +30,7 @@ import { useT } from '@/i18n';
 import * as api from '@/data/api';
 import { getHealth } from '@/data/health';
 import type { AppNotification, Claim, Lead, Reminder } from '@/data/types';
-import { CATEGORY_ICON, Task, taskProgress } from '@/data/tasks';
+import { CATEGORY_ICON, Task, dueBucket as bucket, taskProgress, todayProgress } from '@/data/tasks';
 import { CLAIM_STATUS, REMINDER_ICON, STAGE_META } from '@/data/labels';
 import { fmtDay, fmtTime, inrShort, timeAgo } from '@/lib/format';
 import { whatsapp } from '@/lib/actions';
@@ -94,11 +94,8 @@ const FETCH_LIMIT = 25;
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
 
-function bucket(t: Task): 'overdue' | 'today' | 'upcoming' {
-  const due = startOfDay(new Date(t.dueDate)).getTime();
-  const today = startOfDay(new Date()).getTime();
-  return due < today ? 'overdue' : due === today ? 'today' : 'upcoming';
-}
+// `bucket` (dueBucket) and `todayProgress` are imported from @/data/tasks so Home and the Tasks
+// tab share one definition of "which day is this due" and "today's progress" — see that module.
 
 function isToday(iso: string | undefined): boolean {
   if (!iso) return false;
@@ -1077,7 +1074,7 @@ export default function Home() {
     // Optimistic: the row has to clear on the same frame as the tap. No haptic yet —
     // the buzz is reserved for the server confirming, so it means "saved", not "tapped".
     setTasks((prev) => prev.map((x) => (x.id === task.id
-      ? { ...x, status: 'done' as const, steps: x.steps.map((s) => ({ ...s, done: true })) }
+      ? { ...x, status: 'done' as const, completedAt: new Date().toISOString(), steps: x.steps.map((s) => ({ ...s, done: true })) }
       : x)));
 
     const res = await api.updateTaskStatus(task.id, 'done');
@@ -1104,13 +1101,15 @@ export default function Home() {
     const overdue = open.filter((x) => bucket(x) === 'overdue');
     const dueToday = open.filter((x) => bucket(x) === 'today');
     const inProgress = open.filter((x) => x.status === 'in_progress');
-    const todayAll = tasks.filter((x) => bucket(x) === 'today' || (x.status === 'done' && bucket(x) !== 'upcoming'));
+    // Shared with the Tasks tab (`todayProgress`) so the two "today" counts can never drift, and
+    // so a reopen or an undated task no longer makes the ratio jump. See @/data/tasks.
+    const prog = todayProgress(tasks);
     return {
       overdue,
       dueToday,
       inProgress,
-      todayAll,
-      todayDone: todayAll.filter((x) => x.status === 'done').length,
+      todayTotal: prog.total,
+      todayDone: prog.done,
       focus: [...overdue, ...dueToday],
     };
   }, [tasks]);
@@ -1179,9 +1178,10 @@ export default function Home() {
     [notes],
   );
 
-  const pct = day.todayAll.length ? day.todayDone / day.todayAll.length : 0;
-  /** The change IS the information: a task closing should be felt as the figure moving. */
-  const shownDone = useCountUp(day.todayDone);
+  const pct = day.todayTotal ? day.todayDone / day.todayTotal : 0;
+  /** The change IS the information: a task closing should be felt as the figure moving. Clamp to
+   *  the instant total so a reopen that drops a task out of today's set never flashes "2 / 1". */
+  const shownDone = Math.min(useCountUp(day.todayDone), day.todayTotal);
 
   /** Nothing came back AND the fetch layer reported an outage: not a confirmed empty day. */
   const unconfirmed = health.degraded && tasks.length === 0;
@@ -2020,17 +2020,17 @@ export default function Home() {
                       {heroRing ? <ClockRing on={clock.in} elapsed={dutyFor} /> : null}
 
                       {heroTasks ? (
-                        day.todayAll.length > 0 ? (
+                        day.todayTotal > 0 ? (
                           <View
                             style={{ flex: 1 }}
                             accessible
-                            accessibilityLabel={`Today, ${day.todayDone} of ${day.todayAll.length} tasks done`}
+                            accessibilityLabel={`Today, ${day.todayDone} of ${day.todayTotal} tasks done`}
                           >
                             <Eyebrow>{t('common.today')}</Eyebrow>
                             <Row style={{ alignItems: 'flex-end', gap: 6, marginTop: 3 }}>
                               <Metric value={String(shownDone)} size={font.display} />
                               <Txt size={font.h3} weight="700" color={c.muted} numeric style={{ marginBottom: 5 }}>
-                                / {day.todayAll.length}
+                                / {day.todayTotal}
                               </Txt>
                             </Row>
                             <Txt size={font.sub} color={c.muted} numberOfLines={1}>tasks done today</Txt>

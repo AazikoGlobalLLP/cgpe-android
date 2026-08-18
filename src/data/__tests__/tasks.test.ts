@@ -8,7 +8,7 @@
  * src/data/tasks.ts has ZERO imports, so this file needs no stub and no environment.
  */
 import { describe, expect, it } from 'vitest';
-import { taskProgress, type Task, type TaskStatus, type TaskStep } from '@/data/tasks';
+import { dueBucket, taskProgress, todayProgress, type Task, type TaskStatus, type TaskStep } from '@/data/tasks';
 
 /** Minimal Task. Only `status` and `steps` are read by taskProgress. */
 function task(status: TaskStatus, steps: TaskStep[]): Task {
@@ -83,5 +83,97 @@ describe('taskProgress — pinned current behaviour (change deliberately, not by
     // runtime from any Task not built by adaptTask (src/data/api.ts:178 is the only thing
     // guaranteeing []). If a later phase adds `t.steps?.length ?? 0`, update this on purpose.
     expect(() => taskProgress({ status: 'todo' } as unknown as Task)).toThrow(TypeError);
+  });
+});
+
+/* -------------------------------------------------------------------------------------------
+ * PHASE 53b — the task-count bug (owner #1, 2026-08-18).
+ *
+ * `dueBucket` and `todayProgress` are the single shared definition that Home and the Tasks tab
+ * both call, so the two headline counts cannot drift. These pins lock the two properties the fix
+ * exists to guarantee:
+ *   1. an UNDATED task (dueDate '') sorts to 'upcoming' — never a false 'overdue'/'today';
+ *   2. completing then reopening a task shifts the ratio by ONE step (the numerator), never a
+ *      simultaneous jump in the denominator (the owner-reported "count animates wrong on reopen").
+ * A fixed local-noon `now` is injected so the buckets don't depend on the runner's clock/timezone.
+ * ------------------------------------------------------------------------------------------- */
+const NOW = new Date(2026, 7, 18, 12, 0, 0); // local noon, 18 Aug 2026 — far from any midnight boundary
+/** ISO for local noon `offset` days from NOW (0 = today, -1 = yesterday, +1 = tomorrow). */
+const dayAt = (offset: number) => new Date(2026, 7, 18 + offset, 12, 0, 0).toISOString();
+/** A Task with only the fields these helpers read; everything else is a harmless default. */
+function mk(o: Partial<Task>): Task {
+  return {
+    id: 't', title: '', description: '', status: 'todo', priority: 'medium',
+    category: 'Task', dueDate: '', assignedBy: '', steps: [], createdAt: '', ...o,
+  };
+}
+
+describe('dueBucket — an undated task is never overdue or due today', () => {
+  it("sorts an empty dueDate ('') to 'upcoming', not 'overdue'/'today'", () => {
+    // THE fix: adaptTeamTask now leaves an undated task's dueDate ''. new Date('') is Invalid →
+    // NaN comparisons fall through to 'upcoming'. Before, it fell back to the server touch-time.
+    expect(dueBucket(mk({ dueDate: '' }), NOW)).toBe('upcoming');
+  });
+  it("classifies past → 'overdue', same day → 'today', future → 'upcoming' against the injected now", () => {
+    expect(dueBucket(mk({ dueDate: dayAt(-1) }), NOW)).toBe('overdue');
+    expect(dueBucket(mk({ dueDate: dayAt(0) }), NOW)).toBe('today');
+    expect(dueBucket(mk({ dueDate: dayAt(1) }), NOW)).toBe('upcoming');
+  });
+});
+
+describe('todayProgress — belongs = due-today ∪ completed-today', () => {
+  it('is {0,0,0} for an empty list', () => {
+    expect(todayProgress([], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+  });
+
+  it('counts a due-today task in the denominator, and only in the numerator once done', () => {
+    expect(todayProgress([mk({ dueDate: dayAt(0), status: 'todo' })], NOW)).toEqual({ total: 1, done: 0, pct: 0 });
+    expect(todayProgress([mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) })], NOW)).toEqual({ total: 1, done: 1, pct: 1 });
+  });
+
+  it('reopen only moves the numerator: a due-today task done→todo keeps total 1 while done flips 1→0', () => {
+    const done = todayProgress([mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) })], NOW);
+    const reopened = todayProgress([mk({ dueDate: dayAt(0), status: 'todo', completedAt: undefined })], NOW);
+    expect(done).toEqual({ total: 1, done: 1, pct: 1 });
+    expect(reopened).toEqual({ total: 1, done: 0, pct: 0 });
+    expect(reopened.total).toBe(done.total); // the denominator does NOT jump — the whole point
+  });
+
+  it('credits a task COMPLETED today even if it was due earlier (overdue-but-done-today counts)', () => {
+    expect(todayProgress([mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(0) })], NOW)).toEqual({ total: 1, done: 1, pct: 1 });
+  });
+
+  it('does NOT count a task completed on a PREVIOUS day (history never pollutes today)', () => {
+    // The old `(done && bucket !== 'upcoming')` clause swept in every non-upcoming done task
+    // regardless of when it closed; this is the case that fixes.
+    expect(todayProgress([mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(-1) })], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+  });
+
+  it('excludes an undated OPEN task entirely (no due-today claim, not completed)', () => {
+    expect(todayProgress([mk({ dueDate: '', status: 'todo' })], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+  });
+
+  it('an undated task counts the day it is completed, and cleanly leaves the set when reopened', () => {
+    expect(todayProgress([mk({ dueDate: '', status: 'done', completedAt: dayAt(0) })], NOW)).toEqual({ total: 1, done: 1, pct: 1 });
+    // Reopen (status todo + completedAt cleared): both total and done drop to 0 — no phantom
+    // 'today' bucket from a touch-time, no oscillation.
+    expect(todayProgress([mk({ dueDate: '', status: 'todo', completedAt: undefined })], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+  });
+
+  it('still counts a due-today done task whose completedAt is missing or stale (the due-today clause carries it)', () => {
+    expect(todayProgress([mk({ dueDate: dayAt(0), status: 'done' })], NOW)).toEqual({ total: 1, done: 1, pct: 1 });
+    expect(todayProgress([mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(-1) })], NOW)).toEqual({ total: 1, done: 1, pct: 1 });
+  });
+
+  it('aggregates a mixed list correctly', () => {
+    const list = [
+      mk({ dueDate: dayAt(0), status: 'todo' }),                      // due today, open      → denom
+      mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) }),// due today, done      → denom+num
+      mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(0) }),// overdue, done today  → denom+num
+      mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(-1) }),// done yesterday      → excluded
+      mk({ dueDate: dayAt(1), status: 'todo' }),                      // upcoming             → excluded
+      mk({ dueDate: '', status: 'todo' }),                            // undated open         → excluded
+    ];
+    expect(todayProgress(list, NOW)).toEqual({ total: 3, done: 2, pct: 2 / 3 });
   });
 });

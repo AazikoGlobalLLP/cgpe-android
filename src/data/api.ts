@@ -303,7 +303,11 @@ function adaptTeamTask(raw: any, assignee?: string): Task {
   const status: Task['status'] = DONE_WORDS.includes(st) ? 'done'
     : st === 'in_progress' || st === 'in progress' || st === 'doing' ? 'in_progress'
     : st === 'blocked' || st === 'on_hold' ? 'blocked' : 'todo';
-  const due = raw.due_at || raw.dueAt || raw.updated_at || raw.created_at || new Date().toISOString();
+  // An undated task keeps dueDate '' — NEVER the server's touch-time `updated_at`. A status
+  // change bumps updated_at, so bucketing an undated task by it made a complete→reopen re-bucket
+  // the task into today/overdue and the "today" count animate wrong (owner bug, 2026-08-18).
+  // '' is Invalid-Date-safe: `dueBucket` sorts it to 'upcoming' and every formatter renders '-'.
+  const due = raw.due_at || raw.dueAt || '';
   return {
     id: String(raw.id || raw._id || raw.team_task_id),
     title: String(raw.title || raw.task || 'Task'),
@@ -316,8 +320,11 @@ function adaptTeamTask(raw: any, assignee?: string): Task {
     client: raw.client || undefined,
     clientPhone: raw.client_phone || undefined,
     steps: [],
-    createdAt: raw.created_at || due,
-    completedAt: status === 'done' ? raw.updated_at : undefined,
+    // Both casings: team_tasks serialises camelCase (createdAt/updatedAt), the Task model snake.
+    createdAt: raw.created_at || raw.createdAt || new Date().toISOString(),
+    // `updated_at` is the best completion-time proxy the row carries; read both casings so a done
+    // task always gets a completedAt (the "today" count credits work done today off this field).
+    completedAt: status === 'done' ? (raw.updated_at || raw.updatedAt) : undefined,
     // extra (non-typed) fields used by admin views
     ...({ assignee: assignee || raw.assigneeName } as any),
   };

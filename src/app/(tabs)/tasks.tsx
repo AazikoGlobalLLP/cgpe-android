@@ -21,7 +21,7 @@ import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
 import * as api from '@/data/api';
-import { CATEGORY_ICON, Task, TaskStatus, TASK_PRIORITY, TASK_STATUS, taskProgress } from '@/data/tasks';
+import { CATEGORY_ICON, Task, TaskStatus, TASK_PRIORITY, TASK_STATUS, dueBucket, taskProgress, todayProgress } from '@/data/tasks';
 import { fmtDay, fmtTime } from '@/lib/format';
 import { call } from '@/lib/actions';
 
@@ -63,15 +63,8 @@ import { call } from '@/lib/actions';
 
 type Filter = 'today' | 'overdue' | 'in_progress' | 'upcoming' | 'done';
 
-function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
-
-export function dueBucket(t: Task): 'overdue' | 'today' | 'upcoming' {
-  const due = startOfDay(new Date(t.dueDate)).getTime();
-  const today = startOfDay(new Date()).getTime();
-  if (due < today) return 'overdue';
-  if (due === today) return 'today';
-  return 'upcoming';
-}
+// `dueBucket` + `todayProgress` now live in @/data/tasks so Home and this screen share one
+// definition (and it is unit-tested). Home imports the same pair.
 
 /** One honest message per view. A shared "All clear" would misreport four of the five. */
 const EMPTY_COPY: Record<Filter, { icon: IconName; title: string; subtitle: string; add?: boolean }> = {
@@ -210,15 +203,15 @@ export default function Tasks() {
     return open.filter((x) => dueBucket(x) === filter);
   }, [list, filter]);
 
-  // Today's completion = today's tasks done vs all of today's tasks.
-  const today = useMemo(() => {
-    const all = list.filter((x) => dueBucket(x) === 'today' || (x.status === 'done' && dueBucket(x) !== 'upcoming'));
-    const done = all.filter((x) => x.status === 'done').length;
-    return { total: all.length, done, pct: all.length ? done / all.length : 0 };
-  }, [list]);
+  // Today's completion = today's tasks done vs all of today's tasks. Schedule-/completion-based
+  // and shared with Home (`todayProgress`) so the two headline counts can never disagree, and so
+  // an undated task or a reopen no longer makes the ratio jump. See @/data/tasks.
+  const today = useMemo(() => todayProgress(list), [list]);
 
-  // The one count-up on this screen. It moves only when a task actually closes.
-  const shownDone = useCountUp(today.done);
+  // The one count-up on this screen. It moves only when a task actually closes. Clamp to the
+  // (instant) total so that when a reopened task LEAVES today's set — denominator drops at once
+  // while the numerator eases down — the card never flashes an impossible "2 / 1" mid-animation.
+  const shownDone = Math.min(useCountUp(today.done), today.total);
 
   const pickFilter = (next: Filter) => {
     if (next === filter) return;
@@ -235,10 +228,16 @@ export default function Tasks() {
    * air — the failure of one write must never revert a different, successful one.
    */
   const setStatus = async (task: Task, status: TaskStatus, refusedTitle: string) => {
-    const before = { status: task.status, steps: task.steps };
+    // Snapshot completedAt too: the optimistic write stamps it now (below) so `todayProgress`
+    // credits the close to today; a rollback must put the prior value (usually undefined) back.
+    const before = { status: task.status, steps: task.steps, completedAt: task.completedAt };
     setList((cur) => cur.map((x) => (
       x.id === task.id
-        ? { ...x, status, steps: status === 'done' ? x.steps.map((s) => ({ ...s, done: true })) : x.steps }
+        ? {
+            ...x, status,
+            steps: status === 'done' ? x.steps.map((s) => ({ ...s, done: true })) : x.steps,
+            completedAt: status === 'done' ? new Date().toISOString() : undefined,
+          }
         : x
     )));
 

@@ -42,6 +42,62 @@ export function taskProgress(t: Task): number {
   return t.steps.filter((s) => s.done).length / t.steps.length;
 }
 
+function startOfDay(d: Date): number {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
+}
+
+/**
+ * Which day-bucket a task's due date falls in, relative to `now`.
+ *
+ * A task with NO due date carries `dueDate === ''` (see `adaptTeamTask`), so `new Date('')` is an
+ * Invalid Date, `startOfDay` is NaN, and both comparisons below are false → it sorts to 'upcoming'.
+ * That is deliberate: an undated task must never claim to be overdue or due today. (Never pass a
+ * `null` dueDate — `new Date(null)` is the 1970 epoch and would read as 'overdue'.)
+ *
+ * Shared by the Tasks tab and Home so the two never drift; `now` is injectable for tests.
+ */
+export function dueBucket(t: Task, now: Date = new Date()): 'overdue' | 'today' | 'upcoming' {
+  const due = startOfDay(new Date(t.dueDate));
+  const today = startOfDay(now);
+  if (due < today) return 'overdue';
+  if (due === today) return 'today';
+  return 'upcoming';
+}
+
+/** True iff `iso` is a valid timestamp on the same local calendar day as `now`. */
+function isSameDay(iso: string | undefined, now: Date): boolean {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return false;
+  return startOfDay(new Date(t)) === startOfDay(now);
+}
+
+/**
+ * "Today's progress" — of the tasks that belong to today, how many are done.
+ *
+ * A task belongs to today if it is DUE today (its real schedule) OR was COMPLETED today. This is
+ * deliberately schedule-/completion-based, never touch-time-based:
+ *   - an undated task (dueDate '') is only ever counted on the day it is completed, and is never
+ *     re-bucketed into "today"/"overdue" by the server's `updated_at`; and
+ *   - completing a task then reopening it moves it in and out of the SAME set, so the ratio shifts
+ *     by one step instead of the numerator and denominator jumping independently — this is the
+ *     owner-reported "the count animates wrong on reopen" (2026-08-18).
+ *
+ * Home and the Tasks tab BOTH call this one function, so their two headline counts cannot drift.
+ */
+export function todayProgress(
+  list: Task[],
+  now: Date = new Date(),
+): { total: number; done: number; pct: number } {
+  const belongs = list.filter(
+    (t) => dueBucket(t, now) === 'today' || (t.status === 'done' && isSameDay(t.completedAt, now)),
+  );
+  const done = belongs.filter((t) => t.status === 'done').length;
+  return { total: belongs.length, done, pct: belongs.length ? done / belongs.length : 0 };
+}
+
 /**
  * PHASE 10. The seeded `tasks` array that used to live here has been removed.
  *
