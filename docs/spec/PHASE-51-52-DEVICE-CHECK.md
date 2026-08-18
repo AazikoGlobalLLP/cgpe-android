@@ -1,5 +1,12 @@
 # v1.10.0 — What to test on the phone
 
+**APK (EAS build `0c648a0c`, FINISHED 2026-08-18):**
+`https://expo.dev/artifacts/eas/ls-3QFiTrj-GuDt-6ot-Q7dQOuYkDcMLlt2InWDuf0s.apk`
+Open that link **on the Android phone** to download + install. If Android refuses to install over
+v1.9.0 ("app not installed"), **uninstall v1.9.0 first, then install** — your data is on the server,
+so you only need to log in again.
+
+
 This build (**v1.10.0**) adds two things on top of the v1.9.0 background-location build:
 - **Map upgrades** — satellite view, show/hide points, colour-coded pins (Phase 51)
 - **Break feature** — Break button after clock-in + break pins on the master map (Phase 52)
