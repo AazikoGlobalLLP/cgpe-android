@@ -14,6 +14,12 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**⚡⚡ v1.10.0 APK CUT (2026-08-18) — EAS build `0c648a0c`, FINISHED.** Bundles Phase 51 (map satellite/points toggles +
+green/red pins) + Phase 52 (Break feature + orange break pins) on the same native base as v1.9.0 (all JS-only on top).
+Direct APK: `https://expo.dev/artifacts/eas/ls-3QFiTrj-GuDt-6ot-Q7dQOuYkDcMLlt2InWDuf0s.apk`. Owner has the device-test
+checklist: `docs/spec/PHASE-51-52-DEVICE-CHECK.md`. **Orange break pins (§C) need the backend `:3001` restart on Backend
+Phase 66 to show.** `git push` still 403s — every commit local.
+
 **⚡ LATEST (owner, 2026-08-17, end of session):** owner re-prioritised again — **the app-closed (background) location
 bug is now #1**. Diagnosed as the Phase-41 native-build gap (installed APK predated the modules); cut a fresh **v1.9.0**
 EAS APK (build `86c1406c`) + device checklist → **owner is testing it on a handset.** Also captured **6 new feature
