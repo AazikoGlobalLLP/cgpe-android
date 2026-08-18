@@ -36,10 +36,13 @@ the break copy same day, so the whole client flow shipped: `8da2fb8` (data layer
 hero shows **Break + Clock out** — **End break** while on break, from `getClockState().isOnBreak`; Break at ≥8h30m worked
 shows a `useConfirm` gate first, under it goes straight to an optional-reason `Sheet`; clocking out while on break ends the
 break FIRST so its duration+location are recorded, else `DayLog.clockOut` discards it). Honest write path throughout.
-Gates: `tsc` 0 · `npm test` **587** · eslint 0 errors on touched files. JS-only → next build/OTA. **Two things still
-pending, both BACKEND (`[api]` filed 2026-08-18, owner relaying):** (B1) `reason` is *sent* additively but not yet *stored*
-server-side; (B2) the **orange break pins** on the map need the per-member break-location read. Neither blocks the button
-today. Spec: `docs/spec/PHASE-52.md`.
+Gates: `tsc` 0 · `npm test` **587** · eslint 0 errors on touched files. JS-only → next build/OTA. **UPDATE — cgpe-api
+shipped Backend Phase 66 (`6ef26f0`), VERIFIED field-for-field → both backend pieces DONE and CONSUMED (`53ba448`):**
+(B1) `reason` now **stored** (`breakSchema.reason`, no mobile change — `startBreak` already sent it); (B2) **orange break
+pins** wired — NEW `getBreakLocations()` (403-for-others = quiet empty, never fabricates) → `LeafletMap` draws break
+points **ORANGE** (`c.warning`), `agent-map` legend now green/orange/red. `npm test` **591** (+4 break-location tests).
+**Phase 52 now COMPLETE — only OPS (`:3001` restart on the Phase-66 build) + a device visual pass remain.** Spec:
+`docs/spec/PHASE-52.md`.
 
 **PRIORITY (owner, 2026-08-17):** **Phase 50 (dual-office geofence + out-of-range / early-clock-out reason →
 super-admin) is #1.** **cgpe-api SHIPPED it (Backend Phase 64, 2026-08-17) — VERIFIED against their real code** (all 6
