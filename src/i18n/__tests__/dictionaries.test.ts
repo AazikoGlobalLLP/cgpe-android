@@ -47,7 +47,9 @@ describe('i18n dictionaries — parity and value quality', () => {
     // the existing `tab.home`/`tasks.today` human copy, not a new translation.
     // Bumped 75 → 94 for the 19 `consent.*` keys (Phase 41a-ii, 2026-08-14) — human copy supplied
     // in all 5 languages (translation-v.01; docs/i18n/PHASE-41-CONSENT-COPY.md), not machine-translated.
-    expect(EN_KEYS.length).toBe(94);
+    // Bumped 94 → 103 for the 9 `break.*` keys (Phase 52, 2026-08-18) — owner human copy in all 5
+    // languages (docs/i18n/PHASE-52-break-copy-REQUEST.md), not machine-translated.
+    expect(EN_KEYS.length).toBe(103);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

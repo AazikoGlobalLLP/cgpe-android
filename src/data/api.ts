@@ -2109,6 +2109,50 @@ export async function clockOut(coords: { lat?: number; lng?: number; accuracy?: 
   }
 }
 /**
+ * PHASE 52 — start / stop a break against the already-live endpoints (`routes/timeTracker.js`
+ * `/break/start` :772, `/break/stop` :870). Same honest write-path posture as `clockIn`/`clockOut`:
+ * never fabricate success. A 403 (`LOCATION_RESTRICTION`) means the location is restricted; any
+ * other non-2xx (e.g. the 400 "Must be clocked in" / "Already on break" state guards) is a plain
+ * failure the caller reports. `reason` is sent ADDITIVELY on start — the backend ignores it until
+ * it persists it (INBOX `[api]` Break A, 2026-08-18), so it is best-effort, never fabricated.
+ */
+export async function startBreak(
+  coords: { lat?: number; lng?: number; accuracy?: number; city?: string } = {},
+  reasonText?: string,
+): Promise<{ ok: boolean; blocked?: boolean; message?: string; reason?: WriteFailure }> {
+  if (FORCE_DEMO) { await wait(200); return { ok: true }; }
+  if (!sessionReal) return { ok: false, reason: 'network' };
+  try {
+    const rt = typeof reasonText === 'string' ? reasonText.trim() : '';
+    const { ok, status, json } = await req('/time-tracker/break/start', {
+      method: 'POST',
+      body: JSON.stringify({ ...coords, source: 'mobile', ...(rt ? { reason: rt } : {}) }),
+    });
+    if (status === 403) return { ok: false, blocked: true, message: json?.message };
+    if (!ok) return { ok: false, reason: 'server', message: json?.message };
+    return { ok: true, message: json?.message };
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
+}
+export async function stopBreak(
+  coords: { lat?: number; lng?: number; accuracy?: number; city?: string } = {},
+): Promise<{ ok: boolean; blocked?: boolean; message?: string; reason?: WriteFailure }> {
+  if (FORCE_DEMO) { await wait(200); return { ok: true }; }
+  if (!sessionReal) return { ok: false, reason: 'network' };
+  try {
+    const { ok, status, json } = await req('/time-tracker/break/stop', {
+      method: 'POST',
+      body: JSON.stringify({ ...coords, source: 'mobile' }),
+    });
+    if (status === 403) return { ok: false, blocked: true, message: json?.message };
+    if (!ok) return { ok: false, reason: 'server', message: json?.message };
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
+}
+/**
  * The signed-in user's CURRENT clock state, straight from the server.
  *
  * WHY THIS EXISTS. Clock state used to live only in AsyncStorage under a device-scoped key
