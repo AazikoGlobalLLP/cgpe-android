@@ -6,6 +6,41 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-18 — Phase 53b (mobile half of owner #1: the "today" task count animating wrong on reopen) BUILT
+
+**Context.** Owner's #1 issue: claiming a ticket doesn't surface it as a task, and reopening a completed task makes the
+count jump. Two independent causes were verified against real code (6-agent investigation `wf_df890eaa-2f6`): **(53a,
+backend)** a claimed ticket is written only on the tickets doc, never mirrored into `team_tasks`, so the task list can never
+show it — filed to `cgpe-api` (INBOX, owner relays); **(53b, mobile)** `adaptTeamTask` derived `dueDate` from the server
+touch-time `updated_at` for undated tasks, and both Home and the Tasks tab computed the "today" denominator as
+`due-today ∪ (done && !upcoming)` — duplicated inline in two files — so a status change re-bucketed undated tasks and swept
+every historical done task into "today", making a reopen change numerator AND denominator at once.
+
+**Decision.** (1) **Undated → `''`, not `created_at`.** An undated task now keeps `dueDate === ''`. Verified downstream: `new
+Date('')` is Invalid → `dueBucket` sorts it to `'upcoming'` (never a false overdue/today) and every formatter routes through
+`toDate` → `'-'`; `tasks.test.ts` already blessed `dueDate:''`. `created_at` was rejected because it *reproduces* the bug
+(old undated tasks would read "Overdue"). This also sidesteps the snake/camel casing trap — the `due_at||dueAt` prefix
+(unchanged) still catches every real due date, so dated tasks are untouched. (2) **One shared, unit-tested helper.**
+`dueBucket` moved to the zero-dep `@/data/tasks` (now takes an injectable `now`), and NEW `todayProgress(list, now)` =
+`belongs(due-today ∪ completed-today)` — **both** Home and Tasks call it, so the two counts cannot drift, and a reopen shifts
+only the numerator (an undated/overdue task completed-then-reopened leaves the SAME set cleanly; history from earlier days no
+longer pollutes today). (3) **Honest optimistic model.** complete stamps `completedAt`, reopen clears it, with a correct
+rollback; `completedAt`/`createdAt` in `adaptTeamTask` now read both snake+camel casings (team_tasks serialises camelCase),
+so a done task always carries a completion timestamp the count can credit. (4) **Clamp the animated numerator.** An
+adversarial review (`wf_5f13f693-c88`, behavior + count-math + contract lenses, 2 of 3 clean) surfaced one low-severity
+cosmetic: on a reopen that drops a task out of today's set the denominator updates instantly while `useCountUp` eases the
+numerator down, transiently showing "2 / 1". Fixed with `Math.min(shownDone, total)` at both hero render sites — it lands on
+the owner's exact "count looks wrong on reopen" sensitivity.
+
+**Consequence.** 53b is editor-complete: `tsc` 0 · `npm test` **603/603** (+12 pins: `dueBucket('')→'upcoming'`,
+reopen-stability, completed-today crediting, history exclusion, and `adaptTeamTask` undated→`''` at the wire) · eslint 0 new
+errors. Commit `46b061e` (local — push still 403s). **Only a device visual pass remains** (native count-up animation).
+**53a stays backend-first** — a claimed ticket cannot appear as a task until `cgpe-api` ships the `team_tasks` mirror; do not
+"fix" it mobile-side. An undated task now lives under the **Upcoming** filter (honest: it has no due date) rather than being
+scattered by touch-time — a deliberate, verified behavior change, not a regression.
+
+---
+
 ## 2026-08-18 — Phase 51 (map toggles) + Phase 52 (Break feature) built end-to-end; backend Phase 66 verified+consumed; v1.10.0 APK cut; new owner issue-batch under investigation
 
 **Context.** Owner answered the map-toggle spec and bundled in a full Break feature + a colour scheme. Later reported the

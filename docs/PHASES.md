@@ -23,11 +23,18 @@ Phase 66 to show.** `git push` still 403s — every commit local.
 **⚡⚡ NEW OWNER ISSUE BATCH 2026-08-18 → Phases 53–58, all VERIFIED against real code** (workflow `wf_d89dc600-86e`,
 6 parallel investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-18.md`. Owner priorities:
 **tasks (#1)** + **iOS (mandatory)**. NONE built yet — this session scoped them; next session executes.
-- **Phase 53 — [m]+[api] Task mismatch (owner #1).** (a) claiming a ticket writes only the tickets doc, never mirrors
-  into `team_tasks`, so it never shows in the task list → **[api]** mirror ticket-assign into `team_tasks`
-  (`routes/tickets.js` PUT, pattern `routes/tasks.js:225-258`); (b) reopen re-buckets undated tasks by touch-time
-  (`adaptTeamTask` `dueDate` falls back to `updated_at`, `api.ts:306`) + the "today" denominator counts done tasks
-  (`tasks.tsx:214`/`home.tsx:1107`) → **[m]** fix both. Scope both · M.
+- **Phase 53 — [m]+[api] Task mismatch (owner #1). 53b (mobile) BUILT `46b061e`; 53a (backend) FILED.** (a) claiming a
+  ticket writes only the tickets doc, never mirrors into `team_tasks`, so it never shows in the task list → **[api]** mirror
+  ticket-assign into `team_tasks` (`routes/tickets.js` PUT, pattern `routes/tasks.js:225-258`) — **filed to `cgpe-api`
+  (INBOX), owner relays; mobile can't build this half.** (b) reopen re-buckets undated tasks by touch-time + the "today"
+  denominator counted done tasks → **[m] BUILT:** `adaptTeamTask` now keeps an undated `dueDate` **`''`** (not `updated_at`;
+  Invalid-Date-safe → `dueBucket` sorts 'upcoming', renders '-'); the "today" count is ONE shared unit-tested helper
+  `todayProgress` (due-today ∪ completed-today) that **both** Home and Tasks call so they can't drift and a reopen shifts
+  only the numerator; optimistic complete/reopen stamps/clears `completedAt` (with rollback); `completedAt`/`createdAt` read
+  both snake+camel casings; animated numerator clamped to the total so a reopen never flashes "2 / 1". Gates: `tsc` 0 ·
+  `npm test` **603** (+12) · eslint 0 new. Adversarially reviewed (`wf_5f13f693-c88`). **Undated tasks now live under
+  Upcoming (honest — no due date), a deliberate behavior change.** Remaining: device visual pass + 53a ships. Spec:
+  `docs/spec/ISSUES-2026-08-18.md` §53; DECISIONS 2026-08-18 (top).
 - **Phase 54 — [api] Lead "could not be opened" (403).** `GET /leads/:id` strict self-check (`leads.js:266`) 403s the
   teammate/firm leads the LIST returns for a leader/member — the leader-tier trap. Fix: detail uses the same
   `visibilityScope/canSee` as the list (`utils/scope.js`), + parity on `PUT /:id:455`. **Mobile zero-change** (Lead has
