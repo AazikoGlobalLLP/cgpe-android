@@ -1464,19 +1464,26 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-18 handoff — new owner issue batch scoped; owner priorities = tasks #1 + iOS. Full grounded spec `docs/spec/ISSUES-2026-08-18.md`):**
-1. **Phase 53 — Task mismatch (owner #1).** Start with the **mobile half (b)** — buildable now, no backend: in `adaptTeamTask`
-   (`api.ts:306`) stop bucketing undated tasks by `updated_at`, and make the "today" denominator stable (`tasks.tsx:214` +
-   `home.tsx:1107`, identical). Then **file the `[api]` (a)** — mirror a ticket-assign into `team_tasks` (`routes/tickets.js`
-   PUT, pattern `routes/tasks.js:225-258`) so a claimed ticket shows in the task list. Confirm the 4 open product Qs with the
-   owner first (mirror-scope, ticket-task dueAt, what "today's progress" counts).
-2. **Phase 54 — Lead "could not be opened" (`[api]`, quick, high-impact).** File the ask: `GET /api/leads/:id` (+ `PUT :455`)
-   must authorize with the same `visibilityScope/canSee` as the list. **Mobile is zero-change** — verify that and file, then
-   the pipeline leads open. Also fix the stale `api.ts:908` comment while nearby.
-3. **Phase 55 — Network resilience (`[m]`, fixes "doesn't work on my WiFi/phone").** Raise `REQUEST_TIMEOUT` (`config.ts:65`)
-   4.5→~12–15 s, add bounded retry+backoff in `req()` (GET+login only), distinguish timeout/DNS/TLS, add a `/health` "Test
-   connection", give `uploadFile` an AbortController. First get the owner's on-phone `/health`-in-browser result to split
-   app-side vs network-side.
+**CURRENT next 3 (2026-08-19 handoff — Phase 53 built; new owner batch 63–69 scoped. Owner priority = background location #1. Full grounded spec `docs/spec/ISSUES-2026-08-19.md`):**
+0. **🚨 OWNER/OPS FIRST — chase the deploy gap.** Deployed `origin/main` is ~28 phases behind; Phases 41–68 (incl. the
+   ticket→task mirror `cb3f9de`, which is **unpushed**) are not live. Get the owner to have the backend team **push + merge
+   to `origin/main` + deploy + restart `:3001`**. This alone fixes Phase 68 (performance) and Phase 69 (ticket→task) and
+   clears many "server did not answer" errors — **for free, no code.** Do NOT rebuild these as app bugs.
+1. **Phase 63 — Background location (owner #1).** `[m]` fix `src/lib/motion.ts` (`distanceInterval 30→0`, add a `High`
+   accuracy case in `tracker.ts:394`, neutralise the 5-min STILL stretch), relay the `[api]` (relax the `>100 m` shift-point
+   drop `timeTracker.js:1671`), and give the owner the OPS checks (confirm Pavitra's APK build ≥ v1.9.0, phone battery =
+   Unrestricted + Auto-start, and query her DB session for `point_count`/`dropped`). Needs a **native APK build** to ship.
+   Confirm the battery-vs-accuracy tradeoff with the owner.
+2. **Phase 64 + 65 — Monitor screen.** `[api]` (relay): `attendance.js dayLogToAttendanceRecords` must surface the stored
+   `clockInLoc` coords (fixes "on duty 0 / live field status 0" — a real backend bug a restart won't fix), and gate + fix
+   `/live-locations` so the roster can come from the **full staff list** (so members appear before they've been assigned a
+   task). `[m]` harden `getBreakLocations` to treat a 404 as a quiet answer (stops the false outage banner).
+3. **Phase 67 — Payroll.** OPS: create a payroll profile per employee (fixes "only 1 shows"). `[m]`: build a `payroll-detail`
+   screen (tap a member → pay breakdown + activity, reusing `earnings.tsx` + `performance.tsx`, rendering server numbers
+   verbatim). `[api]`: add `hourly_rate` to `computeRangeSalary months[]`.
+
+**Also open (lower priority):** Phase 66 (live-location last-known button, `[api]`+`[m]`+`[sec]`); Phases 54/55/56/57 from
+the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline) still stand.
 
 **⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
 iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability

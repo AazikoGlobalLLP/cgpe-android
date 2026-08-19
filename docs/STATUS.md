@@ -1,18 +1,15 @@
 # Status — CGPE Connect (Android app)
 
-**Updated:** 2026-08-18
+**Updated:** 2026-08-19
 
-**Working on right now:** Turning the owner's latest list of problems into a clear, checked plan and getting the next round of fixes ready.
+**Working on right now:** Finished the top-priority task/dashboard fix, and turned the owner's new list of problems (the manager screens, payroll, and live location) into a clear, checked plan.
 
 **Done this week:**
-- The team-location map now has a **satellite view**, a button to **hide or show the location dots**, and **colour-coded pins** — green where a person clocked in, red where they clocked out.
-- Added a **Break** feature: after clocking in, a staff member can take a break (with an optional reason); if they've already finished their minimum hours it first asks whether they'd rather clock out. A manager can now see **break locations in orange** on the map.
-- Sent a new installable app version (**v1.10.0**) to the owner for testing, with a simple checklist of what to try.
-- Went through the app carefully and confirmed the **Break reason and the orange break pins** are wired correctly.
-- Investigated the owner's new list of issues (tasks not reaching the dashboard, some leads not opening, the app failing on certain networks, iPhone support) and wrote a clear plan for each — grounded in the real code, not guesswork.
+- Fixed the **owner's #1 issue — the task counts**. A task you reopen no longer makes the "today" number jump around, and a claimed job is set up to show on your own dashboard. The app side is done and tested.
+- **Checked the server team's work** on the "claim a ticket → it becomes your task" feature. Their code is correct and our app already reads it — but see the blocker below: it isn't switched on yet on the live server.
+- **Investigated the new list of problems** (the manager "Monitor" screen showing 0 people on duty, the map error, the payroll screen showing only one employee, live location, and the big one — a staff member's phone tracking her location poorly) and wrote a clear, grounded plan for each — every cause traced to the real code, not guesswork.
 
-**Blocked on:**
-- The **orange break locations** on the manager map only appear after the server team restarts the server once (a quick step on their side).
-- **iPhone support** needs an **Apple developer account (about $99 a year)** before we can build an iPhone version at all. Also, honest note: on iPhone the app will work fully for login, data, the map and fingerprint/Face unlock, but Apple does **not** allow the same "record location 24/7 even after the app is fully closed" that Android does.
+**Blocked on (the one big thing):**
+- **The live server is running an old version of the back-end.** A lot of back-end work the server team said was "done" (including the claim-a-ticket feature and the manager performance report) was written but **never switched on for the live app** — some of it was never even uploaded. This is why the owner sees several "finished" features not working, and several "could not load" errors. **The server team needs to publish their latest work to the live server and restart it.** Our side can't do this. Until they do, our app is correct but shows honest "couldn't load" messages.
 
-**Next:** Fix the **task/dashboard mismatch** (the owner's top priority — a claimed job should appear on your own dashboard, and the counts should stay correct when a task is reopened), fix the **"lead could not be opened"** error, and make the app **hold up better on weak networks**.
+**Next:** The background location tracking (a staff member's phone should record her real position about every minute and keep every point) — this is the owner's new top priority and needs a fresh app build plus a check on her phone's settings. Alongside it: fix the manager "Monitor" screen (it shows 0 on duty because the server isn't sending the location data), and build the payroll screen so it lists all employees and shows how each person's pay was calculated.

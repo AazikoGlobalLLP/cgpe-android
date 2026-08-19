@@ -43,6 +43,17 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   one boot. Do **not** re-describe roadmap `[api]` items (`docs/PLAN-2026-08-14.md`: Phases 37/38/41–45/47/48) as
   "blocked indefinitely." After the owner confirms, re-read the producer's real code before wiring the app side
   — a backend fix can need a `:3001` restart / prod deploy to actually be live, so a device miss ≠ a code bug.
+- ⚠️ **"Backend shipped" ≠ live on prod. VERIFY DEPLOYMENT, not just the code (proven 2026-08-19).** The prod backend
+  deploys **only `origin/main`** (`cgpe-backend-main/.github/workflows/deploy.yml`), and on 2026-08-19 live `origin/main`
+  was `1cad312` (**Phase 38–40**) while every "shipped" backend piece **Phases 41–68** (task-report/perf, break-locations,
+  geofence, clock-reason, commissions, the ticket→team_tasks mirror) sat on `shivam`/local `main`, **never merged to
+  `origin/main`** — and the ticket-mirror commit `cb3f9de` was on **no remote branch at all** (unpushed). So multiple
+  "done" features the owner tested simply **did not run on the device**, and the symptoms read as app bugs but were a
+  deploy gap. **Before telling the owner a backend-dependent feature works — or re-diagnosing it as an app bug — confirm
+  it is on deployed `origin/main`** (`git -C ../cgpe-backend-main ls-remote origin refs/heads/main`, then
+  `git grep <fn> origin/main -- <file>` or `git branch -r --contains <commit>`) and, ideally, that the live endpoint
+  answers. Our `git push` is 403-blocked, so **we cannot deploy — file it as an OPS ask and have the owner relay** "push +
+  merge to `origin/main` + deploy + restart `:3001`."
 
 ## Commands
 - `npx expo start --go` — Expo Go. **`--go` is required**; `expo-dev-client` is installed, so a bare
