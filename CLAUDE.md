@@ -134,6 +134,18 @@ URL only shows an Install button when opened ON the Android phone). So when the 
 you can deliver one — do not tell them shipping is blocked. (`--non-interactive` is required — stdin is
 EOF here — and `build:view` does NOT accept `--non-interactive`, only `--json`.)
 
+**USB/ADB DEVICE TESTING WORKS FROM HERE (proven 2026-08-19).** The owner can connect the phone by USB and
+you can drive it (screenshots, taps, install). `adb` isn't installed → download Google **platform-tools** to
+the scratchpad (`.../scratchpad/platform-tools/adb.exe`, a zip, no admin install). The owner must enable
+**USB-debugging + authorize the PC + log in themselves** (the app is real-backend-only — no credentials exist
+here). Confirm the exact build by **APK hash** (`adb pull` the on-device `base.apk`, its SHA-256 must equal the
+EAS artifact — version strings CAN'T tell builds apart: every `preview` build is `v1.10.0` / `versionCode 1`).
+**Screen-off drops the ADB session** → `adb shell settings put global stay_on_while_plugged_in 7` while testing,
+reset to `0` after. Tap via `uiautomator dump` + parse `bounds`, or screenshot coordinates ×1.17 (device is
+1080×2340). **Cannot be driven** (owner-owed, physical): background GPS over a real shift, geofence at a real
+place, biometric hardware, real writes (clock-in / WhatsApp send) — those live in
+`docs/DEVICE-TESTING-GUIDE-v1.10.0.md`. See DECISIONS 2026-08-19.
+
 **"App doesn't work on WiFi" is almost always the WiFi, NOT the app (validated 2026-08-15).** There is
 **no network-type check anywhere in `src/`** (the app never requires mobile data), and the backend is
 healthy + fast (HTTP 200, ~40 ms, IPv4-only — verify with `curl -w '%{time_total}' https://cgpe.in/internal/api/health`).

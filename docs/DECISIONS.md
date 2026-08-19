@@ -6,6 +6,44 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — Phase-50 office geofence must NOT go live until H1 (clock-reason UI) is installed + localized
+
+**Context.** A code audit + a direct re-read found that `home.tsx` had **no `needsReason` branch**: the Phase-50 data layer maps
+the server's `400 REASON_REQUIRED` (out-of-range / early clock-out) to `{ok:false, needsReason:true}` with `blocked` unset, so it
+fell through to the generic `if (!res.ok)` and showed a **false "The server could not be reached"** — and because no reason was
+ever collected, the clock-out could **never succeed**. This is exactly the owner's "finish at a client's home" scenario.
+
+**Decision.** Fixed in `home.tsx` (`dfa10f2`): a `needsReason` branch on both clock paths opens a **mandatory reason `Sheet`**
+(mirrors the Phase-52 break sheet) and re-sends `clockOut/clockIn(coords, reason)`, reusing the existing success path untouched.
+The sheet copy is **English** — deliberately, because the whole home.tsx clock-notice surface is already hardcoded English, so
+this is consistent, not machine translation. **The bug is LATENT** until the office geofence is configured server-side (the
+server only returns `REASON_REQUIRED` once it has office pins to measure against), so it cannot be end-to-end device-tested until
+go-live.
+
+**Consequence.** **Do not enable the Phase-50 geofence (`PUT /geofence` pins) until the `6b76608b` APK is installed AND the reason
+sheet is localized** with the owner's 5-language copy (like consent/break). Without the fix, enabling the fence breaks clock-out;
+with the fix but no copy, Gujarati/Hindi field agents see an English prompt. Also fixed the same session (`95b0da2`): M1 claims-403
+classify, M2 matured-policy premium-due guard at source (adapt.ts → fixes premium.tsx + clients.tsx), M3 agent-map stale on-duty
+pin. LOW/cosmetic items left open — see `docs/DEVICE-TEST-FINDINGS-2026-08-19.md`.
+
+## 2026-08-19 — Device testing IS possible over USB/ADB from this environment (reusable how-to)
+
+**Context.** The owner asked whether they could connect the phone by USB and have the session test the app while they watch. ADB
+was not installed here.
+
+**Decision (capability, recorded for reuse).** It works, with limits. Downloaded Google **platform-tools** to the session
+scratchpad (`.../scratchpad/platform-tools/adb.exe`) — no admin install. The owner enables USB-debugging + authorizes the PC +
+**logs in themselves** (the app is real-backend-only; no credentials exist here). Confirm the exact build via **APK hash**
+(`adb pull` the on-device `base.apk`, SHA-256 == the EAS artifact — version strings can't tell builds apart: every `preview`
+build is v1.10.0 / versionCode 1). **Screen-off drops the ADB session** → `adb shell settings put global
+stay_on_while_plugged_in 7` for the duration (reset to `0` after). Tap via `uiautomator dump` + parse `bounds`, or screenshot
+coordinates ×1.17 (1080×2340 device). **Cannot be driven:** background GPS over a real shift, geofence at a real place,
+biometric hardware, and real write actions (clock-in, WhatsApp send) — those stay owner-owed.
+
+**Consequence.** Future sessions can do a real on-device visual/behaviour pass of anything reachable after the owner logs in,
+which caught nothing the code missed on the new batch but is a genuine second gate. It does **not** replace the physical
+checklist (`docs/DEVICE-TESTING-GUIDE-v1.10.0.md`).
+
 ## 2026-08-19 — DEPLOY GAP CLOSED: Backend Phase 69 is merged to origin/main AND live on prod (verified, end of session)
 
 **Context.** The owner reported "backend push kar diya hai" at session end. Per the standing rule (verify deployment, not

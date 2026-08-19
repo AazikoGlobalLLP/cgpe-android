@@ -1,58 +1,55 @@
-# HANDOFF — CGPE Connect (Android) — Phases 64/66/67 `[m]` built + Backend Phase 69 deploy VERIFIED LIVE — 2026-08-19
+# HANDOFF — CGPE Connect (Android) — Final APK cut + on-device tested + H1/M1/M2/M3 fixed — 2026-08-19 (#4)
 
-The 2026-08-19 owner batch is now **mobile-complete for every buildable phase (63/64/66/67)**, each adversarially reviewed,
-and — the big change this session — **the backend deploy gap is CLOSED and verified live on prod.** The only thing standing
-between the owner and testing everything is **cutting the ONE final APK** (their standing directive: build all of 63–69
-first, then one combined APK).
+The 2026-08-19 batch (Phases 63/64/66/67) shipped in a combined APK **and was verified on real hardware** this session — the
+app was driven over USB/ADB on the owner's Samsung A54 as the Master (super_admin) account. The new batch is **green on-device
+and in a code audit**. A parallel code audit surfaced a real **HIGH latent bug** in the adjacent Phase-50 clock flow plus three
+mediums; **all four are now fixed** and folded into a fresh APK.
 
 ## Done
-- **The deploy gap is resolved (verified, not assumed).** `origin/main` is now `2531817` and contains Phase 69 (`f0eac8e`);
-  live prod probes confirm it is DEPLOYED: `GET /time-tracker/last-location` and `/team/task-report` now return **401**
-  (route present, auth required) where they returned **404** before, and `/health` is 200. So all of Phases 41–69 run on
-  `:3001` now — the "server did not answer / 0 on duty / straight-line GPS" symptoms were the deploy gap and are cleared
-  server-side.
-- **Backend Phase 69's 5 `[api]` fixes VERIFIED code-correct** (6 investigators, file:line): shift accuracy `<=1000m`;
-  `dayLogToAttendanceRecords` folds clock-in coords (the 0/0 fix); `/live-locations` super_admin gate + ObjectId fix; new
-  `GET /last-location`; payroll `hourly_rate` + `days/sundays/holidays`.
-- **Mobile built + reviewed this session (all local, push 403s):**
-  - **Phase 64** — `getBreakLocations` treats 404/501 as a quiet answer (no false "server did not answer" banner). `3d5c4f8`.
-  - **Phase 67** — NEW `payroll-detail` screen: tap a roster member → pay breakdown (rendered verbatim, never multiplied) +
-    master-only completed-tasks activity. `2d18eb5`.
-  - **Phase 66** — master "Live location" (last-known) on `team/[id]`: honest readout (freshness, real duty, accuracy,
-    copyable coords), NOT the misleading clock-in map pin. `46a1dee`.
-- Gates on the final tree: `tsc` 0 · `npm test` **625** · eslint 0 new.
+- **Combined APK cut + delivered:** EAS `6b76608b`, v1.10.0, commit `da9e5a9`, direct `.apk`
+  `https://expo.dev/artifacts/eas/K5bRx6VlgAUC2xxViT-NJHnnbuSMvNHqCGgrAeVN1WA.apk` — **supersedes `8f3238fa`**. Contains
+  63/64/66/67 + the H1/M1/M2/M3 fixes below.
+- **On-device verified (Master account, real A54):** Monitor on-duty **1/3 (not 0)**; agent-map "Live field status: 1" with no
+  false banner; **Live location** honest last-known (10m ago, On duty, ±100m, real coords, "not a live ping"); **payroll-detail**
+  full breakdown (the "0 days → ₹574" = 2.5h × ₹226 hourly); **Esri satellite + points** toggles; **team performance** 75/100
+  (math checks out); greeting emoji; Viewing-as; Clients/360/Tasks/Claims/Notifications/Commissions; **outage banner honesty +
+  clears on recovery**; i18n switch works (coverage gaps noted).
+- **H1 FIXED** (`dfa10f2`): clock-in/out now handle the server's `REASON_REQUIRED` (out-of-range / early) → a mandatory reason
+  Sheet → re-send with the reason. No more false "server could not be reached"; the agent can actually clock out.
+- **M1/M2/M3 FIXED** (`95b0da2`): claims 403 classified (no false outage); matured policy no longer flagged premium-due/renewal
+  (premium.tsx + clients.tsx, guarded at source); agent-map stale prior-day point no longer shown as live "on duty".
+- Gates green throughout: `tsc` 0 · `npm test` **625** · eslint 0 new.
 
-## Files changed (this session)
-- `src/data/api.ts` — `getBreakLocations` 404-hardening; NEW `getLastLocation`/`mapLastLocation` (three-outcome, rejects the
-  (0,0) no-fix); `PayrollMonth` gained additive `hourly_rate`/`days`/`sundays`/`holidays`.
-- `src/app/payroll-detail.tsx` — NEW per-member pay breakdown + activity screen.
-- `src/app/payroll.tsx` — roster rows tap through to `payroll-detail`.
-- `src/app/team/[id].tsx` — master-only "Live location" card + Sheet with the honest last-known readout.
-- `src/data/__tests__/{api-break,api-payroll,api-lastlocation}.test.ts` — +3/+3/+13 wire-contract tests.
-- `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md` — status.
+## Files changed
+- `src/app/(tabs)/home.tsx` — H1: `toggleClock(reasonText?)` + `needsReason` branch on both clock paths + a reason `Sheet`
+  (mirrors the Phase-52 break sheet) that re-sends the action; reason coerced to a string so the onPress event isn't misread.
+- `src/data/api.ts` — M1: `getClaims` captures `status` + `reportIfOutage(status,'/claims')`. M3: `toPin(row,p,live=true)`;
+  the `getAgentLocations` fallback passes `live=false` so prior-day points aren't "on duty".
+- `src/data/adapt.ts` — M2: `isPremiumDueThisMonth` and the `renewal_due` segment now guard on `status !== 'matured'`.
+- `docs/DEVICE-TESTING-GUIDE-v1.10.0.md` — NEW: full step-by-step device checklist (24 sections, edge cases, physical-only marks).
+- `docs/DEVICE-TEST-FINDINGS-2026-08-19.md` — NEW: device + code-audit findings, APK links, fix status.
+- `docs/PHASES.md`, `docs/DECISIONS.md` — status.
 
 ## Decisions made
-- **Verify deployment, not just "pushed".** "Backend pushed" was verified to mean, this time, merged-to-`origin/main` AND
-  deployed AND answering live (401 probes) — the full chain, not just a push. This is how to confirm the gap is truly closed.
-- **Phase 66 shows an honest readout, not a map pin.** The review found reusing `LeafletMap`'s `AgentPin` (a clock-in
-  concept) mislabels an off-duty point green "Clocked in" and drops a (0,0) fix while the labels assert a location. So no
-  map pin; a neutral single-pin map is a scoped follow-up (LeafletMap is a danger zone agent-map depends on).
-- **Phase 67 failed-activity ≠ "no tasks".** The review caught a failed task-report rendering as a confident empty; fixed
-  with a distinct `ActivityState` error branch (mirrors `performance.tsx`).
+- **Device testing IS possible over USB/ADB from here** (proven) — but it's black-box: no creds (owner logs in), and
+  bg-GPS/geofence/biometric/real-writes can't be driven. See DECISIONS 2026-08-19 for the reusable how-to.
+- **H1 fixed with a reason Sheet, English copy** — the whole home.tsx clock-notice surface is already hardcoded English, so this
+  is consistent (not machine translation). Localise when the 5-language reason copy lands.
+- **Phase-50 office geofence must NOT be enabled until H1 ships in an installed APK (done: `6b76608b`) AND the sheet is localized.**
+  Until the fence is configured server-side, H1 is latent and can't be end-to-end device-tested.
 
 ## Known broken / deliberately skipped
-- **No APK cut yet** — owner directive is ONE final APK after the whole 63–69 batch. Phases 63/64/66/67 are app-side code and
-  need that build to reach the device (the installed v1.10.0 predates them). **This is the next action.**
-- **Phase 65 mobile wiring not built** — "every member appears in agent-locations" needs the app's roster pointed at the now-
-  live `/live-locations` (full-staff left-join). The `[api]` half is deployed; the `[m]` half is the one remaining mobile
-  build in this batch. A never-assigned member is still invisible until that lands.
-- **`git push` still 403s** — every commit (`3d5c4f8`, `2d18eb5`, `46a1dee`) is local only.
-- **Device pass outstanding** for the whole batch — happens on the combined APK.
+- **Reason sheet is English-only** — needs the owner's 5-language reason copy (like consent/break) to localise. Not blocking install.
+- **H1 not end-to-end device-verified** — the `needsReason` path only fires once the office geofence is configured on the server.
+- **LOW/cosmetic items NOT fixed** — i18n coverage gaps (Settings/Claims/Search English; Home "tasks done today" / "Nothing is
+  overdue…"), `inrShort` trailing zero, `toDate('0')`, `-₹0`, `mapClaimStatus` partial_paid (pinned), "Advisor" subtitle for the
+  Master, in-app Version reads 1.8.0, FAB overlaps. Full list in `docs/DEVICE-TEST-FINDINGS-2026-08-19.md`.
+- **Phase 65 (`[m]` full-staff roster) NOT built** — still the one open mobile piece; would need its own APK.
+- **Physical tests owner-owed** — §5 bg GPS (clock out+in on THIS APK first), §3 geofence, biometric, break 8h30m gate, WhatsApp send.
+- **`git push` still 403s** — every commit local (`dfa10f2`, `95b0da2`, `da9e5a9`, `27beb1c`).
 
 ## Next session starts here
-- **Cut the ONE final APK** (owner directive), then hand over one combined device-test checklist for 63/64/66/67 + confirm
-  asks 1/2/3 now work live (On-duty pins populate, GPS route fills in, payroll detail + Live-location resolve).
-- **First command:** `npx eas-cli build -p android --profile preview --non-interactive` (then the direct `.apk` URL via
-  `npx eas-cli build:view <buildId> --json` → `.artifacts.applicationArchiveUrl`). Background it (~15–20 min).
-- **Watch out for:** decide up front whether to build **Phase 65 mobile** (full-staff roster) BEFORE the final APK — the
-  owner asked for "every member visible", and only that `[m]` piece is unbuilt; if it goes in this APK it saves a second build.
+- Phase: **localise the H1 reason sheet** (needs the owner's 5-language copy) — or clear the LOW/cosmetic list, or build **Phase 65**.
+- First command: `/boot`
+- Watch out for: **do NOT let the owner enable the Phase-50 office geofence until the `6b76608b` APK is installed AND the reason
+  sheet is localized** — otherwise an out-of-range/early clock-out is fixed but still English-only for Gujarati/Hindi agents.

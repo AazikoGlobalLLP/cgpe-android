@@ -1,14 +1,13 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-19
-**Working on right now:** Getting the last batch of owner-requested fixes ready to install on the phones as one app update.
+**Working on right now:** Testing the app on a real phone and fixing the problems that test found.
 
 **Done this week:**
-- The office server that the app talks to was running old code, which is why several things the owner tested looked broken (staff showing as "0 on duty", the map saying "server did not answer", location not coming through). The backend team has now put the up-to-date server live, and we confirmed it is actually running — so those issues are fixed on the server side.
-- Built the new "tap an employee to see their full pay breakdown and what they worked on" screen.
-- Built the owner's "see a team member's last-known location" feature (with an honest "as of X minutes ago" so no one is misled).
-- Improved the background location tracking so a field agent's route is recorded properly through the day.
-- Every change was independently double-checked for mistakes before being accepted; a couple of real issues were caught and fixed in that check.
+- Built a new version of the app, installed it on the phone, and checked it screen by screen on a real handset.
+- The owner-monitoring side all works: seeing who is on duty (it correctly shows staff as on-duty, not zero), where staff are on the map, a member's last-known location, and their pay breakdown and performance score.
+- Found and fixed a serious problem before it could bite: a staff member finishing work away from the office would have been unable to clock out (the app wrongly said "no connection"). Now they can clock out by typing a short reason, and their manager is notified.
+- Fixed three smaller issues: a false "could not load" warning on the Claims screen for some staff; matured insurance policies wrongly showing a payment as still due; and an old location showing as if a person were working right now.
 
-**Blocked on:** Nothing — the server is live and all the app changes are ready.
+**Blocked on:** Before the "must be at the office" rule can be switched on, we need the owner to supply the "reason for clocking out" wording in all five languages (the same way the location-consent wording was supplied).
 
-**Next:** Package everything into one installable app update, give the owner the download link, and test it all together on a real phone.
+**Next:** The owner installs the new app and tests the phone-only features that can't be checked from a computer — background location over a full day, and fingerprint unlock.

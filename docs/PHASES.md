@@ -14,6 +14,18 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅✅ FINAL COMBINED APK CUT + ON-DEVICE VERIFIED + H1/M1/M2/M3 FIXED (2026-08-19 handoff #4).** The 63/64/66/67 batch shipped in
+EAS build **`6b76608b`** (v1.10.0, commit `da9e5a9`, direct `.apk`
+`https://expo.dev/artifacts/eas/K5bRx6VlgAUC2xxViT-NJHnnbuSMvNHqCGgrAeVN1WA.apk`, supersedes `8f3238fa`) and was **driven on the
+owner's real Samsung A54 over USB/ADB as the Master account** — Monitor on-duty **1/3 (not 0)**, Live-location honest last-known,
+payroll-detail, Esri satellite/points, team-perf 75/100, outage-banner honesty + recovery all GREEN. A parallel 13-agent code
+audit found 16 issues; the **1 HIGH + 3 MEDIUM are FIXED**: **H1** (`dfa10f2`, home.tsx — clock-in/out `needsReason` → reason
+`Sheet` → re-send; was a FALSE "server could not be reached" that permanently blocked an out-of-range/early clock-out),
+**M1/M2/M3** (`95b0da2` — claims-403 classify / matured premium-due guard / stale on-duty pin). Gates green each. **⚠️ DO NOT
+enable the Phase-50 office geofence until this APK is installed AND the H1 reason sheet is localized (owner's 5-lang copy) —
+until the fence is configured H1 is latent and untestable end-to-end.** LOW/cosmetic list + full detail:
+`docs/DEVICE-TEST-FINDINGS-2026-08-19.md`; DECISIONS 2026-08-19 (top two).
+
 **🚨🚨 NEW OWNER ISSUE BATCH 2026-08-19 → Phases 63–69, all VERIFIED against real mobile + backend code** (5 parallel
 investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-19.md`. Owner priority: **background location
 (63) is #1.** **🧭 OWNER DIRECTIVE: build ALL of 63–69 editor-side first, then cut ONE final APK + test together — no
@@ -1514,23 +1526,22 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-19 handoff #3 — mobile 63/64/66/67 BUILT + reviewed; Backend Phase 69 DEPLOYED + verified live;
-owner directive = ONE final APK after the batch. Spec `docs/spec/ISSUES-2026-08-19.md`):**
+**CURRENT next 3 (2026-08-19 handoff #4 — final APK cut + on-device verified + H1/M1/M2/M3 fixed. Findings:
+`docs/DEVICE-TEST-FINDINGS-2026-08-19.md`):**
 
-**🧭 OWNER DIRECTIVE (2026-08-19): ONE final APK after the whole 63–69 batch, then test together.** All buildable phases are
-done; the batch is APK-ready. (`git push` still 403s — commits local; EAS builds from the local tree.)
+The 63/64/66/67 batch is shipped in APK `6b76608b` and verified on real hardware; H1 (Phase-50 clock-reason) + M1/M2/M3 are fixed
+and in that APK. (`git push` still 403s — commits local; EAS builds from the local tree.)
 
-1. **🚀 CUT THE ONE FINAL APK.** All app-side batch work (63/64/66/67) is built + reviewed + committed and the backend it
-   depends on is now LIVE (deploy verified 2026-08-19). Run
-   `npx eas-cli build -p android --profile preview --non-interactive` (background ~15–20 min), get the direct `.apk` URL via
-   `npx eas-cli build:view <buildId> --json` → `.artifacts.applicationArchiveUrl`, and hand the owner ONE combined device-test
-   checklist (background GPS route fills in; On-duty pins populate; payroll detail; Live-location; break pins).
-2. **Phase 65 `[m]` — full-staff roster (DECIDE BEFORE the APK).** The one un-built mobile piece: point `getAgentLocations`/
-   `getTeam` at the now-live, now-gated `/live-locations` and left-join, so a member appears even before they've been assigned
-   a task. If it's wanted in this APK, build it FIRST (saves a second build); else defer and note it. Owner asked for "every
-   member visible."
-3. **Device pass + close-out.** Walk the combined checklist on a real handset once the APK is installed; confirm asks 1/2/3
-   now behave live. Then the 2026-08-19 batch is DONE.
+1. **Localise the H1 reason sheet (needs the owner's 5-language copy).** The clock-reason `Sheet` (`home.tsx`) is English (matches
+   the surrounding hardcoded clock notices). Get the owner's 5-lang copy for the reason prompt (title/explanation/Cancel/Clock-out
+   labels) — like consent/break — then wire it. **Blocking dependency for Phase-50 go-live:** do NOT set the office geofence pins
+   until the APK is installed AND this is localized (else Gujarati/Hindi agents get an English out-of-range prompt).
+2. **Phase 65 `[m]` — full-staff roster.** The one un-built mobile piece: point `getAgentLocations`/`getTeam` at the now-live,
+   now-gated `/live-locations` and left-join, so a member appears even before assigned a task. Needs its own APK. Owner asked for
+   "every member visible."
+3. **Owner physical pass + optional LOW/cosmetic cleanup.** Owner installs `6b76608b` and walks §5 bg-GPS (clock out+in first) /
+   §3 geofence (after H1 localized) / biometric / break-gate on ≥2 phone brands. Optionally clear the LOW/cosmetic list
+   (i18n coverage, inrShort trailing zero, "Advisor" subtitle, Version 1.8.0, FAB overlaps).
 
 **Also open (lower priority):** Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated
 on an Apple account, offline) still stand; Phase 41 on-device verification (owner: do last).
