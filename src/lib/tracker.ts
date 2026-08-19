@@ -40,6 +40,7 @@ import {
   debounceMotion,
   resolveMotion,
   samplingProfile,
+  AMBIENT_PROFILE,
   MOTION_WINDOW,
   type MotionState,
   type SamplingProfile,
@@ -47,6 +48,9 @@ import {
 import * as api from '@/data/api';
 
 const isNative = Platform.OS !== 'web';
+/** Android-specific gate: `timeInterval` throttles delivery only on Android, so `distanceInterval: 0`
+ *  is safe there but firehoses iOS (which has no timeInterval) — see `startService`. */
+const isAndroid = Platform.OS === 'android';
 
 /**
  * Registered with the OS and persisted by TaskManager across launches. Renaming this
@@ -108,11 +112,15 @@ const SHIFT_NOTIF: Notif = {
 const AMBIENT_NOTIF_FALLBACK: Notif = { title: 'CGPE Connect', body: 'Location on for work' };
 
 /**
- * Roughly four hours of points at one fix a minute. The buffer only grows while the device
- * has no usable network, and every batch that lands clears it, so this cap is a guard
- * against an all-day dead zone rather than the normal case.
+ * Offline retention buffer for the route. It only grows while the device has no usable network; every
+ * batch that lands clears it, so this cap guards a dead-zone stretch, not the normal case. PHASE 63 made
+ * the shift cadence a fixed ~60 s even when stationary (`distanceInterval: 0`), so the old 240 would have
+ * held only ~4 h — a 5× drop from before. Raised to 720 (~12 h at one fix a minute) so a long offline
+ * shift keeps far more of its early legs. Safe on Android (SharedPreferences has no hard value-size
+ * limit, verified 2026-08-19); a >12 h continuous-offline shift still evicts the oldest and would need
+ * upload chunking (follow-up), and iOS's historical ~2 KB Keychain limit is moot until iOS ships.
  */
-const MAX_POINTS = 240;
+const MAX_POINTS = 720;
 
 /** `[lat, lng, epochMs, accuracy, speed, heading]` — compact because it is re-serialised on every fix. */
 type PointTuple = [number, number, number, number | null, number | null, number | null];
@@ -389,11 +397,21 @@ function stopMotionClassifier(): void {
   motionStreak = 0;
 }
 
-/** Map the motion profile's accuracy to expo-location's enum. High (~10 m) survives the backend's shift-point >100 m drop. */
+/**
+ * Map the motion profile's accuracy string to expo-location's enum. High (~10 m) is the crux of PHASE 63:
+ * it is what survives the backend's shift-point `accuracy <= 100 m` drop, so `'high'` must NEVER resolve
+ * to Balanced. A `Record` keyed by the union means tsc flags any unmapped accuracy AND a wrong pairing is
+ * a single, glaring line rather than a buried `if`. (tracker.ts is device-only — no expo-location stub —
+ * so this cannot be unit-tested here; motion.ts pins the profile strings, and this table is the auditable
+ * 1:1 translation. See PHASE-63 review, test-quality finding.)
+ */
+const ACCURACY_ENUM: Record<SamplingProfile['accuracy'], Location.Accuracy> = {
+  high: Location.Accuracy.High,
+  balanced: Location.Accuracy.Balanced,
+  low: Location.Accuracy.Low,
+};
 function accuracyOf(profile: SamplingProfile) {
-  if (profile.accuracy === 'high') return Location.Accuracy.High;
-  if (profile.accuracy === 'low') return Location.Accuracy.Low;
-  return Location.Accuracy.Balanced;
+  return ACCURACY_ENUM[profile.accuracy];
 }
 
 /**
@@ -436,18 +454,29 @@ async function startService(notif: Notif): Promise<void> {
     await startMotionClassifier();
     return;
   }
-  // PHASE 41c: pick the sampling cadence from the last committed motion state (fail-safe to MOVING).
-  // Applied at (re)start — the boring, reliability-safe point to change GPS options (a live service
-  // cannot be reconfigured without a stop+start, which would fight 41b and flicker the notification).
-  const profile = samplingProfile(await readMotion());
+  // PHASE 63: WHICH profile depends on what this service is recording. A shift (a persisted `sid`) gets
+  // the aggressive "every point / High" profile; the 24/7 OFF-DUTY ambient recorder (a service running
+  // with NO sid) gets the coarser AMBIENT_PROFILE, so consent-based off-duty tracking is not upgraded to
+  // continuous ~10 m home recording (privacy) or an always-hot GPS radio (battery). Within a shift the
+  // motion classifier still chooses (currently neutralised — STILL == MOVING — pending an owner battery
+  // lock). Applied only at (re)start — the reliability-safe point to change GPS options (a live service
+  // can't be reconfigured without a stop+start, which would fight 41b and flicker the notification), so a
+  // 24/7-armed user who clocks in over an already-running ambient service keeps the ambient profile until
+  // the next genuine restart (documented limitation; the common non-24/7 path tears down on clock-out and
+  // starts fresh on clock-in).
+  const { sid } = await readState();
+  const profile = sid ? samplingProfile(await readMotion()) : AMBIENT_PROFILE;
   await Location.startLocationUpdatesAsync(ROUTE_TASK, {
-    // Accuracy + cadence come from the motion profile (PHASE 63): High accuracy + a 60 s timeInterval +
-    // distanceInterval 0, so a point lands every ~60 s even when the phone is stationary and each fix is
-    // precise enough to survive the backend's shift-point >100 m drop. Motion adaptivity is neutralised
-    // (STILL == MOVING) pending an owner-locked battery number — see motion.ts.
+    // Accuracy + cadence come from the profile above. On the shift path (PHASE 63): High accuracy + a 60 s
+    // timeInterval + distanceInterval 0, so a point lands every ~60 s even when the phone is stationary
+    // and each fix is precise enough to survive the backend's shift-point >100 m drop.
     accuracy: accuracyOf(profile),
     timeInterval: profile.timeInterval,
-    distanceInterval: profile.distanceInterval,
+    // distanceInterval 0 records on the time interval even when stationary. `timeInterval` throttles that
+    // to ~60 s ON ANDROID ONLY; iOS ignores `timeInterval`, so 0 there would firehose fixes at the GPS's
+    // native rate (battery/data). Keep a non-zero iOS distance filter (restores the pre-63 iOS behaviour;
+    // iOS background is a separate Phase-56 effort). `x || 30` only rewrites a 0 → 30.
+    distanceInterval: isAndroid ? profile.distanceInterval : profile.distanceInterval || 30,
     deferredUpdatesInterval: profile.deferredUpdatesInterval,
     // The service can restart in the background, where a settings dialog would be both impossible and
     // alarming. `ensureBackgroundPermission` is where the user is told that location is switched off.

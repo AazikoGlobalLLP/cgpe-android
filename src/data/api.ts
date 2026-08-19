@@ -2319,8 +2319,10 @@ export type TrackSession = { session_id: string; date: string; started_at: strin
  * What happened to a batch of GPS points. PHASE 7.
  *
  * `sent` — the server took them. `added` is its own count and CAN BE ZERO: it drops every point
- *          whose accuracy is worse than 100 m (`routes/timeTracker.js:1350`) and still answers
+ *          whose accuracy is worse than 100 m (`routes/timeTracker.js:1671`) and still answers
  *          200. The buffer is cleared either way, because re-sending is discarded identically.
+ *          (PHASE 63 raises the request to Accuracy.High so real fixes clear that filter; the
+ *          matching backend relax of the >100 m drop is filed to cgpe-api — owner relays.)
  * `refused` — the server understood these points and said no. Retrying cannot change the answer,
  *          so holding them only grows a bag of somebody's coordinates on a handset.
  * `retry` — a dead network, the 4.5 s abort, a 5xx, or a 429. Keep them for the next wake-up.

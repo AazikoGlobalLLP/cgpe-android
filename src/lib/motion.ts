@@ -13,11 +13,13 @@
  *
  * WHAT THE MOTION STATE IS FOR (§3). "Sparse when still, denser when moving." A stationary phone
  * needs GPS to wake far less often; a moving one needs the normal cadence to draw a usable route.
- * ⚠️ PHASE 63 (2026-08-19, owner #1): this economy is currently NEUTRALISED — `STILL_PROFILE` is now
- * identical to `MOVING_PROFILE` — because the owner requires EVERY point retained (the old "sparse when
- * still" behaviour was a root cause of the reported no-points/straight-line bug). The classifier still
- * runs and persists its state, so re-enabling the economy is a one-line STILL_PROFILE re-tune once the
- * owner locks a battery number.
+ * ⚠️ PHASE 63 (2026-08-19, owner #1): on the CLOCKED-IN shift path this economy is NEUTRALISED —
+ * `STILL_PROFILE` equals `MOVING_PROFILE` — because the owner requires EVERY shift point retained (the
+ * old "sparse when still" behaviour was a root cause of the reported no-points/straight-line bug), and
+ * the `motion.test.ts` owner-#1 guard LOCKS that (distanceInterval 0 / accuracy 'high' / cadence ≤ 60 s
+ * on both). Off-duty battery economy lives instead in `AMBIENT_PROFILE` (below), which the guard does
+ * NOT constrain — that, not a STILL re-tune, is the lever to dial off-duty cost. Re-introducing any
+ * shift-time still-economy would require a deliberate owner-#1 guard change, not a one-liner.
  *
  * ⚠️ NUMBERS. The spec fixes none of these, so they are PROPOSED DEFAULTS pending an owner lock, and
  * every one is a single named constant so tuning is a one-line change. The threshold is derived from
@@ -71,17 +73,33 @@ export const MOVING_PROFILE: SamplingProfile = {
 };
 
 /**
- * STILL — motion adaptivity is NEUTRALISED (PHASE 63): this profile is now identical to MOVING. The
- * old "sparse when still" economy both stretched the cadence to 5 min AND (via `distanceInterval: 30`)
- * recorded nothing while stationary — exactly the gap the owner reported — so it directly conflicts with
- * owner #1 ("retain every point"). The 41c classifier still runs and persists its state; keeping this
- * constant (rather than deleting the mechanism) means a future owner-locked battery phase re-tunes the
- * economy in one line and the classifier becomes meaningful again. See PHASE-63 / DECISIONS 2026-08-19.
+ * STILL — on the shift path, motion adaptivity is NEUTRALISED (PHASE 63): this profile is identical to
+ * MOVING. The old "sparse when still" economy both stretched the cadence to 5 min AND (via
+ * `distanceInterval: 30`) recorded nothing while stationary — exactly the gap the owner reported — so it
+ * conflicts with owner #1 ("retain every shift point"), and the owner-#1 test guard locks both profiles
+ * to distanceInterval 0 / accuracy 'high'. The 41c classifier still runs and persists its state; the
+ * constant is kept (not deleted) so the mechanism survives. Note: OFF-DUTY battery economy is NOT here —
+ * it lives in `AMBIENT_PROFILE`; re-introducing a shift-time still-economy needs a deliberate guard edit.
  */
 export const STILL_PROFILE: SamplingProfile = {
   accuracy: 'high',
   timeInterval: 60000,
   distanceInterval: 0,
+  deferredUpdatesInterval: 60000,
+};
+
+/**
+ * AMBIENT — the 24/7 OFF-DUTY recorder profile. `tracker.ts` selects it whenever the recorder runs with
+ * NO shift session id. Deliberately COARSER than the shift profile — Balanced (~100 m, not High ~10 m)
+ * and distance-gated (30 m) — so consent-based off-duty tracking is NOT silently upgraded to continuous
+ * ~10 m home recording (a privacy escalation) and does not keep the GPS radio hot around the clock
+ * (battery). This preserves the pre-PHASE-63 off-duty behaviour; PHASE 63's "capture every point" is a
+ * CLOCKED-IN-shift requirement only (owner #1). This constant is the lever to dial off-duty cost.
+ */
+export const AMBIENT_PROFILE: SamplingProfile = {
+  accuracy: 'balanced',
+  timeInterval: 60000,
+  distanceInterval: 30,
   deferredUpdatesInterval: 60000,
 };
 

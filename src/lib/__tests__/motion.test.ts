@@ -7,6 +7,7 @@ import {
   resolveMotion,
   MOVING_PROFILE,
   STILL_PROFILE,
+  AMBIENT_PROFILE,
   MOTION_DEBOUNCE,
   MOTION_FRESH_MS,
   type MotionState,
@@ -71,12 +72,19 @@ describe('samplingProfile', () => {
     expect(STILL_PROFILE.timeInterval).toBe(MOVING_PROFILE.timeInterval);
     expect(STILL_PROFILE.accuracy).toBe('high');
   });
-  it('neither profile can silently regress to a distance-throttled or coarse config (owner #1 guard)', () => {
+  it('neither SHIFT profile can silently regress to a distance-throttled or coarse config (owner #1 guard)', () => {
     for (const p of [MOVING_PROFILE, STILL_PROFILE]) {
       expect(p.distanceInterval).toBe(0); // never gate a fix on movement again (the stationary-no-points bug)
       expect(p.accuracy).toBe('high'); // never coarse enough to be dropped by the >100 m server filter
       expect(p.timeInterval).toBeLessThanOrEqual(60000); // ~60 s or tighter, never the old 5-min stretch
     }
+  });
+  it('AMBIENT (off-duty) stays coarser than the shift profile — no continuous 10 m off-duty tracking (privacy/battery)', () => {
+    // The 24/7 recorder must NOT inherit the aggressive shift profile: off-duty stays Balanced (~100 m,
+    // not High ~10 m) and distance-gated so a stationary off-duty phone is not recorded continuously.
+    expect(AMBIENT_PROFILE.accuracy).toBe('balanced');
+    expect(AMBIENT_PROFILE.accuracy).not.toBe(MOVING_PROFILE.accuracy); // must not silently match the shift profile
+    expect(AMBIENT_PROFILE.distanceInterval).toBeGreaterThan(0); // distance-gated: a motionless off-duty phone records little
   });
 });
 
