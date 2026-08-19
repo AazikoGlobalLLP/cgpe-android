@@ -11,13 +11,17 @@ import { DataRow, KpiStrip, ListSection, Pill } from '@/ui/data';
 import type { KpiItem } from '@/ui/data';
 import { Avatar } from '@/ui/identity';
 import { Spine, SpineRow } from '@/ui/spine';
+import { Sheet } from '@/ui/sheet';
 import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
+import type { LastLocationResult } from '@/data/api';
 import type { TeamMember } from '@/data/team';
 import { inrShort, timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useAuth } from '@/store/auth';
+import { canSeeLiveLocation } from '@/store/roles';
 import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
@@ -37,9 +41,14 @@ export default function TeamMemberDetail() {
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { user } = useAuth();
+  // Coordinates are master-only across the contract (Phase 66); the button is REAL-super_admin gated.
+  const canSeeLive = canSeeLiveLocation(user);
 
   const [m, setM] = useState<TeamMember | null>(null);
   const [loading, setLoading] = useState(true);
+  const [liveOpen, setLiveOpen] = useState(false);
+  const [liveRes, setLiveRes] = useState<LastLocationResult | 'loading' | null>(null);
 
   /**
    * The mounted flag, not a per-effect one: `load` is fired both by the focus effect and
@@ -60,6 +69,16 @@ export default function TeamMemberDetail() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const retry = useCallback(() => { setLoading(true); load(); }, [load]);
+
+  // Master "Live location": fetch this member's last-known point on demand, show it in a Sheet.
+  const openLive = useCallback(async () => {
+    haptics.tap();
+    setLiveRes('loading');
+    setLiveOpen(true);
+    const r = await api.getLastLocation(String(id));
+    if (!live.current) return;
+    setLiveRes(r);
+  }, [id]);
 
   const kpis: KpiItem[] = useMemo(() => {
     if (!m) return [];
@@ -135,6 +154,22 @@ export default function TeamMemberDetail() {
             </View>
           </Card>
         </Appear>
+
+        {canSeeLive ? (
+          <Appear index={1}>
+            <Card>
+              <Row style={{ alignItems: 'center', gap: spacing.md }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Eyebrow>Live location</Eyebrow>
+                  <Txt size={font.sub} color={c.muted} numberOfLines={2} style={{ marginTop: 2 }}>
+                    {(m.name.split(' ')[0] || 'This member')}&apos;s last-known position — on or off duty.
+                  </Txt>
+                </View>
+                <Button label="Show" icon="location" size="sm" onPress={openLive} />
+              </Row>
+            </Card>
+          </Appear>
+        ) : null}
 
         {kpis.length > 0 ? (
           <Appear index={1} style={{ marginHorizontal: -spacing.lg }}>
@@ -216,7 +251,82 @@ export default function TeamMemberDetail() {
           style={{ flex: 1 }}
         />
       </View>
+
+      {/* Master-only: the member's last-known location, on a single-pin map (Phase 66). */}
+      <Sheet visible={liveOpen} onClose={() => setLiveOpen(false)} title="Live location" subtitle={m.name} scroll={false}>
+        <LiveLocationBody res={liveRes} name={m.name} />
+      </Sheet>
     </Screen>
+  );
+}
+
+/* ================================================================== *
+ * Live location — the member's last-known point + an honest freshness label
+ * ================================================================== */
+
+function LiveLocationBody({ res, name }: { res: LastLocationResult | 'loading' | null; name: string }) {
+  const c = useTheme();
+
+  if (res === null || res === 'loading') {
+    return (
+      <View style={{ padding: spacing.lg }}>
+        <Skeleton width="100%" height={280} radius={radius.lg} />
+      </View>
+    );
+  }
+
+  if (res.status === 'ok') {
+    const loc = res.loc;
+    // NOT drawn on the in-app map: LeafletMap's pin is a clock-in/out concept (always a green
+    // "Clocked in at …" marker), which would misstate an off-duty member's last-known point, and it
+    // drops a (0,0) no-fix while the labels still assert a position. Show an honest readout instead —
+    // real duty state, freshness, accuracy, and copyable coordinates the master opens in their own
+    // maps app. (A neutral single-pin in-app map is a separate follow-up needing a LeafletMap change.)
+    const duty = loc.isClockedIn
+      ? { label: 'On duty', tone: 'success' as const }
+      : loc.offDuty ? { label: 'Off duty', tone: 'neutral' as const }
+        : { label: 'Last shift', tone: 'neutral' as const };
+    return (
+      <View style={{ padding: spacing.lg, gap: spacing.md }}>
+        <View style={{ gap: 4 }}>
+          <Eyebrow>Last known position</Eyebrow>
+          <Txt size={font.h2} weight="800">{loc.at ? timeAgo(loc.at) : 'Time not recorded'}</Txt>
+        </View>
+        <Row style={{ gap: spacing.sm, flexWrap: 'wrap' }}>
+          <Pill label={duty.label} tone={duty.tone} small dot={loc.isClockedIn} />
+            {loc.accuracy != null ? <Pill label={`±${Math.round(loc.accuracy)} m`} tone="neutral" small numeric /> : null}
+        </Row>
+        <ListSection>
+          <DataRow label="Coordinates" value={`${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`} icon="location-outline" numeric copyable />
+        </ListSection>
+        <Txt size={font.tiny} color={c.faint} numberOfLines={3}>
+          The most recent position {name.split(' ')[0] || 'this member'}&apos;s device reported — not a live ping. Copy the coordinates to open them in a maps app. Off-duty location needs their consent and background permission.
+        </Txt>
+      </View>
+    );
+  }
+
+  if (res.status === 'none') {
+    return (
+      <View style={{ padding: spacing.lg }}>
+        <EmptyState
+          icon="location-outline"
+          title="No recent location"
+          subtitle={`${name} hasn't shared a location recently. Off-duty location needs their consent and background permission.`}
+        />
+      </View>
+    );
+  }
+
+  // res.status === 'error'
+  return (
+    <View style={{ padding: spacing.lg }}>
+      <EmptyState
+        icon="cloud-offline-outline"
+        title="Couldn't load location"
+        subtitle="We couldn't reach the location service, so nothing here is confirmed. Close this and try again."
+      />
+    </View>
   );
 }
 

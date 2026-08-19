@@ -6,6 +6,33 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — Phase 66 `[m]`: master "Live location" (last-known) shows an HONEST readout, NOT the clock-in map pin
+
+**Context.** Owner wants a master to see a member's live location on/off duty. No real-time ping exists (no push infra), so
+the honest deliverable is **last-known**. Built `getLastLocation(userId)` over Backend Phase 69's `GET /last-location`
+(three-outcome `ok`/`none`/`error`, mirrors `getTaskReport`; own always, another needs super_admin) + a master-only "Live
+location" card on `team/[id]` (gated `canSeeLiveLocation` = real super_admin) → a Sheet. First cut embedded `LeafletMap` with a
+single pin. A 4-lens adversarial review (`wf_aae29582`) caught **two real honesty bugs, both from reusing LeafletMap's pin**:
+(1) `AgentPin` is a clock-in/out concept — LeafletMap draws every `inLat/inLng` point GREEN with a "Clocked in at …" popup and
+ignores `onDuty`, so an **off-duty** member's last-known point rendered as a green "clocked in" pin contradicting the "Off
+duty" label beside it; (2) a **(0,0) "GPS had no fix"** point (the tracker can store one; LeafletMap's `usable()` drops it)
+mapped to `ok`, so the freshness/duty pills asserted a location the map then refused to plot ("No location points yet").
+
+**Decision.** DO NOT reuse the clock-in map pin, and DO NOT hack `LeafletMap` (a 1031-line danger-zone WebView whose pin
+colours agent-map depends on — a neutral single-pin mode is a separate, scoped change). Instead the Sheet shows an **honest
+readout**: the freshness (`timeAgo(at)` or "Time not recorded"), the REAL duty state (on/off duty from the point's own
+`is_clocked_in`/`off_duty`), accuracy, and the **copyable coordinates** the master opens in their own maps app (privacy-
+conservative — no auto-send to an external service). And `mapLastLocation` now rejects the **(0,0)/non-finite** sentinel (same
+rule as `usable()`) → `getLastLocation` returns `none` ("no recent location"), never a fabricated last-known. A
+present-but-unusable point is `none` (calm), only a real fault is `error`.
+
+**Consequence.** Both review bugs eliminated at the root (no map pin → no clock-in mislabel; no unusable point surfaced as
+`ok`). The in-app **map visualization is a documented follow-up** needing a neutral-pin `LeafletMap` mode. Gates: `tsc` 0 ·
+`npm test` **625** (+13, `api-lastlocation.test.ts`) · eslint 0 new. Coordinates stay master-only (contract). Needs Backend
+Phase 69 deployed (endpoint 404s on prod today → honest "couldn’t load"). JS-only → final APK. Ships in the final APK.
+
+---
+
 ## 2026-08-19 — Backend Phase 69 (the 5 mobile `[api]` asks) VERIFIED code-correct but NOT deployed — the deploy gap persists
 
 **Context.** The owner relayed that the backend finished the 5 `[api]` asks from the 2026-08-19 batch. Verified each against

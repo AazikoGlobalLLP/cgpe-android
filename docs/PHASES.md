@@ -19,9 +19,11 @@ investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-1
 (63) is #1.** **🧭 OWNER DIRECTIVE: build ALL of 63–69 editor-side first, then cut ONE final APK + test together — no
 per-phase APKs.** **Phase 63 `[m]` BUILT + reviewed (`9033e88`+`26d011d`); Phase 64 `[m]` BUILT + reviewed
 (getBreakLocations 404/501 quiet-answer, `wf_f9a30b90` 0 findings, commit `3d5c4f8`); Phase 67 `[m]` BUILT + reviewed
-(payroll-detail screen, `wf_0829f800` caught 1 real bug → fixed). Backend Phase 69 (the 5 `[api]` asks) VERIFIED code-correct
-(6 investigators) but NOT on deployed `origin/main` — the deploy gap persists (owner action). 65/66 now unblocked ([api]
-endpoints exist in code); 68/69 OPS-only.**
+(payroll-detail screen, `wf_0829f800` caught 1 real bug → fixed); Phase 66 `[m]` BUILT + reviewed (master Live-location
+last-known readout, `wf_aae29582` caught 2 real honesty bugs → fixed by dropping the misleading map pin). Backend Phase 69
+(the 5 `[api]` asks) VERIFIED code-correct (6 investigators) but NOT on deployed `origin/main` — the deploy gap persists
+(owner action). **Mobile-buildable batch work is DONE: 63/64/66/67 built + reviewed; 65 needs the [api] `/live-locations`
+gate live first; 68/69 OPS-only.**
 
 **⚠️ SYSTEMIC ROOT CAUSE found this batch — the prod backend is ~28 phases behind the code.** Deployed `origin/main` =
 `1cad312` (Phase 38–40); every "shipped" backend piece Phases 41–68 (task-report/perf, break-locations, geofence,
@@ -67,11 +69,20 @@ restart `:3001`** — this blocks 64/66/68/69 and clears many "server did not an
   is built from **`team_tasks` assignees** (`team.js:128`), so anyone with no assigned task never appears. Fix = source the
   roster from the full staff directory left-joined with live status (via `/live-locations` after it's master-gated + its
   id-compare bug fixed). Depends on 64(a) for pins. · M.
-- **Phase 66 — [api]+[m]+[sec] "Live location" button (master → member X's last-known location, on/off duty).** No current-
-  location endpoint exists; deliverable = **last-known** (real-time ping needs FCM the project doesn't have). `[api]` new
-  master-gated `GET /last-location?user_id=X` (internal readers already exist) + `[m]` a "Live" button with an honest
-  freshness label + `[sec]` gate `/live-locations` (leaks all staff email/role). Ceiling: off-duty works only for consented
-  members with bg-permission. · M.
+- **Phase 66 — [api]+[m]+[sec] "Live location" button (master → member X's last-known location, on/off duty). `[m]` BUILT +
+  adversarially reviewed — 2026-08-19.** No current-location endpoint exists; deliverable = **last-known** (real-time ping
+  needs FCM the project doesn't have). `[api]` `GET /last-location?user_id=X` — **VERIFIED in real code (Backend Phase 69),
+  NOT yet on deployed `origin/main`.** `[sec]` `/live-locations` gate — also in Backend Phase 69 (super_admin gate + ObjectId
+  fix), verified. **`[m]` BUILT:** `getLastLocation(userId)` (three-outcome `ok`/`none`/`error`, mirrors `getTaskReport`;
+  403/404/501 quiet, 5xx banners; `mapLastLocation` rejects non-finite **and the (0,0) no-fix sentinel** → never a fabricated
+  pin) + a master-only "Live location" card on `team/[id]` (gated `canSeeLiveLocation` = real super_admin) → a Sheet with an
+  HONEST last-known readout: freshness (`timeAgo`), real duty state, accuracy, copyable coordinates. A 4-lens review
+  (`wf_aae29582`) caught 2 real honesty bugs from an initial `LeafletMap` single-pin embed — a green "Clocked in at …" pin for
+  an OFF-duty member (LeafletMap ignores `onDuty`), and a (0,0) point surfaced as `ok` while the map dropped it — **both fixed
+  by dropping the misleading map pin** for the readout (a neutral single-pin `LeafletMap` mode is a scoped follow-up; the map
+  is a danger zone agent-map depends on). Gates: `tsc` 0 · `npm test` **625** (+13) · eslint 0. JS-only → final APK.
+  **Remaining: `[api]` deploy (relayed); device pass; optional neutral-pin in-app map.** Ceiling: off-duty works only for
+  consented members with bg-permission; a real-time ping is a separate FCM build. · M.
 - **Phase 67 — OPS+[m]+[api] Payroll: show ALL employees + tap one → pay breakdown + activity. `[m]` BUILT + adversarially
   reviewed — 2026-08-19.** Only 1 shows because `buildRoster` iterates **`payroll_profiles`** (`payroll.js:325`) and only ONE
   exists — **OPS: create each employee's payroll profile + set its `segment`** (the mobile list is already multi-member,

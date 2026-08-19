@@ -2714,6 +2714,71 @@ export async function getBreakLocations(userId?: string): Promise<MemberBreaks[]
   }
 }
 
+/* ------------------------------------------------ Last-known location (master "Live") */
+export type LastLocation = {
+  userId: string; lat: number; lng: number;
+  at: string | null; accuracy: number | null;
+  offDuty: boolean; isClockedIn: boolean; ageSeconds: number | null;
+};
+export type LastLocationResult =
+  | { status: 'ok'; loc: LastLocation }
+  | { status: 'none' }        // 200 data:null — the member never shared a point
+  | { status: 'error' };      // a 5xx/network/shape-drift outage, OR a suppressed 401/403/404/501 answer
+
+/**
+ * Pure wire→app mapper for one `/last-location` point. Returns `null` when lat/lng are not finite,
+ * so a garbage body becomes an honest failure rather than a fabricated pin (never invents a
+ * coordinate). Exported for the test.
+ */
+export function mapLastLocation(data: any): LastLocation | null {
+  const lat = num2(data?.lat), lng = num2(data?.lng);
+  // Reject non-finite AND the (0,0) "GPS had no fix" sentinel that the tracker can store and the
+  // map pipeline already drops (`LeafletMap` usable(): `!(lat===0 && lng===0)`). A no-fix reading is
+  // "no usable location", never a plotted point — so it must not surface as a confident last-known.
+  if (lat === undefined || lng === undefined || (lat === 0 && lng === 0)) return null;
+  return {
+    userId: String(data?.user_id ?? ''),
+    lat, lng,
+    at: typeof data?.at === 'string' && data.at ? data.at : null,
+    accuracy: num2(data?.accuracy) ?? null,
+    offDuty: !!data?.off_duty,
+    isClockedIn: !!data?.is_clocked_in,
+    ageSeconds: num2(data?.age_seconds) ?? null,
+  };
+}
+
+/**
+ * PHASE 66 — one member's newest stored location for the master "Live location" button.
+ * `GET /api/time-tracker/last-location?user_id=X` (Backend Phase 69). Own point is always allowed;
+ * another member's requires super_admin (else 403). Coordinates are master-only by contract, so the
+ * caller gates on `canSeeLiveLocation` before ever calling this.
+ *
+ * THREE OUTCOMES, told apart (uses `req()` not `tryReal`, so a 200 `data:null` stays distinct from a
+ * point). Same posture as `getTaskReport`: a non-2xx goes through the ONE classifier `reportIfOutage`
+ * (401/403/404/501 = a quiet ANSWER, no banner; 5xx = a real outage banner), and either way surfaces
+ * as `error` so the button shows an honest "couldn't load", never a fabricated location. Only a real
+ * 200 with `data:null` is `none` ("no recent location"). Never invents a coordinate.
+ */
+export async function getLastLocation(userId?: string): Promise<LastLocationResult> {
+  if (FORCE_DEMO || !sessionReal) return { status: 'error' };   // no request attempted
+  const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+  const key = healthKey('/time-tracker/last-location');
+  try {
+    const { ok, status, json } = await req(`/time-tracker/last-location${qs}`, {}, REQUEST_TIMEOUT, key);
+    if (!ok) { reportIfOutage(status, key); return { status: 'error' }; }
+    const data = json?.data;
+    if (data === null) return { status: 'none' };               // 200 data:null — member never shared a point
+    const loc = mapLastLocation(data);
+    // A present-but-unusable point (a (0,0) "no fix" or non-finite coord) is "no usable location" — a
+    // calm answer, NOT a fabricated pin and NOT an outage. Only a real fault (non-2xx/network) errors.
+    if (!loc) return { status: 'none' };
+    return { status: 'ok', loc };
+  } catch {
+    reportFailure(key);             // dead network or the 4.5 s abort
+    return { status: 'error' };
+  }
+}
+
 /** Generate a family/client report -> POST /api/clients/generate-report. Null on any failure. */
 export async function generateReport(clientName: string): Promise<any | null> {
   return await tryReal<any>('/clients/generate-report', { method: 'POST', body: JSON.stringify({ clientName }) }, isObj);
