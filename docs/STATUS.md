@@ -1,12 +1,14 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-19
-**Working on right now:** Making the app record a staff member's location properly all through their shift, instead of losing most of it.
+**Working on right now:** Getting the last batch of owner-requested fixes ready to install on the phones as one app update.
 
 **Done this week:**
-- Fixed the biggest reported problem in the app: when a team member was on duty, the phone was recording their location too rarely and too roughly, so their day showed up as a single straight line instead of their real route. The app now takes a precise location reading about once a minute for the whole shift — even when they are standing still.
-- Made sure this change did not accidentally start tracking people's homes when they are off duty — off-duty tracking stays deliberately light on detail and on battery.
-- Double-checked the change with an automated review that looks for mistakes, found a few, and fixed them before calling it finished.
+- The office server that the app talks to was running old code, which is why several things the owner tested looked broken (staff showing as "0 on duty", the map saying "server did not answer", location not coming through). The backend team has now put the up-to-date server live, and we confirmed it is actually running — so those issues are fixed on the server side.
+- Built the new "tap an employee to see their full pay breakdown and what they worked on" screen.
+- Built the owner's "see a team member's last-known location" feature (with an honest "as of X minutes ago" so no one is misled).
+- Improved the background location tracking so a field agent's route is recorded properly through the day.
+- Every change was independently double-checked for mistakes before being accepted; a couple of real issues were caught and fixed in that check.
 
-**Blocked on:** Two things that are not ours to do: (1) the office's own server still needs to be updated so it stops throwing away the more detailed location readings, and (2) the affected staff phones need their battery/permission settings checked and the newest app installed. Both are with the owner to arrange.
+**Blocked on:** Nothing — the server is live and all the app changes are ready.
 
-**Next:** Continue fixing the rest of this batch of reported issues (the manager's monitoring screen, payroll, etc.). As agreed with the owner, we will build all of them first, then make one final app version and test everything together in a single round.
+**Next:** Package everything into one installable app update, give the owner the download link, and test it all together on a real phone.

@@ -6,6 +6,26 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — DEPLOY GAP CLOSED: Backend Phase 69 is merged to origin/main AND live on prod (verified, end of session)
+
+**Context.** The owner reported "backend push kar diya hai" at session end. Per the standing rule (verify deployment, not
+just code / not just a push), this was checked against the real remote + live prod, not taken on trust.
+
+**Decision (finding, recorded as fact).** The gap is fully closed. `git fetch` shows `origin/main` = `2531817`, which
+CONTAINS Phase 69 (`f0eac8e`) — `git merge-base --is-ancestor f0eac8e origin/main` → true (was `1cad312`, Phase 38–40, all
+session). Live prod probes confirm it is DEPLOYED and running: `GET https://cgpe.in/internal/api/time-tracker/last-location`
+and `/team/task-report` now return **401** (route present, auth required) where they returned **404** (absent) earlier today;
+`/health` → 200. So the full chain — pushed → merged to `origin/main` → deployed → `:3001` answering — is confirmed, not
+just the push.
+
+**Consequence.** Every backend-dependent symptom the owner saw (0 on-duty, "server did not answer", straight-line GPS, missing
+payroll rate, ticket→task) is now resolvable server-side. Asks 1/2/3 (shift accuracy, attendance coords, /live-locations)
+need ZERO app change and light up on the deployed backend. The app-side work — Phases 63/64/66/67 — still needs the ONE final
+APK to reach the device (installed v1.10.0 predates them). **Method to reuse next time a deploy is claimed: `git fetch` +
+`merge-base --is-ancestor <commit> origin/main` + a no-auth curl (401 = route deployed, 404 = not).**
+
+---
+
 ## 2026-08-19 — Phase 66 `[m]`: master "Live location" (last-known) shows an HONEST readout, NOT the clock-in map pin
 
 **Context.** Owner wants a master to see a member's live location on/off duty. No real-time ping exists (no push infra), so

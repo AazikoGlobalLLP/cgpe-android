@@ -160,6 +160,13 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
    their empty state on `useDataHealth().degraded` so "no clients" ≠ "could not load clients".
 5. New route = drop a file in `src/app`. A new **tab** must be added twice: `<Tabs.Screen>` *and*
    `TAB_META` + `ORDER` in `src/app/(tabs)/_layout.tsx`.
+   **⚠️ TYPED-ROUTES TRAP (Phase 67, 2026-08-19): after adding a NEW route file, `tsc` fails on any
+   `router.push` to it** — `typedRoutes:true` (app.json) generates the route union into
+   `.expo/types/router.d.ts`, which is regenerated **only on `expo start`** (it can be days stale;
+   `.expo/` is gitignored). Do NOT `as unknown as Href`-hack it. Regenerate: `npx expo start --offline
+   --port 8083` (port 8081 is usually taken by a running dev server → non-interactive mode SKIPS
+   rather than prompts, so pass a free `--port`; CI-mode Metro writes the types in ~30 s then you can
+   let it exit). Then the clean `router.push({ pathname: '/new-route', params })` typechecks with no cast.
 
 ## Danger zones
 - `src/data/api.ts` (1744 lines, 56 importers) — `state` is a write buffer, not seed data.

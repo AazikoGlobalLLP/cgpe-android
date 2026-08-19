@@ -21,16 +21,21 @@ per-phase APKs.** **Phase 63 `[m]` BUILT + reviewed (`9033e88`+`26d011d`); Phase
 (getBreakLocations 404/501 quiet-answer, `wf_f9a30b90` 0 findings, commit `3d5c4f8`); Phase 67 `[m]` BUILT + reviewed
 (payroll-detail screen, `wf_0829f800` caught 1 real bug → fixed); Phase 66 `[m]` BUILT + reviewed (master Live-location
 last-known readout, `wf_aae29582` caught 2 real honesty bugs → fixed by dropping the misleading map pin). Backend Phase 69
-(the 5 `[api]` asks) VERIFIED code-correct (6 investigators) but NOT on deployed `origin/main` — the deploy gap persists
-(owner action). **Mobile-buildable batch work is DONE: 63/64/66/67 built + reviewed; 65 needs the [api] `/live-locations`
-gate live first; 68/69 OPS-only.**
+(the 5 `[api]` asks) VERIFIED code-correct (6 investigators). **Mobile-buildable batch work is DONE: 63/64/66/67 built +
+reviewed; 65 (`[m]` full-staff roster) is the one un-built mobile piece; 68/69 OPS-only.**
 
-**⚠️ SYSTEMIC ROOT CAUSE found this batch — the prod backend is ~28 phases behind the code.** Deployed `origin/main` =
-`1cad312` (Phase 38–40); every "shipped" backend piece Phases 41–68 (task-report/perf, break-locations, geofence,
-clock-reason, commissions, **the ticket→team_tasks mirror**) lives on `shivam`/local `main` and was **never merged to
-`origin/main`** — and the ticket-mirror commit `cb3f9de` is **not pushed to any remote at all**. So "backend done" has
-meant *done in code*, not *live on prod*. **OWNER must have the backend team push + merge to `origin/main` + deploy +
-restart `:3001`** — this blocks 64/66/68/69 and clears many "server did not answer" errors. Mobile can't (push 403s).
+**✅ DEPLOY GAP CLOSED (verified 2026-08-19, end of session).** The systemic blocker below is RESOLVED: `git fetch` shows
+`origin/main` = `2531817` which **contains Phase 69 (`f0eac8e`)**, and live prod probes confirm it is DEPLOYED —
+`/time-tracker/last-location` and `/team/task-report` now return **401** (route present) where they were **404** (absent)
+earlier today; `/health` 200. So all of Phases 41–69 run on `:3001`. Asks 1/2/3 (shift accuracy, attendance coords,
+/live-locations) now work with ZERO app change; the app-side Phases 63/64/66/67 need the ONE final APK to reach the device.
+DECISIONS 2026-08-19 (top). **NEXT = cut the final APK.**
+
+**⚠️ (HISTORICAL — now resolved) SYSTEMIC ROOT CAUSE found this batch — the prod backend was ~28 phases behind the code.**
+Deployed `origin/main` was `1cad312` (Phase 38–40) all session; Phases 41–69 lived on `deploy-phases-41-69`/local `main`,
+never merged to `origin/main`, so prod ran old code — the cause of the "0 on duty / server did not answer / straight-line
+GPS" symptoms. The owner had the backend team merge to `origin/main` + deploy + restart `:3001` at session end (verified
+above). Kept here as the reference example of "backend done ≠ live on prod — verify deployment."
 
 - **Phase 63 — [m]+[api]+OPS Background location (owner #1, the "Pavitra" 20h/8km-straight case). `[m]` HALF BUILT
   + adversarially reviewed — 2026-08-19 (commits `9033e88` + `26d011d`, local; push 403s).** Three stacked causes:
@@ -1509,34 +1514,26 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-19 handoff #2 — Phase 63 `[m]` BUILT + reviewed; batch 63–69 continues. Owner priority = background
-location #1. Full grounded spec `docs/spec/ISSUES-2026-08-19.md`):**
+**CURRENT next 3 (2026-08-19 handoff #3 — mobile 63/64/66/67 BUILT + reviewed; Backend Phase 69 DEPLOYED + verified live;
+owner directive = ONE final APK after the batch. Spec `docs/spec/ISSUES-2026-08-19.md`):**
 
-**🧭 OWNER DIRECTIVE (2026-08-19): do NOT cut an APK per-phase. Finish ALL of Phases 63–69 first, then cut ONE final APK and
-test everything together in a single pass.** So every phase this batch stays editor-complete + gated + committed; no interim
-EAS builds; the device pass is deferred to the end. (`git push` still 403s — commits are local; EAS builds from the local tree
-when the time comes.)
+**🧭 OWNER DIRECTIVE (2026-08-19): ONE final APK after the whole 63–69 batch, then test together.** All buildable phases are
+done; the batch is APK-ready. (`git push` still 403s — commits local; EAS builds from the local tree.)
 
-0. **🚨 OWNER/OPS FIRST — chase the deploy gap.** Deployed `origin/main` is ~28 phases behind; Phases 41–68 (incl. the
-   ticket→task mirror `cb3f9de`, which is **unpushed**) are not live. Get the owner to have the backend team **push + merge
-   to `origin/main` + deploy + restart `:3001`**. This alone fixes Phase 68 (performance) and Phase 69 (ticket→task) and
-   clears many "server did not answer" errors — **for free, no code.** Do NOT rebuild these as app bugs.
-1. **Phase 63 — Background location (owner #1). `[m]` DONE (`9033e88`+`26d011d`, reviewed `wf_98aa7dfa`).** SHIFT records a
-   point every ~60 s even when stationary (`distanceInterval 0`) at `High` accuracy; off-duty stays coarse (`AMBIENT_PROFILE`);
-   iOS firehose guarded; `MAX_POINTS 240→720`. **Remaining (NOT mobile-code):** relay the `[api]` relax of the `>100 m`
-   shift-point drop (`timeTracker.js:1671`, already filed INBOX ask #1) — **without it, `High` still gets dropped
-   indoors/poor-signal, so this is not a full fix alone**; owner OPS (confirm Pavitra's APK ≥ v1.9.0, battery Unrestricted +
-   Auto-start, query her DB session `point_count`/`dropped`); confirm the battery-vs-accuracy tradeoff. Ships in the final APK.
-2. **Phase 64 + 65 — Monitor screen.** `[api]` (relay): `attendance.js dayLogToAttendanceRecords` must surface the stored
-   `clockInLoc` coords (fixes "on duty 0 / live field status 0" — a real backend bug a restart won't fix), and gate + fix
-   `/live-locations` so the roster can come from the **full staff list** (so members appear before they've been assigned a
-   task). `[m]` harden `getBreakLocations` to treat a 404 as a quiet answer (stops the false outage banner).
-3. **Phase 67 — Payroll.** OPS: create a payroll profile per employee (fixes "only 1 shows"). `[m]`: build a `payroll-detail`
-   screen (tap a member → pay breakdown + activity, reusing `earnings.tsx` + `performance.tsx`, rendering server numbers
-   verbatim). `[api]`: add `hourly_rate` to `computeRangeSalary months[]`.
+1. **🚀 CUT THE ONE FINAL APK.** All app-side batch work (63/64/66/67) is built + reviewed + committed and the backend it
+   depends on is now LIVE (deploy verified 2026-08-19). Run
+   `npx eas-cli build -p android --profile preview --non-interactive` (background ~15–20 min), get the direct `.apk` URL via
+   `npx eas-cli build:view <buildId> --json` → `.artifacts.applicationArchiveUrl`, and hand the owner ONE combined device-test
+   checklist (background GPS route fills in; On-duty pins populate; payroll detail; Live-location; break pins).
+2. **Phase 65 `[m]` — full-staff roster (DECIDE BEFORE the APK).** The one un-built mobile piece: point `getAgentLocations`/
+   `getTeam` at the now-live, now-gated `/live-locations` and left-join, so a member appears even before they've been assigned
+   a task. If it's wanted in this APK, build it FIRST (saves a second build); else defer and note it. Owner asked for "every
+   member visible."
+3. **Device pass + close-out.** Walk the combined checklist on a real handset once the APK is installed; confirm asks 1/2/3
+   now behave live. Then the 2026-08-19 batch is DONE.
 
-**Also open (lower priority):** Phase 66 (live-location last-known button, `[api]`+`[m]`+`[sec]`); Phases 54/55/56/57 from
-the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline) still stand.
+**Also open (lower priority):** Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated
+on an Apple account, offline) still stand; Phase 41 on-device verification (owner: do last).
 
 **⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
 iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability
