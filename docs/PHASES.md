@@ -14,6 +14,52 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🚨🚨 NEW OWNER ISSUE BATCH 2026-08-19 → Phases 63–69, all VERIFIED against real mobile + backend code** (5 parallel
+investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-19.md`. **NONE built — scoped only; next
+session executes + relays the `[api]` asks.** Owner priority: **background location (63) is #1.**
+
+**⚠️ SYSTEMIC ROOT CAUSE found this batch — the prod backend is ~28 phases behind the code.** Deployed `origin/main` =
+`1cad312` (Phase 38–40); every "shipped" backend piece Phases 41–68 (task-report/perf, break-locations, geofence,
+clock-reason, commissions, **the ticket→team_tasks mirror**) lives on `shivam`/local `main` and was **never merged to
+`origin/main`** — and the ticket-mirror commit `cb3f9de` is **not pushed to any remote at all**. So "backend done" has
+meant *done in code*, not *live on prod*. **OWNER must have the backend team push + merge to `origin/main` + deploy +
+restart `:3001`** — this blocks 64/66/68/69 and clears many "server did not answer" errors. Mobile can't (push 403s).
+
+- **Phase 63 — [m]+[api]+OPS Background location (owner #1, the "Pavitra" 20h/8km-straight case).** Three stacked causes:
+  route records at `Balanced` (~100m) but backend **drops every shift point >100m** (`timeTracker.js:1671` × `tracker.ts:394`);
+  `distanceInterval:30` means a **stationary phone records nothing** + a "still" reading stretches to **5-min** cadence
+  (`motion.ts:52/65`); and the 8km straight line = **the background service wasn't running** (installed APK predates the
+  Phase-41 native modules OR OEM battery-killed it — device/DB check needed). Fix = `[m]` motion.ts (`distanceInterval 0`,
+  `High` accuracy, kill the still-stretch) + `[api]` relax the >100m drop + OPS (confirm APK/battery, query her DB session).
+  Needs a **native APK build** to ship. Honest ceiling: ~15-min gaps after an OEM kill are unavoidable. · L.
+- **Phase 64 — [api]+[m]+OPS Monitor "on duty 0 / live field status 0" + map "server did not answer".** A restart alone
+  will NOT fix the zeros: `routes/attendance.js dayLogToAttendanceRecords` (`:38-57`) **drops the clock-in coordinates**
+  the map requires (`api.ts:2577`), so `getAgentLocations` returns `[]` for everyone even on a healthy server → 0/0. `[api]`
+  ~5-line fix to surface `clockInLoc` lat/lng. The banner is the deploy gap (break-locations 404) + a minor `[m]`
+  getBreakLocations 404-hardening. · S–M.
+- **Phase 65 — [api]+[m] Every team member appears in agent-locations (not only after they "open the app").** The roster
+  is built from **`team_tasks` assignees** (`team.js:128`), so anyone with no assigned task never appears. Fix = source the
+  roster from the full staff directory left-joined with live status (via `/live-locations` after it's master-gated + its
+  id-compare bug fixed). Depends on 64(a) for pins. · M.
+- **Phase 66 — [api]+[m]+[sec] "Live location" button (master → member X's last-known location, on/off duty).** No current-
+  location endpoint exists; deliverable = **last-known** (real-time ping needs FCM the project doesn't have). `[api]` new
+  master-gated `GET /last-location?user_id=X` (internal readers already exist) + `[m]` a "Live" button with an honest
+  freshness label + `[sec]` gate `/live-locations` (leaks all staff email/role). Ceiling: off-duty works only for consented
+  members with bg-permission. · M.
+- **Phase 67 — OPS+[m]+[api] Payroll: show ALL employees + tap one → pay breakdown + activity.** Only 1 shows because
+  `buildRoster` iterates **`payroll_profiles`** (`payroll.js:325`) and only ONE exists — **OPS: create each employee's
+  payroll profile + set its `segment`** (the mobile list is already multi-member). `[m]` build a `payroll-detail` screen
+  (reuse `earnings.tsx` breakdown card + `performance.tsx` activity list, render server numbers verbatim — how ₹40,000 was
+  reached). `[api]` add `hourly_rate` to `computeRangeSalary months[]` so the app doesn't divide. `inr()` comma-format
+  already correct. · M.
+- **Phase 68 — OPS Team performance "report service could not be reached".** App + backend code both correct; the endpoint
+  (`/team/task-report`, Phase 53 `bfea1f5`) isn't on deployed `origin/main`. **OPS deploy + restart** (see systemic note),
+  then verify `GET …/team/task-report?month=2026-08&scope=all` → 200. No code change. · trivial-once-deployed.
+- **Phase 69 — OPS "I'll handle this" ticket STILL doesn't become a task (owner re-report 2026-08-19).** VERIFIED (hard git
+  evidence): the mirror `syncTicketTaskMirror` (commit `cb3f9de`) is **local-only, unpushed, absent from `origin/main`** —
+  so prod has no mirror code. Mobile is already correct + tested (`0b64be8`); **OPS: push + deploy + restart** and it works
+  with zero app change. The clearest proof of the deploy gap. · trivial-once-deployed.
+
 **⚡⚡ v1.10.0 APK CUT (2026-08-18) — EAS build `0c648a0c`, FINISHED.** Bundles Phase 51 (map satellite/points toggles +
 green/red pins) + Phase 52 (Break feature + orange break pins) on the same native base as v1.9.0 (all JS-only on top).
 Direct APK: `https://expo.dev/artifacts/eas/ls-3QFiTrj-GuDt-6ot-Q7dQOuYkDcMLlt2InWDuf0s.apk`. Owner has the device-test

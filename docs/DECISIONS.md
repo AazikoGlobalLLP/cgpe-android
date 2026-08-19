@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — Owner issue batch (Phases 63–69) scoped from real code; SYSTEMIC finding: prod backend is ~28 phases behind + some commits unpushed
+
+**Context.** Owner reported 6 monitoring/payroll/location issues + a re-report that "I'll handle this" still doesn't move
+a ticket to Tasks. Rather than guess, ran 5 parallel read-only investigators over the real mobile AND backend code
+(file:line cited). A cross-cutting root cause emerged that ties several symptoms together.
+
+**Decision.** (1) **Scope, don't build yet** — wrote the grounded spec `docs/spec/ISSUES-2026-08-19.md` (Phases 63–69),
+each with a verified root cause and an app/backend/OPS classification, plus board rows; filed the discrete `[api]`/`[sec]`
+asks to `../contracts/INBOX.md` for the owner to relay. (2) **The headline finding is OPS, not code:** deployed
+`origin/main` = `1cad312` (Phase 38–40), while every "shipped" backend piece Phases 41–68 (perf `task-report`,
+`break-locations`, geofence, clock-reason, commissions, the **ticket→team_tasks mirror**) sits on `shivam`/local `main`,
+never merged to `origin/main`; the deploy pipeline only ships `origin/main`. Hard proof: the ticket-mirror commit
+`cb3f9de` is on **no remote branch at all** (`git branch -r --contains` → empty). So the owner's "ticket→task doesn't
+work" (Phase 69) and "performance blank" (Phase 68) are the **same deploy gap** — the mobile side is already correct and
+tested (`0b64be8`); nothing to build, the backend must push+merge+deploy+restart. (3) **A `:3001` restart alone does NOT
+fix the monitor zeros** (Phase 64): `routes/attendance.js` genuinely drops the clock-in coordinates the map needs — a real
+backend bug, separate from the deploy gap. (4) **Background tracking (Phase 63, owner #1)** has real app-config defects
+(`distanceInterval:30` = nothing recorded when still; 5-min still-cadence; `Balanced` accuracy colliding with the backend's
+>100 m drop) AND is very likely an ops/native-build gap (installed APK predates the Phase-41 modules / OEM battery kill) —
+needs a device+DB check to disambiguate. (5) **Payroll "only 1 employee"** is data, not code — only one `payroll_profiles`
+row exists; the mobile list is already multi-member. The real build is a per-employee pay-breakdown+activity detail screen
+(reuse `earnings.tsx` + `performance.tsx`). (6) **Live-location button** is deliverable only as **last-known** location
+(no push infra for a real-time ping) via a new master-gated `[api]` + an honest freshness label.
+
+**Consequence.** Nothing built this batch — scoped + filed only; next session executes and relays. **The owner's most
+important unblock is not a code change but getting the backend team to push + deploy `origin/main` + restart `:3001`**
+(mobile can't — push 403s). Priority: background location (63) is #1. Do NOT re-verify the ticket-mirror or perf as "app
+bugs" — they are correct in code and blocked purely on deploy.
+
+---
+
 ## 2026-08-18 — Phase 53b (mobile half of owner #1: the "today" task count animating wrong on reopen) BUILT
 
 **Context.** Owner's #1 issue: claiming a ticket doesn't surface it as a task, and reopening a completed task makes the
