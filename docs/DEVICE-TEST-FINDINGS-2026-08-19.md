@@ -9,7 +9,7 @@ The 2026-08-19 batch (Phases 63/64/66/67) is **verified working** — on-device 
 > **✅ UPDATE — H1, M1, M2, M3 are FIXED (2026-08-19, gates green: tsc 0 · npm test 625 · eslint 0 new).**
 > - **H1** — `dfa10f2`: `needsReason` branch on clock-in/out → mandatory reason Sheet → re-send. No more false "server could not be reached"; the agent can clock out/in with a reason. *(Sheet copy is English — localise with the 5-language reason copy before Phase-50 go-live. Full end-to-end test needs the office geofence configured.)*
 > - **M1/M2/M3** — `95b0da2`: claims 403 classified (no false outage); matured-policy premium-due/renewal guarded at source (fixes premium.tsx + clients.tsx); stale prior-day point never shown as live "on duty".
-> A **combined APK** (H1+M1+M2+M3) is building. The LOW/cosmetic items below are **not** yet fixed.
+> **Combined APK cut:** EAS `6b76608b` (v1.10.0, commit `da9e5a9`) — direct install: https://expo.dev/artifacts/eas/K5bRx6VlgAUC2xxViT-NJHnnbuSMvNHqCGgrAeVN1WA.apk (supersedes `8f3238fa`). The LOW/cosmetic items below are **not** yet fixed.
 
 ---
 
