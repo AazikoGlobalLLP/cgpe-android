@@ -6,6 +6,24 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — Owner directive: build ALL of Phases 63–69 editor-side first, THEN one final APK, THEN test everything together
+
+**Context.** After Phase 63 `[m]` was built, the owner directed (Hinglish): "sabhi phases complete hone ke baad final apk
+banayege and then sabhi ki testing ek saath kar denge" — build all the phases, then make the final APK, then test all of it
+at once.
+
+**Decision.** No per-phase / interim EAS builds for the 63–69 batch. Every phase stays **editor-complete + gated (tsc/test/
+lint) + committed locally**; the single **final APK is cut only after the whole batch is done**, and the on-device pass for
+the entire batch happens together in one session. (EAS builds from the local working tree, so the 403 push block does not
+prevent the final build when the time comes.)
+
+**Consequence.** Do not offer or cut an APK mid-batch. When 63–69 are all built, cut ONE `preview` APK
+(`npx eas-cli build -p android --profile preview --non-interactive`), get the direct `.apk` URL via `build:view <id> --json`,
+and hand the owner one combined device-test checklist. Until then, "ships in the final APK" is the standing status for every
+JS change in this batch.
+
+---
+
 ## 2026-08-19 — Phase 63 `[m]` (background location, owner #1) BUILT + adversarially reviewed: shift captures every point at High; off-duty stays coarse
 
 **Context.** Owner #1: a clocked-in member ("Pavitra") had the app open ~20h yet her route never came through — ~8km,

@@ -15,8 +15,9 @@ Each phase touches ≤8 files and produces one demoable thing.
 ## Now
 
 **🚨🚨 NEW OWNER ISSUE BATCH 2026-08-19 → Phases 63–69, all VERIFIED against real mobile + backend code** (5 parallel
-investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-19.md`. **NONE built — scoped only; next
-session executes + relays the `[api]` asks.** Owner priority: **background location (63) is #1.**
+investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-19.md`. Owner priority: **background location
+(63) is #1.** **🧭 OWNER DIRECTIVE: build ALL of 63–69 editor-side first, then cut ONE final APK + test together — no
+per-phase APKs.** **Phase 63 `[m]` BUILT + adversarially reviewed (`9033e88`+`26d011d`); 64–69 not started.**
 
 **⚠️ SYSTEMIC ROOT CAUSE found this batch — the prod backend is ~28 phases behind the code.** Deployed `origin/main` =
 `1cad312` (Phase 38–40); every "shipped" backend piece Phases 41–68 (task-report/perf, break-locations, geofence,
@@ -1478,16 +1479,24 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-19 handoff — Phase 53 built; new owner batch 63–69 scoped. Owner priority = background location #1. Full grounded spec `docs/spec/ISSUES-2026-08-19.md`):**
+**CURRENT next 3 (2026-08-19 handoff #2 — Phase 63 `[m]` BUILT + reviewed; batch 63–69 continues. Owner priority = background
+location #1. Full grounded spec `docs/spec/ISSUES-2026-08-19.md`):**
+
+**🧭 OWNER DIRECTIVE (2026-08-19): do NOT cut an APK per-phase. Finish ALL of Phases 63–69 first, then cut ONE final APK and
+test everything together in a single pass.** So every phase this batch stays editor-complete + gated + committed; no interim
+EAS builds; the device pass is deferred to the end. (`git push` still 403s — commits are local; EAS builds from the local tree
+when the time comes.)
+
 0. **🚨 OWNER/OPS FIRST — chase the deploy gap.** Deployed `origin/main` is ~28 phases behind; Phases 41–68 (incl. the
    ticket→task mirror `cb3f9de`, which is **unpushed**) are not live. Get the owner to have the backend team **push + merge
    to `origin/main` + deploy + restart `:3001`**. This alone fixes Phase 68 (performance) and Phase 69 (ticket→task) and
    clears many "server did not answer" errors — **for free, no code.** Do NOT rebuild these as app bugs.
-1. **Phase 63 — Background location (owner #1).** `[m]` fix `src/lib/motion.ts` (`distanceInterval 30→0`, add a `High`
-   accuracy case in `tracker.ts:394`, neutralise the 5-min STILL stretch), relay the `[api]` (relax the `>100 m` shift-point
-   drop `timeTracker.js:1671`), and give the owner the OPS checks (confirm Pavitra's APK build ≥ v1.9.0, phone battery =
-   Unrestricted + Auto-start, and query her DB session for `point_count`/`dropped`). Needs a **native APK build** to ship.
-   Confirm the battery-vs-accuracy tradeoff with the owner.
+1. **Phase 63 — Background location (owner #1). `[m]` DONE (`9033e88`+`26d011d`, reviewed `wf_98aa7dfa`).** SHIFT records a
+   point every ~60 s even when stationary (`distanceInterval 0`) at `High` accuracy; off-duty stays coarse (`AMBIENT_PROFILE`);
+   iOS firehose guarded; `MAX_POINTS 240→720`. **Remaining (NOT mobile-code):** relay the `[api]` relax of the `>100 m`
+   shift-point drop (`timeTracker.js:1671`, already filed INBOX ask #1) — **without it, `High` still gets dropped
+   indoors/poor-signal, so this is not a full fix alone**; owner OPS (confirm Pavitra's APK ≥ v1.9.0, battery Unrestricted +
+   Auto-start, query her DB session `point_count`/`dropped`); confirm the battery-vs-accuracy tradeoff. Ships in the final APK.
 2. **Phase 64 + 65 — Monitor screen.** `[api]` (relay): `attendance.js dayLogToAttendanceRecords` must surface the stored
    `clockInLoc` coords (fixes "on duty 0 / live field status 0" — a real backend bug a restart won't fix), and gate + fix
    `/live-locations` so the roster can come from the **full staff list** (so members appear before they've been assigned a
