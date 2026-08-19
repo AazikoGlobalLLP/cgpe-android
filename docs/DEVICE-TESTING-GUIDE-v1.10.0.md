@@ -1,6 +1,6 @@
 # CGPE Connect — Device Testing Guide
 
-**APK:** v1.10.0 preview (EAS build `8f3238fa-deb5-41dc-ab58-5221f036d36d`)
+**APK:** v1.10.0 preview (EAS build `8f3238fa-deb5-41dc-ab58-5221f036d36d`) — **direct install:** https://expo.dev/artifacts/eas/30_U-0_Em-sVzQe4Q0Fr5Zl__AsTH1Bkqi40a1BJeLQ.apk
 **Covers the 2026-08-19 batch:** Phase 63 (background location), 64 (Monitor on-duty + map honesty), 66 (Live location), 67 (Payroll detail) — plus a full regression pass of everything already shipped.
 **Written for:** the owner, to test **on a real phone**. Everything below is a thing that **cannot be verified in the editor or by automated tests** — it needs a real device, a real login, a real role, real GPS movement, or real backend data.
 
