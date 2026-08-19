@@ -13,11 +13,16 @@
  *
  * WHAT THE MOTION STATE IS FOR (§3). "Sparse when still, denser when moving." A stationary phone
  * needs GPS to wake far less often; a moving one needs the normal cadence to draw a usable route.
+ * ⚠️ PHASE 63 (2026-08-19, owner #1): this economy is currently NEUTRALISED — `STILL_PROFILE` is now
+ * identical to `MOVING_PROFILE` — because the owner requires EVERY point retained (the old "sparse when
+ * still" behaviour was a root cause of the reported no-points/straight-line bug). The classifier still
+ * runs and persists its state, so re-enabling the economy is a one-line STILL_PROFILE re-tune once the
+ * owner locks a battery number.
  *
  * ⚠️ NUMBERS. The spec fixes none of these, so they are PROPOSED DEFAULTS pending an owner lock, and
  * every one is a single named constant so tuning is a one-line change. The threshold is derived from
- * accelerometer physics (still noise ≈ 0.02 g, walking ≫ 0.1 g); the STILL time interval is the one
- * GPS-behaviour number the owner should confirm against a real battery measurement (§3 gate).
+ * accelerometer physics (still noise ≈ 0.02 g, walking ≫ 0.1 g); the accuracy/always-on-60 s battery
+ * cost (PHASE 63) is the GPS-behaviour tradeoff the owner should confirm against a real measurement (§3).
  */
 
 export type MotionState = 'still' | 'moving';
@@ -37,35 +42,47 @@ export const MOTION_FRESH_MS = 5 * 60 * 1000;
 
 /** Sampling knobs handed to `Location.startLocationUpdatesAsync` (the constant options stay in tracker). */
 export type SamplingProfile = {
-  /** 'balanced' ≈ ~100 m (usable point); 'low' would be km-level, too coarse to keep — so both use balanced. */
-  accuracy: 'balanced' | 'low';
+  /**
+   * 'high' ≈ ~10 m — survives the backend's `accuracy <= 100 m` shift-point drop; 'balanced' ≈ ~100 m
+   * sits ON that drop edge (often discarded server-side); 'low' would be km-level, too coarse to keep.
+   */
+  accuracy: 'high' | 'balanced' | 'low';
   /** Min ms between location checks. */
   timeInterval: number;
-  /** Min metres of movement before a fix is delivered — already suppresses fixes when stationary. */
+  /** Min metres of movement before a fix is delivered. `0` = deliver on the time interval even when stationary. */
   distanceInterval: number;
   /** Batching window for deferred delivery. */
   deferredUpdatesInterval: number;
 };
 
-/** MOVING = today's single profile, unchanged — the safe default the recorder has always used. */
+/**
+ * MOVING — the always-on recorder profile (PHASE 63, 2026-08-19 owner #1 "capture every point").
+ * `distanceInterval: 0` so a fix is delivered every `timeInterval` even when the phone is stationary —
+ * the old `30` recorded NOTHING until the user moved 30 m (a root cause of the reported no-points bug).
+ * `accuracy: 'high'` (~10 m) so each fix survives the backend's `accuracy <= 100 m` shift-point filter
+ * that was silently dropping the coarser Balanced fixes. The battery cost of High + always-on 60 s is
+ * the owner's flagged open question — dial it back here once they lock a number.
+ */
 export const MOVING_PROFILE: SamplingProfile = {
-  accuracy: 'balanced',
+  accuracy: 'high',
   timeInterval: 60000,
-  distanceInterval: 30,
+  distanceInterval: 0,
   deferredUpdatesInterval: 60000,
 };
 
 /**
- * STILL = check five times less often when stationary. ONLY the time intervals lengthen: accuracy and
- * distanceInterval stay identical to MOVING so the fixes we still take remain usable and a real move
- * is caught by distance immediately. `timeInterval`/`deferredUpdatesInterval` 300000 is the one number
- * the owner should confirm against the §3 battery measurement.
+ * STILL — motion adaptivity is NEUTRALISED (PHASE 63): this profile is now identical to MOVING. The
+ * old "sparse when still" economy both stretched the cadence to 5 min AND (via `distanceInterval: 30`)
+ * recorded nothing while stationary — exactly the gap the owner reported — so it directly conflicts with
+ * owner #1 ("retain every point"). The 41c classifier still runs and persists its state; keeping this
+ * constant (rather than deleting the mechanism) means a future owner-locked battery phase re-tunes the
+ * economy in one line and the classifier becomes meaningful again. See PHASE-63 / DECISIONS 2026-08-19.
  */
 export const STILL_PROFILE: SamplingProfile = {
-  accuracy: 'balanced',
-  timeInterval: 300000,
-  distanceInterval: 30,
-  deferredUpdatesInterval: 300000,
+  accuracy: 'high',
+  timeInterval: 60000,
+  distanceInterval: 0,
+  deferredUpdatesInterval: 60000,
 };
 
 export function samplingProfile(state: MotionState): SamplingProfile {

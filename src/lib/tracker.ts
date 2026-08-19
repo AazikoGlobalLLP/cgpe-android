@@ -389,9 +389,11 @@ function stopMotionClassifier(): void {
   motionStreak = 0;
 }
 
-/** Map the motion profile's accuracy to expo-location's enum (both profiles are Balanced today). */
+/** Map the motion profile's accuracy to expo-location's enum. High (~10 m) survives the backend's shift-point >100 m drop. */
 function accuracyOf(profile: SamplingProfile) {
-  return profile.accuracy === 'low' ? Location.Accuracy.Low : Location.Accuracy.Balanced;
+  if (profile.accuracy === 'high') return Location.Accuracy.High;
+  if (profile.accuracy === 'low') return Location.Accuracy.Low;
+  return Location.Accuracy.Balanced;
 }
 
 /**
@@ -439,8 +441,10 @@ async function startService(notif: Notif): Promise<void> {
   // cannot be reconfigured without a stop+start, which would fight 41b and flicker the notification).
   const profile = samplingProfile(await readMotion());
   await Location.startLocationUpdatesAsync(ROUTE_TASK, {
-    // Accuracy + cadence come from the motion profile: MOVING keeps the all-day-battery Balanced cadence;
-    // STILL lengthens the intervals when stationary. A route replay never needs lane-level precision.
+    // Accuracy + cadence come from the motion profile (PHASE 63): High accuracy + a 60 s timeInterval +
+    // distanceInterval 0, so a point lands every ~60 s even when the phone is stationary and each fix is
+    // precise enough to survive the backend's shift-point >100 m drop. Motion adaptivity is neutralised
+    // (STILL == MOVING) pending an owner-locked battery number — see motion.ts.
     accuracy: accuracyOf(profile),
     timeInterval: profile.timeInterval,
     distanceInterval: profile.distanceInterval,

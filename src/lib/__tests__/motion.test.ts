@@ -55,19 +55,28 @@ describe('samplingProfile', () => {
     expect(samplingProfile('moving')).toBe(MOVING_PROFILE);
     expect(samplingProfile('still')).toBe(STILL_PROFILE);
   });
-  it('MOVING keeps the original recorder cadence', () => {
+  it('MOVING records every ~60 s even when stationary, at High accuracy (PHASE 63)', () => {
     expect(MOVING_PROFILE).toEqual({
-      accuracy: 'balanced',
-      timeInterval: 60000,
-      distanceInterval: 30,
+      accuracy: 'high', // ~10 m — survives the backend accuracy<=100 m shift-point drop
+      timeInterval: 60000, // ~60 s cadence
+      distanceInterval: 0, // 0 = deliver on the time interval even when the phone has not moved
       deferredUpdatesInterval: 60000,
     });
   });
-  it('STILL only lengthens the time intervals — accuracy and distance stay usable', () => {
-    expect(STILL_PROFILE.accuracy).toBe(MOVING_PROFILE.accuracy);
-    expect(STILL_PROFILE.distanceInterval).toBe(MOVING_PROFILE.distanceInterval);
-    expect(STILL_PROFILE.timeInterval).toBeGreaterThan(MOVING_PROFILE.timeInterval);
-    expect(STILL_PROFILE.deferredUpdatesInterval).toBeGreaterThan(MOVING_PROFILE.deferredUpdatesInterval);
+  it('STILL is neutralised — identical to MOVING so no point is dropped when stationary (PHASE 63)', () => {
+    // Motion adaptivity is off until the owner locks a battery number: the "sparse when still" economy
+    // conflicts with owner #1 (retain every point), so STILL must not under-sample vs MOVING.
+    expect(STILL_PROFILE).toEqual(MOVING_PROFILE);
+    expect(STILL_PROFILE.distanceInterval).toBe(0);
+    expect(STILL_PROFILE.timeInterval).toBe(MOVING_PROFILE.timeInterval);
+    expect(STILL_PROFILE.accuracy).toBe('high');
+  });
+  it('neither profile can silently regress to a distance-throttled or coarse config (owner #1 guard)', () => {
+    for (const p of [MOVING_PROFILE, STILL_PROFILE]) {
+      expect(p.distanceInterval).toBe(0); // never gate a fix on movement again (the stationary-no-points bug)
+      expect(p.accuracy).toBe('high'); // never coarse enough to be dropped by the >100 m server filter
+      expect(p.timeInterval).toBeLessThanOrEqual(60000); // ~60 s or tighter, never the old 5-min stretch
+    }
   });
 });
 
