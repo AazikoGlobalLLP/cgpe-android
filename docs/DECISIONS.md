@@ -6,6 +6,41 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — Phase 63 `[m]` (background location, owner #1) BUILT + adversarially reviewed: shift captures every point at High; off-duty stays coarse
+
+**Context.** Owner #1: a clocked-in member ("Pavitra") had the app open ~20h yet her route never came through — ~8km,
+one straight line. Verified root causes: (1) the recorder requested `Balanced` (~100m) but the backend silently drops
+every clocked-in fix with `accuracy > 100m` (`timeTracker.js:1671`); (2) `distanceInterval:30` meant a stationary phone
+recorded nothing, and a "still" classifier reading stretched cadence to 5 min; (3) the straight line ≈ the background
+service wasn't running (OPS/native-build, out of scope for a JS change). Built the `[m]` half, then ran a 4-lens
+adversarial workflow (`wf_98aa7dfa`) BEFORE calling it done.
+
+**Decision.** (1) **SHIFT profile = capture every point:** `MOVING_PROFILE`/`STILL_PROFILE` → `distanceInterval 0`
+(deliver on the ~60s time interval even when stationary) + `accuracy 'high'` (~10m, clears the >100m server filter). The
+motion "sparse when still" economy is **neutralised** (STILL == MOVING) and **guard-locked** by a test, because it was a
+root cause of the reported gap. (2) **Off-duty is NOT upgraded:** `startService` is shared by the shift and 24/7 ambient
+paths, so the review caught that both had inherited the aggressive profile → continuous ~10m recording of an off-duty
+user's **home** (privacy) with the GPS radio hot 24/7 (battery). Fixed with a distinct coarser **`AMBIENT_PROFILE`**
+(Balanced + distance-gated = the pre-63 off-duty behaviour), selected by the presence of a shift `sid`. Off-duty battery
+economy now lives in `AMBIENT_PROFILE`, NOT in a STILL re-tune (the shift guard forbids that). (3) **iOS guarded:**
+`distanceInterval 0` removes iOS's only throttle (`timeInterval` is Android-only) → iOS would firehose ~1Hz High fixes;
+iOS keeps a non-zero distance filter, Android keeps 0. iOS bg tuning is deferred to Phase 56. (4) **Crux hardened:** the
+new `'high'→Location.Accuracy.High` mapping (the single line that makes the fix work) was untested (tracker.ts is
+device-only) → converted `accuracyOf` to a `Record<accuracy, Accuracy>` so tsc enforces completeness and a typo to
+Balanced is one glaring line. (5) **Offline buffer:** the fixed 60s cadence shrank the 240-point buffer to ~4h → raised
+`MAX_POINTS 240→720` (~12h); verified expo-secure-store has no hard value-size limit on Android.
+
+**Consequence.** `tsc` 0 · `npm test` **606** (+2) · eslint 0 new. Commits `9033e88` + `26d011d` (local; push 403s).
+**NOT a complete fix on these commits alone** (review, HIGH): `High` is a *target* — indoor/poor-signal fixes can still
+report >100m and be dropped until the filed **`[api]` relax** of the >100m drop lands on deployed `origin/main`; do NOT
+report to the owner as fixed pre-`[api]`+device. Ships only in a **native APK build** (JS-only but the profile rides a
+build, not OTA). Device test MUST **clock out+in** (or reinstall) — the profile applies only at service (re)start.
+Known limits: a 24/7-armed user who clocks in over a running ambient service keeps the coarse profile until a genuine
+restart (documented, non-regressive); a >12h continuous-offline shift still evicts oldest (needs upload chunking); the
+now-dormant 41c classifier runs for no behavioural effect (accepted minor overhead, revisited when STILL is re-tuned).
+
+---
+
 ## 2026-08-19 — Owner issue batch (Phases 63–69) scoped from real code; SYSTEMIC finding: prod backend is ~28 phases behind + some commits unpushed
 
 **Context.** Owner reported 6 monitoring/payroll/location issues + a re-report that "I'll handle this" still doesn't move

@@ -25,13 +25,27 @@ clock-reason, commissions, **the ticket→team_tasks mirror**) lives on `shivam`
 meant *done in code*, not *live on prod*. **OWNER must have the backend team push + merge to `origin/main` + deploy +
 restart `:3001`** — this blocks 64/66/68/69 and clears many "server did not answer" errors. Mobile can't (push 403s).
 
-- **Phase 63 — [m]+[api]+OPS Background location (owner #1, the "Pavitra" 20h/8km-straight case).** Three stacked causes:
+- **Phase 63 — [m]+[api]+OPS Background location (owner #1, the "Pavitra" 20h/8km-straight case). `[m]` HALF BUILT
+  + adversarially reviewed — 2026-08-19 (commits `9033e88` + `26d011d`, local; push 403s).** Three stacked causes:
   route records at `Balanced` (~100m) but backend **drops every shift point >100m** (`timeTracker.js:1671` × `tracker.ts:394`);
   `distanceInterval:30` means a **stationary phone records nothing** + a "still" reading stretches to **5-min** cadence
   (`motion.ts:52/65`); and the 8km straight line = **the background service wasn't running** (installed APK predates the
-  Phase-41 native modules OR OEM battery-killed it — device/DB check needed). Fix = `[m]` motion.ts (`distanceInterval 0`,
-  `High` accuracy, kill the still-stretch) + `[api]` relax the >100m drop + OPS (confirm APK/battery, query her DB session).
-  Needs a **native APK build** to ship. Honest ceiling: ~15-min gaps after an OEM kill are unavoidable. · L.
+  Phase-41 native modules OR OEM battery-killed it — device/DB check needed).
+  **`[m]` BUILT (motion.ts + tracker.ts):** SHIFT profile now `distanceInterval 0` (a point every ~60s **even when
+  stationary**) + `accuracy High` (~10m, **survives** the >100m server drop); the STILL 5-min stretch is neutralised
+  (STILL == MOVING, guard-locked). A 4-lens adversarial review (`wf_98aa7dfa`) then caught + fixed real regressions the
+  first commit introduced: the 24/7 **off-duty** path had inherited the aggressive profile (continuous ~10m home
+  recording — privacy + battery) → NEW coarser `AMBIENT_PROFILE` selected by shift `sid`; the **iOS** firehose
+  (`distanceInterval 0` removes iOS's only throttle — `timeInterval` is Android-only) → iOS keeps a non-zero distance
+  filter; the **untested `accuracyOf` crux** ('high'→`Accuracy.High`) → a tsc-completeness `Record` map; and the
+  **offline buffer** shrank 5× at the new cadence → `MAX_POINTS 240→720` (~12h; SecureStore has no hard size limit on
+  Android, verified). Gates: `tsc` 0 · `npm test` **606** (+2) · eslint 0 new. **⚠️ NOT a full fix on this commit
+  alone (review, HIGH):** `High` is a *target* — indoor/poor-signal fixes can still report >100m and are still dropped
+  until the **`[api]` relax** lands on deployed `origin/main`; and the profile only applies at service **(re)start**, so
+  a device test must **clock out+in** (or reinstall) to pick it up. **Remaining:** `[api]` relax the >100m drop (filed,
+  owner relays) + a **native APK build** (JS-only but the profile rides a build, not OTA) + OPS (confirm APK≥v1.9.0 /
+  battery-unrestricted, query her DB session) + device/battery verification. Honest ceiling: ~15-min gaps after an OEM
+  kill are unavoidable; a >12h continuous-offline shift still needs upload chunking (follow-up); iOS bg is Phase 56. · L.
 - **Phase 64 — [api]+[m]+OPS Monitor "on duty 0 / live field status 0" + map "server did not answer".** A restart alone
   will NOT fix the zeros: `routes/attendance.js dayLogToAttendanceRecords` (`:38-57`) **drops the clock-in coordinates**
   the map requires (`api.ts:2577`), so `getAgentLocations` returns `[]` for everyone even on a healthy server → 0/0. `[api]`
