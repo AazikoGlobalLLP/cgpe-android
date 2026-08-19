@@ -12,7 +12,7 @@
  * reset export, so every test re-imports it (CLAUDE.md).
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Task } from '@/data/tasks';
+import { dueBucket, type Task } from '@/data/tasks';
 
 type Api = typeof import('@/data/api');
 let api: Api;
@@ -79,5 +79,36 @@ describe('adaptTeamTask — due date never follows the server touch-time', () =>
     expect(doneUndated.dueDate).toBe('');
     expect(doneUndated.status).toBe('done');
     expect(doneUndated.completedAt).toBe('2026-08-18T07:00:00.000Z');
+  });
+});
+
+/*
+ * PHASE 53a consumption — a CLAIMED TICKET now surfaces as a task. cgpe-api Backend Phase 68 mirrors
+ * a claimed/assigned ticket into `team_tasks` (source:'ticket'), and the follow-up set its dueAt to
+ * the ticket's own createdAt (its claim date) so the mobile list buckets it Today/Overdue rather than
+ * Upcoming (owner request, verified in routes/tickets.js syncTicketTaskMirror). Mobile needs no code
+ * change to consume it — this pins that end-to-end: the mirror row maps to a DATED task in the right
+ * bucket, so a ticket claimed today lands on the default 'today' Tasks view.
+ */
+describe('adaptTeamTask — a claimed-ticket mirror (source:ticket, dueAt=claim date) is a DATED task', () => {
+  const NOW = new Date(2026, 7, 18, 12, 0, 0);              // local noon, 18 Aug 2026
+  const at = (offsetDays: number) => new Date(2026, 7, 18 + offsetDays, 9, 0, 0).toISOString();
+
+  it('buckets a ticket claimed today as Today and an older one as Overdue (never Upcoming)', async () => {
+    serve([
+      { _id: 'tkA', taskId: 'ticket:tkA', type: 'task', title: 'Handle request', status: 'open',
+        priority: 'P2', source: 'ticket', assigneeName: 'Asha', dueAt: at(0), createdAt: at(0), updatedAt: at(0) },
+      { _id: 'tkB', taskId: 'ticket:tkB', type: 'task', title: 'Old request', status: 'open',
+        priority: 'P3', source: 'ticket', assigneeName: 'Asha', dueAt: at(-8), createdAt: at(-8), updatedAt: at(-8) },
+    ]);
+    const list = await api.getTasks();
+
+    const a = byId(list, 'tkA');
+    expect(a.dueDate).toBe(at(0));            // a REAL ticket date — not '' (would hide it under Upcoming)
+    expect(dueBucket(a, NOW)).toBe('today');  // so a freshly-claimed ticket shows on the default Today view
+
+    const b = byId(list, 'tkB');
+    expect(b.dueDate).toBe(at(-8));
+    expect(dueBucket(b, NOW)).toBe('overdue');// an older claimed ticket reads as needing attention
   });
 });
