@@ -549,6 +549,12 @@ export default function Home() {
   const [breaking, setBreaking] = useState(false);
   const [breakSheet, setBreakSheet] = useState(false);
   const [breakReason, setBreakReason] = useState('');
+  // PHASE 50: an out-of-range OR early clock-in/out is ALLOWED but must carry a reason (the server
+  // enforces it and notifies a master). `clockReasonSheet`/`clockReason` drive the prompt;
+  // `clockReasonCtx` remembers why it opened so the copy is honest (early vs away from office).
+  const [clockReasonSheet, setClockReasonSheet] = useState(false);
+  const [clockReason, setClockReason] = useState('');
+  const [clockReasonCtx, setClockReasonCtx] = useState<{ early?: boolean; outOfRange?: boolean; message?: string } | null>(null);
   const { confirm } = useConfirm();
   // Lazy initialiser: Date.now() is impure, so it must not run in the render body on every
   // pass (react-hooks/purity). Passing the thunk defers it to mount; the value is identical.
@@ -778,8 +784,11 @@ export default function Home() {
     void refreshBell();
   }, [refreshBell]));
 
-  const toggleClock = useCallback(async () => {
+  const toggleClock = useCallback(async (reasonText?: string) => {
     if (clocking) return;
+    // `toggleClock` is bound straight to onPress, so a press event can arrive as the first arg —
+    // only a real, non-empty string counts as a reason (PHASE 50 out-of-range / early re-send).
+    const reason = typeof reasonText === 'string' && reasonText.trim() ? reasonText.trim() : undefined;
     setClocking(true);
     setNotice(null);
     haptics.tap();
@@ -866,11 +875,27 @@ export default function Home() {
           await api.stopBreak(coords).catch(() => {});
           if (!mounted.current) return;
         }
-        const res = await api.clockOut(coords);
+        const res = await api.clockOut(coords, reason);
         if (!mounted.current) return;
         if (res.blocked) {
           haptics.warn();
           setNotice({ tone: 'warning', title: 'Too far to clock out', message: res.message || 'You have to be at the office to clock out.' });
+          return;
+        }
+        // PHASE 50: the server ALLOWS this clock-out but needs a reason (out-of-range or early) and
+        // notifies a master. This is neither a refusal nor a network fault — collect the reason and
+        // re-send. Without this branch it fell through to the false "server could not be reached".
+        if (res.needsReason) {
+          if (reason) {
+            // A reason was already supplied but the server still refused it — say so honestly.
+            haptics.warn();
+            setNotice({ tone: 'warning', title: 'Reason needed to clock out', message: res.message || 'Please add a short reason to clock out here.' });
+            return;
+          }
+          haptics.warn();
+          setClockReasonCtx({ early: res.early, outOfRange: res.outOfRange, message: res.message });
+          setClockReason('');
+          setClockReasonSheet(true);
           return;
         }
         /* PHASE 1: the shift stays OPEN when the server did not close it. Previously any
@@ -906,11 +931,26 @@ export default function Home() {
         return;
       }
 
-      const res = await api.clockIn(coords);
+      const res = await api.clockIn(coords, reason);
       if (!mounted.current) return;
       if (res.blocked) {
         haptics.warn();
         setNotice({ tone: 'warning', title: 'Too far to clock in', message: res.message || 'You have to be inside the office area to clock in.' });
+        return;
+      }
+      // PHASE 50: server allows the clock-in but needs a reason (out-of-range — the client fence and
+      // the server's per-member fence disagreed, or no fence was cached). Collect it and re-send;
+      // never show the false network-outage notice for a 400 the server answered clearly.
+      if (res.needsReason) {
+        if (reason) {
+          haptics.warn();
+          setNotice({ tone: 'warning', title: 'Reason needed to clock in', message: res.message || 'Please add a short reason to clock in here.' });
+          return;
+        }
+        haptics.warn();
+        setClockReasonCtx({ outOfRange: res.outOfRange, message: res.message });
+        setClockReason('');
+        setClockReasonSheet(true);
         return;
       }
 
@@ -968,6 +1008,15 @@ export default function Home() {
       if (mounted.current) setClocking(false);
     }
   }, [clocking, clock.in, clock.onBreak, clockKey]);
+
+  // PHASE 50: the reason prompt re-runs the SAME clock action, this time carrying the typed reason,
+  // so the success path (start/stop tracking, clock state, haptics) is reused untouched.
+  const submitClockReason = useCallback(() => {
+    const r = clockReason.trim();
+    if (!r || clocking) return;
+    setClockReasonSheet(false);
+    void toggleClock(r);
+  }, [clockReason, clocking, toggleClock]);
 
   /* ---------- PHASE 52: break ----------
    * Break start/stop hits the already-live endpoints (`api.startBreak`/`stopBreak`). Location is
@@ -2214,6 +2263,49 @@ export default function Home() {
           label={t('break.reasonPlaceholder')}
           value={breakReason}
           onChange={setBreakReason}
+          multiline
+          maxLength={500}
+          autoFocus
+        />
+      </Sheet>
+
+      {/* PHASE 50: out-of-range / early clock actions are ALLOWED but must carry a reason (server-
+          enforced; a master is notified). This collects it and re-sends the SAME action. English
+          copy matches the surrounding attendance notices — localise together when the 5-language
+          copy lands. */}
+      <Sheet
+        visible={clockReasonSheet}
+        onClose={() => { if (!clocking) setClockReasonSheet(false); }}
+        title={clock.in ? 'Add a reason to clock out' : 'Add a reason to clock in'}
+        footer={
+          <Row style={{ gap: spacing.sm }}>
+            <Button
+              label="Cancel"
+              variant="outline"
+              disabled={clocking}
+              onPress={() => { if (!clocking) setClockReasonSheet(false); }}
+              style={{ flex: 1 }}
+            />
+            <Button
+              label={clock.in ? 'Clock out' : 'Clock in'}
+              variant="primary"
+              loading={clocking}
+              disabled={!clockReason.trim()}
+              onPress={submitClockReason}
+              style={{ flex: 1 }}
+            />
+          </Row>
+        }
+      >
+        <Field
+          label={
+            clockReasonCtx?.message
+            || (clockReasonCtx?.early
+              ? 'You are clocking out before your shift ends. Your manager will be notified.'
+              : 'You are away from the office. Your manager will be notified.')
+          }
+          value={clockReason}
+          onChange={setClockReason}
           multiline
           maxLength={500}
           autoFocus
