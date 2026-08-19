@@ -2651,18 +2651,29 @@ export type MemberBreaks = {
  * is_on_break, breaks:[{ lat, lng, at, kind:'start'|'end', accuracy, reason?, active? }] }] } }`
  * (verified against `routes/timeTracker.js:1074`).
  *
- * Master-gated server-side: the whole-map case (no `user_id`) requires super_admin, and a 403 is a
- * quiet, legitimate "not for you" answer (empty) — NOT an outage, so it never raises the banner;
- * only a real 5xx/network failure does. The app renders exactly what the server returns; it never
- * invents a break point.
+ * Master-gated server-side: the whole-map case (no `user_id`) requires super_admin, so a 403 is a
+ * quiet, legitimate "not for you" answer (empty) — NOT an outage. PHASE 64 widened that to the whole
+ * ANSWER set: a 401/403/404/501 (the last two = the endpoint is not deployed on the prod build yet —
+ * the deploy gap) is classified by `reportIfOutage` and stays OFF the HealthBanner; only a real
+ * 5xx/network fault raises it. The old `status === 403`-only guard let an undeployed 404 fall through
+ * to a red banner, which is exactly the "server did not answer" that the owner saw. The app renders
+ * exactly what the server returns; it never invents a break point.
  */
 export async function getBreakLocations(userId?: string): Promise<MemberBreaks[]> {
-  if (!sessionReal || FORCE_DEMO) return unavailable('/time-tracker/break-locations', [] as MemberBreaks[]);
+  const KEY = '/time-tracker/break-locations';
+  if (!sessionReal || FORCE_DEMO) return unavailable(KEY, [] as MemberBreaks[]);
   try {
     const qs = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
-    const { ok, status, json } = await req(`/time-tracker/break-locations${qs}`);
-    if (status === 403) return [];   // non-master asked for others' data — a quiet empty answer
-    if (!ok) return unavailable('/time-tracker/break-locations', [] as MemberBreaks[]);
+    const { ok, status, json } = await req(`${KEY}${qs}`, {}, REQUEST_TIMEOUT, KEY);
+    if (!ok) {
+      // 401/403/404/501 are ANSWERS, not outages — delegate to the ONE classifier (`reportIfOutage`)
+      // rather than re-listing them here. A non-master (403) or an UNDEPLOYED endpoint (404/501, the
+      // deploy gap) is a quiet empty answer; `reportIfOutage` leaves the "this was an answer" note and
+      // `unavailable` consumes it, so it stays off the banner. Only a real 5xx/network fault raises it.
+      // The old hard-coded `status === 403` let a 404 fall straight through to `unavailable`→banner.
+      reportIfOutage(status, KEY);
+      return unavailable(KEY, [] as MemberBreaks[]);
+    }
     const members: any[] = Array.isArray(json?.data?.members) ? json.data.members : [];
     return members.map((m): MemberBreaks => ({
       userId: String(m?.user_id ?? ''),
@@ -2684,7 +2695,7 @@ export async function getBreakLocations(userId?: string): Promise<MemberBreaks[]
         .filter(Boolean) as BreakPoint[],
     }));
   } catch {
-    return unavailable('/time-tracker/break-locations', [] as MemberBreaks[]);
+    return unavailable(KEY, [] as MemberBreaks[]);
   }
 }
 

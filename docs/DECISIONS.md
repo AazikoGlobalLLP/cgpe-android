@@ -6,6 +6,33 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — Phase 64 `[m]`: getBreakLocations treats 404/501 as a QUIET answer (deploy-gap-proof), delegating to the ONE classifier
+
+**Context.** The master monitor/map showed "server did not answer" (Phase 64b). The global `health.degraded` banner
+needs a real 5xx/timeout/404; the likely trigger is `getBreakLocations` reading `/time-tracker/break-locations`, which on a
+prod build that predates that endpoint returns **404**. The function hard-coded `if (status === 403) return []` as its only
+quiet answer and routed everything else (404 included) through `unavailable()` → `reportFailure` → red banner. That `=== 403`
+list had **drifted** from the app's actual contract for "which statuses are answers": `reportIfOutage` (`api.ts:130`) treats
+**401/403/404/501** as answers (an undeployed route is `unsupported`, not a fault). The core "on duty 0 / live field status
+0" zeros are a *separate* backend bug (`dayLogToAttendanceRecords` drops `clockInLoc` coords) — filed `[api]`, not mobile.
+
+**Decision.** Route the whole `!ok` branch through the single classifier: `reportIfOutage(status, KEY)` (suppresses
+401/403/404/501, reports the rest) followed by `unavailable(KEY, [])` (consumes the suppression note so answers stay quiet,
+reports real faults). Removed the hand-coded `=== 403` short-circuit rather than extend it, so this can **never drift from
+the contract again** — the exact drift-class bug being fixed. Introduced a local `const KEY` and passed it as `req()`'s 4th
+arg so producer (`reportIfOutage`/`req`) and consumer (`unavailable`) meet on the same health key. Behaviour: 403 (non-master)
+and 404/501 (deploy gap) → quiet `[]`, no banner; 400/5xx/network → honest banner, still `[]` (never fabricates a pin).
+
+**Consequence.** The map no longer shows a false "server did not answer" for a not-yet-deployed break-locations endpoint;
+once OPS deploys, orange break pins light up with no further app change. This does **not** fix the "0/0" zeros — those need
+the `[api]` `clockInLoc` coordinate-surfacing fix (INBOX, owner relays) on deployed `origin/main`. The 403 empty answer now
+incurs the standard `unavailable()` ~260ms `wait()` (was an immediate return) — matches every other empty path; the sole
+caller (`agent-map.tsx:104`) fully awaits + `.catch()`es, so it is unaffected. Gates: `tsc` 0 · `npm test` **609** (+3, the
+404/501 quiet-answer lock, the 5xx banner boundary, the network-catch banner) · eslint 0 new. Reviewed by a 4-lens
+adversarial workflow (`wf_f9a30b90`) — 0 findings. JS-only → ships in the final 63–69 APK. Ships in the final APK.
+
+---
+
 ## 2026-08-19 — Owner directive: build ALL of Phases 63–69 editor-side first, THEN one final APK, THEN test everything together
 
 **Context.** After Phase 63 `[m]` was built, the owner directed (Hinglish): "sabhi phases complete hone ke baad final apk

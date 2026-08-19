@@ -15,7 +15,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Api = typeof import('@/data/api');
+type Health = typeof import('@/data/health');
 let api: Api;
+let health: Health;
 let fetchSpy: ReturnType<typeof vi.fn>;
 
 const reply = (status: number, body: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
@@ -30,6 +32,7 @@ beforeEach(async () => {
   fetchSpy = vi.fn();
   vi.stubGlobal('fetch', fetchSpy);
   api = await import('@/data/api');
+  health = await import('@/data/health'); // same instance api is bound to (resetModules cleared it)
   api.setAuthToken('test-token'); // a real (non-demo) session, so the calls actually reach fetch
 });
 
@@ -143,6 +146,35 @@ describe('getBreakLocations (Phase 66 master read)', () => {
     fetchSpy.mockResolvedValueOnce(reply(403, { success: false, message: 'Access denied' }));
     const res = await api.getBreakLocations();
     expect(res).toEqual([]);
+    expect(health.getHealth().degraded).toBe(false);   // a permission result, never the banner
+  });
+
+  it('a 404/501 (endpoint not on the deployed build — the deploy gap) is a QUIET empty answer, not the "server did not answer" banner', async () => {
+    // PHASE 64: on the map, this endpoint 404s against a prod build that predates it. The old
+    // `status === 403`-only guard let that 404 fall straight through to the HealthBanner ("server
+    // did not answer") — the symptom the owner reported. 404/501 mean "not deployed", an ANSWER, so
+    // they must stay quiet exactly like 403; only a real fault raises the banner (asserted below).
+    for (const status of [404, 501]) {
+      fetchSpy.mockResolvedValueOnce(reply(status, { success: false, message: 'Not found' }));
+      const res = await api.getBreakLocations();
+      expect(res).toEqual([]);
+    }
+    expect(health.getHealth().degraded).toBe(false);   // neither status raised the banner
+  });
+
+  it('a real 5xx IS reported (the banner boundary — suppressing 404 must not swallow a true outage)', async () => {
+    fetchSpy.mockResolvedValueOnce(reply(500, { success: false, message: 'boom' }));
+    const res = await api.getBreakLocations();
+    expect(res).toEqual([]);                            // still never fabricates a pin
+    expect(health.getHealth().degraded).toBe(true);    // but the genuine outage is surfaced honestly
+    expect(health.getHealth().failures).toEqual(['/time-tracker/break-locations']);
+  });
+
+  it('a dead network / abort IS reported (the catch path still banners)', async () => {
+    fetchSpy.mockRejectedValueOnce(new Error('network down'));
+    const res = await api.getBreakLocations();
+    expect(res).toEqual([]);
+    expect(health.getHealth().failures).toEqual(['/time-tracker/break-locations']);
   });
 
   it('drops break points with non-finite coordinates (never fabricates a pin)', async () => {

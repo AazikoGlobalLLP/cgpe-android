@@ -17,7 +17,9 @@ Each phase touches ≤8 files and produces one demoable thing.
 **🚨🚨 NEW OWNER ISSUE BATCH 2026-08-19 → Phases 63–69, all VERIFIED against real mobile + backend code** (5 parallel
 investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-19.md`. Owner priority: **background location
 (63) is #1.** **🧭 OWNER DIRECTIVE: build ALL of 63–69 editor-side first, then cut ONE final APK + test together — no
-per-phase APKs.** **Phase 63 `[m]` BUILT + adversarially reviewed (`9033e88`+`26d011d`); 64–69 not started.**
+per-phase APKs.** **Phase 63 `[m]` BUILT + adversarially reviewed (`9033e88`+`26d011d`); Phase 64 `[m]` BUILT + adversarially
+reviewed (getBreakLocations 404/501 quiet-answer, `wf_f9a30b90` 0 findings); 65–69 not started (65/66/68/69 backend-first,
+67 `[m]` next-buildable).**
 
 **⚠️ SYSTEMIC ROOT CAUSE found this batch — the prod backend is ~28 phases behind the code.** Deployed `origin/main` =
 `1cad312` (Phase 38–40); every "shipped" backend piece Phases 41–68 (task-report/perf, break-locations, geofence,
@@ -47,11 +49,18 @@ restart `:3001`** — this blocks 64/66/68/69 and clears many "server did not an
   owner relays) + a **native APK build** (JS-only but the profile rides a build, not OTA) + OPS (confirm APK≥v1.9.0 /
   battery-unrestricted, query her DB session) + device/battery verification. Honest ceiling: ~15-min gaps after an OEM
   kill are unavoidable; a >12h continuous-offline shift still needs upload chunking (follow-up); iOS bg is Phase 56. · L.
-- **Phase 64 — [api]+[m]+OPS Monitor "on duty 0 / live field status 0" + map "server did not answer".** A restart alone
-  will NOT fix the zeros: `routes/attendance.js dayLogToAttendanceRecords` (`:38-57`) **drops the clock-in coordinates**
-  the map requires (`api.ts:2577`), so `getAgentLocations` returns `[]` for everyone even on a healthy server → 0/0. `[api]`
-  ~5-line fix to surface `clockInLoc` lat/lng. The banner is the deploy gap (break-locations 404) + a minor `[m]`
-  getBreakLocations 404-hardening. · S–M.
+- **Phase 64 — [api]+[m]+OPS Monitor "on duty 0 / live field status 0" + map "server did not answer". `[m]` BUILT +
+  adversarially reviewed — 2026-08-19.** A restart alone will NOT fix the zeros: `routes/attendance.js
+  dayLogToAttendanceRecords` (`:38-57`) **drops the clock-in coordinates** the map requires (`api.ts:2577`), so
+  `getAgentLocations` returns `[]` for everyone even on a healthy server → 0/0. `[api]` ~5-line fix to surface `clockInLoc`
+  lat/lng — **filed (INBOX #2, owner relays); mobile CANNOT fix the zeros.** The map banner is the deploy gap
+  (break-locations 404). **`[m]` BUILT:** `getBreakLocations` (`api.ts`) now delegates its whole `!ok` branch to the single
+  classifier `reportIfOutage` — a **404/501** (endpoint not on the deployed prod build — the deploy gap) is a **quiet empty
+  answer**, no longer a false "server did not answer" banner; only a real 5xx/network fault banners. Replaces the drifted
+  hard-coded `=== 403`-only guard (which let a 404 fall through). Gates: `tsc` 0 · `npm test` **609** (+3: 404/501 quiet
+  lock, 5xx banner boundary, network-catch banner) · eslint 0 new. 4-lens adversarial review `wf_f9a30b90` → 0 findings. JS-
+  only → ships in the final 63–69 APK. **Remaining: [api] coordinate fix + OPS deploy `origin/main` + `:3001` restart — both
+  filed, owner relays.** The banner-clear (restart) will NOT fix the zeros; those need the coordinate fix. · S–M.
 - **Phase 65 — [api]+[m] Every team member appears in agent-locations (not only after they "open the app").** The roster
   is built from **`team_tasks` assignees** (`team.js:128`), so anyone with no assigned task never appears. Fix = source the
   roster from the full staff directory left-joined with live status (via `/live-locations` after it's master-gated + its
