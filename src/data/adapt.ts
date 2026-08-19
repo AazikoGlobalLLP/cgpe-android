@@ -45,10 +45,15 @@ export function dayMatches(d?: string | Date | null, ref = new Date()): boolean 
   return !!x && !isNaN(x.getTime()) && x.getMonth() === ref.getMonth() && x.getDate() === ref.getDate();
 }
 
-/** Item 12: premium is due THIS month when fupDate's month falls in the current month. */
+/** Item 12: premium is due THIS month when fupDate's month falls in the current month.
+ *  A MATURED policy has run its full term and cannot have a premium due — match the guard the
+ *  Client-360 detail already applies (client/[id].tsx), so the renewals list (premium.tsx) and the
+ *  Clients segment filter stop resurrecting a due prompt from a matured policy's stale follow-up
+ *  month. */
 export function isPremiumDueThisMonth(client: Client, ref = new Date()): boolean {
-  const fup = client.policies[0]?.nextRenewal;
-  return monthMatches(fup, ref);
+  const p0 = client.policies[0];
+  if (!p0 || p0.status === 'matured') return false;
+  return monthMatches(p0.nextRenewal, ref);
 }
 export function isBirthdayThisMonth(client: Client, ref = new Date()): boolean {
   return monthMatches(client.dob, ref);
@@ -134,7 +139,9 @@ export function adaptClient(raw: any): Client {
   };
 
   const segment: Client['segment'] = [];
-  if (monthMatches(fupDate)) segment.push('renewal_due');
+  // A matured policy is never "renewal due" — its follow-up month is stale (same guard as the
+  // Client-360 detail and isPremiumDueThisMonth above).
+  if (status !== 'matured' && monthMatches(fupDate)) segment.push('renewal_due');
   if (monthMatches(dob)) segment.push('birthday');
   if (matDays != null && matDays >= 0 && matDays <= 90) segment.push('maturity_soon');
   if (!segment.length) segment.push('cross_sell');

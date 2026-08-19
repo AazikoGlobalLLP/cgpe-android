@@ -1179,14 +1179,18 @@ const claimCache = new Map<string, Claim>();
 export async function getClaims(): Promise<Claim[]> {
   if (sessionReal && !FORCE_DEMO) {
     try {
-      const { ok, json } = await req('/claims?limit=500&scope=all');
+      const { ok, status, json } = await req('/claims?limit=500&scope=all');
       const arr = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : null);
       if (ok && arr) {
         const claims = arr.map(adaptClaim);
         claims.forEach((c: Claim) => claimCache.set(c.id, c));
         return claims;
       }
-    } catch { /* fall through */ }
+      // A permission ANSWER (401/403/404/501 — e.g. a departmented user without the `operations`
+      // module) is not an outage. Classify it so it stays quiet instead of raising a false global
+      // HealthBanner + "server could not be reached" empty state. Mirrors getLeads.
+      if (!ok) reportIfOutage(status, '/claims');
+    } catch { /* fall through — `unavailable` reports a real outage */ }
   }
   return unavailable('/claims', state.claims);
 }
@@ -2588,7 +2592,10 @@ const num2 = (v: any) => (typeof v === 'number' && isFinite(v) ? v : undefined);
  * /attendance/user/:userId (raw `attendance` collection, string user_id), so we
  * fan out across the roster and keep whoever has coordinates for today.
  */
-const toPin = (row: any, p: any): AgentPin | null => {
+// `live` = this row is a TODAY record, so a missing clock-out means genuinely on duty right now.
+// The fallback path passes live=false for a prior-day last-known point, so a shift someone forgot
+// to clock out of yesterday is never counted as "on duty" today or shown as a live on-duty pin.
+const toPin = (row: any, p: any, live = true): AgentPin | null => {
   const ci = row?.clock_in || {}; const co = row?.clock_out || {};
   const inLat = num2(ci.lat), inLng = num2(ci.lng);
   if (inLat === undefined || inLng === undefined) return null;
@@ -2598,7 +2605,7 @@ const toPin = (row: any, p: any): AgentPin | null => {
     city: ci.city || undefined,
     inLat, inLng, inTime: ci.time || undefined,
     outLat: num2(co.lat), outLng: num2(co.lng), outTime: co.time || undefined,
-    onDuty: !co.time,
+    onDuty: live && !co.time,
   };
 };
 
@@ -2645,7 +2652,8 @@ export async function getAgentLocations(): Promise<AgentPin[]> {
       const rows: any[] = json?.data ?? [];
       const withGps = rows.filter((r) => num2(r?.clock_in?.lat) !== undefined);
       withGps.sort((a, b) => String(a.date).localeCompare(String(b.date)));
-      return toPin(withGps[withGps.length - 1], p);
+      // live=false: a prior-day point is last-known, not a live shift — never mark it on duty.
+      return toPin(withGps[withGps.length - 1], p, false);
     } catch { return null; }
   }));
   return recent.filter(Boolean) as AgentPin[];
