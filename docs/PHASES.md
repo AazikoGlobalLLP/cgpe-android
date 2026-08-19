@@ -17,9 +17,11 @@ Each phase touches ≤8 files and produces one demoable thing.
 **🚨🚨 NEW OWNER ISSUE BATCH 2026-08-19 → Phases 63–69, all VERIFIED against real mobile + backend code** (5 parallel
 investigators, file:line cited). Full grounded spec: `docs/spec/ISSUES-2026-08-19.md`. Owner priority: **background location
 (63) is #1.** **🧭 OWNER DIRECTIVE: build ALL of 63–69 editor-side first, then cut ONE final APK + test together — no
-per-phase APKs.** **Phase 63 `[m]` BUILT + adversarially reviewed (`9033e88`+`26d011d`); Phase 64 `[m]` BUILT + adversarially
-reviewed (getBreakLocations 404/501 quiet-answer, `wf_f9a30b90` 0 findings); 65–69 not started (65/66/68/69 backend-first,
-67 `[m]` next-buildable).**
+per-phase APKs.** **Phase 63 `[m]` BUILT + reviewed (`9033e88`+`26d011d`); Phase 64 `[m]` BUILT + reviewed
+(getBreakLocations 404/501 quiet-answer, `wf_f9a30b90` 0 findings, commit `3d5c4f8`); Phase 67 `[m]` BUILT + reviewed
+(payroll-detail screen, `wf_0829f800` caught 1 real bug → fixed). Backend Phase 69 (the 5 `[api]` asks) VERIFIED code-correct
+(6 investigators) but NOT on deployed `origin/main` — the deploy gap persists (owner action). 65/66 now unblocked ([api]
+endpoints exist in code); 68/69 OPS-only.**
 
 **⚠️ SYSTEMIC ROOT CAUSE found this batch — the prod backend is ~28 phases behind the code.** Deployed `origin/main` =
 `1cad312` (Phase 38–40); every "shipped" backend piece Phases 41–68 (task-report/perf, break-locations, geofence,
@@ -70,12 +72,20 @@ restart `:3001`** — this blocks 64/66/68/69 and clears many "server did not an
   master-gated `GET /last-location?user_id=X` (internal readers already exist) + `[m]` a "Live" button with an honest
   freshness label + `[sec]` gate `/live-locations` (leaks all staff email/role). Ceiling: off-duty works only for consented
   members with bg-permission. · M.
-- **Phase 67 — OPS+[m]+[api] Payroll: show ALL employees + tap one → pay breakdown + activity.** Only 1 shows because
-  `buildRoster` iterates **`payroll_profiles`** (`payroll.js:325`) and only ONE exists — **OPS: create each employee's
-  payroll profile + set its `segment`** (the mobile list is already multi-member). `[m]` build a `payroll-detail` screen
-  (reuse `earnings.tsx` breakdown card + `performance.tsx` activity list, render server numbers verbatim — how ₹40,000 was
-  reached). `[api]` add `hourly_rate` to `computeRangeSalary months[]` so the app doesn't divide. `inr()` comma-format
-  already correct. · M.
+- **Phase 67 — OPS+[m]+[api] Payroll: show ALL employees + tap one → pay breakdown + activity. `[m]` BUILT + adversarially
+  reviewed — 2026-08-19.** Only 1 shows because `buildRoster` iterates **`payroll_profiles`** (`payroll.js:325`) and only ONE
+  exists — **OPS: create each employee's payroll profile + set its `segment`** (the mobile list is already multi-member,
+  no code fix). `[api]` `hourly_rate` (+ `days/sundays/holidays`) added to `computeRangeSalary months[]` — **VERIFIED in real
+  code (Backend Phase 69), NOT yet on deployed `origin/main`.** **`[m]` BUILT:** NEW `src/app/payroll-detail.tsx` — tap a
+  roster row → per-member **pay breakdown** (segment, hourly/per-day rate, office+worked hours, the server's working-days
+  derivation, payable — rendered verbatim, the app never multiplies/recomputes; only `absent = working − present` days) +
+  a master-only **completed-tasks activity** list (via the proven `getTaskReport({scope:'all'})` + client-side member pick,
+  gated `canSeeTeamPerformance`); `PayrollMonth` type gained the additive fields (defensive, absent pre-deploy). Double-gated
+  like `payroll.tsx` (admin for pay, super_admin for activity; a leader deep-link gets an honest refusal). A 4-lens review
+  (`wf_0829f800`) caught a real bug — a FAILED task-report (5xx/timeout/**the silent deploy-gap 404**) rendered as a confident
+  "No completed tasks" (empty≠could-not-load) — **fixed** with a distinct `ActivityState` error branch (mirrors
+  `performance.tsx`). Gates: `tsc` 0 · `npm test` **612** (+3) · eslint 0. JS-only → final APK. **Remaining: OPS create the
+  payroll profiles + `[api]` deploy (both relayed); device pass.** · M.
 - **Phase 68 — OPS Team performance "report service could not be reached".** App + backend code both correct; the endpoint
   (`/team/task-report`, Phase 53 `bfea1f5`) isn't on deployed `origin/main`. **OPS deploy + restart** (see systemic note),
   then verify `GET …/team/task-report?month=2026-08&scope=all` → 200. No code change. · trivial-once-deployed.

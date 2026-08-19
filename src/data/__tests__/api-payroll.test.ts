@@ -72,6 +72,42 @@ describe('getPayrollRoster — the envelope', () => {
   });
 });
 
+describe('getPayrollRoster — Phase 67 additive breakdown fields flow through verbatim', () => {
+  // Backend Phase 69 added hourly_rate + days/sundays/holidays to each months[] entry so the
+  // detail screen can show HOW pay was reached without the app dividing (CLAUDE.md money rule).
+  // getPayrollRoster is a straight tryReal passthrough, so these lock the wire→type contract:
+  // a future refactor that introduces a mapper must not silently drop them.
+  it('passes hourly_rate + days/sundays/holidays through unchanged for an hourly member', async () => {
+    serve(200, { success: true, data: [rrow({
+      segment: 'hourly', salary_amount: 20400, payable: 21120,
+      months: [{ year: 2026, month: 3, working_days: 26, present_days: 22, worked_hours: 176,
+        per_day_rate: null, payable_precise: 21120, hourly_rate: 120, days: 31, sundays: 5, holidays: 0 }],
+    })] });
+    const m = (await api.getPayrollRoster(2026, 3))?.[0].months[0];
+    expect(m?.hourly_rate).toBe(120);                 // rendered as "₹120/hour" — never derived on-device
+    expect(m).toMatchObject({ days: 31, sundays: 5, holidays: 0 });
+  });
+
+  it('keeps hourly_rate null for a flat base member (the "how ₹40,000 was reached" case)', async () => {
+    serve(200, { success: true, data: [rrow({
+      segment: 'base', salary_amount: 40000, payable: 40000,
+      months: [{ year: 2026, month: 3, working_days: 26, present_days: 26, worked_hours: 208,
+        per_day_rate: null, payable_precise: 40000, hourly_rate: null, days: 31, sundays: 5, holidays: 0 }],
+    })] });
+    const row = (await api.getPayrollRoster(2026, 3))?.[0];
+    expect(row?.months[0].hourly_rate).toBeNull();    // null (not 0) — no hourly rate for a base salary
+    expect(row?.payable).toBe(40000);                 // the flat figure passes through verbatim
+  });
+
+  it('tolerates the new fields being ABSENT (a pre-deploy backend) — the row still parses', async () => {
+    serve(200, { success: true, data: [rrow()] });    // rrow() carries none of the Phase-67 fields
+    const m = (await api.getPayrollRoster(2026, 3))?.[0].months[0];
+    expect(m?.hourly_rate).toBeUndefined();
+    expect(m?.days).toBeUndefined();
+    expect(m?.working_days).toBe(26);                  // and the existing fields are untouched
+  });
+});
+
 describe('getPayrollRoster — access and outages are told apart', () => {
   it('returns null on 403 (a leader hitting the admin gate) and raises NO banner', async () => {
     serve(403, { success: false, message: 'User role leader is not authorized to access this route' });

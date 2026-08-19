@@ -2234,6 +2234,21 @@ export type PayrollMonth = {
   worked_hours: number;
   per_day_rate: number | null;
   payable_precise?: number;
+  /**
+   * PHASE 67 [api] (Backend Phase 69, additive): ₹/hour for an `hourly` segment; `null` for
+   * `base`/`day_wise`. Lets the detail screen show an hourly member's rate WITHOUT the app dividing
+   * (CLAUDE.md money rule — the engine computes it, the app renders it). Optional because it is
+   * absent until the Phase-69 backend reaches deployed `origin/main`.
+   */
+  hourly_rate?: number | null;
+  /**
+   * PHASE 67 [api] (Backend Phase 69, additive): the working-days derivation the engine used
+   * (`working_days = days − sundays − holidays`). Rendered as supporting facts; the app never
+   * recomputes `working_days` from them (rule 2). Optional — absent pre-deploy.
+   */
+  days?: number;
+  sundays?: number;
+  holidays?: number;
 };
 export type PayrollRow = {
   user_id: string;

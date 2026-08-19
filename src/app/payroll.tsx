@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { font, radius, spacing, useTheme } from '@/theme/theme';
@@ -201,7 +201,7 @@ export default function Payroll() {
               <View>
                 <SectionHeader title="By member" />
                 <ListSection>
-                  {roster.map((r, i) => <MemberRow key={`${r.user_id}-${i}`} row={r} />)}
+                  {roster.map((r, i) => <MemberRow key={`${r.user_id}-${i}`} row={r} year={period.year} month={period.month} />)}
                 </ListSection>
               </View>
             </Appear>
@@ -252,19 +252,29 @@ function MonthStrip({ months, sel, onPick }: { months: MonthOpt[]; sel: number; 
 }
 
 /* One member's row: name, pay segment + present/working days, and the server's payable. A row
- * with no matching staff profile, or no attendance, says so rather than printing a bare ₹0. */
-function MemberRow({ row }: { row: PayrollRow }) {
+ * with no matching staff profile, or no attendance, says so rather than printing a bare ₹0.
+ * Tapping opens the per-member breakdown + activity for THIS month (Phase 67). */
+function MemberRow({ row, year, month }: { row: PayrollRow; year: number; month: number }) {
+  const router = useRouter();
   const m = row.months?.[0];
   const seg = SEGMENT_LABEL[row.segment] ?? row.segment;
   const parts = [seg];
   if (m) parts.push(`${num(m.present_days)}/${num(m.working_days)} days`);
   const payable = num(row.payable);
+  const open = () => {
+    haptics.select();
+    router.push({
+      pathname: '/payroll-detail',
+      params: { user_id: row.user_id, name: row.name ?? '', year: String(year), month: String(month) },
+    });
+  };
   return (
     <PersonRow
       name={row.name || row.user_id || 'Member'}
       subtitle={parts.join(' · ')}
       subtitleNumeric
       size={40}
+      onPress={open}
       style={{ marginHorizontal: 0, paddingHorizontal: spacing.lg, borderRadius: 0 }}
       right={
         !row.staff_found

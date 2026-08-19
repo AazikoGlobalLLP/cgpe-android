@@ -6,6 +6,53 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-19 — Backend Phase 69 (the 5 mobile `[api]` asks) VERIFIED code-correct but NOT deployed — the deploy gap persists
+
+**Context.** The owner relayed that the backend finished the 5 `[api]` asks from the 2026-08-19 batch. Verified each against
+the **real `cgpe-backend-main` code** (6 parallel investigators, file:line): all 5 are code-correct — (1) shift accuracy
+drop relaxed `<=100m`→`<=1000m` (`SHIFT_ACCURACY_MAX_M`, `timeTracker.js:1712`); (2) `dayLogToAttendanceRecords`/`withClockLoc`
+now folds `clockInLoc`/`clockOutLoc` lat/lng onto `clock_in`/`clock_out` (`attendance.js:44-53,62,66` — the 0/0 fix);
+(3) `/live-locations` super_admin-gated + `String()===String()` compare fixed; (4) NEW `GET /last-location` with the exact
+8-field shape; (5) payroll `hourly_rate` + `days/sundays/holidays` in `computeRangeSalary` `months[]`.
+
+**Decision.** Treat the backend as **code-done but NOT live**. Deployed `origin/main` is still `1cad312` (Phase 38–40);
+Phase 69 (`f0eac8e`) is on local `main` + pushed to `origin/deploy-phases-41-69` but **NOT merged to `origin/main`**, which is
+the only branch prod deploys. So NONE of the 5 fixes (nor Phases 41–68) run on the device yet. This is a clean fast-forward
+(0 divergent / 53 ahead). **The deploy is the OWNER's action** — neither mobile (push 403) nor the backend session (won't
+push to `main` by their own rule) can do it. Relayed as the standing OPS blocker.
+
+**Consequence.** Asks 1/2/3 need ZERO mobile change and light up on deploy (GPS route fills in, On-duty populates). Asks 4/5
+are the mobile builds (Phase 66 Live button, Phase 67 payroll detail — this session). Do **not** tell the owner these work on
+the phone until `origin/main` carries Phase 69 and `:3001` restarts. Verify deployment, not just code (the recurring trap).
+
+---
+
+## 2026-08-19 — Phase 67 `[m]`: payroll-detail screen (per-member breakdown + activity); failed activity ≠ "no tasks"
+
+**Context.** Owner asked to see every employee and, tapping one, HOW their pay was reached + what they did. Built a new
+`payroll-detail` route reached from the Payroll roster (`payroll.tsx` rows now tap through). It re-fetches the admin roster
+`getPayrollRoster` and finds the member; for a real master (`canSeeTeamPerformance`) it also fetches
+`getTaskReport({scope:'all'})` — the proven call, not the unexercised `user_id` param — and picks the member's completed
+tasks client-side. Consumes Backend Phase 69's additive `hourly_rate`/`days`/`sundays`/`holidays` (typed + wire-tested).
+
+**Decision.** RENDER-NEVER-RECOMPUTE (rule 2): the working-days derivation shows the server's own `days`/`sundays`/`holidays`/
+`working_days` — the app does not subtract them; `hourly_rate` is shown verbatim (no dividing payable/hours). Only `absent =
+working − present` (a DAYS subtraction) is on-device, as `earnings.tsx` already does. DOUBLE-GATED like `payroll.tsx`: the pay
+breakdown is admin/super_admin (the admin `/compute` endpoint); the activity block is super_admin-only (`isMaster`), so a
+non-master admin sees the breakdown but never another member's tasks; a leader deep-linking gets an honest refusal.
+**A 4-lens adversarial review (`wf_0829f800`) then caught a real bug and it was fixed:** the activity block collapsed a FAILED
+`getTaskReport` (5xx/timeout/**the deploy-gap 404, which is silent — no banner**) into a confident "No completed tasks
+recorded" — the empty≠could-not-load violation (rule 4) the health channel exists to prevent, and the sibling
+`performance.tsx` handles correctly. Fixed by tracking a distinct `ActivityState` (`skipped`/`ok`/`error`) and rendering an
+honest "couldn’t load this member’s activity" line on error, never a fake empty.
+
+**Consequence.** Gates: `tsc` 0 · `npm test` **612** (+3 wire-contract locks on the new payroll fields) · eslint 0. New route
+`/payroll-detail` (flat stack; `.expo/types` regenerated locally — gitignored, other devs regen on `expo start`). JS-only →
+ships in the final 63–69 APK. The screen is data-complete but the payload/activity only fill in once Backend Phase 69 is
+**deployed** (hourly_rate absent → that Fact row hidden; task-report 404 → the honest could-not-load line). Ships in the final APK.
+
+---
+
 ## 2026-08-19 — Phase 64 `[m]`: getBreakLocations treats 404/501 as a QUIET answer (deploy-gap-proof), delegating to the ONE classifier
 
 **Context.** The master monitor/map showed "server did not answer" (Phase 64b). The global `health.degraded` banner
