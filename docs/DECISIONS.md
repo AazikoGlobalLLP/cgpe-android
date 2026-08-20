@@ -6,6 +6,33 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 57b finished: Task-create wired into the offline write queue
+
+**Context.** 57b shipped the write queue for Notes only; Task-create (`addTask`) was the documented remaining piece.
+`addTask` still returned the always-looks-saved `Task & {forbidden?}` and, on a network throw or a non-403 refusal,
+fell through to a local buffer and reported success — the exact dishonesty 57b exists to remove, for the app's main
+data-entry screen.
+
+**Decision.**
+- **`addTask` returns a FOUR-outcome `AddTaskResult`** (`saved`/`queued`/`forbidden`/`failed`), mirroring `AddNoteResult`
+  but with `forbidden` split out because a 403 is an explainable role condition, not a transient error. Only a **network
+  throw** enqueues; **no refusal (403 or otherwise) is ever queued** (replaying a rejected write is wrong).
+- **A shared `taskCreateBody()` builds the `/team/tasks` POST for both the first attempt and the offline replay**, resolved
+  ONCE at enqueue time — so a replay hours later sends a byte-identical body and can't re-derive a changed assignee.
+- **A 200 without a server id is a refusal (drop), not a success** — mirrors the Notes replay's `success:false` guard.
+- **Pending task drafts are pinned as a SEPARATE section on the Tasks tab, not merged into the filtered list** — so a
+  not-yet-on-server draft cannot distort the hero "today" progress or the overdue/upcoming counts, which must reflect only
+  confirmed tasks. Each pending card is inert (no swipe / complete / tap) with a "Pending sync" badge until it flushes; a
+  reconcile-on-flush effect refetches when the queue shrinks so the synced task lands as a confirmed row.
+- **Deliberate scope: creates only.** Leads-create is the only additive create still unqueued (optional; not in the
+  owner's acceptance criteria). Same kind-generic mechanism if wanted.
+
+**Consequence.** Phase 57 offline support is fully built (57a + 57b Notes + 57b Task-create). `addTask`'s return type
+changed from `Task & {forbidden?}` to `AddTaskResult`; its one caller (`task-new.tsx`) was updated. `state.tasks.unshift`
+no longer runs on the real-session failure path (it was part of the lie); the FORCE_DEMO path keeps it. Gates `tsc` 0 ·
+`npm test` 755 (+8) · eslint 0 new. Commit `eb81a04`, pushed `aaziko/Shivam`. Device-unverified; new English strings owe
+5-language copy. No contract change.
+
 ## 2026-08-20 — Phase 57 built (offline support: read cache 57a + safe write queue 57b, Notes)
 
 **Context.** With Phase 72 re-verified still blocked (prod `/push/register` → 404, push code uncommitted in

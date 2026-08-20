@@ -29,7 +29,7 @@ reconcile-on-flush effect refetches when the queue shrinks so the synced task la
 reworded kind-agnostic. Gates `tsc` 0 · `npm test` **755** (+8: `api-task-queue` 7, writeQueue task-kind 1) · eslint 0
 new. **Deliberate scope: creates only** (Leads-create is the only remaining additive create still unqueued — optional).
 New English strings still owe 5-lang copy; **device-unverified** (AsyncStorage stub is a no-op), JS-only → OTA-eligible.
-Spec: `docs/spec/PHASE-57.md` (Build log). Commit + push pending.
+Spec: `docs/spec/PHASE-57.md` (Build log). Commit `eb81a04`, pushed `aaziko/Shivam`. **Phase 57 offline support fully built.**
 
 **✅ 2026-08-20 — PHASE 57b BUILT (safe write queue — Notes).** The second half of offline support: a note created while
 offline is no longer lost or falsely reported as saved. `addNote` now returns a 3-outcome `AddNoteResult` — **saved** (server
@@ -1767,10 +1767,10 @@ All five ride ONE combined native APK (72/73 force a rebuild) — not yet cut. *
 
 **Also standing (lower priority):**
 Phases 54/56 from the 2026-08-18 batch (lead-open `[api]`; iOS gated on an Apple account). **Phase 55 (network resilience) BUILT +
-PUSHED `941c583`** (device pass + 5-lang copy remain). **Phase 57 (offline support) BUILT + PUSHED — 57a read cache `20eb4ed`, 57b
-write queue (Notes) `e318e06`; REMAINING = Task-create queue wiring (small, uses the existing mechanism) + 5-lang copy + a device
-pass.** Phase 41 on-device verification (owner: do last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after
-go-live, biometric, break-gate) on ≥2 phone brands.
+PUSHED `941c583`** (device pass + 5-lang copy remain). **✅ Phase 57 (offline support) FULLY BUILT + PUSHED — 57a read cache
+`20eb4ed`, 57b write queue Notes `e318e06` + Task-create `eb81a04`; REMAINING = 5-lang copy for the new English strings + a device
+pass. Only Leads-create stays unqueued (optional, same mechanism).** Phase 41 on-device verification (owner: do last). Owner
+physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live, biometric, break-gate) on ≥2 phone brands.
 
 **⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
 iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability
