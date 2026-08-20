@@ -45,6 +45,9 @@ export interface Lead {
   createdAt: string;
   lastActivity: string;
   notes: LeadNote[];
+  /** PHASE 57 (Leads-create): true for a lead created offline and held in the write queue — not yet
+   *  on the server, so the pipeline renders it inert with a "Pending sync" badge until it flushes. */
+  pending?: boolean;
 }
 
 export interface LeadNote {

@@ -1174,6 +1174,7 @@ export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
   if (data.source) body.source = data.source;
 
   let reason: Exclude<WriteFailure, 'invalid'> = 'network';
+  let threw = false;   // PHASE 57: only a genuine network THROW (not a server refusal) may be queued
   if (sessionReal && !FORCE_DEMO) {
     try {
       const { ok, status, json } = await req('/leads', { method: 'POST', body: JSON.stringify(body) });
@@ -1195,16 +1196,58 @@ export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
         suppressed.delete('/leads');
         reason = status === 403 ? 'forbidden' : status === 404 || status === 501 ? 'unsupported' : 'server';
       }
-    } catch { reportFailure('/leads'); }
+    } catch { threw = true; }   // the network failed — reason stays 'network' (reported below only if unqueued)
+  }
+
+  // PHASE 57 (Leads-create): a NETWORK throw on a real session queues the additive create to the
+  // PERSISTENT write queue (survives an app kill, replays on the next successful request) instead
+  // of the ephemeral in-memory buffer. Only a THROW enqueues (spec row 9) — a server ANSWER (a 5xx,
+  // or a 2xx without a lead) is `reason: 'server'` and is NOT queued: replaying a rejected write is
+  // wrong. The lead is stored in its exact request-body shape so a replay hours later is identical.
+  // A successfully-queued write is HANDLED, so — like the Notes/Tasks queue paths — it does NOT raise
+  // the global outage banner on its own (a concurrent failed read still will, honestly); the "saved
+  // on this device" toast is the per-write signal.
+  if (threw) {
+    const draft = await enqueueWrite('lead', body);
+    if (draft) { await wait(250); return { ok: false, reason: 'network', lead: leadDraftToLead(draft) }; }
+    // No signed-in user id to queue under (shouldn't happen with a real session): this outage was
+    // never reported, so report it now, then fall through to hold the typed record for this session.
+    reportFailure('/leads');
   }
 
   // A refusal the user cannot fix by trying again — no `sales` module (403), or an endpoint that
   // is not there (404/501) — is not held. Same reasoning as the 400 above: this lead will never
   // exist, so keeping it in the list would be the fabrication this file was built to remove.
-  // A dropped connection or a 5xx IS held: that is what the buffer is for.
+  // A dropped connection (unqueued) or a 5xx IS held: that is what the buffer is for.
   if (reason === 'network' || reason === 'server') state.leads.unshift(local);
   await wait(250);
   return { ok: false, reason, lead: clone(local) };
+}
+
+/** Render a queued lead draft as a `Lead` so the pipeline shows it in the list, flagged pending.
+ *  Reads the stored request body (schema field names) back into the app's display shape. PHASE 57. */
+export function leadDraftToLead(d: QueuedWrite): Lead {
+  const p = d.payload as {
+    name?: string; phone?: string; source?: string;
+    insurance_need?: string; expected_premium?: number; address?: { city?: string };
+  };
+  const premium = Number(p.expected_premium);
+  return {
+    id: d.id,
+    name: String(p.name ?? 'New Lead'),
+    phone: String(p.phone ?? ''),
+    stage: 'new_lead',
+    source: String(p.source ?? 'Manual'),
+    interest: String(p.insurance_need ?? ''),
+    potential: Number.isFinite(premium) ? premium : 0,
+    city: String(p.address?.city ?? ''),
+    // Mirrors the saved copy: `probability` defaults to 10 server-side and `adaptLead` maps 10 → 'cold'.
+    priority: 'cold',
+    createdAt: d.createdAt,
+    lastActivity: d.createdAt,
+    notes: [],
+    pending: true,
+  };
 }
 
 /* ---------------------------------------------------------------- Clients */
@@ -3466,6 +3509,17 @@ async function replayWrite(draft: QueuedWrite): Promise<{ ok: boolean; status: n
     });
     // Success needs the server id; a 200 without one is an odd refusal, not a success → drop.
     const serverOk = ok && !!json?.data?.id;
+    return { ok: serverOk, status: serverOk ? status : ok ? 422 : status };
+  }
+  if (draft.kind === 'lead') {
+    // The payload IS the exact `/leads` request body (schema field names), stored at enqueue time,
+    // so this replay is byte-identical to the first attempt. PHASE 57 (Leads-create).
+    const { ok, status, json } = await req('/leads', {
+      method: 'POST',
+      body: JSON.stringify(draft.payload),
+    });
+    // Success needs the created lead document; a 2xx without one is a refusal, not a success → drop.
+    const serverOk = ok && isObj(json?.data?.lead);
     return { ok: serverOk, status: serverOk ? status : ok ? 422 : status };
   }
   return { ok: false, status: 400 };   // unknown kind → drop (should never happen)

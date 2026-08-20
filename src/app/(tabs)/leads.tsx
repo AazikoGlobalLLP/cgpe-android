@@ -12,6 +12,8 @@ import { SwipeRow } from '@/ui/swipe';
 import type { SwipeAction } from '@/ui/swipe';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
+import { usePendingWrites, useDropNotice, PendingBadge } from '@/ui/pending';
+import { setDropNotice } from '@/data/pendingWrites';
 import { haptics } from '@/lib/haptics';
 import { useData } from '@/hooks/useData';
 import * as api from '@/data/api';
@@ -121,6 +123,21 @@ export default function Leads() {
 
   useEffect(() => { if (data) setLeads(data); }, [data]);
 
+  // PHASE 57 (Leads-create) — offline write queue. Leads captured while the network was down live in
+  // the pending bus (loaded from storage on sign-in, so they survive an app kill); they render pinned
+  // above the pipeline with a "Pending sync" badge and are inert until they flush. Newest draft on top.
+  const pendingLeads = usePendingWrites('lead');
+  const dropNotice = useDropNotice();
+  const pendingCards = useMemo(() => pendingLeads.map(api.leadDraftToLead).reverse(), [pendingLeads]);
+
+  // When a draft flushes (the queue shrinks) the real server lead now exists — refresh so it lands as
+  // a confirmed row while the pending card drops away in the same pass.
+  const prevPending = useRef(pendingLeads.length);
+  useEffect(() => {
+    if (pendingLeads.length < prevPending.current && !loading) refresh();
+    prevPending.current = pendingLeads.length;
+  }, [pendingLeads.length, loading, refresh]);
+
   /* ---------- derived pipeline shape ---------- */
   const byStage = useMemo(() => {
     const m: Record<LeadStage, { count: number; value: number }> = {
@@ -223,13 +240,21 @@ export default function Leads() {
       toast(`${lead.name} added to your pipeline`, 'success');
       return;
     }
+    // PHASE 57: a dropped connection now QUEUES the lead to the persistent write queue — it will POST
+    // automatically on the next successful request and shows as "Pending sync" above until then. This
+    // is NOT a success (no success haptic, spec row 9), but it is also not the scary "check before you
+    // add it again" — the draft is safe and will retry itself, so a neutral acknowledgement is honest.
+    if (reason === 'network') {
+      haptics.tap();
+      toast(`${lead.name} saved on this device — it will sync when you're back online`, 'info');
+      return;
+    }
     haptics.warn();
-    // The two failures need opposite copy, which is why the reason is passed up. A dropped
-    // connection means "we are holding it, try again"; a refusal means "this lead does not
-    // exist and nothing is holding it" — telling that user to pull to refresh would send them
-    // looking for a record that was never created and can never be.
-    const held = reason === 'network' || reason === 'server';
-    setNotice(held ? {
+    // The remaining failures need opposite copy. A 5xx is held in memory but will NOT auto-retry, so
+    // the user is told to check; a refusal (403/404/501) means the lead does not exist and nothing is
+    // holding it — telling that user to pull to refresh would send them looking for a record that was
+    // never created and can never be.
+    setNotice(reason === 'server' ? {
       title: 'That lead is not on the server yet',
       message: `${lead.name} was captured on this device, but the server did not confirm it. Pull to refresh and check before adding this lead again.`,
     } : {
@@ -353,6 +378,29 @@ export default function Leads() {
               onDismiss={() => setNotice(null)}
               action={{ label: 'Refresh', onPress: () => { setNotice(null); refresh(); } }}
             />
+          </View>
+        ) : null}
+
+        {/* PHASE 57: a one-time notice for any offline lead draft the server later refused (dropped). */}
+        {dropNotice ? (
+          <View style={{ paddingHorizontal: spacing.lg }}>
+            <Banner
+              tone="warning"
+              title="An offline lead was not saved"
+              message={dropNotice}
+              onDismiss={() => setDropNotice(null)}
+            />
+          </View>
+        ) : null}
+
+        {/* PHASE 57: leads captured offline, pinned above the pipeline so they stay visible under
+            every filter and never distort the counts/meter, which reflect only server-confirmed
+            leads. Each is inert — not tappable, no swipe — with a "Pending sync" badge, until it flushes. */}
+        {pendingCards.length > 0 ? (
+          <View style={{ paddingHorizontal: spacing.lg, gap: spacing.sm }}>
+            {pendingCards.map((lead) => (
+              <PendingLeadRow key={lead.id} lead={lead} />
+            ))}
           </View>
         ) : null}
       </View>
@@ -493,6 +541,41 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
         }
       />
     </SwipeRow>
+  );
+}
+
+/**
+ * A lead captured offline (Phase 57), pinned above the live pipeline. It is NOT on the server yet, so
+ * it is inert — not tappable, no swipe, no navigation to a detail that cannot load — and carries a
+ * "Pending sync" badge. It flushes automatically on the next successful request, then re-appears as a
+ * confirmed row (the reconcile-on-flush refresh above). A bordered card sets it apart from live rows.
+ */
+function PendingLeadRow({ lead }: { lead: Lead }) {
+  const c = useTheme();
+  const { spacing, font, radius } = c;
+  const fact = lead.interest || lead.city || lead.phone || 'No interest recorded';
+  const subtitleIcon = lead.interest ? 'pricetag-outline' : lead.city ? 'location-outline' : 'call-outline';
+  return (
+    <View style={{
+      backgroundColor: c.card,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: c.warning,
+    }}>
+      <PersonRow
+        name={lead.name}
+        subtitle={fact}
+        subtitleIcon={subtitleIcon}
+        subtitleNumeric
+        style={{ marginHorizontal: 0, paddingHorizontal: spacing.lg, borderRadius: radius.lg }}
+        right={
+          <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 118 }}>
+            {lead.potential > 0 ? <Metric value={inrShort(lead.potential)} size={font.sub} /> : null}
+            <PendingBadge />
+          </View>
+        }
+      />
+    </View>
   );
 }
 

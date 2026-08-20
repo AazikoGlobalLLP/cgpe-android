@@ -54,19 +54,20 @@ describe('parse / serialize', () => {
     const raw = JSON.stringify([
       draft({ id: 'good' }),
       { id: 'no-kind', payload: {}, createdAt: 'x', attempts: 0 },     // missing kind
-      { id: 'bad-kind', kind: 'lead', payload: {}, createdAt: 'x', attempts: 0 }, // unknown kind
+      { id: 'bad-kind', kind: 'reminder', payload: {}, createdAt: 'x', attempts: 0 }, // unknown kind
       { kind: 'note', payload: {}, createdAt: 'x', attempts: 0 },      // missing id
       draft({ id: 'good2' }),
     ]);
     expect(parseQueue(raw).map((d) => d.id)).toEqual(['good', 'good2']);
   });
-  it('accepts BOTH the note and task kinds (57b Task-create), still rejecting others', () => {
+  it('accepts the note, task AND lead kinds (57b/57c), still rejecting others', () => {
     const raw = JSON.stringify([
       draft({ id: 'a-note', kind: 'note' }),
       draft({ id: 'a-task', kind: 'task' }),
-      { id: 'a-lead', kind: 'lead', payload: {}, createdAt: 'x', attempts: 0 },   // unknown → dropped
+      draft({ id: 'a-lead', kind: 'lead' }),
+      { id: 'a-reminder', kind: 'reminder', payload: {}, createdAt: 'x', attempts: 0 },   // unknown → dropped
     ]);
-    expect(parseQueue(raw).map((d) => d.id)).toEqual(['a-note', 'a-task']);
+    expect(parseQueue(raw).map((d) => d.id)).toEqual(['a-note', 'a-task', 'a-lead']);
   });
 });
 

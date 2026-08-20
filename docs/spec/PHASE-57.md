@@ -1,7 +1,7 @@
 # PHASE 57 — Offline support (read cache + safe write queue)
 
 **Status:** spec locked 2026-08-20 (owner approved `go`). **57a read cache BUILT + PUSHED (`20eb4ed`).
-57b safe write queue BUILT (Notes `e318e06`) + **Task-create now wired** (this session).** Build order: **57a read cache first**, then 57b write queue.
+57b safe write queue BUILT (Notes `e318e06`, Task-create `eb81a04`) + **Leads-create now wired** (this session) — every additive create the app has is queued.** Build order: **57a read cache first**, then 57b write queue.
 
 ## Build log
 - **57a (read cache) — DONE** `20eb4ed`: `offlineCache.ts` (pure) + `offlineStore.ts` + `freshness.ts` +
@@ -26,8 +26,25 @@
     +1, `api-task-queue` +7) · eslint 0 new. Tests: `src/data/__tests__/api-task-queue.test.ts` (4-outcome contract),
     `writeQueue.test.ts` (both kinds accepted). Still **device-unverified** (AsyncStorage stub is a no-op); new
     English strings still owe 5-lang copy.
+  - **Leads-create NOW WIRED (this session) — the last additive create joins the queue:** `'lead'` added to
+    `QueueKind`/`KINDS` (pure `writeQueue.ts`). `addLead` keeps its existing 3-outcome `AddLeadResult` (`ok:true` /
+    `reason:'invalid'` / a held `reason`), but a NETWORK throw on a real session now enqueues a PERSISTENT draft
+    (kind `'lead'`) instead of the ephemeral in-memory `state.leads` buffer, and returns the pending draft
+    (`pending:true`) as `reason:'network'`. Only a THROW enqueues (spec row 9); a server ANSWER (5xx / 2xx-without-a-
+    lead = `reason:'server'`, or 400 = `invalid`, or 403/404/501) is NOT queued. The stored payload IS the exact
+    `/leads` request body (schema field names), so `replayWrite`'s new `lead` branch replays it byte-identically;
+    `leadDraftToLead()` reads that body back into the app's display shape. `(tabs)/leads.tsx`: pending lead drafts
+    pinned above the pipeline (never distort the counts/meter, which reflect only confirmed leads), each inert (not
+    tappable, no swipe) with a "Pending sync" badge; a one-time drop-notice banner; a reconcile-on-flush refresh when
+    the queue shrinks. `AddLeadSheet.onAdded` now splits the queued (`network`) case — a neutral "saved on this device
+    — it will sync when you're back online" toast, NO success haptic — from the in-memory `server` hold ("pull to
+    refresh") and the hard refusals (forbidden/unsupported). A successfully-queued write does NOT raise the global
+    outage banner on its own (matches the Notes/Tasks queue paths; a concurrent failed read still will). Gates `tsc`
+    0 · `npm test` **763** (+8: NEW `api-lead-queue.test.ts` 8; `writeQueue.test.ts` lead-kind case updated in place)
+    · eslint 0 new. Tests: `src/data/__tests__/api-lead-queue.test.ts` (the classify-and-queue contract). Still
+    **device-unverified** (AsyncStorage stub is a no-op); JS-only → **OTA-eligible**.
   - **New English strings owe 5-lang copy** (spec row 6): "Pending sync", "Synced … may be out of date", the queued
-    toast, the drop-notice. Machine translation forbidden.
+    toasts (Notes/Tasks/Leads), the drop-notice. Machine translation forbidden.
 Scope **mobile**, effort **XL**, **no contract change** (pure client-side; the backend never knows the app was offline).
 
 Grounded triage: `docs/spec/ISSUES-2026-08-18.md` §57. Integrates with the honesty channel
