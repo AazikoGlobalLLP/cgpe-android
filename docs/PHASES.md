@@ -30,8 +30,11 @@ flag land. **Honest iOS 24/7 limit (do NOT promise Android parity):** iOS record
 ('Always'), but after a **force-quit** background updates stop and after a **reboot** recording stays off until reopened, and
 the watchdog is opportunistic (`BGTaskScheduler`, not WorkManager's ~15-min cadence); the Simulator can't run Background
 Tasks at all. Gates `tsc` 0 · `npm test` **763** · eslint 0 (no `src/` change — the config gate is `expo config`, which
-passed). **Remaining (owner-gated):** buy the Apple Developer membership → cut a real-device/TestFlight build → verify Face
-ID / map / background route on a physical iPhone. iOS push (APNs) is separate + out of scope. Spec + owner runbook:
+passed). **✅ COMPILE PROVEN:** an Apple-account-free **EAS iOS-Simulator build FINISHED green** — build
+`9649bf51-ca6e-4359-90a8-d3b4c5a80f30` (profile `ios-simulator`, SDK 57.0.0, git `49bb951`) — so the whole native iOS
+target builds with the full module set, not just the config. **Remaining (owner-gated, owner confirmed 2026-08-20 they
+WILL get the Apple account):** buy the Apple Developer membership → cut a real-device/TestFlight build → verify Face ID /
+map / background route on a physical iPhone. iOS push (APNs) is separate + out of scope. Spec + owner runbook:
 `docs/spec/PHASE-56.md`. Files: `eas.json`, `app.json`, `assets/images/ios-icon.png` (new), `docs/spec/PHASE-56.md` (new).
 
 **✅ 2026-08-20 — PHASE 57 COMPLETE (Lead-create wired into the offline write queue — the last additive create).** With Notes

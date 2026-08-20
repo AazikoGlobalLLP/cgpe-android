@@ -1,9 +1,11 @@
 # PHASE 56 — iOS enablement
 
-**Status:** editor-side prep BUILT + config-validated (2026-08-20). **Owner-gated on an Apple
-Developer Program account ($99/yr)** before a real-iPhone / TestFlight build can be signed. An
-**Apple-account-free iOS Simulator build is buildable right now** (proves the native iOS target
-compiles).
+**Status:** editor-side prep BUILT + config-validated + **iOS compile PROVEN** (2026-08-20). An
+Apple-account-free **iOS Simulator EAS build FINISHED green** — build
+`9649bf51-ca6e-4359-90a8-d3b4c5a80f30`, profile `ios-simulator`, SDK 57.0.0, from git commit
+`49bb951` — so the whole native iOS target compiles with the full module set. **Owner-gated on an
+Apple Developer Program account ($99/yr)** before a real-iPhone / TestFlight build can be signed
+(owner confirmed 2026-08-20 they will get the account).
 
 Session `cgpe-mobile`. `[m]` only — **no contract change**, no `../contracts/` edit.
 
@@ -55,8 +57,9 @@ in memory and emits the final native config) — the resolved iOS config is corr
    mask), LANCZOS resample, saved RGB. Reversible; no existing asset was overwritten.
 
 **Gates:** `tsc` 0 · `npm test` **763** · eslint 0 (no `src/` change — TypeScript is untouched, so the
-three code gates are unaffected; `expo config --type introspect` is the gate that matters here and it
-passed clean).
+three code gates are unaffected; `expo config --type introspect` is the config gate and it passed
+clean). **Plus the real proof: an EAS iOS-Simulator build FINISHED green** (build `9649bf51`, §6) — the
+native target compiles, not just the config.
 
 ## 3. Honest iOS 24/7 limits — DO NOT promise Android parity
 
@@ -111,7 +114,8 @@ Then pick a path:
 
 ## 5. Open decisions for the owner
 
-1. **Buy the Apple Developer membership?** (hard blocker for any real-device build — paths A and B).
+1. **Buy the Apple Developer membership?** ✅ Owner said **yes, they will get it** (2026-08-20). Hard
+   blocker for any real-device build (paths A and B) until it exists — then run path A/B.
 2. **TestFlight (A) or ad-hoc (B)?** TestFlight scales to a team without collecting UDIDs; ad-hoc is
    fine for 2–3 known phones.
 3. **Accept the honest iOS 24/7 limit (§3)**, or later invest in the coarse mitigations
@@ -130,5 +134,9 @@ Then pick a path:
   `NSRemindersUsageDescription`, and `NSMicrophoneUsageDescription`. They pass a build; App Store
   review prefers specific copy. If/when submitting to the App Store, add truthful custom strings under
   `app.json` `ios.infoPlist`. Not a blocker for TestFlight or a build.
-- **iOS Simulator EAS build** — the account-free compile proof; cut it to confirm the native target
-  builds before the owner spends on the Apple account.
+- **iOS Simulator EAS build — ✅ DONE (2026-08-20).** Build `9649bf51-ca6e-4359-90a8-d3b4c5a80f30`
+  FINISHED green (profile `ios-simulator`, SDK 57.0.0, git `49bb951`); artifact (Mac-only `.app`
+  tarball): `https://expo.dev/artifacts/eas/52sqyiyIWBy73eNMCZXV1IsPt9TmHMIbBA5oImmgIzg.tar.gz`. This
+  is the account-free compile proof — the native iOS target builds. It runs only in the iOS Simulator
+  on a Mac (Background Tasks / GPS are physical-device-only, §3). Minor: the upload archive was 316 MB —
+  add an `.easignore` (exclude `e2e/artifacts`, etc.) before repeated iOS builds to speed uploads.
