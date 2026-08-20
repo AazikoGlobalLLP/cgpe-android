@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 65 BUILT + PUSHED (owner chose it over waiting on Phase 72's backend).** The last un-built mobile piece
+from the 63–69 batch is done: the master's Monitor roster + Agent map now source their people-universe from the deployed
+super_admin-gated `/live-locations` (walks EVERY profile) instead of `/team/task-overview` (grouped by `team_tasks` assignee), so
+a member with zero team-tasks no longer vanishes — it shows off-duty/zeroed. Pure tested `src/data/roster.ts`; join by NAME (the
+two endpoints use different id spaces); non-masters unchanged; NO screen change. `[api]` prereq VERIFIED DEPLOYED (live probe 401)
+BEFORE building. Commit `0c4fde1`. Full entry + honest limits below (map "who's out NOW"; possible deactivated-account inclusion →
+optional `[api]`). Gates `tsc` 0 · `npm test` **690** · eslint 0.
+
+**⚠️ 2026-08-20 — PHASE 72 "backend done" SIGNAL VERIFIED PREMATURE — do NOT cut the APK or mark 72 done.** Owner said the backend
+finished the push work. Per the deploy-gap rule, verified: cgpe-api DID build it (INBOX Phase-72 `[x]`, their Phase 76/D-102) and
+the code exists in `../cgpe-backend-main`, BUT it is **uncommitted** (`?? routes/push.js`/`models/PushToken.js`/`services/push.js`;
+` M notify.js`/`tasks.js`), **not on `origin/main`** (tip `2531817` = Phase 69), and prod `/push/register` returns **404** (health
+200). Firebase/FCM (hard prereq) still unset. So Phase 72 needs: backend commit→deploy→restart `:3001`, owner Firebase+FCM V1 key,
+THEN re-verify (probe 401 not 404, token registers, test push arrives) → cut the ONE combined APK (65+70+71+72+73).
+
 **⏸️ 2026-08-20 — PHASE 72 MOBILE HALF BUILT + PUSHED (owner #3), NOW PENDING BACKEND+INFRA — do NOT mark done.** Owner chose
 **Tier B real push**. The mobile receiver is built + gated + pushed (`64f1afc`): `expo-notifications@~57.0.12`, token
 register/unregister, foreground + tap→deep-link, pure-tested `pushRouting.ts`. It is DORMANT until (a) the backend ships the
@@ -209,10 +224,17 @@ above). Kept here as the reference example of "backend done ≠ live on prod —
   lock, 5xx banner boundary, network-catch banner) · eslint 0 new. 4-lens adversarial review `wf_f9a30b90` → 0 findings. JS-
   only → ships in the final 63–69 APK. **Remaining: [api] coordinate fix + OPS deploy `origin/main` + `:3001` restart — both
   filed, owner relays.** The banner-clear (restart) will NOT fix the zeros; those need the coordinate fix. · S–M.
-- **Phase 65 — [api]+[m] Every team member appears in agent-locations (not only after they "open the app").** The roster
-  is built from **`team_tasks` assignees** (`team.js:128`), so anyone with no assigned task never appears. Fix = source the
-  roster from the full staff directory left-joined with live status (via `/live-locations` after it's master-gated + its
-  id-compare bug fixed). Depends on 64(a) for pins. · M.
+- **Phase 65 — [m] Every team member appears in agent-locations (not only after they "open the app"). ✅ BUILT + PUSHED
+  2026-08-20 (commit `0c4fde1`, `aaziko/Shivam`).** The roster was built from **`team_tasks` assignees** (`team.js:128`), so
+  anyone with no assigned task never appeared. Fixed: for a master, `getTeam`/`getAgentLocations` source the universe from the
+  now-deployed super_admin-gated `/live-locations` (iterates EVERY profile) left-joined with the task-overview stats — a
+  never-active member shows off-duty/zeroed instead of vanishing. **Join by NORMALIZED NAME** (the two endpoints use different
+  id spaces: live→`profile._id`, task-overview→`user_id`; `/profiles/:id` accepts both so nav still works). Pure tested
+  `src/data/roster.ts` (`mergeRoster`/`liveOnDutyPins`); `getLiveLocations` quiet-on-403/404; non-masters (403→[]) unchanged;
+  NO screen change. `[api]` prereq VERIFIED DEPLOYED first (live probe 401 + Phase-69 ObjectId fix present). Gates `tsc` 0 ·
+  `npm test` **690** (+21) · eslint 0 new. **Honest limits (spec):** map shows "who's out NOW" (drops clocked-out-earlier-today
+  grey pins when anyone's on duty); `/live-locations` `.find({})` could surface a deactivated account → optional `[api]`
+  `is_active` follow-up (not filed). JS-only → rides the batch APK; device-unverified. Spec: `docs/spec/PHASE-65.md`. · M.
 - **Phase 66 — [api]+[m]+[sec] "Live location" button (master → member X's last-known location, on/off duty). `[m]` BUILT +
   adversarially reviewed — 2026-08-19.** No current-location endpoint exists; deliverable = **last-known** (real-time ping
   needs FCM the project doesn't have). `[api]` `GET /last-location?user_id=X` — **VERIFIED in real code (Backend Phase 69),
@@ -1653,26 +1675,29 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-20 — the WHOLE 70–73 batch is now BUILT + PUSHED on the mobile side. Detail: `docs/PHASES.md` §Now,
-`docs/DECISIONS.md` 2026-08-20):**
+**CURRENT next 3 (2026-08-20 — the 70–73 batch AND Phase 65 are now BUILT + PUSHED on the mobile side. Detail: `docs/PHASES.md`
+§Now, `docs/DECISIONS.md` 2026-08-20):**
 
-Phases **70** (`cd134ba`), **71** (`612410f`), **72 mobile** (`64f1afc`), **73** (`aa8469f`) are all built + pushed to
-`aaziko/Shivam`. `git push aaziko Shivam` works; the remote can be ahead (web-UI README) → fetch + **merge**, never force. All four
-ride ONE combined native APK (72/73 force a rebuild) — not yet cut.
+Phases **65** (`0c4fde1`), **70** (`cd134ba`), **71** (`612410f`), **72 mobile** (`64f1afc`), **73** (`aa8469f`) are all built +
+pushed to `aaziko/Shivam`. `git push aaziko Shivam` works; the remote can be ahead (web-UI README) → fetch + **merge**, never force.
+All five ride ONE combined native APK (72/73 force a rebuild) — not yet cut. **There is no un-built mobile piece left in the
+63–73 batches.**
 
-1. **Phase 72 — EXECUTE ON OWNER'S "backend done" SIGNAL.** The mobile receiver is built + pushed and PENDING two owner-owed pieces:
-   the backend (device-token store + `/push/register`+`/unregister` + `broadcastToDepartment` + `sendPush` + the 4 trigger wirings,
-   filed to `cgpe-api` INBOX) and a **Firebase/FCM project** (hard infra prereq). When the owner says both are live: verify the
-   backend against its real code (fetch + `merge-base --is-ancestor` + a no-auth curl 401/404) and that FCM is configured, confirm a
-   test token registers + a test push arrives — THEN this phase completes.
-2. **Cut the ONE combined APK (70+71+72+73)** — only AFTER #1 is verified live, so it ships with working push, not a dormant half
-   (owner's "build the batch, then one APK" rule). `npx eas-cli build -p android --profile preview --non-interactive`; direct `.apk`
-   URL via `build:view <id> --json` → `.artifacts.applicationArchiveUrl`. Then the combined device-test pass.
-3. **Phase 65 `[m]` — full-staff monitor roster** (the one un-built mobile piece from the 63–69 batch; `/live-locations` is now
-   live + master-gated). Source the roster from the full staff directory left-joined with live status so a never-assigned member
-   still appears. Its own APK (or fold into the batch if not yet cut).
+1. **Phase 72 — EXECUTE ONLY ON A *VERIFIED* "backend live" SIGNAL (not a claim).** The owner's 2026-08-20 "backend done" signal
+   was checked and is PREMATURE: the backend push code is uncommitted in `../cgpe-backend-main`, not on `origin/main`, and prod
+   `/push/register` → **404**; Firebase/FCM unset. Two owner-owed pieces remain: the backend (commit→merge `origin/main`→deploy→
+   restart `:3001`) and a **Firebase/FCM project** (hard infra prereq). When BOTH are claimed live: re-verify (fetch +
+   `merge-base --is-ancestor` + a no-auth curl — 401=live, 404=not) and that FCM is configured, confirm a test token registers +
+   a test push arrives — THEN this phase completes.
+2. **Cut the ONE combined APK (65+70+71+72+73)** — only AFTER #1 is verified live, so it ships with working push, not a dormant
+   half (owner's "build the batch, then one APK" rule). `npx eas-cli build -p android --profile preview --non-interactive`; direct
+   `.apk` URL via `build:view <id> --json` → `.artifacts.applicationArchiveUrl`. Then the combined device-test pass.
+3. **Owner physical device-test pass** on the current/next APK: bg-GPS over a real shift (Phase 71 ≤60-min point), geofence after
+   go-live (Phase 50), biometric App-Lock grace (Phase 70), calendar auto-sync (Phase 73), and Phase 65's full-staff roster
+   showing a never-assigned member. Optional: if a device test surfaces deactivated accounts in the roster, file the Phase-65
+   `is_active` `[api]` note.
 
-**Also standing (lower priority):** Phase 65 is now #3 above;
+**Also standing (lower priority):**
 Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline);
 Phase 41 on-device verification (owner: do last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live,
 biometric, break-gate) on ≥2 phone brands.

@@ -6,6 +6,36 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 65 built (full-staff monitor roster / map from `/live-locations`); Phase 72 "backend done" signal verified PREMATURE
+
+**Context.** Owner said "wait, look at this — backend finished the task" (Phase 72 push). Per the standing
+deploy-gap rule ("backend shipped ≠ live"), verified before acting: cgpe-api DID build it (INBOX Phase-72
+`[x]`, their Phase 76/D-102) and the code exists in `../cgpe-backend-main`, but it is **uncommitted**
+(`?? routes/push.js` / `models/PushToken.js` / `services/push.js`; ` M utils/notify.js` / `routes/tasks.js`),
+**not on `origin/main`** (tip `2531817` = Phase 69), and prod `/push/register` + `/unregister` return **404**
+(health 200). Firebase/FCM (hard prereq) also unset. Owner then chose (option a) to keep Phase 72 pending and
+**build Phase 65** instead — the one un-built mobile piece from the 63–69 batch.
+
+**Decision.** Phase 65: source the master's roster/map universe from the now-deployed, super_admin-gated
+`GET /time-tracker/live-locations` (iterates every profile) instead of `/team/task-overview` (grouped by
+`team_tasks` assignee → members with no task vanished), left-joined with the task-overview stats. **Join key
+is the normalized NAME, not an id** — `/live-locations` keys people by `profile._id` (24-hex) while
+task-overview keys by the `user_id` field (`user_...`); the id spaces never match, and `/profiles/:id` accepts
+both types so a roster row carrying the `_id` still navigates. Verified `/live-locations` is deployed +
+gated (live probe 401) + carries the Phase-69 ObjectId fix, BEFORE building. Pure logic in a new tested
+`src/data/roster.ts` (`mergeRoster`/`liveOnDutyPins`); `api.getLiveLocations` is quiet-on-403/404 like
+`getBreakLocations`; master paths in `getTeam`/`getAgentLocations`; non-masters (403 → []) keep the exact
+old path. No screen change. Owner decision on the spec's open Q: show EVERY active staff member (greyed
+off-duty), not only ever-located ones — the complaint mandates it.
+
+**Consequence.** A staff member with zero team-tasks now appears on Monitor + the map (off-duty/zeroed)
+instead of vanishing. Gates: `tsc` 0 · `npm test` **690** (+21) · eslint 0 new. Commit `0c4fde1`, pushed
+`aaziko/Shivam`. Two honest limits (in `docs/spec/PHASE-65.md`): the map now shows "who's out RIGHT NOW"
+(drops clocked-out-earlier-today grey pins when anyone is on duty — no coord for off-duty in the payload),
+and `/live-locations` (`.find({})`, no `is_active`) could surface a deactivated account → optional `[api]`
+follow-up (add `is_active`), not filed. Phase 72 stays PENDING; do NOT cut the APK until prod probes 401 and
+Firebase is configured.
+
 ## 2026-08-20 — Phase 73 built (auto-sync assigned tasks/reminders to the phone calendar — Option B)
 
 **Context.** Owner batch #4. Owner chose **Option B (auto-add on assign)** over the simpler one-click export. Pure client
