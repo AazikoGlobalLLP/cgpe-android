@@ -18,6 +18,7 @@ import 'react-native-gesture-handler';
  * already-consented user (PHASE-41 §12.5).
  */
 import { startAmbientTracking, syncConsentWithPermission } from '@/lib/tracker';
+import { configurePushHandler, subscribeToPushTaps, syncPushRegistration } from '@/lib/push';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -147,6 +148,32 @@ function PermissionMonitor() {
   return null;
 }
 
+/**
+ * PHASE 72 §Tier B — team-targeted PUSH. On sign-in this registers the device's Expo push token
+ * with the backend (so a new department task / reassignment / lead / due reminder can reach the
+ * phone even when the app is closed) and wires notification taps to navigation. Sign-OUT
+ * unregistration lives in `store/auth.logout()`, where the auth token is still valid.
+ *
+ * Mounted once at the root beside `ConsentGate`/`PermissionMonitor`; headless, native-only, no
+ * setState. Everything it calls is best-effort and silent — a denied permission or a not-yet-live
+ * `/push/register` endpoint just means "no push yet," never a banner or a blocked sign-in. Gated on
+ * `user` so registration runs only for a signed-in account and re-runs for the next one. The tap
+ * destination is decided purely by `routeForPush` (unit-tested in `pushRouting.test.ts`).
+ */
+function PushGate() {
+  const { user } = useAuth();
+  const router = useRouter();
+  useEffect(() => {
+    if (Platform.OS === 'web') return; // native-only: no push on web
+    configurePushHandler();            // foreground presentation; idempotent, safe every mount
+    if (!user) return;                 // signed out — nothing to register or listen for
+    void syncPushRegistration();       // register/refresh this device's token (only if changed)
+    const unsub = subscribeToPushTaps((route) => router.push(route));
+    return () => unsub();
+  }, [user, router]);
+  return null;
+}
+
 function BrandTheme({ children }: { children: React.ReactNode }) {
   const base = useTheme();
   const { config } = useAppUi();
@@ -197,6 +224,9 @@ function RootNav() {
       {/* PHASE 41d §5: on foreground, treat a revoked OS location permission as a consent withdrawal
           (notify masters + stop recording). Native-only, headless — see PermissionMonitor above. */}
       <PermissionMonitor />
+      {/* PHASE 72: register this device for team push on sign-in + route notification taps.
+          Native-only, headless — see PushGate above. */}
+      <PushGate />
       {/* PHASE 41d §5: block a consented 24/7 user behind a "turn location back on" notice while
           location is off (owner-locked immediate trigger). Overlay, native-only — see LocationBlock.
           Below AppLock's zIndex so the biometric device lock always wins if both are up. */}

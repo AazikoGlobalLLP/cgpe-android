@@ -1764,6 +1764,53 @@ export async function dispatchNotification(input: {
     return { ok: false, created: 0, message: 'Could not send the notification.' };
   }
 }
+
+/**
+ * PHASE 72 (Tier B push). Register this device's Expo push token so the backend can deliver a
+ * team-targeted push to it (a new department task, a reassignment, a new lead, a due reminder).
+ *
+ * BEST-EFFORT AND SILENT BY DESIGN. Push is additive, so a failure here must never raise the
+ * health banner, block sign-in, or surface to the user — it just means "no push yet." We
+ * therefore do NOT route through `reportIfOutage`/`reportFailure`; a non-2xx simply returns
+ * `false`. (A 401 still ends the session via `req`'s `reportAuth`, exactly like every other call —
+ * a dead token is a dead token regardless of the endpoint.)
+ *
+ * The endpoint `POST /api/push/register` is NEW and rides a backend deploy (Phase 72); until it
+ * exists this quietly no-ops on a 404/501, the same posture as every not-yet-deployed surface.
+ * `platform` is `Platform.OS` ('android' | 'ios'). Returns whether the server accepted it, so the
+ * caller can persist the token only once it actually landed.
+ */
+export async function registerPushToken(token: string, platform: string): Promise<boolean> {
+  if (FORCE_DEMO || !sessionReal || !authToken || !token) return false;
+  try {
+    const { ok } = await req('/push/register', {
+      method: 'POST',
+      body: JSON.stringify({ token, platform }),
+    });
+    return !!ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * PHASE 72. The sign-out companion to `registerPushToken`: tell the backend to stop pushing to
+ * this device's token. Same silent, best-effort contract — a shared handset must be able to sign a
+ * user out without their token lingering, but a failed unregister must never block the sign-out.
+ */
+export async function unregisterPushToken(token: string): Promise<boolean> {
+  if (FORCE_DEMO || !sessionReal || !authToken || !token) return false;
+  try {
+    const { ok } = await req('/push/unregister', {
+      method: 'POST',
+      body: JSON.stringify({ token }),
+    });
+    return !!ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function getContests(): Promise<Contest[]> {
   return (await tryReal<Contest[]>('/contests', {}, isArr)) ?? unavailable('/contests', state.contests);
 }

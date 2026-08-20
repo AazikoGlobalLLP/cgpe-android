@@ -22,6 +22,7 @@ import {
   resolveBoundIdentity,
   saveBoundIdentity,
 } from '@/lib/biometricIdentity';
+import { clearPushRegistration } from '@/lib/pushToken';
 import type { User } from '@/data/types';
 import type { Tier } from '@/store/roles';
 
@@ -252,6 +253,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isWeb) {
         const rt = await storage.get(REFRESH_KEY);
         if (rt) await api.serverLogout(rt);
+        // Stop team pushes (Phase 72) reaching this handset once signed out. Must run BEFORE
+        // clear() nulls the auth token, since the unregister call is itself authenticated.
+        // Best-effort — a failure never blocks sign-out.
+        await clearPushRegistration();
       }
       await clear();
     },
