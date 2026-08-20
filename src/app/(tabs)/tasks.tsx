@@ -15,6 +15,7 @@ import { SwipeRow } from '@/ui/swipe';
 import type { SwipeAction } from '@/ui/swipe';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
+import { SyncChip } from '@/ui/SyncChip';
 import { haptics } from '@/lib/haptics';
 
 import { useT } from '@/i18n';
@@ -150,6 +151,8 @@ export default function Tasks() {
   const health = useDataHealth();
   const { user, viewAs } = useAuth();
   const ownOnly = capabilitiesOf(user, viewAs).tier === 'team';
+  // Phase 57a: the offline read-cache key MUST match `getTasks`'s (`own` vs `all` cache apart).
+  const tasksKey = `tasks:${ownOnly ? 'own' : 'all'}`;
 
   const [list, setList] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -285,6 +288,8 @@ export default function Tasks() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Phase 57a: shown only when these rows came from the offline cache after a failed refetch. */}
+        <SyncChip endpointKey={tasksKey} />
         {loading ? <TasksSkeleton /> : (
           <>
             {/* HERO — how much of today is left. */}

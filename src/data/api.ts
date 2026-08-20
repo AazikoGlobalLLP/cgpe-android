@@ -37,6 +37,11 @@ import { expireSession, resetSessionGuard } from '@/lib/session';
 // `nbsp` is the house guarantee that a value never wraps between its number and its unit.
 import { nbsp } from '@/lib/format';
 import { reportFailure, reportSuccess } from './health';
+// PHASE 57a — offline read cache. The freshness bus drives the "Synced <time>" chip without
+// changing any read's return type; `offlineStore` is the device I/O over the pure `offlineCache`.
+import { markFresh, markStale } from './freshness';
+import * as offlineStore from './offlineStore';
+import { decideRead, mergeById } from '@/lib/offlineCache';
 import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification, adaptLicPlan } from './adapt';
 // Types only. The seed arrays these modules once exported (`teamMembers`, `teamActivityFeed`,
 // `tasks`) were deleted — importing them is what kept sample records inside the shipped bundle,
@@ -473,16 +478,23 @@ export async function getTaskReport(month: string, opts: TaskReportScope = {}): 
 
 /** All tasks the signed-in user may see (own only for team tier; everything for admin/master). */
 export async function getTasks(ownOnly = false): Promise<Task[]> {
-  const ov = await getTaskOverview();
-  if (ov) {
-    const mine = (m: any) =>
-      (currentUserId && String(m.user_id) === String(currentUserId)) ||
-      (currentUserName && String(m.name).trim().toLowerCase() === String(currentUserName).trim().toLowerCase());
-    const members = ownOnly ? ov.members.filter(mine) : ov.members;
-    return members.flatMap((m) => (m.tasks || []).map((t) => adaptTeamTask(t, m.name)));
-  }
-  const real = await tryReal<any[]>('/tasks?limit=500', {}, isArr);
-  return real ? real.map(adaptTask) : unavailable('/tasks', state.tasks);
+  // PHASE 57a: `own` and `all` cache separately — they are different row sets.
+  return cachedList<Task>(
+    `tasks:${ownOnly ? 'own' : 'all'}`,
+    async () => {
+      const ov = await getTaskOverview();
+      if (ov) {
+        const mine = (m: any) =>
+          (currentUserId && String(m.user_id) === String(currentUserId)) ||
+          (currentUserName && String(m.name).trim().toLowerCase() === String(currentUserName).trim().toLowerCase());
+        const members = ownOnly ? ov.members.filter(mine) : ov.members;
+        return members.flatMap((m) => (m.tasks || []).map((t) => adaptTeamTask(t, m.name)));
+      }
+      const real = await tryReal<any[]>('/tasks?limit=500', {}, isArr);
+      return real ? real.map(adaptTask) : null;
+    },
+    () => unavailable('/tasks', state.tasks),
+  );
 }
 
 /** Live org dashboard counters (claims, tickets, tasks) — un-scoped. */
@@ -650,6 +662,53 @@ async function unavailable<T>(endpoint: string, value: T): Promise<T> {
   if (!suppressed.delete(endpoint)) reportFailure(endpoint);
   await wait();
   return clone(value);
+}
+
+/**
+ * PHASE 57a — serve a list read through the offline cache (spec `docs/spec/PHASE-57.md`).
+ *
+ * `fetchOnce` performs the endpoint's NORMAL online read and returns the adapted rows on success,
+ * or `null` on any failure — its body is the function's original logic, verbatim, so online
+ * behaviour (the same request, the same `reportIfOutage` classification) is unchanged.
+ *
+ *   - success        → write the rows through to this user's cache + mark the endpoint FRESH.
+ *   - failure        → run `failurePath` (the original `unavailable(...)`) UNCONDITIONALLY so the
+ *                      degraded banner is still raised (row 4: stale = cache + banner), THEN serve
+ *                      the last cached copy if one exists (the "stale" state; `markStale` drives
+ *                      the "Synced <time>" chip), else `failurePath`'s empty value ("could not
+ *                      load"). Never fabricates a row — a cache MISS is the empty state, as today.
+ *
+ * With no signed-in user there is no cache namespace, so it degrades to exactly today's behaviour.
+ * `endpointKey` is the cache/freshness key (e.g. `tasks:own`), independent of the health key.
+ */
+async function cachedList<T extends { id: string }>(
+  endpointKey: string,
+  fetchOnce: () => Promise<T[] | null>,
+  failurePath: () => Promise<T[]>,
+): Promise<T[]> {
+  const rows = await fetchOnce();
+  const uid = currentUserId;
+  if (rows !== null) {
+    if (uid) {
+      markFresh(endpointKey);
+      void offlineStore.writeList(uid, endpointKey, rows);   // fire-and-forget; never blocks the read
+    }
+    return rows;
+  }
+  // The read failed. Always run the original failure path first — it reports the outage and
+  // returns the write buffer (`state.xxx`), so the banner is raised whether or not a cached copy
+  // exists, and `buffer` carries any this-session unconfirmed creates.
+  const buffer = await failurePath();
+  if (!uid) return buffer;
+  const cached = await offlineStore.readList<T>(uid, endpointKey);
+  const decision = decideRead<T>(false, buffer, cached);
+  if (decision.state === 'stale') {
+    if (decision.syncedAt != null) markStale(endpointKey, decision.syncedAt);
+    // Keep the buffer's fresh creates visible on top of the (older) cached snapshot — don't
+    // regress the pre-cache behaviour where an offline-created row still showed during an outage.
+    return mergeById(decision.rows, buffer);
+  }
+  return decision.rows;
 }
 
 /* -------------------------------------------------------------------- Auth
@@ -937,14 +996,20 @@ export async function deleteAccount(): Promise<{ ok: boolean; reason?: WriteFail
  * the same defect Phase 3 fixed for `GET /profiles`. `reportIfOutage` is the classifier.
  */
 export async function getLeads(): Promise<Lead[]> {
-  if (sessionReal && !FORCE_DEMO) {
-    try {
-      const { ok, status, json } = await req('/leads?limit=500&scope=all');
-      if (ok && Array.isArray(json?.data?.leads)) return json.data.leads.map(adaptLead);
-      if (!ok) reportIfOutage(status, '/leads');
-    } catch { /* fall through — `unavailable` reports the outage */ }
-  }
-  return unavailable('/leads', state.leads);
+  return cachedList<Lead>(
+    'leads',
+    async () => {
+      if (sessionReal && !FORCE_DEMO) {
+        try {
+          const { ok, status, json } = await req('/leads?limit=500&scope=all');
+          if (ok && Array.isArray(json?.data?.leads)) return json.data.leads.map(adaptLead);
+          if (!ok) reportIfOutage(status, '/leads');
+        } catch { /* fall through — `unavailable` reports the outage, then the cache is tried */ }
+      }
+      return null;
+    },
+    () => unavailable('/leads', state.leads),
+  );
 }
 
 /**
@@ -1312,14 +1377,20 @@ export async function toggleClaimDoc(claimId: string, docId: string): Promise<vo
 
 /* -------------------------------------------------------------- Reminders */
 export async function getReminders(): Promise<Reminder[]> {
-  if (sessionReal && !FORCE_DEMO) {
-    try {
-      const { ok, json } = await req('/reminders?limit=100');
-      const arr = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : null);
-      if (ok && arr) return arr.map(adaptReminder);
-    } catch { /* fall through */ }
-  }
-  return unavailable('/reminders', state.reminders);
+  return cachedList<Reminder>(
+    'reminders',
+    async () => {
+      if (sessionReal && !FORCE_DEMO) {
+        try {
+          const { ok, json } = await req('/reminders?limit=100');
+          const arr = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : null);
+          if (ok && arr) return arr.map(adaptReminder);
+        } catch { /* fall through */ }
+      }
+      return null;
+    },
+    () => unavailable('/reminders', state.reminders),
+  );
 }
 /**
  * Mark a reminder done, for real. PHASE 9.
@@ -1707,14 +1778,20 @@ export async function sendWaMessage(threadId: string, text: string): Promise<Sen
   }
 }
 export async function getNotifications(): Promise<AppNotification[]> {
-  if (sessionReal && !FORCE_DEMO) {
-    try {
-      const { ok, json } = await req('/notifications?limit=50');
-      const arr = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : null);
-      if (ok && arr) return arr.map(adaptNotification);
-    } catch { /* fall through */ }
-  }
-  return unavailable('/notifications', state.notifications);
+  return cachedList<AppNotification>(
+    'notifications',
+    async () => {
+      if (sessionReal && !FORCE_DEMO) {
+        try {
+          const { ok, json } = await req('/notifications?limit=50');
+          const arr = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : null);
+          if (ok && arr) return arr.map(adaptNotification);
+        } catch { /* fall through */ }
+      }
+      return null;
+    },
+    () => unavailable('/notifications', state.notifications),
+  );
 }
 /**
  * Mark every notification read.

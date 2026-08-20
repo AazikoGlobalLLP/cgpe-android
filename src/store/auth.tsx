@@ -6,6 +6,7 @@ import { storage } from '@/lib/storage';
 import * as api from '@/data/api';
 import { EXPIRY_MESSAGE, ExpiryReason, onSessionExpired, resetSessionGuard } from '@/lib/session';
 import { resetHealth } from '@/data/health';
+import { resetFreshness } from '@/data/freshness';   // Phase 57a — clear stale-cache marks on sign-out
 // One-directional: i18n imports nothing from this store, so there is no require cycle.
 // Language is persisted per user (`cgpe.lang.<userId>`), and the provider only re-reads which
 // user is signed in when it is told to. Without these calls a user switch inside one app run
@@ -180,13 +181,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    * importantly the field-route tracker holds a live session id that belongs to the OUTGOING
    * user's shift; if it survived the logout, the next person's session could inherit it.
    *
-   * Scoped deliberately: only `clock.*` and `track.*` are dropped. Language choice and the
-   * biometric preference are device settings and correctly survive a user switch.
+   * Scoped deliberately: only `clock.*`, `track.*` and `cache.*` (the Phase-57a read cache) are
+   * dropped. Language choice and the biometric preference are device settings and correctly
+   * survive a user switch.
    */
   const purgeUserScopedCaches = async () => {
     try {
       const keys = await AsyncStorage.getAllKeys();
-      const doomed = keys.filter((k) => k.startsWith('clock.') || k.startsWith('track.'));
+      // Phase 57a: `cache.*` is the offline read cache (per-user list copies). Purging it on
+      // sign-out removes the outgoing user's cached rows — including any client-book data — so it
+      // can never be read by the next person on a shared handset. The keys are namespaced per
+      // user, so this also cannot leave another account's cache stranded.
+      const doomed = keys.filter((k) => k.startsWith('clock.') || k.startsWith('track.') || k.startsWith('cache.'));
       if (doomed.length) await AsyncStorage.multiRemove(doomed);
     } catch {
       // A cache purge must never block sign-out.
@@ -209,6 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     api.setAuthToken(null);
     api.setCurrentUser(null, null);
     resetHealth();
+    resetFreshness();   // Phase 57a — no stale-cache chip may survive into the next session
     await purgeUserScopedCaches();
     await storage.remove(TOKEN_KEY);
     await storage.remove(USER_KEY);
