@@ -1,7 +1,7 @@
 /**
  * PHASE 19 — dictionary parity, the permanent gate.
  *
- * The whole i18n system is 5 dictionaries × 75 flat keys (`src/i18n/index.tsx`). The single most
+ * The whole i18n system is 5 dictionaries × 107 flat keys (`src/i18n/index.tsx`). The single most
  * common i18n regression is a key added to English and forgotten in one of the other four, which
  * ships as an English string leaking into a Gujarati screen. TypeScript already stops the crudest
  * form of this — `Dict = Record<TKey, string>` makes a MISSING or MISSPELLED key a compile error —
@@ -49,7 +49,9 @@ describe('i18n dictionaries — parity and value quality', () => {
     // in all 5 languages (translation-v.01; docs/i18n/PHASE-41-CONSENT-COPY.md), not machine-translated.
     // Bumped 94 → 103 for the 9 `break.*` keys (Phase 52, 2026-08-18) — owner human copy in all 5
     // languages (docs/i18n/PHASE-52-break-copy-REQUEST.md), not machine-translated.
-    expect(EN_KEYS.length).toBe(103);
+    // Bumped 103 → 107 for the 4 `clock.reason*` keys (Phase 50 H1 localization, 2026-08-20) — owner
+    // human copy in all 5 languages (supplied in-chat), not machine-translated.
+    expect(EN_KEYS.length).toBe(107);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

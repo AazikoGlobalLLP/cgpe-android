@@ -2270,24 +2270,25 @@ export default function Home() {
       </Sheet>
 
       {/* PHASE 50: out-of-range / early clock actions are ALLOWED but must carry a reason (server-
-          enforced; a master is notified). This collects it and re-sends the SAME action. English
-          copy matches the surrounding attendance notices — localise together when the 5-language
-          copy lands. */}
+          enforced; a master is notified). This collects it and re-sends the SAME action. Localised
+          in all 5 languages via `clock.reason*` (owner human copy, 2026-08-20). The server's own
+          `message` still wins when present; the `clock.reasonEarly`/`clock.reasonAway` copy is the
+          fallback. Buttons reuse `common.cancel` / `home.clockIn` / `home.clockOut`. */}
       <Sheet
         visible={clockReasonSheet}
         onClose={() => { if (!clocking) setClockReasonSheet(false); }}
-        title={clock.in ? 'Add a reason to clock out' : 'Add a reason to clock in'}
+        title={clock.in ? t('clock.reasonTitleOut') : t('clock.reasonTitleIn')}
         footer={
           <Row style={{ gap: spacing.sm }}>
             <Button
-              label="Cancel"
+              label={t('common.cancel')}
               variant="outline"
               disabled={clocking}
               onPress={() => { if (!clocking) setClockReasonSheet(false); }}
               style={{ flex: 1 }}
             />
             <Button
-              label={clock.in ? 'Clock out' : 'Clock in'}
+              label={clock.in ? t('home.clockOut') : t('home.clockIn')}
               variant="primary"
               loading={clocking}
               disabled={!clockReason.trim()}
@@ -2301,8 +2302,8 @@ export default function Home() {
           label={
             clockReasonCtx?.message
             || (clockReasonCtx?.early
-              ? 'You are clocking out before your shift ends. Your manager will be notified.'
-              : 'You are away from the office. Your manager will be notified.')
+              ? t('clock.reasonEarly')
+              : t('clock.reasonAway'))
           }
           value={clockReason}
           onChange={setClockReason}
