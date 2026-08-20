@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 56: iOS enablement (editor-side prep + account-free compile proof)
+
+**Context.** The app always *targeted* iOS (`ios.bundleIdentifier` set, permission strings via config plugins) but was
+**never built for it** — `eas.json` had no `ios` profile, and iOS signing needs Apple credentials EAS lacks. Owner made iOS
+mandatory and (2026-08-20) chose this phase and confirmed they will buy the Apple Developer account. CNG project (no `ios/` dir).
+
+**Decision.**
+- **Added an `ios-simulator` EAS profile as the account-free compile proof.** A simulator build (`ios.simulator:true`,
+  `distribution:internal`) needs no Apple account or signing (SDK-57 build-reference), so the full native iOS target could be
+  built and verified BEFORE any spend. It ran green: build `9649bf51-ca6e-4359-90a8-d3b4c5a80f30`, SDK 57.0.0, git `49bb951`,
+  status FINISHED. `preview` (Android APK / iOS ad-hoc) and `production` (TestFlight/App Store) are left ready for when
+  credentials exist.
+- **`ios.config.usesNonExemptEncryption:false`** — factually correct (the app is HTTPS/TLS-only, the Apple "exempt" case),
+  not a guess; it removes the manual export-compliance prompt on every TestFlight upload. Confirmed present as
+  `ITSAppUsesNonExemptEncryption` in the introspected config.
+- **Regenerated the iOS app icon** rather than reuse an existing asset. `ios.icon` was `./assets/expo.icon` (the Expo default
+  grid — wrong brand); `cgpe-logo.png` is 827×975 + alpha (invalid iOS icon: must be square, opaque); `icon.png` is 1024² but
+  the Expo default art. New `assets/images/ios-icon.png` = the CGPE brand mark composited on the already-written-down
+  `#ffffff` (Android adaptive-icon background), 1024² opaque. Grounded (no invented colour), reversible, new file only.
+- **Did NOT hand-add iOS `UIBackgroundModes` / `BGTaskSchedulerPermittedIdentifiers`** — the `expo-background-task` plugin
+  injects them via CNG prebuild (verified via `npx expo config --type introspect`). Hand-adding would duplicate/drift.
+- **Documented the honest iOS 24/7 limit** (do NOT promise Android parity): iOS records the on-duty route while
+  alive/backgrounded ('Always'), but background updates stop after a **force-quit** and recording stays off after a **reboot**
+  until the app is reopened; the watchdog is opportunistic (`BGTaskScheduler`, not WorkManager's ~15-min cadence). The
+  Simulator cannot run Background Tasks at all. `tracker.ts` is built around Android's foreground service, which iOS ignores.
+
+**Consequence.** The iOS build is proven to compile from committed code; the only remaining iOS work is owner-gated on the
+Apple Developer account, after which a TestFlight/ad-hoc build + on-device verification follows `docs/spec/PHASE-56.md` §4.
+No contract change; no sibling session affected. Validation gate for config-only phases like this is `expo config --type
+introspect` + an EAS build — the three code gates (`tsc`/`npm test`/eslint) are unaffected because no `src/` changed.
+
 ## 2026-08-20 — Phase 57 finished: Lead-create wired into the offline write queue
 
 **Context.** With Notes and Task-create queued, Lead-create (`addLead`) was the last additive create still un-queued. On a

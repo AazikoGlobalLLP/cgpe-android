@@ -129,6 +129,14 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   native-only surfaces (haptics, background GPS, biometric lock, native map, cold-start persistence) —
   see `e2e/WEB-LIMITS.md`. `npm run e2e:report` opens the HTML report.
 - `eas build -p android --profile preview` — the installable APK (`production` emits an AAB).
+- `npx eas-cli build -p ios --profile ios-simulator --non-interactive` — **an iOS build that needs NO
+  Apple Developer account** (simulator builds aren't code-signed). Use it to PROVE the iOS native target
+  compiles without spending on the Apple account (done Phase 56, build `9649bf51` FINISHED green). The
+  artifact is a Mac-only `.app` tarball (`build:view <id> --json` → `.artifacts.applicationArchiveUrl`) —
+  it does NOT run on Windows or a phone. A real-iPhone / TestFlight build (`--profile production` /
+  `preview`) DOES need the Apple Developer account ($99/yr). Validate iOS app config without any build via
+  `npx expo config --type introspect` (runs the config plugins in memory; this is CNG — no `ios/` dir, so
+  never hand-edit a plist: `expo-background-task`/`expo-location` inject the iOS background modes for you).
 - `npm run reset-project` — **NEVER RUN.** Deletes `src/` and `scripts/`.
 
 **git RESOLVED 2026-08-10 — do not re-diagnose it.** Every git command used to abort with

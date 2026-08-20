@@ -1,15 +1,18 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-20
-**Working on right now:** Nothing in progress — the offline-support work is finished and waiting for a decision on what to do next.
+**Working on right now:** Nothing in progress — iPhone-readiness work is finished and waiting on the Apple account.
 
 **Done this week:**
-- The app now keeps your work safe when the phone has no internet. If a team member adds a new **lead** while offline, it is
-  saved on the phone, shown with a "Pending sync" tag, and sent to the server automatically the moment the connection comes
-  back — it can no longer be quietly lost. The same safety already covers notes and tasks, so all three are now protected.
-- When something is saved offline, the person sees an honest message ("saved on this device — it will sync when you're back
-  online") instead of a confusing error, and the app never pretends an offline save reached the server.
+- **The app is now proven to build for iPhone.** We ran a free test build in the cloud and it succeeded, which confirms the
+  iPhone version of the app compiles correctly — before spending any money. Until now the app had only ever been built for
+  Android.
+- Set up everything on our side that iPhone needs: the build settings, an App-Store compliance answer, and a proper CGPE
+  app icon for iPhone (it had been showing a leftover placeholder icon).
+- Wrote a plain-language guide for the remaining steps, so once the Apple account is ready we can get the app onto real
+  iPhones (and TestFlight for the team) quickly.
 
-**Blocked on:** Nothing. The team-notifications feature is still waiting on the backend team and the Firebase setup, exactly as before.
+**Blocked on:** To put the app on a real iPhone, Apple requires a paid developer account (about $99/year) — there is no free
+way around this. You confirmed you'll get it; nothing more can happen on iPhone until it's in place.
 
-**Next:** Decide the next feature — either start iPhone support (needs a paid Apple developer account first) or pick up team
-notifications once the backend and Firebase are confirmed live.
+**Next:** Once the Apple account is ready, tell the team and we'll build the iPhone app and put it on TestFlight so your
+staff can install it just like the Android app. (Separately, team push-notifications are still waiting on the backend team.)

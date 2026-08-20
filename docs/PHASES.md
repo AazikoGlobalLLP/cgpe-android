@@ -1809,16 +1809,21 @@ All five ride ONE combined native APK (72/73 force a rebuild) — not yet cut. *
    `is_active` `[api]` note.
 
 **Also standing (lower priority):**
-Phases 54/56 from the 2026-08-18 batch (lead-open `[api]`; iOS gated on an Apple account). **Phase 55 (network resilience) BUILT +
+Phase 54 from the 2026-08-18 batch (lead-open `[api]`). **Phase 56 (iOS) is BUILT + compile-proven — see its ✅ entry below.**
+**Phase 55 (network resilience) BUILT +
 PUSHED `941c583`** (device pass + 5-lang copy remain). **✅ Phase 57 (offline support) FULLY COMPLETE + PUSHED — 57a read cache
 `20eb4ed`, 57b write queue Notes `e318e06` + Task-create `eb81a04` + Lead-create `00aee55`; EVERY additive create (Notes/Tasks/
 Leads) is now queued. REMAINING = 5-lang copy for the new English strings + a device pass.** Phase 41 on-device verification (owner: do last). Owner
 physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live, biometric, break-gate) on ≥2 phone brands.
 
-**⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
-iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability
-is confirmed first-class EXCEPT the guaranteed-24/7-after-force-quit/reboot tracker (Android-only). Phase 57 (offline, XL) and
-Phase 58 (createdAt, needs owner repro) sit after.
+**✅ Phase 56 (iOS) — editor-side prep BUILT + compile-PROVEN, now purely owner-gated on the Apple account (2026-08-20).**
+Commits `49bb951` (config) + `ee8df2b` (docs), pushed `aaziko/Shivam`. `eas.json` `ios-simulator` profile + `app.json`
+export-compliance flag + a real CGPE iOS icon; validated via `expo config --type introspect`. **Apple-account-free EAS
+iOS-Simulator build `9649bf51` FINISHED green (SDK 57.0.0, git `49bb951`)** — the native iOS target compiles with the full
+module set. **Remaining = owner-owed only:** owner confirmed 2026-08-20 they WILL buy the **Apple Developer account ($99/yr)**;
+when it exists, cut a TestFlight (recommended) or ad-hoc build per `docs/spec/PHASE-56.md` §4 and verify Face ID / map /
+background route on a real iPhone. iOS reliability is first-class EXCEPT the guaranteed-24/7-after-force-quit/reboot tracker
+(Android-only, documented). iOS push (APNs) is a separate, later piece. Phase 58 (createdAt, needs owner repro) still open.
 
 ---
 
