@@ -4,6 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@/store/auth';
 import { useTheme, radius, shadow, type } from '@/theme/theme';
 import { Grad } from '@/ui/base';
+import { storage } from '@/lib/storage';
+import { parseLastActive, shouldRelock } from '@/lib/appLock';
+
+// The wall-clock moment the app was last sent to the background, persisted so a COLD start can
+// also honour the grace window (an OS kill during a brief trip must not demand a fingerprint).
+// SecureStore on native via @/lib/storage. See lib/appLock.ts for the PHASE-70 rationale.
+const LAST_ACTIVE_KEY = 'applock.lastActive';
 
 /**
  * Biometric / device-passcode app lock. After the first login, whenever the app is
@@ -19,6 +26,8 @@ export function AppLock() {
   const appState = useRef<AppStateStatus>('active');
   const armed = useRef(false);
   const inFlight = useRef(false);
+  // When the app was last genuinely backgrounded, for the foreground grace check (PHASE 70).
+  const backgroundedAt = useRef<number | null>(null);
 
   const shouldLock = !!user && biometricAvailable && biometricEnabled;
 
@@ -56,25 +65,50 @@ export function AppLock() {
     }
   };
 
-  // Lock on cold start when a saved session was restored.
+  // Lock on cold start when a saved session was restored — but honour the grace window: if the
+  // app was backgrounded only moments ago (an OS kill during a brief trip — common on the
+  // battery-aggressive OEMs this app targets), a cold start should NOT demand a fingerprint. Lock
+  // FIRST so app content never flashes, then read the persisted stamp and reveal if within grace.
   useEffect(() => {
     if (ready && !armed.current) {
       armed.current = true;
-      if (restoredSession && shouldLock) { setLocked(true); attempt(); }
+      if (restoredSession && shouldLock) {
+        setLocked(true);
+        (async () => {
+          const raw = await storage.get(LAST_ACTIVE_KEY).catch(() => null);
+          if (shouldRelock(parseLastActive(raw), Date.now())) attempt();
+          else setLocked(false); // within grace → reveal the app, no prompt
+        })();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready]);
 
-  // Lock again when returning to the foreground.
+  // Lock again when returning to the foreground — but only if the user was actually away longer
+  // than the grace window (PHASE 70). A quick app-switch / call / glance at a map comes straight
+  // back in; a real absence still re-locks.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
-      const back = appState.current.match(/inactive|background/) && next === 'active';
+      const prev = appState.current;
+      const leaving = /inactive|background/.test(next);
+      const back = /inactive|background/.test(prev) && next === 'active';
       appState.current = next;
-      // `!inFlight.current`: the biometric / device-credential prompt drives the app
-      // background→active itself, so that return-to-active is NOT the user leaving and coming
-      // back — re-locking on it would start a second prompt that fights the first (see
-      // attempt()). A genuine foreground return, with no prompt in flight, still re-locks.
-      if (back && shouldLock && !inFlight.current) { setLocked(true); attempt(); }
+      // Stamp when the user GENUINELY leaves. `!inFlight.current` excludes the background bounce
+      // the biometric / device-credential prompt causes itself (attempt() holds inFlight), so an
+      // in-progress unlock never resets the "last away" clock.
+      if (leaving && !inFlight.current) {
+        const ts = Date.now();
+        backgroundedAt.current = ts;
+        void storage.set(LAST_ACTIVE_KEY, String(ts));
+      }
+      // `!inFlight.current`: the prompt drives the app background→active itself, so that return is
+      // NOT the user coming back — re-locking on it would start a second prompt that fights the
+      // first (see attempt()). A genuine return, with no prompt in flight, re-locks only when the
+      // gap exceeds the grace window.
+      if (back && shouldLock && !inFlight.current && shouldRelock(backgroundedAt.current, Date.now())) {
+        setLocked(true);
+        attempt();
+      }
     });
     return () => sub.remove();
     // eslint-disable-next-line react-hooks/exhaustive-deps
