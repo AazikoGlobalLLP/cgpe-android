@@ -1,56 +1,77 @@
-# Welcome to your Expo app 👋
+# cgpe-android
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+> A TypeScript frontend app built with React.
 
-## Get started
+![TypeScript](https://img.shields.io/badge/TypeScript-language-3178C6?style=flat-square)
+![React](https://img.shields.io/badge/React-framework-6E56CF?style=flat-square)
+![license](https://img.shields.io/badge/license-MIT-8B5CF6?style=flat-square)
+![stars](https://img.shields.io/badge/stars-0-F5C518?style=flat-square)
 
-1. Install dependencies
+## Why this exists
 
-   ```bash
-   npm install
-   ```
+This repository ships without a description — everything below was detected from its files. The codebase is written primarily in TypeScript and JavaScript. It is built on React.
 
-2. Start the app
+## Tech stack
 
-   ```bash
-   npx expo start
-   ```
+| Technology | Role | How it's used |
+| --- | --- | --- |
+| TypeScript | Language | 100% of the code by bytes (GitHub language stats) |
+| React | Framework | react in package.json |
+| Playwright | Testing | @playwright/test in package.json |
+| Vitest | Testing | vitest in package.json |
+| ESLint | Tooling | eslint in package.json |
 
-In the output, you'll find options to open the app in a
+## Architecture
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+React renders the frontend.
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```mermaid
+flowchart LR
+  U([User])
+  FE["React frontend"]
+  U --> FE
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Getting started
 
-### Other setup steps
+```bash
+git clone https://github.com/AazikoGlobalLLP/cgpe-android.git
+cd cgpe-android
+npm install
+npm run start
+npm run test
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+Every command above exists in the repository:
 
-## Learn more
+- `npm install` — install JavaScript dependencies (package.json present)
+- `npm run start` — package.json "start" script: expo start
+- `npm run test` — package.json "test" script: vitest run
 
-To learn more about developing your project with Expo, look at the following resources:
+## Project structure
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```text
+cgpe-android/
+├── assets/   # static assets
+├── docs/     # documentation
+├── e2e/      # end-to-end tests
+├── public/   # static assets
+├── scripts/  # automation scripts
+├── src/      # application source code
+└── test/     # test suite
+```
 
-## Join the community
+## CI & testing
 
-Join our community of developers creating universal apps.
+Detected test tooling:
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+- Playwright — @playwright/test in package.json
+- Vitest — vitest in package.json
+
+## License
+
+MIT — as declared in the repository's GitHub license metadata.
+
+---
+
+_README forged from the repository itself by ProfileForge (https://profileforge-one.vercel.app/project) — every claim above was detected, not guessed._
