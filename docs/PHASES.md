@@ -14,6 +14,18 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 70 BUILT + PUSHED (owner #1 of the 70–73 batch).** The "app keeps logging me out / re-verifies every
+2-3 hours" complaint is fixed on the App-Lock side. Owner confirmed (AskUserQuestion) the "logged out" screen is the **dark
+fingerprint overlay** (session alive), NOT the email/OTP login card — so it was the biometric lock re-arming with no grace, never a
+token expiry. Built a **5-minute grace window** (owner-chosen): the lock stamps when the app was last backgrounded (in-memory for a
+live process, persisted in SecureStore for cold start) and re-prompts **only if the gap exceeds 5 min** — on both the foreground and
+cold-start paths. New pure `src/lib/appLock.ts` (`shouldRelock`/`parseLastActive`, fails closed) + `appLock.test.ts` (+10);
+`src/ui/AppLock.tsx` wired. Deliberately did NOT touch the quick-unlock default (owner wants the lock) or add silent-restore-on-401
+(no real expiry in play). Gates: `tsc` 0 · `npm test` **635** · eslint 0. Commit `cd134ba`. **Pure JS (OTA-eligible) — not yet on a
+phone; rides the batch APK with 71/72/73.** **🆕 PUSH NOW WORKS:** new remote `aaziko` → `AazikoGlobalLLP/cgpe-android`,
+`git push aaziko Shivam` succeeds (`origin` still 403s, untouched). Owner directive: push after EVERY phase with a distinct commit
+message, then `/handoff`.
+
 **⚡ 2026-08-20 — H1 clock-reason Sheet FULLY LOCALIZED (all 5 languages) + fresh APK cut.** Owner supplied 5-language human copy
 for the Phase-50 out-of-range / early clock-reason prompt (both the Sheet titles/prompts AND the 2 edge-case "reason needed"
 notices). Wired 8 new `clock.reason*` / `clock.reasonNeeded*` keys across all 5 dictionaries (commits `08f3a4f` + `8e9ad46`; i18n
@@ -27,7 +39,10 @@ localized reason Sheet + everything since 63/64/66/67. Gates green (`tsc` 0 · `
 file:line cited). NONE built — triaged this session, next session executes.** Owner priority order as reported: session-logout
 (70) → location 60-min (71) → team notifications (72) → phone-calendar sync (73).
 
-- **Phase 70 — [m] (+[api]/OPS) "App keeps logging me out / re-verifies every 2-3 hours."** TWO independent mechanisms,
+- **Phase 70 — [m] "App keeps logging me out / re-verifies every 2-3 hours." ✅ BUILT + PUSHED 2026-08-20 (commit `cd134ba`).**
+  Owner confirmed via AskUserQuestion it is the **dark fingerprint overlay** (Mechanism 1, session alive) → built the 5-min App-Lock
+  grace window only; NO OPS/`JWT_EXPIRE`, NO silent-restore (Mechanism 2 not in play). Original triage retained below for reference.
+  TWO independent mechanisms,
   conflated in the report — separating them IS the fix. **(1) The frequent re-verify on every reopen = the biometric App-Lock,
   session INTACT underneath.** `src/ui/AppLock.tsx:69-81` (esp. `:77`) has **NO grace window** — ANY background→foreground
   transition re-locks and fires the prompt; the token is never touched. Quick-unlock defaults ON without opt-in
@@ -1598,24 +1613,25 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-20 — H1 reason-Sheet fully localized + fresh APK `b01f4164` cut; owner batch 70–73 triaged. Detail:
-`docs/PHASES.md` §Now, `docs/DECISIONS.md` 2026-08-20):**
+**CURRENT next 3 (2026-08-20 — Phase 70 BUILT + PUSHED; push now works via new remote `aaziko`. Detail: `docs/PHASES.md` §Now,
+`docs/DECISIONS.md` 2026-08-20):**
 
-The Phase-50 clock-reason `Sheet` is now fully localized (5 langs) and shipped in APK `b01f4164` (v1.10.0, gitCommit `8e9ad46`,
-supersedes `6b76608b`). Owner reported 4 new items → **Phases 70–73** (verified vs real code, file:line cited, **NONE built**).
-(`git push` still 403s — commits local; EAS builds from the local tree.)
+Phase 70 (App-Lock 5-min grace window) is done (commit `cd134ba`), owner #1 of the 70–73 batch. **`git push aaziko Shivam` now
+succeeds** (remote `aaziko` → `AazikoGlobalLLP/cgpe-android`; `origin` still 403s, untouched) — push after every completed phase
+with a distinct commit message. Phase 70 is pure JS (OTA-eligible) but not yet on a phone; it rides the batch APK with 71/72/73.
 
-1. **Phase 70 — session "keeps logging me out / re-verify every 2-3 hours" (owner #1).** FIRST ask the owner the disambiguating
-   question: **a dark fingerprint-only overlay** (Mech 1 — the App-Lock has no grace window, session still alive, a `[m]` fix at
-   `AppLock.tsx:69-81`) **vs the full email/OTP sign-in card** (Mech 2 — a real 401; the 24h token default can't produce 2-3h, so
-   check prod `JWT_EXPIRE` → OPS/`[api]`). The answer decides the whole fix. NB it's a Bearer JWT, **not a cookie**.
-2. **Phase 71 — guarantee a location point every ≤60 min + fix "bg not running" (owner #2).** No code-driven time guarantee
-   exists today; the fix is a forced `getCurrentPositionAsync` heartbeat in `watchdogTick` (`tracker.ts:592-611`, `[m]` JS-only,
-   rides a rebuild). "bg not running" is most likely the APK predating the native modules OR needing a clock-out+in to pick up the
-   Phase-63 profile — confirm on-device (APK SHA-256, the persistent notification, DB `point_count`) before assuming a code bug.
-3. **Phase 72 / 73 — team-targeted notifications + phone-calendar sync.** Both need an owner decision first (72: in-app Tier A vs
-   real-push Tier B; 73: which entities + undated=skip-or-all-day) and a native rebuild (72 Tier B, 73 `expo-calendar`). 73's
-   bulk export is the cheapest concrete win; 72 Tier B is the biggest build (FCM + a backend device-token store + infra).
+1. **Phase 71 — guarantee a location point every ≤60 min + fix "bg not running" (owner #2, now the front of the queue).** No
+   code-driven time guarantee exists today; the fix is a forced `getCurrentPositionAsync` heartbeat in `watchdogTick`
+   (`tracker.ts:592-611`, `[m]` JS-only, rides a rebuild). **Lift the "is the buffer stale?" decision into a pure, tested helper**
+   like Phase 70 did for the App-Lock — `tracker.ts` has ZERO test coverage. "bg not running" is most likely the APK predating the
+   native modules OR needing a clock-out+in to pick up the Phase-63 profile — confirm on-device (APK SHA-256, the persistent
+   notification, DB `point_count`) before assuming a code bug. Honest ceiling: WorkManager is Doze-deferred, so 60 min is
+   best-effort, not a hard real-time guarantee.
+2. **Phase 72 — team-targeted notifications.** Needs an owner decision first: **in-app Tier A** (no rebuild, small `[api]`, doesn't
+   buzz a closed phone) **vs real-push Tier B** (FCM + a backend device-token store + `expo-notifications` + infra — the biggest
+   build of the batch). Also which departments/labels + which events trigger.
+3. **Phase 73 — phone-calendar sync.** Needs `expo-calendar` (native rebuild) + an owner decision (which entities; undated =
+   skip-or-all-day; export vs auto-sync). The **one-click bulk export** is the cheapest concrete win — ship it before auto-sync.
 
 **Also standing (lower priority):** Phase 65 `[m]` full-staff roster (the one un-built mobile piece; `/live-locations` now live);
 Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline);

@@ -117,11 +117,18 @@ one-time fix has been applied and is global, so git now works normally here:
 If it ever reappears (a new machine or a reset global config), re-run exactly that. It is **not** a
 corrupt repo, and it is never fixed by re-cloning. Work on branch `Shivam`; never push to `main`.
 
-**`git push` currently fails 403 and no amount of retrying will fix it.** The stored credential is
-`reactjsaaziko`; the remote is `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`, and that account has no
-write access. This needs a human to grant access or swap the credential in Windows Credential
-Manager. Do **not** change the remote URL, rewrite history, or re-clone to work around it — commit
-locally and say clearly in the handoff that the push is outstanding. `gh` is not installed here.
+**✅ PUSH NOW WORKS via a NEW remote (2026-08-20) — do not tell the owner "push is blocked".** The owner
+supplied a repo they own and directed pushing `Shivam` there after **every** completed phase (distinct
+commit message each time), then `/handoff`. Added as a **separate** remote **`aaziko`** →
+`https://github.com/AazikoGlobalLLP/cgpe-android.git`; **`git push aaziko Shivam` succeeds.** Per-phase
+workflow: finish a phase → commit with a clear per-phase message → `git push aaziko Shivam` → `/handoff`.
+Never push `main`. Never touch/redirect `origin`, rewrite history, or force-push. Do NOT commit the
+untracked repo-root `.txt` files or local `.claude/settings.json` unless the owner asks.
+
+**`git push` to `origin` still fails 403 (unchanged) — just don't route through it.** The stored credential
+is `reactjsaaziko`; `origin` is `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`, and that account has no write
+access. Leave `origin` exactly as it is (the new `aaziko` remote is the working path). `gh` is not installed
+here.
 
 **BUT the push-403 does NOT block shipping an APK — EAS cloud build WORKS from here (proven 2026-08-15).**
 `npx eas-cli build -p android --profile preview --non-interactive` runs headless: logged in as

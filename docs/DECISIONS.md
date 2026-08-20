@@ -6,6 +6,40 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 70 built (App-Lock 5-min grace window); confirmed it's the biometric lock re-arming, NOT a token expiry
+
+**Context.** Owner: "app keeps logging me out / re-verifies every 2-3 hours." The triage (Phases 70) had flagged TWO possible
+mechanisms — (1) the biometric App-Lock re-locking on every foreground return with no grace (`AppLock.tsx:77`, session alive), or
+(2) a real 401 to the login card (prod `JWT_EXPIRE`, OPS). The fix forks entirely on which. Asked the owner (AskUserQuestion) which
+screen they see; they answered the **dark fingerprint overlay** — i.e. Mechanism 1. They also chose a **5-minute** grace window.
+
+**Decision.** Built the Mechanism-1 `[m]` fix only. New pure `src/lib/appLock.ts` (`shouldRelock`/`parseLastActive` +
+`APP_LOCK_GRACE_MS = 5min`, fails closed on missing/corrupt/clock-skewed stamps) + `appLock.test.ts` (+10); `AppLock.tsx` stamps
+the last-backgrounded moment (in-memory for the live process, persisted in SecureStore for cold start) and re-locks only when the
+gap exceeds grace — on both the foreground and cold-start paths. Deliberately did NOT: (a) touch the quick-unlock default (`auth.tsx:130`,
+left ON — owner wants the lock, just not the nagging; turning it off would silently disable the lock); (b) add silent-restore-on-401
+(owner confirmed it's not the login card, so no real expiry — that would be speculative dead code); (c) do any OPS/`JWT_EXPIRE` work.
+
+**Consequence.** A brief background trip (<5 min) no longer re-prompts; a real absence still re-locks; a found handset stays shut
+after the phone's been set down. Gates: `tsc` 0 · `npm test` 635 · eslint 0. Commit `cd134ba`. Pure JS (OTA-eligible) but not yet on
+any phone — rides the batch APK with 71/72/73. Device-verify: brief-trip skips prompt, >5 min re-locks, cold-start after OEM kill
+honours grace.
+
+## 2026-08-20 — New working git remote `aaziko` (AazikoGlobalLLP/cgpe-android); push-403 bypassed; push after every phase
+
+**Context.** `git push` to `origin` (`Dev-Shivam-05/CGPE-ANDROID-APPLICATION`) has 403'd for many sessions (credential
+`reactjsaaziko` has no write access), so every commit sat local. The owner supplied a repo they own and directed: create/push the
+`Shivam` branch there, and push after **every** completed phase with a distinct commit message for easy tracking, then `/handoff`.
+
+**Decision.** Added `https://github.com/AazikoGlobalLLP/cgpe-android.git` as a **separate** remote `aaziko` (left `origin`
+untouched — no URL redirect, no history rewrite, no force) and `git push -u aaziko Shivam` — **it succeeds**. Branch `Shivam` (all
+history + `cd134ba`) is now live there, tracking `aaziko/Shivam`.
+
+**Consequence.** Stop telling the owner "push is blocked / commit local only" — that guidance in CLAUDE.md and older memories is now
+stale for this remote. Per-phase workflow going forward: finish a phase → commit with a clear per-phase message → `git push aaziko
+Shivam` → `/handoff`. Never push `main`; never touch `origin`. Do not commit the untracked repo-root `.txt` files or local
+`.claude/settings.json` unless the owner asks.
+
 ## 2026-08-20 — H1 clock-reason Sheet fully localized (owner copy) + fresh APK `b01f4164`; the "reason sheet localized" precondition is now met
 
 **Context.** The 2026-08-19 decision (below) left the Phase-50 geofence blocked on two preconditions: the `6b76608b` APK installed

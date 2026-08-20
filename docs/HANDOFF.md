@@ -1,57 +1,62 @@
-# HANDOFF — CGPE Connect (Android) — H1 reason-Sheet localized + fresh APK + owner batch 70–73 triaged — 2026-08-20
+# HANDOFF — CGPE Connect (Android) — Phase 70 (App-Lock grace window) built + pushed to new repo — 2026-08-20
 
-Two things this session: (1) the Phase-50 out-of-range / early clock-reason prompt is now **fully localized in all 5
-languages** and shipped in a **fresh EAS APK `b01f4164`**; (2) the owner reported **4 new items**, each **investigated
-against the real mobile + backend code** (4 parallel agents, file:line cited) and written up as **Phases 70–73** — none
-built yet.
+Owner's #1 of the 70–73 batch is done: the App-Lock no longer re-prompts for a fingerprint on
+**every** reopen — it now only re-locks after you've genuinely been away longer than **5 minutes**.
+Also this session: a **new working git remote** (`aaziko` → AazikoGlobalLLP/cgpe-android) — the
+push-403 block is bypassed, and per the owner's directive every completed phase is now **pushed**
+(distinct commit message each time) then handed off.
 
 ## Done
-- **H1 clock-reason Sheet fully localized (5 languages).** The out-of-range / early clock-in-out reason prompt in
-  `home.tsx` (Sheet titles + field prompts + the 2 edge-case "reason needed" notices) now renders in
-  English / ગુજરાતી / हिन्दी / Hinglish / Roman-Gujarati instead of English-only. Owner supplied the human copy in-chat.
-- **Fresh APK cut + delivered:** EAS `b01f4164`, v1.10.0, gitCommit `8e9ad46`, direct `.apk`
-  `https://expo.dev/artifacts/eas/4ZaCvftKnI8K2MD--kCCtkii2HRmTYzKYxILWbtqNT8.apk` — **supersedes `6b76608b`**. Contains the
-  localized reason Sheet + the whole 63/64/66/67 batch. Build-page (Install button on the phone):
-  `https://expo.dev/accounts/shivam-bhadoriya/projects/ANDROID/builds/b01f4164-10db-4154-bd66-5a4bcd621068`.
-- **Owner's 4 new items triaged into grounded Phases 70–73** (session-logout / location-60min / team-notifications /
-  phone-calendar-sync) — verified against real code, classified `[m]`/`[api]`/OPS/native-rebuild, each with open questions.
-- Gates green: `tsc` 0 · `npm test` **625** · eslint 0 new (1 pre-existing `i18n/index.tsx` warning).
+- **Phase 70 — "app keeps logging me out / re-verifies every 2-3 hours" FIXED (the App-Lock half).**
+  Confirmed with the owner it is the **dark fingerprint overlay** (session alive), not the email/OTP
+  login card — so this was the biometric lock re-arming with no grace, never a token expiry. The lock
+  now remembers when the app was last backgrounded and **only re-prompts if the gap exceeds 5 minutes**
+  (owner-chosen). A quick app-switch / call / map-glance comes straight back in; a phone left on a desk
+  still re-locks. Covers **both** paths — returning to a live app *and* a cold start after an OEM
+  battery-kill (the timestamp is persisted in SecureStore, so it survives process death). Content never
+  flashes: cold start locks first, then reveals if within grace.
+- **`Shivam` branch pushed to the owner's repo** `https://github.com/AazikoGlobalLLP/cgpe-android.git`
+  (remote `aaziko`, tracking `aaziko/Shivam`). Push now **works** — the old `origin`
+  (`Dev-Shivam-05/…`) still 403s and was left untouched.
+- Gates green: `tsc` **0** · `npm test` **635** (was 625, +10 new) · eslint **0** on the touched files.
 
 ## Files changed
-- `src/i18n/index.tsx` — +8 keys × 5 langs: `clock.reasonTitleOut/In`, `clock.reasonEarly`, `clock.reasonAway` (commit
-  `08f3a4f`) and `clock.reasonNeededTitleOut/BodyOut/TitleIn/BodyIn` (commit `8e9ad46`). Owner copy, not machine-translated.
-- `src/app/(tabs)/home.tsx` — the clock-reason `Sheet` (title/field label/buttons) and the two `setNotice` edge branches now
-  use `t()`; added `t` to `toggleClock`'s dep array. Buttons reuse existing `common.cancel`/`home.clockIn`/`home.clockOut`.
-- `src/i18n/__tests__/dictionaries.test.ts` — parity count 103 → 111 (two bumps, documented).
-- `docs/PHASES.md` — new 2026-08-20 status block + Phases 70–73 rows; `## Now` / `## Next 3` updated.
-- `docs/DECISIONS.md` — appended 2026-08-20 decisions.
+- `src/lib/appLock.ts` — **NEW** pure helper: `shouldRelock()` / `parseLastActive()` + `APP_LOCK_GRACE_MS`
+  (5 min). Fails closed on a missing / corrupt / clock-skewed timestamp (unknown gap → lock). Device-free
+  so it is unit-testable, exactly like `lib/watchdog.ts`.
+- `src/lib/__tests__/appLock.test.ts` — **NEW** (+10): grace boundary (`elapsed === grace` → no prompt),
+  brief-trip, and every fail-closed case.
+- `src/ui/AppLock.tsx` — stamps the last-backgrounded moment (in-memory for the live process, persisted for
+  cold start) and grace-gates the re-lock on both the foreground and cold-start effects.
+- Commit `cd134ba` on `Shivam`, pushed to `aaziko/Shivam`.
 
 ## Decisions made
-- **Localized H1 with owner-supplied copy, not a guess.** Machine translation is forbidden here; the owner pasted all 12
-  strings in 5 languages, so the whole Phase-50 clock-reason surface is now honest in every language.
-- **Left the two edge-case notices' English fallback in place until copy landed** (owner then supplied it, so both are now
-  localized). The server's own `message` still wins over the fallback keys.
-- **Cut a fresh APK immediately on owner request** — EAS archives the local working tree, so `b01f4164` carries local commits
-  `08f3a4f`+`8e9ad46` even though `git push` 403s. Identify a build by **commit / build-ID**, never the version string (every
-  preview build is v1.10.0 / versionCode 1).
-- **Phases 70–73 written as grounded triage, not started.** The owner asked to "analyze well + make rows + handoff." Several
-  need owner decisions (see Next) and 3 of 4 need a native rebuild — building blind would be wasted work.
+- **Grace-window `[m]` fix only — no OPS/`JWT_EXPIRE`, no silent-restore.** Owner confirmed (AskUserQuestion)
+  the "logged out" screen is the **dark fingerprint overlay**, i.e. the session is alive. So the real-401
+  path (Mechanism 2) is not in play; building silent-restore-on-401 would be speculative dead code.
+- **5-minute grace window** — owner-set, not invented.
+- **Quick-unlock default left ON** (`auth.tsx:130`). The owner values the lock; the complaint was the
+  nagging, which the grace window fixes. Turning the default off would silently disable the lock — a
+  security regression, not what was asked.
+- **Pushed to a new owner-owned remote instead of fighting the 403.** The owner supplied the repo and
+  directed a push after every phase; `aaziko` is a separate remote, `origin` untouched, no force, no
+  history rewrite.
 
 ## Known broken / deliberately skipped
-- **Phase-50 office geofence still must NOT be enabled** until this APK (`b01f4164`) is installed on the field phones — until
-  the fence is configured server-side, the (now-localized) reason prompt is latent and can't be end-to-end device-tested.
-- **Phases 70–73 not built** — triage only. Each carries OPEN QUESTIONS the owner must answer before a sane build (esp. 70's
-  Mech-A-vs-B question, 72's in-app-vs-real-push, 73's which-entities).
-- **`git push` still 403s** — every commit local (`08f3a4f`, `8e9ad46`, plus the docs commit).
-- **Physical/device tests still owner-owed** — bg GPS over a real shift, geofence at a real office, the localized reason
-  prompt actually appearing (needs the fence live).
+- **Phase 70 not yet on any field phone.** It's pure JS (OTA-eligible), but 71/72/73 all need a native
+  rebuild anyway, so — per the owner's standing "build the batch, then cut ONE APK" directive — no APK/OTA
+  was cut this session. Device verification (brief-trip skips the prompt; >5 min re-locks; cold-start after
+  an OEM kill honours grace) is owner-owed once the fix ships.
+- **The two untracked repo-root `.txt` files + local `.claude/settings.json` were NOT committed/pushed** —
+  they aren't phase work, and a local settings file shouldn't land in a shared repo without the owner's say.
+- **Phases 71–73 still need owner decisions** before a sane build (72 = in-app vs real push; 73 = tasks-only
+  vs +reminders, export vs auto-sync). 71's core `[m]` fix is well-defined and buildable now.
 
 ## Next session starts here
-- Phase: **70 — the session "keeps logging me out / re-verify every 2-3 hours" fix.** Owner's #1. But FIRST get the owner to
-  answer the disambiguating question, because it decides the entire fix:
-  **when "logged out", is it (A) a dark fingerprint-only overlay (session alive — the AppLock grace-window `[m]` fix) or
-  (B) the full email/OTP sign-in card (a real 401 — check prod `JWT_EXPIRE`, an OPS/`[api]` matter)?**
+- Phase **71** — guarantee a location point every ≤60 min: add a forced `getCurrentPositionAsync` in
+  `watchdogTick` (`tracker.ts:592-611`) when the newest buffered point is >~55 min old → buffer + `deliver`.
 - First command: `/boot`
-- Watch out for: **most of this batch needs a NATIVE APK rebuild (71 profile pickup, 72 push, 73 expo-calendar) — none are
-  OTA.** And 70's "cookie/logout" is almost certainly the grace-window-less AppLock (`AppLock.tsx:77`) with the session still
-  alive, NOT a token clear — don't chase a token bug before confirming which overlay the owner sees.
+- Watch out for: **`src/lib/tracker.ts` is device-only with ZERO test coverage** (no expo-location /
+  task-manager stub) — lift the "is the buffer stale?" decision into a **pure, tested helper** the way
+  Phase 70 did for the App-Lock, don't bury it in the untestable file. And WorkManager is itself
+  Doze-deferred, so 60 min is a best-effort ceiling, not a hard real-time guarantee — say so honestly.
