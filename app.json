@@ -8,9 +8,12 @@
     "scheme": "cgpe",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/ios-icon.png",
       "bundleIdentifier": "com.cgpe.connect",
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

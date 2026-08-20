@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🍏 2026-08-20 — PHASE 56 editor-side prep BUILT + config-validated (owner chose iOS enablement; gated on an Apple account).**
+The app always *targeted* iOS but was **never built for it** — no `ios` build profile existed and iOS signing needs Apple
+credentials. Did every piece that does NOT need the $99/yr Apple Developer account, `[m]` only, **no contract change**:
+(1) `eas.json` gains an **`ios-simulator` profile** (`distribution:internal`, `ios.simulator:true`) — an iOS **Simulator**
+build needs no Apple account/signing (SDK-57 docs), so the native iOS target is **buildable today** to prove it compiles;
+`preview` stays the Android APK / iOS ad-hoc path and `production` stays the TestFlight/App-Store path, both live once the
+account exists. (2) `app.json` `ios.config.usesNonExemptEncryption:false` (→ `ITSAppUsesNonExemptEncryption`) — the app is
+HTTPS-only (exempt), removing the per-upload export-compliance prompt. (3) `app.json` `ios.icon` was the **default Expo
+template icon** (blue-arrow grid) → NEW `assets/images/ios-icon.png`, a generated **1024² opaque** CGPE brand mark on the
+same `#ffffff` the Android adaptive icon uses (brand source is 827×975+alpha, unusable directly). Validated with
+`npx expo config --type introspect`: resolved iOS config is correct — `UIBackgroundModes:[processing,location,fetch]` +
+`BGTaskSchedulerPermittedIdentifiers` auto-injected by the plugins, all CGPE permission strings present, icon + encryption
+flag land. **Honest iOS 24/7 limit (do NOT promise Android parity):** iOS records the on-duty route while alive/backgrounded
+('Always'), but after a **force-quit** background updates stop and after a **reboot** recording stays off until reopened, and
+the watchdog is opportunistic (`BGTaskScheduler`, not WorkManager's ~15-min cadence); the Simulator can't run Background
+Tasks at all. Gates `tsc` 0 · `npm test` **763** · eslint 0 (no `src/` change — the config gate is `expo config`, which
+passed). **Remaining (owner-gated):** buy the Apple Developer membership → cut a real-device/TestFlight build → verify Face
+ID / map / background route on a physical iPhone. iOS push (APNs) is separate + out of scope. Spec + owner runbook:
+`docs/spec/PHASE-56.md`. Files: `eas.json`, `app.json`, `assets/images/ios-icon.png` (new), `docs/spec/PHASE-56.md` (new).
+
 **✅ 2026-08-20 — PHASE 57 COMPLETE (Lead-create wired into the offline write queue — the last additive create).** With Notes
 and Task-create already queued, `addLead` was the one additive create still holding an offline draft only in the ephemeral
 in-memory `state.leads` buffer (lost on an app kill; the sheet told the user to "pull to refresh and check"). Now a **network
