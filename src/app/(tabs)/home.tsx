@@ -889,7 +889,7 @@ export default function Home() {
           if (reason) {
             // A reason was already supplied but the server still refused it — say so honestly.
             haptics.warn();
-            setNotice({ tone: 'warning', title: 'Reason needed to clock out', message: res.message || 'Please add a short reason to clock out here.' });
+            setNotice({ tone: 'warning', title: t('clock.reasonNeededTitleOut'), message: res.message || t('clock.reasonNeededBodyOut') });
             return;
           }
           haptics.warn();
@@ -944,7 +944,7 @@ export default function Home() {
       if (res.needsReason) {
         if (reason) {
           haptics.warn();
-          setNotice({ tone: 'warning', title: 'Reason needed to clock in', message: res.message || 'Please add a short reason to clock in here.' });
+          setNotice({ tone: 'warning', title: t('clock.reasonNeededTitleIn'), message: res.message || t('clock.reasonNeededBodyIn') });
           return;
         }
         haptics.warn();
@@ -1007,7 +1007,7 @@ export default function Home() {
     } finally {
       if (mounted.current) setClocking(false);
     }
-  }, [clocking, clock.in, clock.onBreak, clockKey]);
+  }, [clocking, clock.in, clock.onBreak, clockKey, t]);
 
   // PHASE 50: the reason prompt re-runs the SAME clock action, this time carrying the typed reason,
   // so the success path (start/stop tracking, clock state, haptics) is reused untouched.
