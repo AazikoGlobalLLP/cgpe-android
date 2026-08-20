@@ -65,7 +65,18 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   `Vitest failed to find the runner` (the project's runner resolves only through the npm script). To scope to
   one file, pass the path to the script: `npm test -- src/data/__tests__/<file>.test.ts`.**
   Config is `vitest.config.mts`; the four `test/stubs/*` files exist only so native modules
-  resolve in Node. `globals: false`, so every file imports `describe`/`it`/`expect`/`vi` from
+  resolve in Node. **⚠️ NATIVE-MODULE-IN-TEST-GRAPH TRAP (Phase 72/73, 2026-08-20): importing a
+  native module WITHOUT a stub — `expo-notifications`, `expo-calendar`, `expo-constants` — from any
+  file the Vitest graph reaches breaks Node with `ReferenceError: __DEV__ is not defined` (via
+  `expo-modules-core`). `store/auth` IS in the graph (`appUi.test`→`appUi`→`auth`), so it must NOT
+  import such a module.** Fix pattern: keep native code in a module ONLY `src/app/_layout.tsx`
+  imports (which no test reaches — e.g. `lib/push.ts`, `lib/calendar.ts`, `lib/tracker.ts`) and
+  split the non-native slice a test-reached file needs into its own file (`lib/pushToken.ts` holds
+  `clearPushRegistration` = storage + a fail-quiet api call, so `auth.tsx` can import IT, not
+  `push.ts`). The PURE decision seam always lives in its own tested file (`pushRouting.ts`,
+  `calendarSync.ts`, `staleBuffer.ts`, `watchdog.ts`). Add a `test/stubs/*` entry + a
+  `vitest.config.mts` alias only if a test genuinely must import through the native module.
+  `globals: false`, so every file imports `describe`/`it`/`expect`/`vi` from
   `vitest` explicitly. Some cases deliberately pin **known bugs** and live in `describe` blocks
   saying so — when a phase fixes one, that test going red is the signal, not a regression.
   Phase 3 flipped `api-renewals.test.ts:187` on purpose; Phase 4 flipped two `adapt.test.ts` cases;

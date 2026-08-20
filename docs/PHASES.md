@@ -1653,25 +1653,24 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-20 — Phases 70 & 71 BUILT + PUSHED; push works via remote `aaziko`. Detail: `docs/PHASES.md` §Now,
+**CURRENT next 3 (2026-08-20 — the WHOLE 70–73 batch is now BUILT + PUSHED on the mobile side. Detail: `docs/PHASES.md` §Now,
 `docs/DECISIONS.md` 2026-08-20):**
 
-Phases **70** (App-Lock 5-min grace window, `cd134ba`) and **71** (≤60-min location heartbeat, `612410f`) are done — owner #1 & #2
-of the 70–73 batch. **`git push aaziko Shivam` now works** (remote `aaziko` → `AazikoGlobalLLP/cgpe-android`; `origin` still 403s,
-untouched) — push after every completed phase; note the remote can be ahead (README via web UI) → fetch + **merge**, never force.
-Both 70 & 71 are pure JS but ride the native batch APK (72/73 force a rebuild) — no phone yet; owner cuts ONE final APK after the batch.
+Phases **70** (`cd134ba`), **71** (`612410f`), **72 mobile** (`64f1afc`), **73** (`aa8469f`) are all built + pushed to
+`aaziko/Shivam`. `git push aaziko Shivam` works; the remote can be ahead (web-UI README) → fetch + **merge**, never force. All four
+ride ONE combined native APK (72/73 force a rebuild) — not yet cut.
 
-1. **Phase 72 — team-targeted notifications (owner #3, now the front of the queue).** Needs an owner decision FIRST: **in-app Tier A**
-   (no rebuild, small `[api]`, does NOT buzz a closed phone) **vs real-push Tier B** (`expo-notifications` + FCM + a backend
-   device-token store + infra — the biggest build of the batch). Also which departments/labels (`Profile.department` vs
-   `TeamStructure`) + which events trigger (only new tasks, or reminders/leads/reassignment) + include/exclude the assignee. Real
-   push exists NOWHERE today (no `expo-notifications`, no `firebase-admin`, no token store). Detail: `docs/PHASES.md` §Now Phase 72.
-2. **Phase 73 — phone-calendar sync.** Needs `expo-calendar` (native rebuild) + an owner decision (which entities; undated =
-   skip-or-all-day; export vs auto-sync). The **one-click bulk export** is the cheapest concrete win — ship it before auto-sync.
-   Pure client, no `[api]` (the app already holds the member's own tasks/reminders). New `common.*` label needs human copy.
+1. **Phase 72 — EXECUTE ON OWNER'S "backend done" SIGNAL.** The mobile receiver is built + pushed and PENDING two owner-owed pieces:
+   the backend (device-token store + `/push/register`+`/unregister` + `broadcastToDepartment` + `sendPush` + the 4 trigger wirings,
+   filed to `cgpe-api` INBOX) and a **Firebase/FCM project** (hard infra prereq). When the owner says both are live: verify the
+   backend against its real code (fetch + `merge-base --is-ancestor` + a no-auth curl 401/404) and that FCM is configured, confirm a
+   test token registers + a test push arrives — THEN this phase completes.
+2. **Cut the ONE combined APK (70+71+72+73)** — only AFTER #1 is verified live, so it ships with working push, not a dormant half
+   (owner's "build the batch, then one APK" rule). `npx eas-cli build -p android --profile preview --non-interactive`; direct `.apk`
+   URL via `build:view <id> --json` → `.artifacts.applicationArchiveUrl`. Then the combined device-test pass.
 3. **Phase 65 `[m]` — full-staff monitor roster** (the one un-built mobile piece from the 63–69 batch; `/live-locations` is now
    live + master-gated). Source the roster from the full staff directory left-joined with live status so a never-assigned member
-   still appears. Its own APK.
+   still appears. Its own APK (or fold into the batch if not yet cut).
 
 **Also standing (lower priority):** Phase 65 is now #3 above;
 Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline);

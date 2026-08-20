@@ -6,6 +6,73 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 73 built (auto-sync assigned tasks/reminders to the phone calendar — Option B)
+
+**Context.** Owner batch #4. Owner chose **Option B (auto-add on assign)** over the simpler one-click export. Pure client
+`[m]` — no `[api]` (the member's own app already holds their own tasks via `getTasks(true)` + `getReminders()`); needs
+`expo-calendar` (not previously installed) → a native APK rebuild.
+
+**Decision.** Installed `expo-calendar@~57.0.2`. The idempotency logic — the one thing that MUST be right, or every refresh
+duplicates events — is a PURE, tested `src/lib/calendarSync.ts` (`buildSyncItems` skips undated + completed items,
+`planSync(desired, map)` computes create/update/delete against a persisted `key → {eventId, fp}` map, `fingerprint` is
+day-granular so time jitter doesn't churn, `allDayRange` is Invalid-Date-safe). The native `src/lib/calendar.ts` finds-or-creates
+a dedicated **"CGPE Connect"** calendar and applies the plan via the SDK-57 **object-oriented** API (`getCalendars`/
+`createCalendar` → an `ExpoCalendar` with `.createEvent`; events via `ExpoCalendarEvent.get(id).update()/.delete()` — the classic
+`*Async` free functions are gone in SDK 57). Defaults, all owner-vetoable: **both** tasks + reminders; **SKIP** undated (never
+coerce a blank date to today — the app's Invalid-Date convention); **all-day** events; **dedicated, removable** calendar;
+**silent** (no in-app UI, so no new i18n key that would need human copy — a future on/off toggle + "synced" indicator is the
+follow-up that does). Permission is requested **lazily** (only when there is something to add, at most once — declining turns
+sync off, never nags). `CalendarGate` in `_layout.tsx` syncs on sign-in + foreground (15-min throttle) and clears this user's
+events on sign-out (shared-handset safety; needs no auth token, so it lives in the gate, not `auth.tsx`).
+
+**Consequence.** A member's dated, open tasks/reminders auto-appear in their phone calendar and stay reconciled. Gates `tsc` 0 ·
+`npm test` 669 (+13) · eslint 0. Commit `aa8469f`, pushed to `aaziko/Shivam`. Native module → rides the batch APK, not OTA.
+Device-unverified (no Vitest stub for `expo-calendar`); the sync decisions are proven pure. Spec: `docs/spec/PHASE-73.md`.
+
+## 2026-08-20 — Phase 72 built (team-targeted PUSH, mobile half); Tier B via Expo Push; native modules kept out of the test graph
+
+**Context.** Owner batch #3. Owner chose (AskUserQuestion) **Tier B real push** that wakes a closed phone, **all four triggers**
+(new dept task / reassign-transfer / new lead / due-overdue reminder), **recipients = everyone in the target department**
+(assignee + creator included). Verified against real backend code first: `models/Task.js` has a free-text `department`;
+`utils/notify.js` has `broadcastToAllActive` but nothing dept-scoped and no real push; no `firebase-admin`/`expo-server-sdk`, no
+device-token store. So real push exists nowhere — a backend build + a Firebase/FCM infra step, both owner-relayed.
+
+**Decision.** Built the mobile RECEIVER only (the backend + Firebase are filed to `contracts/INBOX.md`). Transport = **Expo Push**
+(`getExpoPushTokenAsync` on the app + `expo-server-sdk` on the backend) over raw `firebase-admin` — the boring, standard Expo path
+with the least backend code, still FCM underneath. Added `expo-notifications@~57.0.12` + `POST_NOTIFICATIONS` + config plugin.
+Pure tested `pushRouting.ts` (`routeForPush` maps `data.type` → the Tasks/Leads tab, honours a `data.url` only if it is a
+known-safe route — never navigate on a guess; `shouldReRegister` so a normal reopen doesn't re-POST). Native fail-quiet `push.ts`
+(permission/channel/Expo-token, foreground handler, tap + cold-start routing). `api.registerPushToken/unregisterPushToken` are
+**silent** — a not-yet-deployed 404/501 no-ops, never a health banner. `PushGate` registers on sign-in + routes taps;
+`auth.logout()` unregisters BEFORE the token is cleared (the unregister is itself authenticated).
+
+**KEY TRAP (will recur):** importing `expo-notifications` (or `expo-calendar`) from any module the Vitest graph reaches breaks
+Node with `ReferenceError: __DEV__ is not defined` (via `expo-constants` → `expo-modules-core`). `store/auth` is in the graph
+(`appUi.test` → `appUi` → `auth`), so the sign-out unregister could not import `push.ts`. Fix pattern: **split the non-native
+slice into its own file** — `pushToken.ts` (storage + a fail-quiet api call, no native import) holds `clearPushRegistration`; the
+native code (`push.ts`, `calendar.ts`) is imported ONLY by `_layout.tsx`, which no test reaches. Recorded in project CLAUDE.md.
+
+**Consequence.** The app is a ready push receiver; it delivers nothing until the backend endpoints + a Firebase/FCM project exist
+(both owner-owed, filed). Phase 72 is PENDING backend — execute/verify on the owner's "backend done" signal, then the combined
+APK. Gates `tsc` 0 · `npm test` 656 (+12) · eslint 0. Commit `64f1afc`, pushed to `aaziko/Shivam`. Spec: `docs/spec/PHASE-72.md`.
+
+## 2026-08-20 — Staff role/dept fixes are a panel/DB job, not a mobile change (8 records, owner applied)
+
+**Context.** Owner sent 8 "FIX role/dept" corrections (Harsh→ops, Hemaben/Harish→General Insurance, Riddish→Banking & Collection,
+Ankit→manager/CGPE-Tree-head, Jagdish→ops/LIC, Aashubhai→Driver, Priyanka→TATA AIA). The values mixed tiers, departments, and the
+legacy `_origRole` field.
+
+**Decision.** These are `staff_unified`/`Profile` DB edits made in the admin panel — NOT a `src/` change (role/dept are never
+client literals; the mobile app only reads them at login). Translated the intent to the real model: `Profile.role` is a strict
+6-value tier enum (`ops`/`manager`/`sales` are NOT tiers), `Profile.department` must be one of the 9 canonical `utils/rbac.js
+DEPARTMENTS`, and org-role teams (Banking & Collection, Driver) are additive rows in the `org_roles` catalog
+(`POST /api/org-roles`, super_admin). `_origRole` is a dead legacy migration field — ignored. Resolved the 4 ambiguous ones with
+the owner (General Insurance = Operations side; Banking & Driver = new org-roles under Operations/OTHERS baselines; Ankit = leader
+tier + SALES-CGPE_Tree). Owner applied them directly in the DB.
+
+**Consequence.** No mobile code changed. This is the reference for "role/dept correction = panel/DB, translate to enum + 9
+canonical departments + org-role catalog, never a `src/` literal."
+
 ## 2026-08-20 — Phase 71 built (≤60-min location heartbeat in the watchdog); threshold derived at 45 min, not the handoff's "55"
 
 **Context.** Owner #2 of the 70–73 batch: "location doesn't update / background not running / 20 h straight-line route." Verified
