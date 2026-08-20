@@ -1,18 +1,15 @@
 # Status — CGPE Connect (Android)
-
 **Updated:** 2026-08-20
-**Working on right now:** Making the app safe to use when the phone has no internet.
+**Working on right now:** Nothing in progress — the offline-support work is finished and waiting for a decision on what to do next.
 
 **Done this week:**
-- The app now keeps working when the connection drops. If a screen (tasks, reminders, notifications, leads) can't reach the
-  server, it shows the last information it had, clearly labelled with when it was last updated, instead of a blank screen.
-- Notes and tasks written while offline are no longer silently lost. They are saved on the phone, marked "Pending sync," and
-  sent automatically the moment the connection comes back. The app never pretends something saved when it didn't.
-- The "app doesn't work on my WiFi" complaint was fixed on our side earlier this week (longer wait times and an automatic retry),
-  and a "Test connection" button now tells a phone problem apart from a network problem.
+- The app now keeps your work safe when the phone has no internet. If a team member adds a new **lead** while offline, it is
+  saved on the phone, shown with a "Pending sync" tag, and sent to the server automatically the moment the connection comes
+  back — it can no longer be quietly lost. The same safety already covers notes and tasks, so all three are now protected.
+- When something is saved offline, the person sees an honest message ("saved on this device — it will sync when you're back
+  online") instead of a confusing error, and the app never pretends an offline save reached the server.
 
-**Blocked on:** Team push notifications (waking a closed phone when a task is assigned) are waiting on the backend team and on a
-one-time Google Firebase setup. Nothing we can do until both are in place.
+**Blocked on:** Nothing. The team-notifications feature is still waiting on the backend team and the Firebase setup, exactly as before.
 
-**Next:** Get these offline and network fixes onto the real phones for a hands-on test, and gather the five-language wording for
-the few new on-screen messages.
+**Next:** Decide the next feature — either start iPhone support (needs a paid Apple developer account first) or pick up team
+notifications once the backend and Firebase are confirmed live.

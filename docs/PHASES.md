@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 57 COMPLETE (Lead-create wired into the offline write queue — the last additive create).** With Notes
+and Task-create already queued, `addLead` was the one additive create still holding an offline draft only in the ephemeral
+in-memory `state.leads` buffer (lost on an app kill; the sheet told the user to "pull to refresh and check"). Now a **network
+throw** on a real session enqueues a **PERSISTENT** `'lead'` draft (survives a kill, replays on reconnect) and returns it as
+`reason:'network'` with `pending:true`. `addLead` KEEPS its existing 3-outcome `AddLeadResult` (deliberately NOT rewritten to
+`addTask`'s 4-outcome `status` union — minimal, preserves the pinned `api-leads.test.ts` wire contract, no ripple through the
+richer Add-lead sheet); only the network branch changed. Only a **throw** enqueues — every server *answer* (400 invalid / 403
+forbidden / 404-501 unsupported / 5xx-or-2xx-without-a-lead = server) is NOT queued (replaying a rejected write is wrong). The
+stored payload IS the exact `/leads` request body (schema names) so `replayWrite`'s new `lead` branch replays byte-identically;
+`leadDraftToLead()` reads it back for display. `'lead'` added to `QueueKind`/`KINDS` (pure `writeQueue.ts`). `(tabs)/leads.tsx`:
+pending drafts pinned above the pipeline (never distort the counts/meter, which reflect only confirmed leads), each inert (not
+tappable, no swipe) with a **"Pending sync"** badge (new `PendingLeadRow`); a one-time drop-notice banner; a reconcile-on-flush
+refresh when the queue shrinks. `AddLeadSheet.onAdded` splits the queued (`network`) case — a neutral "saved on this device — it
+will sync when you're back online" toast, NO success haptic — from the in-memory `server` hold ("pull to refresh") and the hard
+refusals. A successfully-queued write does NOT raise the global outage banner on its own (matches the Notes/Tasks queue paths).
+Gates `tsc` 0 · `npm test` **763** (+8: NEW `api-lead-queue` 8; `writeQueue` lead-kind case updated) · eslint 0 new. New English
+strings owe 5-lang copy; **device-unverified** (AsyncStorage stub is a no-op), JS-only → OTA-eligible. Spec: `docs/spec/PHASE-57.md`
+(Build log). Commit `00aee55`, pushed `aaziko/Shivam`. **Phase 57 offline support fully complete — every additive create (Notes,
+Tasks, Leads) is queued.**
+
 **✅ 2026-08-20 — PHASE 57b FINISHED (Task-create wired into the offline write queue).** The documented remaining 57b
 piece is done: a task created while offline is no longer lost or falsely reported as saved. `addTask` was rewritten from
 the always-looks-saved `Task & {forbidden?}` to a FOUR-outcome `AddTaskResult` — **saved** (server accepted, real id) /
@@ -27,7 +47,7 @@ honest "not created" notice). Tasks tab: pending drafts pinned above the server-
 the hero/counts), each inert (no swipe/complete/tap) with a **"Pending sync"** badge; a one-time drop-notice banner; a
 reconcile-on-flush effect refetches when the queue shrinks so the synced task lands as a confirmed row. Drop notice
 reworded kind-agnostic. Gates `tsc` 0 · `npm test` **755** (+8: `api-task-queue` 7, writeQueue task-kind 1) · eslint 0
-new. **Deliberate scope: creates only** (Leads-create is the only remaining additive create still unqueued — optional).
+new. **Deliberate scope: creates only** (Leads-create was the only remaining additive create — now wired, see the top entry; Phase 57 complete).
 New English strings still owe 5-lang copy; **device-unverified** (AsyncStorage stub is a no-op), JS-only → OTA-eligible.
 Spec: `docs/spec/PHASE-57.md` (Build log). Commit `eb81a04`, pushed `aaziko/Shivam`. **Phase 57 offline support fully built.**
 
@@ -1767,9 +1787,9 @@ All five ride ONE combined native APK (72/73 force a rebuild) — not yet cut. *
 
 **Also standing (lower priority):**
 Phases 54/56 from the 2026-08-18 batch (lead-open `[api]`; iOS gated on an Apple account). **Phase 55 (network resilience) BUILT +
-PUSHED `941c583`** (device pass + 5-lang copy remain). **✅ Phase 57 (offline support) FULLY BUILT + PUSHED — 57a read cache
-`20eb4ed`, 57b write queue Notes `e318e06` + Task-create `eb81a04`; REMAINING = 5-lang copy for the new English strings + a device
-pass. Only Leads-create stays unqueued (optional, same mechanism).** Phase 41 on-device verification (owner: do last). Owner
+PUSHED `941c583`** (device pass + 5-lang copy remain). **✅ Phase 57 (offline support) FULLY COMPLETE + PUSHED — 57a read cache
+`20eb4ed`, 57b write queue Notes `e318e06` + Task-create `eb81a04` + Lead-create `00aee55`; EVERY additive create (Notes/Tasks/
+Leads) is now queued. REMAINING = 5-lang copy for the new English strings + a device pass.** Phase 41 on-device verification (owner: do last). Owner
 physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live, biometric, break-gate) on ≥2 phone brands.
 
 **⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any

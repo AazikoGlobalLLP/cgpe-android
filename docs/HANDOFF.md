@@ -1,55 +1,56 @@
-# HANDOFF — CGPE Connect (Android) — Phase 57b finished (Task-create in the offline write queue) — 2026-08-20
+# HANDOFF — CGPE Connect (Android) — Phase 57 finished (Lead-create in the offline write queue) — 2026-08-20
 
-Phase 57 offline support is now **fully built**: 57a read cache, 57b write queue for **Notes**, and — this session — the
-documented remaining 57b piece, **Task-create**. `[m]`-only, **no contract change** (the backend never learns the app was
-offline). JS-only and **OTA-eligible** (AsyncStorage was already a dependency), so it does NOT need the pending native APK.
-Committed `eb81a04`, pushed `aaziko/Shivam`.
+Phase 57 offline support is now **fully complete**: 57a read cache, and 57b write queue for **all three** additive creates the
+app has — **Notes**, **Task-create**, and — this session — **Lead-create**. `[m]`-only, **no contract change** (the backend never
+learns the app was offline). JS-only and **OTA-eligible** (AsyncStorage was already a dependency), so it does NOT need the pending
+native APK. Committed `00aee55`, pushed `aaziko/Shivam`.
 
 ## Done
-- **A task created while offline is no longer lost or falsely reported as saved.** `addTask` now has four honest outcomes —
-  **saved** (server accepted, real id) / **queued** (network was down → additive draft held to sync, temp id, "Pending sync"
-  badge, NO success buzz, "saved on this device" toast) / **forbidden** (403) / **failed** (any other server refusal → NOT
-  queued). The queued draft survives an app kill, renders pinned at the top of the Tasks tab, is inert (no swipe / complete /
-  tap) until it flushes, and auto-syncs on the next successful request (sign-in / foreground / recovery) — swapping its temp
-  id for the real server task via a reconcile-on-flush refetch. A server-refused draft drops with a one-time notice.
-- Gates green: `tsc` 0 · `npm test` **755** (+8: `api-task-queue` 7, writeQueue task-kind 1) · eslint 0 new errors.
+- **A lead created while offline is no longer lost or held only in memory.** A dropped connection now queues the lead to the
+  **persistent** write queue (survives an app kill) instead of the ephemeral `state.leads` buffer. The queued lead renders pinned
+  at the top of the Leads tab with a **"Pending sync"** badge, is inert (not tappable, no swipe) until it flushes, and auto-syncs
+  on the next successful request (sign-in / foreground / recovery) — the reconcile-on-flush refresh swaps the temp draft for the
+  real server lead. `addLead` keeps its three honest outcomes; only a genuine **network throw** enqueues — every server *answer*
+  (400 invalid / 403 forbidden / 404-501 unsupported / 5xx-or-2xx-without-a-lead) is NOT queued (replaying a rejected write is wrong).
+- The Add-lead sheet's copy now splits the three cases: **queued** → a neutral "saved on this device — it will sync when you're
+  back online" toast (no success haptic); **server-held** → "pull to refresh and check"; **hard refusal** → "nothing was saved".
+- Gates green: `tsc` 0 · `npm test` **763** (+8: NEW `api-lead-queue` 8; `writeQueue` lead-kind case updated) · eslint 0 new.
 
 ## Files changed
-- `src/lib/writeQueue.ts` — `'task'` added to `QueueKind` + the `KINDS` runtime guard (pure seam).
-- `src/data/api.ts` — `addTask` rewritten to the 4-outcome `AddTaskResult`; shared `taskCreateBody()` builds the `/team/tasks`
-  POST for BOTH first attempt and offline replay (can't drift); `taskDraftToTask()` = draft→display Task; `replayWrite` gained
-  a `task` branch; drop-notice reworded kind-agnostic ("offline change(s)").
-- `src/data/tasks.ts` — `Task` gains an optional `pending` flag (offline-queued, inert, badged).
-- `src/app/task-new.tsx` — the caller now branches all four outcomes (success haptic only on `saved`; `queued` → neutral toast
-  + navigate to the Tasks tab; `failed` → honest "not created" notice).
-- `src/app/(tabs)/tasks.tsx` — pending task drafts pinned above the server-confirmed filtered list; "Pending sync" badge on
-  the card; one-time drop-notice banner; reconcile-on-flush effect (refetch when the queue shrinks).
-- `src/data/__tests__/api-task-queue.test.ts` — NEW, the 4-outcome contract pinned (mirrors `api-notes-queue.test.ts`).
-- `src/lib/__tests__/writeQueue.test.ts` — a case that both `note` and `task` kinds parse, others still rejected.
+- `src/lib/writeQueue.ts` — `'lead'` added to `QueueKind` + the `KINDS` runtime guard (pure seam).
+- `src/data/types.ts` — `Lead` gains an optional `pending` flag (offline-queued, inert, badged).
+- `src/data/api.ts` — `addLead` network path rewired: a throw on a real session enqueues a persistent `'lead'` draft (stored as the
+  exact `/leads` request body) and returns it as `reason:'network'` with `pending:true`; a successfully-queued write no longer raises
+  the outage banner on its own. New `leadDraftToLead()` (body→display Task-equivalent); `replayWrite` gained a `lead` branch.
+- `src/app/(tabs)/leads.tsx` — pending lead drafts pinned above the pipeline (never distort the counts/meter); "Pending sync" badge
+  on each (new `PendingLeadRow`); one-time drop-notice banner; reconcile-on-flush effect; `onAdded` copy split three ways.
+- `src/data/__tests__/api-lead-queue.test.ts` — NEW, the classify-and-queue contract pinned (mirrors `api-task-queue.test.ts`).
+- `src/lib/__tests__/writeQueue.test.ts` — lead is now a valid kind; the two "unknown kind → dropped" fixtures switched to `reminder`.
 - `docs/spec/PHASE-57.md` / `docs/PHASES.md` — Build log + board updated.
 
 ## Decisions made
-- **Pending tasks are pinned as a separate section, NOT merged into the filtered list** — so a not-yet-on-server draft can't
-  distort the hero "today" progress or the overdue/upcoming counts, which must reflect only confirmed tasks.
-- **`taskCreateBody()` is resolved ONCE at enqueue time and shared by first-attempt + replay** — a replay hours later must send
-  a byte-identical body (e.g. can't re-derive a different assignee from a since-changed `currentUserName`).
-- **A 403 is its own `forbidden` outcome, kept apart from `failed`** — "you may not create tasks" is an explainable role
-  condition (an inline role notice), not a transient error, and like every 4xx it is never queued.
-- **A 200 without a server id is treated as a refusal (drop), not a success** — mirrors the Notes replay's `success:false` guard.
+- **`addLead` was NOT rewritten to the 4-outcome `status` union that `addTask`/`addNote` use** — it keeps its existing 3-outcome
+  `AddLeadResult` (`ok`/`reason`). Rewiring only the `network` branch to enqueue is minimal, preserves the pinned wire contract in
+  `api-leads.test.ts`, and avoids a ripple through the richer Add-lead sheet. The queue is still fully kind-generic.
+- **The stored payload is the exact `/leads` request body (schema field names), resolved once at enqueue time** — a replay hours
+  later is byte-identical (can't re-derive a since-changed field), and `replayWrite('lead')` POSTs it directly like the Notes branch.
+- **Only a genuine throw enqueues; a `server` (5xx / 2xx-without-a-lead) answer stays in the ephemeral in-memory buffer, NOT the
+  persistent queue** — a server that answered and refused should not be retried automatically (spec row 9).
+- **A successfully-queued lead does NOT raise the global outage banner on its own** — matches the Notes/Tasks queue paths; the
+  "saved on this device" toast is the per-write signal, and a concurrent failed read still raises the banner honestly.
 
 ## Known broken / deliberately skipped
-- **Leads-create is the only additive create still unqueued** — optional, not in the owner's acceptance criteria; the mechanism
-  is kind-generic if it's ever wanted (add `'lead'` to `QueueKind`, an enqueue + a `replayWrite` branch).
-- **Device-unverified** — the Vitest AsyncStorage stub is a no-op, so the round-trip only proves out on a handset. OTA-eligible.
-- **New English strings owe 5-language human copy** — "Pending sync", the queued toast, "not created", the drop notice.
-  Machine translation forbidden; not yet i18n keys.
+- **Every additive create is now queued (Notes, Tasks, Leads).** There is no remaining un-queued create; edits/deletes/status
+  changes/reorders are deliberately out of scope (additive-only, no conflict hazard — spec rows 8/59-61).
+- **Device-unverified** — the Vitest AsyncStorage stub is a no-op, so the offline round-trip only proves out on a handset. OTA-eligible.
+- **New English strings owe 5-language human copy** — "Pending sync", the queued toast, the drop notice. Machine translation forbidden.
 - **Phase 72 (team push) STILL blocked** (unchanged) — backend push code uncommitted in `../cgpe-backend-main`, absent from
   `origin/main`, prod `/push/register` → 404, FCM unset. Do NOT cut the APK or mark it done.
 
 ## Next session starts here
-- **Phase 57 is done.** Pick from: wire **Leads-create** into the queue (small, same mechanism) — OR **Phase 56 (iOS)**, which
-  needs an Apple Developer account decision from the owner — OR pick up **Phase 72** only if the backend + Firebase are
-  *verifiably* live (fetch `origin/main` + no-auth curl `/push/register` returns 401 not 404).
+- **Phase 57 is done.** Pick from: **Phase 56 (iOS)** — needs an Apple Developer account ($99/yr) decision from the owner — OR pick
+  up **Phase 72** only if the backend + Firebase are *verifiably* live (fetch `origin/main` + no-auth curl `/push/register` returns
+  401 not 404). No mobile-buildable phase is un-owned right now; ask the owner which of the pending owner batches to take.
 - First command: `/boot`
 - Watch out for: **the backend repo is `CGPE-CURRENT-PROJECT/cgpe-backend-main`, NOT `Shivam-Aaziko-Dev-MERN/cgpe-backend-main`** —
   a `cd 2>/dev/null` to the wrong path silently runs git in the ANDROID repo and gives false "backend" answers. Use

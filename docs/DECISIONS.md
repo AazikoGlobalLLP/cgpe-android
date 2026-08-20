@@ -6,6 +6,35 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 57 finished: Lead-create wired into the offline write queue
+
+**Context.** With Notes and Task-create queued, Lead-create (`addLead`) was the last additive create still un-queued. On a
+network throw `addLead` held the typed lead only in the ephemeral in-memory `state.leads` buffer — an app kill lost it, and
+the Add-lead sheet told the user to "pull to refresh and check," implying manual re-entry.
+
+**Decision.**
+- **`addLead` was NOT rewritten to the 4-outcome `status` union** that `addTask`/`addNote` use. It keeps its existing
+  3-outcome `AddLeadResult` (`ok:true` / `reason:'invalid'` / a held `reason`). Only the **network-throw** branch was rewired
+  to enqueue a **persistent** `'lead'` draft (returned as `reason:'network'`, `lead.pending:true`) instead of the in-memory
+  buffer. Rationale: minimal, preserves the pinned wire contract in `api-leads.test.ts`, avoids a ripple through the richer
+  Add-lead sheet. The queue is still fully kind-generic (`'lead'` added to `QueueKind`/`KINDS`).
+- **Only a genuine throw enqueues.** A `server` answer (5xx / 2xx-without-a-lead) stays in the ephemeral buffer (NOT queued —
+  the server answered and refused, so an automatic retry is wrong); 400/403/404/501 are never held at all (spec row 9).
+- **The stored payload IS the exact `/leads` request body** (schema field names), resolved once at enqueue time, so
+  `replayWrite('lead')` POSTs it byte-identically (like the Notes branch); `leadDraftToLead()` reads it back for display.
+- **A successfully-queued lead does NOT raise the global outage banner on its own** — unlike the pre-57 `addLead`, which
+  reported `/leads` on every network throw. This matches the Notes/Tasks queue paths: the "saved on this device" toast is the
+  per-write signal, and a concurrent failed read still raises the banner honestly. The unqueueable no-user throw still reports.
+- **Pending lead drafts are pinned above the pipeline as bordered "Pending sync" cards, inert** (not tappable, no swipe) until
+  they flush, and are excluded from the pipeline counts/meter (which must reflect only server-confirmed leads).
+
+**Consequence.** Phase 57 offline support is complete — every additive create the app has (Notes, Tasks, Leads) survives an
+app kill and auto-syncs on reconnect. Gates `tsc` 0 · `npm test` 763 (+8) · eslint 0 new. `[m]`-only, no contract change,
+JS-only (OTA-eligible), device-unverified. New English strings ("Pending sync", the queued toast, the drop notice) owe
+5-language human copy. Commit `00aee55`, pushed `aaziko/Shivam`.
+
+---
+
 ## 2026-08-20 — Phase 57b finished: Task-create wired into the offline write queue
 
 **Context.** 57b shipped the write queue for Notes only; Task-create (`addTask`) was the documented remaining piece.
