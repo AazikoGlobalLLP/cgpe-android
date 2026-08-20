@@ -6,6 +6,43 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — H1 clock-reason Sheet fully localized (owner copy) + fresh APK `b01f4164`; the "reason sheet localized" precondition is now met
+
+**Context.** The 2026-08-19 decision (below) left the Phase-50 geofence blocked on two preconditions: the `6b76608b` APK installed
+AND the reason Sheet localized. The reason Sheet shipped English-only. The owner supplied 5-language human copy in-chat for all 12
+strings (4 core: `clock.reasonTitleOut/In`, `clock.reasonEarly`, `clock.reasonAway`; 4 edge-case: `clock.reasonNeededTitleOut/
+BodyOut/TitleIn/BodyIn`).
+
+**Decision.** Wired 8 new `clock.*` keys across all 5 dictionaries (commits `08f3a4f` + `8e9ad46`, i18n parity 103 → 111), pointed
+the `home.tsx` Sheet + both `setNotice` edge branches at `t()`, and reused `common.cancel`/`home.clockIn`/`home.clockOut` for the
+buttons. Machine translation stays forbidden — this is owner copy. The server's own `message` still wins over the fallback keys.
+Cut a fresh EAS APK `b01f4164` (v1.10.0, gitCommit `8e9ad46`) on owner request; it supersedes `6b76608b`.
+
+**Consequence.** The "reason sheet localized" half of the geofence precondition is DONE; the remaining half is installing
+`b01f4164` on the field phones. Still do NOT enable the fence until it's installed. Reminder for identifying builds: every preview
+APK is v1.10.0 / versionCode 1 — distinguish by build-ID / gitCommit / APK SHA-256, never the version string.
+
+## 2026-08-20 — Owner batch of 4 reported issues triaged into grounded Phases 70–73 (not built), key root causes
+
+**Context.** Owner reported 4 items: (1) app keeps logging out / re-verifies every 2-3 hours; (2) wants a guaranteed location
+point every ≤60 min + suspects bg location isn't running; (3) team-targeted notifications (new Sales task → notify Sales team);
+(4) merge assigned tasks/reminders into the member's phone calendar + a one-click export. Each was investigated against the real
+mobile + backend code (4 parallel agents, file:line cited) before writing any row.
+
+**Decision.** Wrote them as Phases 70–73 in `PHASES.md`, not started (each needs owner decisions; 3 of 4 need a native rebuild).
+Grounded root causes: **(70)** TWO mechanisms — the frequent re-verify is the biometric App-Lock with **no grace window**
+(`AppLock.tsx:69-81`, `:77`), session INTACT (a `[m]` fix); the genuine 2-3h logout needs a real 401, and the code's token TTL
+default is **24h** (`../cgpe-backend-main/routes/auth.js:64-66`) so a 2-3h cadence points at **prod `.env` `JWT_EXPIRE` set
+short** (OPS) — the app uses a Bearer JWT, **not a cookie**. **(71)** There is **no code-driven time guarantee** today — all
+points are OS-delivery best-effort and the watchdog captures none (`tracker.ts:592-611`); the fix is a forced
+`getCurrentPositionAsync` heartbeat in `watchdogTick` (`[m]`, but WorkManager is Doze-deferred so the ceiling is ~15 min typical).
+**(72)** Real push exists **nowhere** (no FCM/expo-notifications, no device-token store) — splits into Tier A (in-app, cheap) vs
+Tier B (real push, native rebuild + Firebase + backend). **(73)** `expo-calendar` not installed (native rebuild); pure client,
+no `[api]`; bulk export is simple, auto-sync needs an `id→eventId` idempotency map.
+
+**Consequence.** Next session starts on Phase 70 but MUST first get the owner to answer the Mech-A-vs-B question (dark
+fingerprint overlay vs full sign-in card) — it decides the whole fix. Do not chase a token bug before confirming the overlay.
+
 ## 2026-08-19 — Phase-50 office geofence must NOT go live until H1 (clock-reason UI) is installed + localized
 
 **Context.** A code audit + a direct re-read found that `home.tsx` had **no `needsReason` branch**: the Phase-50 data layer maps

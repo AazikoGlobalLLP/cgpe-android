@@ -1,13 +1,12 @@
 # Status — CGPE Connect (Android)
-**Updated:** 2026-08-19
-**Working on right now:** Testing the app on a real phone and fixing the problems that test found.
+**Updated:** 2026-08-20
+**Working on right now:** Getting the "reason for clocking in/out away from the office" message to show in all five languages, and sending the team a new app build with that fix.
 
 **Done this week:**
-- Built a new version of the app, installed it on the phone, and checked it screen by screen on a real handset.
-- The owner-monitoring side all works: seeing who is on duty (it correctly shows staff as on-duty, not zero), where staff are on the map, a member's last-known location, and their pay breakdown and performance score.
-- Found and fixed a serious problem before it could bite: a staff member finishing work away from the office would have been unable to clock out (the app wrongly said "no connection"). Now they can clock out by typing a short reason, and their manager is notified.
-- Fixed three smaller issues: a false "could not load" warning on the Claims screen for some staff; matured insurance policies wrongly showing a payment as still due; and an old location showing as if a person were working right now.
+- The message that asks a field agent why they clocked in or out away from the office now appears in Gujarati, Hindi, and the two Roman styles — not just English. The owner gave us the exact wording for each language.
+- Built and sent a fresh installable app (download link shared) that includes this change.
+- Looked closely at the four new problems the owner reported — the repeated log-outs, background location not always recording, wanting team-specific alerts, and adding tasks to the phone's calendar — and wrote up a clear plan for each, checked against the actual app and server code, ready to build next.
 
-**Blocked on:** Before the "must be at the office" rule can be switched on, we need the owner to supply the "reason for clocking out" wording in all five languages (the same way the location-consent wording was supplied).
+**Blocked on:** For three of the four new items we need the owner to make a couple of choices first (for example: should the new alerts buzz a closed phone or just show inside the app), and three of them will need a brand-new app build to reach the phones.
 
-**Next:** The owner installs the new app and tests the phone-only features that can't be checked from a computer — background location over a full day, and fingerprint unlock.
+**Next:** Start on the "app keeps logging me out every few hours" fix — but first confirm with the owner exactly what they see on screen when it happens, because that decides which fix is the right one.

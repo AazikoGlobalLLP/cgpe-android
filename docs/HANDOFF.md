@@ -1,55 +1,57 @@
-# HANDOFF — CGPE Connect (Android) — Final APK cut + on-device tested + H1/M1/M2/M3 fixed — 2026-08-19 (#4)
+# HANDOFF — CGPE Connect (Android) — H1 reason-Sheet localized + fresh APK + owner batch 70–73 triaged — 2026-08-20
 
-The 2026-08-19 batch (Phases 63/64/66/67) shipped in a combined APK **and was verified on real hardware** this session — the
-app was driven over USB/ADB on the owner's Samsung A54 as the Master (super_admin) account. The new batch is **green on-device
-and in a code audit**. A parallel code audit surfaced a real **HIGH latent bug** in the adjacent Phase-50 clock flow plus three
-mediums; **all four are now fixed** and folded into a fresh APK.
+Two things this session: (1) the Phase-50 out-of-range / early clock-reason prompt is now **fully localized in all 5
+languages** and shipped in a **fresh EAS APK `b01f4164`**; (2) the owner reported **4 new items**, each **investigated
+against the real mobile + backend code** (4 parallel agents, file:line cited) and written up as **Phases 70–73** — none
+built yet.
 
 ## Done
-- **Combined APK cut + delivered:** EAS `6b76608b`, v1.10.0, commit `da9e5a9`, direct `.apk`
-  `https://expo.dev/artifacts/eas/K5bRx6VlgAUC2xxViT-NJHnnbuSMvNHqCGgrAeVN1WA.apk` — **supersedes `8f3238fa`**. Contains
-  63/64/66/67 + the H1/M1/M2/M3 fixes below.
-- **On-device verified (Master account, real A54):** Monitor on-duty **1/3 (not 0)**; agent-map "Live field status: 1" with no
-  false banner; **Live location** honest last-known (10m ago, On duty, ±100m, real coords, "not a live ping"); **payroll-detail**
-  full breakdown (the "0 days → ₹574" = 2.5h × ₹226 hourly); **Esri satellite + points** toggles; **team performance** 75/100
-  (math checks out); greeting emoji; Viewing-as; Clients/360/Tasks/Claims/Notifications/Commissions; **outage banner honesty +
-  clears on recovery**; i18n switch works (coverage gaps noted).
-- **H1 FIXED** (`dfa10f2`): clock-in/out now handle the server's `REASON_REQUIRED` (out-of-range / early) → a mandatory reason
-  Sheet → re-send with the reason. No more false "server could not be reached"; the agent can actually clock out.
-- **M1/M2/M3 FIXED** (`95b0da2`): claims 403 classified (no false outage); matured policy no longer flagged premium-due/renewal
-  (premium.tsx + clients.tsx, guarded at source); agent-map stale prior-day point no longer shown as live "on duty".
-- Gates green throughout: `tsc` 0 · `npm test` **625** · eslint 0 new.
+- **H1 clock-reason Sheet fully localized (5 languages).** The out-of-range / early clock-in-out reason prompt in
+  `home.tsx` (Sheet titles + field prompts + the 2 edge-case "reason needed" notices) now renders in
+  English / ગુજરાતી / हिन्दी / Hinglish / Roman-Gujarati instead of English-only. Owner supplied the human copy in-chat.
+- **Fresh APK cut + delivered:** EAS `b01f4164`, v1.10.0, gitCommit `8e9ad46`, direct `.apk`
+  `https://expo.dev/artifacts/eas/4ZaCvftKnI8K2MD--kCCtkii2HRmTYzKYxILWbtqNT8.apk` — **supersedes `6b76608b`**. Contains the
+  localized reason Sheet + the whole 63/64/66/67 batch. Build-page (Install button on the phone):
+  `https://expo.dev/accounts/shivam-bhadoriya/projects/ANDROID/builds/b01f4164-10db-4154-bd66-5a4bcd621068`.
+- **Owner's 4 new items triaged into grounded Phases 70–73** (session-logout / location-60min / team-notifications /
+  phone-calendar-sync) — verified against real code, classified `[m]`/`[api]`/OPS/native-rebuild, each with open questions.
+- Gates green: `tsc` 0 · `npm test` **625** · eslint 0 new (1 pre-existing `i18n/index.tsx` warning).
 
 ## Files changed
-- `src/app/(tabs)/home.tsx` — H1: `toggleClock(reasonText?)` + `needsReason` branch on both clock paths + a reason `Sheet`
-  (mirrors the Phase-52 break sheet) that re-sends the action; reason coerced to a string so the onPress event isn't misread.
-- `src/data/api.ts` — M1: `getClaims` captures `status` + `reportIfOutage(status,'/claims')`. M3: `toPin(row,p,live=true)`;
-  the `getAgentLocations` fallback passes `live=false` so prior-day points aren't "on duty".
-- `src/data/adapt.ts` — M2: `isPremiumDueThisMonth` and the `renewal_due` segment now guard on `status !== 'matured'`.
-- `docs/DEVICE-TESTING-GUIDE-v1.10.0.md` — NEW: full step-by-step device checklist (24 sections, edge cases, physical-only marks).
-- `docs/DEVICE-TEST-FINDINGS-2026-08-19.md` — NEW: device + code-audit findings, APK links, fix status.
-- `docs/PHASES.md`, `docs/DECISIONS.md` — status.
+- `src/i18n/index.tsx` — +8 keys × 5 langs: `clock.reasonTitleOut/In`, `clock.reasonEarly`, `clock.reasonAway` (commit
+  `08f3a4f`) and `clock.reasonNeededTitleOut/BodyOut/TitleIn/BodyIn` (commit `8e9ad46`). Owner copy, not machine-translated.
+- `src/app/(tabs)/home.tsx` — the clock-reason `Sheet` (title/field label/buttons) and the two `setNotice` edge branches now
+  use `t()`; added `t` to `toggleClock`'s dep array. Buttons reuse existing `common.cancel`/`home.clockIn`/`home.clockOut`.
+- `src/i18n/__tests__/dictionaries.test.ts` — parity count 103 → 111 (two bumps, documented).
+- `docs/PHASES.md` — new 2026-08-20 status block + Phases 70–73 rows; `## Now` / `## Next 3` updated.
+- `docs/DECISIONS.md` — appended 2026-08-20 decisions.
 
 ## Decisions made
-- **Device testing IS possible over USB/ADB from here** (proven) — but it's black-box: no creds (owner logs in), and
-  bg-GPS/geofence/biometric/real-writes can't be driven. See DECISIONS 2026-08-19 for the reusable how-to.
-- **H1 fixed with a reason Sheet, English copy** — the whole home.tsx clock-notice surface is already hardcoded English, so this
-  is consistent (not machine translation). Localise when the 5-language reason copy lands.
-- **Phase-50 office geofence must NOT be enabled until H1 ships in an installed APK (done: `6b76608b`) AND the sheet is localized.**
-  Until the fence is configured server-side, H1 is latent and can't be end-to-end device-tested.
+- **Localized H1 with owner-supplied copy, not a guess.** Machine translation is forbidden here; the owner pasted all 12
+  strings in 5 languages, so the whole Phase-50 clock-reason surface is now honest in every language.
+- **Left the two edge-case notices' English fallback in place until copy landed** (owner then supplied it, so both are now
+  localized). The server's own `message` still wins over the fallback keys.
+- **Cut a fresh APK immediately on owner request** — EAS archives the local working tree, so `b01f4164` carries local commits
+  `08f3a4f`+`8e9ad46` even though `git push` 403s. Identify a build by **commit / build-ID**, never the version string (every
+  preview build is v1.10.0 / versionCode 1).
+- **Phases 70–73 written as grounded triage, not started.** The owner asked to "analyze well + make rows + handoff." Several
+  need owner decisions (see Next) and 3 of 4 need a native rebuild — building blind would be wasted work.
 
 ## Known broken / deliberately skipped
-- **Reason sheet is English-only** — needs the owner's 5-language reason copy (like consent/break) to localise. Not blocking install.
-- **H1 not end-to-end device-verified** — the `needsReason` path only fires once the office geofence is configured on the server.
-- **LOW/cosmetic items NOT fixed** — i18n coverage gaps (Settings/Claims/Search English; Home "tasks done today" / "Nothing is
-  overdue…"), `inrShort` trailing zero, `toDate('0')`, `-₹0`, `mapClaimStatus` partial_paid (pinned), "Advisor" subtitle for the
-  Master, in-app Version reads 1.8.0, FAB overlaps. Full list in `docs/DEVICE-TEST-FINDINGS-2026-08-19.md`.
-- **Phase 65 (`[m]` full-staff roster) NOT built** — still the one open mobile piece; would need its own APK.
-- **Physical tests owner-owed** — §5 bg GPS (clock out+in on THIS APK first), §3 geofence, biometric, break 8h30m gate, WhatsApp send.
-- **`git push` still 403s** — every commit local (`dfa10f2`, `95b0da2`, `da9e5a9`, `27beb1c`).
+- **Phase-50 office geofence still must NOT be enabled** until this APK (`b01f4164`) is installed on the field phones — until
+  the fence is configured server-side, the (now-localized) reason prompt is latent and can't be end-to-end device-tested.
+- **Phases 70–73 not built** — triage only. Each carries OPEN QUESTIONS the owner must answer before a sane build (esp. 70's
+  Mech-A-vs-B question, 72's in-app-vs-real-push, 73's which-entities).
+- **`git push` still 403s** — every commit local (`08f3a4f`, `8e9ad46`, plus the docs commit).
+- **Physical/device tests still owner-owed** — bg GPS over a real shift, geofence at a real office, the localized reason
+  prompt actually appearing (needs the fence live).
 
 ## Next session starts here
-- Phase: **localise the H1 reason sheet** (needs the owner's 5-language copy) — or clear the LOW/cosmetic list, or build **Phase 65**.
+- Phase: **70 — the session "keeps logging me out / re-verify every 2-3 hours" fix.** Owner's #1. But FIRST get the owner to
+  answer the disambiguating question, because it decides the entire fix:
+  **when "logged out", is it (A) a dark fingerprint-only overlay (session alive — the AppLock grace-window `[m]` fix) or
+  (B) the full email/OTP sign-in card (a real 401 — check prod `JWT_EXPIRE`, an OPS/`[api]` matter)?**
 - First command: `/boot`
-- Watch out for: **do NOT let the owner enable the Phase-50 office geofence until the `6b76608b` APK is installed AND the reason
-  sheet is localized** — otherwise an out-of-range/early clock-out is fixed but still English-only for Gujarati/Hindi agents.
+- Watch out for: **most of this batch needs a NATIVE APK rebuild (71 profile pickup, 72 push, 73 expo-calendar) — none are
+  OTA.** And 70's "cookie/logout" is almost certainly the grace-window-less AppLock (`AppLock.tsx:77`) with the session still
+  alive, NOT a token clear — don't chase a token bug before confirming which overlay the owner sees.

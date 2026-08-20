@@ -14,7 +14,79 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**✅✅ FINAL COMBINED APK CUT + ON-DEVICE VERIFIED + H1/M1/M2/M3 FIXED (2026-08-19 handoff #4).** The 63/64/66/67 batch shipped in
+**⚡ 2026-08-20 — H1 clock-reason Sheet FULLY LOCALIZED (all 5 languages) + fresh APK cut.** Owner supplied 5-language human copy
+for the Phase-50 out-of-range / early clock-reason prompt (both the Sheet titles/prompts AND the 2 edge-case "reason needed"
+notices). Wired 8 new `clock.reason*` / `clock.reasonNeeded*` keys across all 5 dictionaries (commits `08f3a4f` + `8e9ad46`; i18n
+parity 103 → 111; NOT machine-translated). Buttons reuse `common.cancel` / `home.clockIn` / `home.clockOut`; the server's own
+`message` still wins, the keys are the fallback. **Fresh EAS APK `b01f4164`** (v1.10.0, gitCommit `8e9ad46`, direct `.apk`
+`https://expo.dev/artifacts/eas/4ZaCvftKnI8K2MD--kCCtkii2HRmTYzKYxILWbtqNT8.apk`) — **supersedes `6b76608b`**, bundles the
+localized reason Sheet + everything since 63/64/66/67. Gates green (`tsc` 0 · `npm test` **625** · eslint 0). This satisfies the
+"reason sheet localized" half of the Phase-50-geofence precondition (the other half = install this APK). Push still 403s (local).
+
+**🚨 NEW OWNER ISSUE BATCH 2026-08-20 → Phases 70–73, all VERIFIED against real mobile + backend code (4 parallel investigators,
+file:line cited). NONE built — triaged this session, next session executes.** Owner priority order as reported: session-logout
+(70) → location 60-min (71) → team notifications (72) → phone-calendar sync (73).
+
+- **Phase 70 — [m] (+[api]/OPS) "App keeps logging me out / re-verifies every 2-3 hours."** TWO independent mechanisms,
+  conflated in the report — separating them IS the fix. **(1) The frequent re-verify on every reopen = the biometric App-Lock,
+  session INTACT underneath.** `src/ui/AppLock.tsx:69-81` (esp. `:77`) has **NO grace window** — ANY background→foreground
+  transition re-locks and fires the prompt; the token is never touched. Quick-unlock defaults ON without opt-in
+  (`store/auth.tsx:130`). **Fix = [m]** add an elapsed-time grace window (stamp `Date.now()` on background, only re-lock if elapsed
+  > ~5 min; same guard for cold-start `:60-66`). **(2) The genuine "logged out to OTP/login" = a real 401** (`api.ts:196-198`
+  `reportAuth` → `expireSession` → `auth.tsx:92-103` clear → `(tabs)/_layout.tsx:178` redirect). Backend access-token TTL default
+  is **24h** (`../cgpe-backend-main/routes/auth.js:64-66`, `JWT_EXPIRE || '24h'`) — **nothing in code expires at 2-3h**, so a
+  precise 2-3h cadence points at **prod `.env` `JWT_EXPIRE` set short** (OPS, most likely) or `is_active` churn
+  (`middleware/auth.js:30`). Phase-48's 30-day biometric re-mint IS wired but **only as a manual login-screen button**
+  (`auth.tsx:349-377`, `login.tsx:252-289`) — there is **no silent refresh on 401** anywhere; optional [m] = attempt
+  `restoreBiometricSession()` inside `onSessionExpired` before clearing `user`. **NB the app uses a Bearer JWT in SecureStore,
+  NOT a cookie** — the owner's "cookie" wording maps to no cookie. **OPEN Qs (owner answer decides the fix): when "logged out",
+  is it (A) a dark fingerprint-only overlay [Mech 1, session alive] or (B) the full email/OTP sign-in card, maybe with a blue
+  "session ended" banner [Mech 2, real expiry]? What is prod `JWT_EXPIRE`? Does turning Biometric-unlock OFF stop the frequent
+  prompts?** The [m] grace window is the near-certain primary fix. · S.
+- **Phase 71 — [m]+OPS (+[api]) Guarantee a location point every ≤60 min + fix "bg location not running".** Today every point is
+  **OS-delivery-driven, best-effort — there is NO code-driven time guarantee.** `tracker.ts:469-501`: `timeInterval:60000` +
+  `distanceInterval:0` is a *request* to the fused provider, and `deferredUpdatesInterval:60000` lets the OS defer; under Doze /
+  OEM-kill the gap can far exceed 60 min. **The watchdog captures NO point** — it only re-arm/idle/retire (`tracker.ts:592-611` ×
+  `watchdog.ts:36-47`). **Fix = [m] JS-only:** in `watchdogTick` (`tracker.ts:592-611`) add a forced
+  `Location.getCurrentPositionAsync({accuracy:High})` when the newest buffered point is > ~55 min old → buffer + `deliver`;
+  reuses the already-installed `expo-background-task` (WorkManager, 15-min floor) + the existing upload path. **Honest ceiling:
+  WorkManager is itself Doze-deferred** (typical ≤15 min, can slip in deep Doze; a hard real-time guarantee needs a native
+  exact-alarm module the app lacks). **"bg not running" most-likely causes, ranked:** (1) the installed APK predates the Phase-41
+  native modules (bg service never ran — NOT OTA-fixable); (2) the profile only applies at service (re)start
+  (`tracker.ts:462-466`), so a member must **clock out + clock in** to pick up the Phase-63 profile; (3) OEM battery-kill; (4)
+  permission ≠ "Allow all the time". **Confirm on-device via APK SHA-256 + the persistent "Recording…" notification + the DB
+  session `point_count`/`last_point_at`.** · [m] JS-only but needs a native APK rebuild to reach field phones; the [api] >100m
+  accuracy-drop relax is belt-and-braces (verify live). · M.
+- **Phase 72 — [api]+[m]+OPS Team-targeted notifications (e.g. a new Sales task → notify the Sales team).** **Real push exists
+  NOWHERE** — mobile has no `expo-notifications`/FCM (`package.json`, `app.json`: no `POST_NOTIFICATIONS`, no google-services),
+  the backend has no `firebase-admin`/`expo-server-sdk` and **no device-token store**; today's notifications are an **in-app pull
+  feed** seen only on app-open (`notifications.tsx`, `notify.tsx` → `/notifications*`). Tasks DO carry a **free-text
+  `department`** (`../cgpe-backend-main/models/Task.js:31-34`; only `'payroll'` proven in code — taxonomy unnormalized), and
+  task-create (`routes/tasks.js:223`) is the clean trigger point but **fires no notification today.** **TWO tiers (owner must
+  choose):** **Tier A — in-app only, NO rebuild** (add `broadcastToDepartment` to `utils/notify.js`, call it from task-create →
+  writes a bell row to each dept member; small [api], ~0 [m]; does NOT buzz a closed phone). **Tier B — real push** (Tier A +
+  `expo-notifications` + `POST_NOTIFICATIONS` + push-token registration on mobile [native rebuild]; backend device-token store +
+  `firebase-admin`/`expo-server-sdk` + a `sendPush` service; FCM google-services + EAS creds [OPS/infra]). **OPEN Qs: in-app or
+  real push? which departments exist + exact labels (use `Profile.department` or the `TeamStructure` model)? which events trigger
+  (only new tasks, or reminders/leads/reassignment)? include or exclude the assignee/creator? iOS too (separate APNs)? tap →
+  deep-link to the task? does the admin panel create tasks via a route other than `POST /tasks`?** Biggest of the four. · Tier A
+  S · Tier B L.
+- **Phase 73 — [m]+native-rebuild Merge assigned tasks/reminders into the member's PHONE calendar + a one-click export.**
+  **`expo-calendar` is NOT installed** (`package.json`, `app.json`: no module, no `WRITE_CALENDAR`) → needs `expo install
+  expo-calendar` + the config plugin + permission + a **new APK** (native, not OTA — same pattern as expo-location). **No [api] —
+  pure client:** employee X's own app already holds X's assigned tasks via `getTasks(ownOnly=true)` (`api.ts:446-457`, filters
+  `/team/task-overview` to the caller) + `getReminders()` (`api.ts:1256-1265`); the merge is on-device, no server relay. **TWO
+  asks, very different cost:** **(a) one-click bulk EXPORT** — simple, ship first: iterate the loaded tasks/reminders that have a
+  valid date → find-or-create a dedicated "CGPE Connect" calendar → `createEventAsync` (title, due date, id in notes); a clean UI
+  slot already exists (`Header right?` prop, `ui/base.tsx:113-114`, unused on `tasks.tsx`). **(b) AUTO-add-on-assign** — harder:
+  a sync-on-fetch pass + **strict idempotency** (persist an `id → calendarEventId` map in AsyncStorage, else every refresh
+  duplicates events). **Edge cases: undated tasks carry `dueDate:''` (Phase-53, Invalid-Date-safe) — SKIP or make all-day, NEVER
+  coerce → now; timezone; permission-denied honesty (Banner, never silent success); delete/reschedule staleness.** New
+  `common.*` i18n label needs **human copy** (no machine translation). **OPEN Qs: tasks-only or +reminders(+leads)? undated =
+  skip or all-day? event shape (all-day vs a timed block; an alarm?)? ship (a) then (b)? dedicated calendar vs the user's
+  default? lifecycle updates on complete/reassign?** · [m] + native rebuild, no [api] · export S · auto-sync M.
+
+
 EAS build **`6b76608b`** (v1.10.0, commit `da9e5a9`, direct `.apk`
 `https://expo.dev/artifacts/eas/K5bRx6VlgAUC2xxViT-NJHnnbuSMvNHqCGgrAeVN1WA.apk`, supersedes `8f3238fa`) and was **driven on the
 owner's real Samsung A54 over USB/ADB as the Master account** — Monitor on-duty **1/3 (not 0)**, Live-location honest last-known,
@@ -1526,25 +1598,29 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-19 handoff #4 — final APK cut + on-device verified + H1/M1/M2/M3 fixed. Findings:
-`docs/DEVICE-TEST-FINDINGS-2026-08-19.md`):**
+**CURRENT next 3 (2026-08-20 — H1 reason-Sheet fully localized + fresh APK `b01f4164` cut; owner batch 70–73 triaged. Detail:
+`docs/PHASES.md` §Now, `docs/DECISIONS.md` 2026-08-20):**
 
-The 63/64/66/67 batch is shipped in APK `6b76608b` and verified on real hardware; H1 (Phase-50 clock-reason) + M1/M2/M3 are fixed
-and in that APK. (`git push` still 403s — commits local; EAS builds from the local tree.)
+The Phase-50 clock-reason `Sheet` is now fully localized (5 langs) and shipped in APK `b01f4164` (v1.10.0, gitCommit `8e9ad46`,
+supersedes `6b76608b`). Owner reported 4 new items → **Phases 70–73** (verified vs real code, file:line cited, **NONE built**).
+(`git push` still 403s — commits local; EAS builds from the local tree.)
 
-1. **Localise the H1 reason sheet (needs the owner's 5-language copy).** The clock-reason `Sheet` (`home.tsx`) is English (matches
-   the surrounding hardcoded clock notices). Get the owner's 5-lang copy for the reason prompt (title/explanation/Cancel/Clock-out
-   labels) — like consent/break — then wire it. **Blocking dependency for Phase-50 go-live:** do NOT set the office geofence pins
-   until the APK is installed AND this is localized (else Gujarati/Hindi agents get an English out-of-range prompt).
-2. **Phase 65 `[m]` — full-staff roster.** The one un-built mobile piece: point `getAgentLocations`/`getTeam` at the now-live,
-   now-gated `/live-locations` and left-join, so a member appears even before assigned a task. Needs its own APK. Owner asked for
-   "every member visible."
-3. **Owner physical pass + optional LOW/cosmetic cleanup.** Owner installs `6b76608b` and walks §5 bg-GPS (clock out+in first) /
-   §3 geofence (after H1 localized) / biometric / break-gate on ≥2 phone brands. Optionally clear the LOW/cosmetic list
-   (i18n coverage, inrShort trailing zero, "Advisor" subtitle, Version 1.8.0, FAB overlaps).
+1. **Phase 70 — session "keeps logging me out / re-verify every 2-3 hours" (owner #1).** FIRST ask the owner the disambiguating
+   question: **a dark fingerprint-only overlay** (Mech 1 — the App-Lock has no grace window, session still alive, a `[m]` fix at
+   `AppLock.tsx:69-81`) **vs the full email/OTP sign-in card** (Mech 2 — a real 401; the 24h token default can't produce 2-3h, so
+   check prod `JWT_EXPIRE` → OPS/`[api]`). The answer decides the whole fix. NB it's a Bearer JWT, **not a cookie**.
+2. **Phase 71 — guarantee a location point every ≤60 min + fix "bg not running" (owner #2).** No code-driven time guarantee
+   exists today; the fix is a forced `getCurrentPositionAsync` heartbeat in `watchdogTick` (`tracker.ts:592-611`, `[m]` JS-only,
+   rides a rebuild). "bg not running" is most likely the APK predating the native modules OR needing a clock-out+in to pick up the
+   Phase-63 profile — confirm on-device (APK SHA-256, the persistent notification, DB `point_count`) before assuming a code bug.
+3. **Phase 72 / 73 — team-targeted notifications + phone-calendar sync.** Both need an owner decision first (72: in-app Tier A vs
+   real-push Tier B; 73: which entities + undated=skip-or-all-day) and a native rebuild (72 Tier B, 73 `expo-calendar`). 73's
+   bulk export is the cheapest concrete win; 72 Tier B is the biggest build (FCM + a backend device-token store + infra).
 
-**Also open (lower priority):** Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated
-on an Apple account, offline) still stand; Phase 41 on-device verification (owner: do last).
+**Also standing (lower priority):** Phase 65 `[m]` full-staff roster (the one un-built mobile piece; `/live-locations` now live);
+Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline);
+Phase 41 on-device verification (owner: do last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live,
+biometric, break-gate) on ≥2 phone brands.
 
 **⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
 iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability
