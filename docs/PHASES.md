@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 71 BUILT + PUSHED (owner #2 of the 70–73 batch).** The "location doesn't update / background not running /
+20 h straight-line route" complaint now has a code-driven fix. Today every route point is OS-delivery-driven and best-effort;
+under Doze/OEM-kill the gap between points can far exceed the requested ~60 s cadence, and the ~15-min reliability watchdog only
+re-armed/idled/retired the recorder — it captured no point of its own. Phase 71 gives `watchdogTick` a second job: when the newest
+recorded point is stale it takes ONE `getCurrentPositionAsync(High)` fix and pushes it through the normal `ingest` path (de-dup,
+mock-drop, shift/ambient attribution, delivery all unchanged). Stale decision lifted into a PURE, tested helper
+`src/lib/staleBuffer.ts` (`isBufferStale`) — `tracker.ts` has zero test coverage. **Threshold `STALE_AFTER_MS = 60 − 15 = 45 min`,
+derived from the owner's 60-min ceiling minus the watchdog interval (NOT the handoff's rough "55", which would overshoot to ~69).**
+Bounded 30 s `withTimeout` so a cold fix can't hang the serial chain; `retire` early-returns; `WATCHDOG_INTERVAL_MIN` derived from
+the shared ms const. Gates `tsc` 0 · `npm test` **644** (+9) · eslint 0. Adversarial review: no HIGH/MED. Commit `612410f`, pushed
+to `aaziko/Shivam` (needed a clean MERGE of a benign remote `Update README.md` commit — no force/rebase — landing as `bdffdef`).
+**Honest ceiling: WorkManager is itself Doze-deferred → ≤60 min is best-effort, not a hard real-time guarantee. Pure JS but rides
+the native batch APK with 72/73 (not OTA); device-verify a stationary clocked-in phone gets points ≤~60 min apart (DB
+`point_count`/`last_point_at`).** Detail: `docs/DECISIONS.md` 2026-08-20 (top).
+
 **✅ 2026-08-20 — PHASE 70 BUILT + PUSHED (owner #1 of the 70–73 batch).** The "app keeps logging me out / re-verifies every
 2-3 hours" complaint is fixed on the App-Lock side. Owner confirmed (AskUserQuestion) the "logged out" screen is the **dark
 fingerprint overlay** (session alive), NOT the email/OTP login card — so it was the biometric lock re-arming with no grace, never a
@@ -58,7 +73,14 @@ file:line cited). NONE built — triaged this session, next session executes.** 
   is it (A) a dark fingerprint-only overlay [Mech 1, session alive] or (B) the full email/OTP sign-in card, maybe with a blue
   "session ended" banner [Mech 2, real expiry]? What is prod `JWT_EXPIRE`? Does turning Biometric-unlock OFF stop the frequent
   prompts?** The [m] grace window is the near-certain primary fix. · S.
-- **Phase 71 — [m]+OPS (+[api]) Guarantee a location point every ≤60 min + fix "bg location not running".** Today every point is
+- **Phase 71 — [m]+OPS (+[api]) Guarantee a location point every ≤60 min + fix "bg location not running". ✅ BUILT + PUSHED
+  2026-08-20 (commit `612410f`, `aaziko/Shivam`).** `watchdogTick` now forces one `getCurrentPositionAsync(High)` fix through
+  `ingest` when `state.lastAt` is stale (>45 min = 60 − 15-min watchdog); pure tested helper `src/lib/staleBuffer.ts`
+  (`isBufferStale`) + `staleBuffer.test.ts` (+9); bounded 30 s `withTimeout`; `retire` early-returns; `WATCHDOG_INTERVAL_MIN`
+  derived from the shared const. Gates `tsc` 0 · `npm test` **644** · eslint 0; adversarial review no HIGH/MED. Honest ceiling:
+  WorkManager is Doze-deferred → best-effort, not hard real-time. JS-only but rides the batch APK (not OTA). **Remaining:**
+  device-verify + the optional `[api]` >100 m relax (Phase-63's, already filed). Original triage retained below for reference.
+  Today every point is
   **OS-delivery-driven, best-effort — there is NO code-driven time guarantee.** `tracker.ts:469-501`: `timeInterval:60000` +
   `distanceInterval:0` is a *request* to the fused provider, and `deferredUpdatesInterval:60000` lets the OS defer; under Doze /
   OEM-kill the gap can far exceed 60 min. **The watchdog captures NO point** — it only re-arm/idle/retire (`tracker.ts:592-611` ×
@@ -1613,27 +1635,27 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-20 — Phase 70 BUILT + PUSHED; push now works via new remote `aaziko`. Detail: `docs/PHASES.md` §Now,
+**CURRENT next 3 (2026-08-20 — Phases 70 & 71 BUILT + PUSHED; push works via remote `aaziko`. Detail: `docs/PHASES.md` §Now,
 `docs/DECISIONS.md` 2026-08-20):**
 
-Phase 70 (App-Lock 5-min grace window) is done (commit `cd134ba`), owner #1 of the 70–73 batch. **`git push aaziko Shivam` now
-succeeds** (remote `aaziko` → `AazikoGlobalLLP/cgpe-android`; `origin` still 403s, untouched) — push after every completed phase
-with a distinct commit message. Phase 70 is pure JS (OTA-eligible) but not yet on a phone; it rides the batch APK with 71/72/73.
+Phases **70** (App-Lock 5-min grace window, `cd134ba`) and **71** (≤60-min location heartbeat, `612410f`) are done — owner #1 & #2
+of the 70–73 batch. **`git push aaziko Shivam` now works** (remote `aaziko` → `AazikoGlobalLLP/cgpe-android`; `origin` still 403s,
+untouched) — push after every completed phase; note the remote can be ahead (README via web UI) → fetch + **merge**, never force.
+Both 70 & 71 are pure JS but ride the native batch APK (72/73 force a rebuild) — no phone yet; owner cuts ONE final APK after the batch.
 
-1. **Phase 71 — guarantee a location point every ≤60 min + fix "bg not running" (owner #2, now the front of the queue).** No
-   code-driven time guarantee exists today; the fix is a forced `getCurrentPositionAsync` heartbeat in `watchdogTick`
-   (`tracker.ts:592-611`, `[m]` JS-only, rides a rebuild). **Lift the "is the buffer stale?" decision into a pure, tested helper**
-   like Phase 70 did for the App-Lock — `tracker.ts` has ZERO test coverage. "bg not running" is most likely the APK predating the
-   native modules OR needing a clock-out+in to pick up the Phase-63 profile — confirm on-device (APK SHA-256, the persistent
-   notification, DB `point_count`) before assuming a code bug. Honest ceiling: WorkManager is Doze-deferred, so 60 min is
-   best-effort, not a hard real-time guarantee.
-2. **Phase 72 — team-targeted notifications.** Needs an owner decision first: **in-app Tier A** (no rebuild, small `[api]`, doesn't
-   buzz a closed phone) **vs real-push Tier B** (FCM + a backend device-token store + `expo-notifications` + infra — the biggest
-   build of the batch). Also which departments/labels + which events trigger.
-3. **Phase 73 — phone-calendar sync.** Needs `expo-calendar` (native rebuild) + an owner decision (which entities; undated =
+1. **Phase 72 — team-targeted notifications (owner #3, now the front of the queue).** Needs an owner decision FIRST: **in-app Tier A**
+   (no rebuild, small `[api]`, does NOT buzz a closed phone) **vs real-push Tier B** (`expo-notifications` + FCM + a backend
+   device-token store + infra — the biggest build of the batch). Also which departments/labels (`Profile.department` vs
+   `TeamStructure`) + which events trigger (only new tasks, or reminders/leads/reassignment) + include/exclude the assignee. Real
+   push exists NOWHERE today (no `expo-notifications`, no `firebase-admin`, no token store). Detail: `docs/PHASES.md` §Now Phase 72.
+2. **Phase 73 — phone-calendar sync.** Needs `expo-calendar` (native rebuild) + an owner decision (which entities; undated =
    skip-or-all-day; export vs auto-sync). The **one-click bulk export** is the cheapest concrete win — ship it before auto-sync.
+   Pure client, no `[api]` (the app already holds the member's own tasks/reminders). New `common.*` label needs human copy.
+3. **Phase 65 `[m]` — full-staff monitor roster** (the one un-built mobile piece from the 63–69 batch; `/live-locations` is now
+   live + master-gated). Source the roster from the full staff directory left-joined with live status so a never-assigned member
+   still appears. Its own APK.
 
-**Also standing (lower priority):** Phase 65 `[m]` full-staff roster (the one un-built mobile piece; `/live-locations` now live);
+**Also standing (lower priority):** Phase 65 is now #3 above;
 Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline);
 Phase 41 on-device verification (owner: do last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live,
 biometric, break-gate) on ≥2 phone brands.

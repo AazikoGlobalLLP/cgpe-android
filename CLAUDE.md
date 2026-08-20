@@ -124,6 +124,13 @@ commit message each time), then `/handoff`. Added as a **separate** remote **`aa
 workflow: finish a phase → commit with a clear per-phase message → `git push aaziko Shivam` → `/handoff`.
 Never push `main`. Never touch/redirect `origin`, rewrite history, or force-push. Do NOT commit the
 untracked repo-root `.txt` files or local `.claude/settings.json` unless the owner asks.
+**⚠️ The push can be REJECTED `! [rejected] (fetch first)` — the remote now exists on GitHub, so the owner (or the
+web UI) can push to `aaziko/Shivam` between sessions (Phase 71, 2026-08-20: a `Update README.md` commit was ahead).
+This is NOT the 403 and NOT corruption. `git fetch aaziko`, inspect the divergence
+(`git log --oneline aaziko/Shivam..Shivam` and `..aaziko/Shivam`), then integrate with a plain
+`git merge aaziko/Shivam --no-edit` and push again. NEVER force-push / rebase / reset to "fix" it — a rebase is
+also blocked by the modified `.claude/settings.json` in the tree. Merge only touched README.md; source files stayed
+intact. See DECISIONS 2026-08-20.**
 
 **`git push` to `origin` still fails 403 (unchanged) — just don't route through it.** The stored credential
 is `reactjsaaziko`; `origin` is `Dev-Shivam-05/CGPE-ANDROID-APPLICATION`, and that account has no write

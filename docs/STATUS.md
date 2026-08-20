@@ -1,12 +1,12 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-20
-**Working on right now:** Fixed the "app keeps making me sign in / fingerprint every couple of hours" complaint, and set up the new code repository so every finished piece of work is saved to it.
+**Working on right now:** Making sure a field agent's location keeps updating at least every hour even when their phone tries to save battery.
 
 **Done this week:**
-- Fixed the biggest complaint: the app was asking for a fingerprint **every single time** it was reopened, which felt like being logged out. It now only asks again if the phone has been left for **more than 5 minutes** — a quick glance at another app or a phone call no longer triggers it. (Confirmed with the owner it was the fingerprint lock being over-eager, not a real sign-out.)
-- Connected the app's code to the new company repository the owner provided, and saved all the work there. From now on, every completed piece of work is pushed to it automatically so progress is easy to track.
-- Earlier this week: the "why did you clock in/out away from the office" message now shows in all five languages, and a fresh installable app with that change was sent to the owner.
+- The app used to make staff re-scan their fingerprint every single time they reopened it (even after a 10-second glance at another app). It now only asks again if they've been away for more than 5 minutes.
+- Fixed the "location stops updating in the background / shows a long straight line" problem: the app now takes its own location reading at least about every hour, instead of waiting and hoping the phone reports one.
+- Both fixes are saved to the company's own code storage.
 
-**Blocked on:** The next three requested items (guaranteed location updates, team-specific alerts, and adding tasks to the phone's calendar) need a couple of quick decisions from the owner first, and will each need a brand-new app build to reach the phones.
+**Blocked on:** Nothing to build right now — but the next two items (team notifications, phone-calendar sync) each need you to make a choice before we start (see "Next").
 
-**Next:** Make sure the app records the field team's location at least once an hour, even when the phone is idle.
+**Next:** Decide how team notifications should work — a message that shows inside the app only (quick to build), or a real phone notification that buzzes even when the app is closed (bigger job, needs extra setup) — then we build it.

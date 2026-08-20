@@ -1,62 +1,70 @@
-# HANDOFF — CGPE Connect (Android) — Phase 70 (App-Lock grace window) built + pushed to new repo — 2026-08-20
+# HANDOFF — CGPE Connect (Android) — Phase 71 (≤60-min location heartbeat) built + pushed — 2026-08-20
 
-Owner's #1 of the 70–73 batch is done: the App-Lock no longer re-prompts for a fingerprint on
-**every** reopen — it now only re-locks after you've genuinely been away longer than **5 minutes**.
-Also this session: a **new working git remote** (`aaziko` → AazikoGlobalLLP/cgpe-android) — the
-push-403 block is bypassed, and per the owner's directive every completed phase is now **pushed**
-(distinct commit message each time) then handed off.
+Owner's #2 of the 70–73 batch is done. The background recorder no longer relies purely on the OS to
+deliver points on time: the ~15-min reliability watchdog now **forces one location fix** whenever the
+newest recorded point has gone stale, so a clocked-in member's route can't sit with a long flat gap
+even under Doze / an OEM battery-kill (the "20 h / 8 km straight line" symptom). Committed and pushed
+to the owner's `aaziko` repo.
 
 ## Done
-- **Phase 70 — "app keeps logging me out / re-verifies every 2-3 hours" FIXED (the App-Lock half).**
-  Confirmed with the owner it is the **dark fingerprint overlay** (session alive), not the email/OTP
-  login card — so this was the biometric lock re-arming with no grace, never a token expiry. The lock
-  now remembers when the app was last backgrounded and **only re-prompts if the gap exceeds 5 minutes**
-  (owner-chosen). A quick app-switch / call / map-glance comes straight back in; a phone left on a desk
-  still re-locks. Covers **both** paths — returning to a live app *and* a cold start after an OEM
-  battery-kill (the timestamp is persisted in SecureStore, so it survives process death). Content never
-  flashes: cold start locks first, then reveals if within grace.
-- **`Shivam` branch pushed to the owner's repo** `https://github.com/AazikoGlobalLLP/cgpe-android.git`
-  (remote `aaziko`, tracking `aaziko/Shivam`). Push now **works** — the old `origin`
-  (`Dev-Shivam-05/…`) still 403s and was left untouched.
-- Gates green: `tsc` **0** · `npm test` **635** (was 625, +10 new) · eslint **0** on the touched files.
+- **A live shift now records a point at least about every 60 minutes, code-driven — not just "if the
+  OS feels like it".** Previously every point was OS-delivery-driven and best-effort; under Doze the
+  gap between points could stretch far past the requested ~60 s cadence. Now, each time the watchdog
+  wakes (~15 min), if the newest recorded point is older than 45 min it takes one `getCurrentPosition`
+  fix (High accuracy, so it survives the backend's >100 m shift-point drop) and posts it through the
+  normal ingest path. On a fresh shift where the service somehow records nothing at all, the very
+  first watchdog tick forces a point instead of leaving a hole.
+- Gates green: `tsc` **0** · `npm test` **644** (was 635, +9 new) · eslint **0** on the touched files.
+- Committed `612410f`; pushed to `aaziko/Shivam` (as merge `bdffdef` — see Decisions).
 
 ## Files changed
-- `src/lib/appLock.ts` — **NEW** pure helper: `shouldRelock()` / `parseLastActive()` + `APP_LOCK_GRACE_MS`
-  (5 min). Fails closed on a missing / corrupt / clock-skewed timestamp (unknown gap → lock). Device-free
-  so it is unit-testable, exactly like `lib/watchdog.ts`.
-- `src/lib/__tests__/appLock.test.ts` — **NEW** (+10): grace boundary (`elapsed === grace` → no prompt),
-  brief-trip, and every fail-closed case.
-- `src/ui/AppLock.tsx` — stamps the last-backgrounded moment (in-memory for the live process, persisted for
-  cold start) and grace-gates the re-lock on both the foreground and cold-start effects.
-- Commit `cd134ba` on `Shivam`, pushed to `aaziko/Shivam`.
+- `src/lib/staleBuffer.ts` — **NEW** pure helper: `isBufferStale(lastAtMs, nowMs, staleAfterMs?)` +
+  `MAX_POINT_GAP_MS` (60 min), `WATCHDOG_INTERVAL_MS` (15 min), `STALE_AFTER_MS` (= 60 − 15 = 45 min).
+  Zero native imports → unit-testable, exactly like `lib/watchdog.ts` / `lib/appLock.ts`. Fails toward
+  "take a fix" on no-point-yet / corrupt / clock-skew.
+- `src/lib/__tests__/staleBuffer.test.ts` — **NEW** (+9): threshold boundary, fresh-shift `lastAt=0`,
+  negative/corrupt timestamp, custom threshold, and the ≤60 derivation + worst-case-gap guarantee.
+- `src/lib/tracker.ts` — `captureForcedPoint()` (one `getCurrentPositionAsync(High)` → `ingest`) wrapped
+  in a bounded `withTimeout` (30 s, so a cold-GPS fix can't hang the serial chain); `watchdogTick` now
+  forces a fix when `isBufferStale(state.lastAt)`; `retire` early-returns (nothing to attribute to);
+  `WATCHDOG_INTERVAL_MIN` is now derived from the shared ms constant so cadence and threshold can't drift.
+- Commit `612410f` on `Shivam`, pushed (via merge `bdffdef`) to `aaziko/Shivam`.
 
 ## Decisions made
-- **Grace-window `[m]` fix only — no OPS/`JWT_EXPIRE`, no silent-restore.** Owner confirmed (AskUserQuestion)
-  the "logged out" screen is the **dark fingerprint overlay**, i.e. the session is alive. So the real-401
-  path (Mechanism 2) is not in play; building silent-restore-on-401 would be speculative dead code.
-- **5-minute grace window** — owner-set, not invented.
-- **Quick-unlock default left ON** (`auth.tsx:130`). The owner values the lock; the complaint was the
-  nagging, which the grace window fixes. Turning the default off would silently disable the lock — a
-  security regression, not what was asked.
-- **Pushed to a new owner-owned remote instead of fighting the 403.** The owner supplied the repo and
-  directed a push after every phase; `aaziko` is a separate remote, `origin` untouched, no force, no
-  history rewrite.
+- **Threshold = ceiling − watchdog-interval = 45 min, NOT the handoff's rough "~55 min".** With a
+  15-min watchdog, triggering at 55 would let a tick that saw 54 min do nothing and the next tick act
+  at ~69 min — overshooting the owner's 60-min ceiling. 45 = 60 − 15 keeps the idealized worst-case gap
+  at 60 min. Derived from the owner's real requirement, not invented.
+- **Reuse `ingest`, don't hand-roll a post.** The forced point flows through the same de-dup, mock-drop,
+  shift/ambient attribution and delivery as an OS-delivered point — one honest write path, no new
+  attribution logic to get wrong. Adversarial review confirmed the "unattributable → teardown" branch
+  is unreachable from the forced path (retire early-returns before it).
+- **Honest ceiling, stated in code + commit:** WorkManager is itself Doze-deferred, so ≤60 min is a
+  best-effort ceiling, not a hard real-time guarantee (that would need a native exact-alarm module the
+  app lacks). Real gap = 60 min + fix-acquisition latency + any Doze slippage of the watchdog itself.
+- **Push needed a merge, not a force.** `aaziko/Shivam` had a benign `Update README.md` commit ahead
+  (added via the GitHub web UI). Merged it in (`bdffdef`, ort strategy, only README.md touched — my
+  source files, the unrelated `.claude/settings.json` and the repo-root `.txt` files all untouched),
+  then pushed. No rebase, no force, no discard — per the data-safety rule.
 
 ## Known broken / deliberately skipped
-- **Phase 70 not yet on any field phone.** It's pure JS (OTA-eligible), but 71/72/73 all need a native
-  rebuild anyway, so — per the owner's standing "build the batch, then cut ONE APK" directive — no APK/OTA
-  was cut this session. Device verification (brief-trip skips the prompt; >5 min re-locks; cold-start after
-  an OEM kill honours grace) is owner-owed once the fix ships.
-- **The two untracked repo-root `.txt` files + local `.claude/settings.json` were NOT committed/pushed** —
-  they aren't phase work, and a local settings file shouldn't land in a shared repo without the owner's say.
-- **Phases 71–73 still need owner decisions** before a sane build (72 = in-app vs real push; 73 = tasks-only
-  vs +reminders, export vs auto-sync). 71's core `[m]` fix is well-defined and buildable now.
+- **Not yet on any field phone.** Pure JS (OTA-eligible in isolation) but 72/73 both need a native
+  rebuild, so — per the owner's standing "build the batch, then cut ONE APK" directive — no APK/OTA was
+  cut this session. Device verification is owner-owed once the batch APK ships: confirm a stationary
+  clocked-in phone gets points ≤~60 min apart (DB `point_count`/`last_point_at`), and that the "bg not
+  running" report is the APK predating the native modules or needing a clock-out+in, not a code bug.
+- **`src/lib/tracker.ts` still has ZERO test coverage** (no expo-location/task-manager stub). The new
+  decision is tested only through the pure `staleBuffer.ts`; the wiring itself is device-only.
+- **Phases 72 & 73 still need owner decisions** before a sane build (72 = in-app Tier A vs real-push
+  Tier B; 73 = export-first vs auto-sync, which entities, undated=skip-or-all-day).
 
 ## Next session starts here
-- Phase **71** — guarantee a location point every ≤60 min: add a forced `getCurrentPositionAsync` in
-  `watchdogTick` (`tracker.ts:592-611`) when the newest buffered point is >~55 min old → buffer + `deliver`.
+- Phase **72** — team-targeted notifications. First get the owner decision: **Tier A** (in-app bell
+  only, no rebuild, small `[api]`) vs **Tier B** (real push — `expo-notifications` + FCM + a backend
+  device-token store + infra). Do not build until that's chosen. (Phase 73 and the un-built Phase 65
+  full-staff roster also await.)
 - First command: `/boot`
-- Watch out for: **`src/lib/tracker.ts` is device-only with ZERO test coverage** (no expo-location /
-  task-manager stub) — lift the "is the buffer stale?" decision into a **pure, tested helper** the way
-  Phase 70 did for the App-Lock, don't bury it in the untestable file. And WorkManager is itself
-  Doze-deferred, so 60 min is a best-effort ceiling, not a hard real-time guarantee — say so honestly.
+- Watch out for: **`git push aaziko Shivam` can reject** if the remote is ahead (someone edits it via
+  the web UI) — fetch, inspect the divergence, and **merge** (never force/rebase/reset); this session it
+  was a one-file README commit. And when you DO build 72/73, remember the batch-APK directive — one
+  final APK, not a per-phase one.

@@ -6,6 +6,48 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 71 built (≤60-min location heartbeat in the watchdog); threshold derived at 45 min, not the handoff's "55"
+
+**Context.** Owner #2 of the 70–73 batch: "location doesn't update / background not running / 20 h straight-line route." Verified
+against real code (Phase-71 triage): every route point is OS-delivery-driven and best-effort — `tracker.ts` asks the fused provider
+for a fix on a ~60 s cadence but under Doze/OEM-kill the real gap can be far larger, and the ~15-min reliability watchdog only
+re-armed/idled/retired the recorder — it **captured no point of its own**. So nothing in code guaranteed a point within any window.
+
+**Decision.** Gave `watchdogTick` a second job: when the newest recorded point is stale, take ONE `getCurrentPositionAsync(High)`
+fix and push it through the existing `ingest` path (de-dup, mock-drop, shift/ambient attribution, delivery — all unchanged;
+High accuracy so it survives the backend's >100 m shift-point drop, same reason as Phase 63). The stale decision is a PURE, tested
+helper `src/lib/staleBuffer.ts` (`isBufferStale`), not buried in device-only `tracker.ts` — same seam pattern as `watchdog.ts`/
+`appLock.ts`, because `tracker.ts` has zero test coverage. **Threshold `STALE_AFTER_MS = ceiling − watchdog-interval = 60 − 15 =
+45 min`, NOT the handoff's rough "~55 min":** with a 15-min watchdog, triggering at 55 would let a tick seeing 54 min do nothing and
+the next tick act at ~69 min, overshooting the owner's 60-min ceiling; 45 keeps the idealized worst-case gap at 60. Derived from the
+owner's real requirement, not invented. The forced fix is bounded by a 30 s `withTimeout` so a cold-GPS fix can't hang the serial
+chain; `retire` early-returns (no session to attribute a forced point to); `WATCHDOG_INTERVAL_MIN` now derives from the shared ms
+constant so cadence and threshold can't drift. Adversarially reviewed (no HIGH/MED; the "unattributable → teardown" branch is
+unreachable from the forced path because retire returns first).
+
+**Consequence.** A clocked-in (or 24/7-armed) member's route can't sit with an hour-long hole while the watchdog is firing.
+**Honest ceiling stated in code + commit:** WorkManager is itself Doze-deferred, so ≤60 min is best-effort, not a hard real-time
+guarantee (real gap = 60 min + fix-acquisition latency + watchdog Doze slippage); a hard bound would need a native exact-alarm.
+Gates: `tsc` 0 · `npm test` **644** (+9) · eslint 0. Commit `612410f`, pushed to `aaziko/Shivam`. Pure JS but rides a native APK
+rebuild to reach phones (not OTA) — bundles with 72/73. Device-verify: a stationary clocked-in phone gets points ≤~60 min apart
+(DB `point_count`/`last_point_at`); "bg not running" is most likely the APK predating the Phase-41 modules or needing a clock-out+in.
+
+## 2026-08-20 — `git push aaziko Shivam` can reject (remote ahead); integrate by MERGE, never force/rebase/reset
+
+**Context.** After committing Phase 71 (`612410f`), `git push aaziko Shivam` was rejected `! [rejected] (fetch first)` — the remote
+`aaziko/Shivam` had a commit we didn't have locally. This is expected now that the repo exists on GitHub: the owner (or the web UI)
+can push to it between our sessions. The data-safety rule forbids force-push / reset / discard on any git error.
+
+**Decision.** Fetched (non-destructive) and inspected the divergence: shared base `9bb0d42`; remote added one benign
+`996727d "Update README.md"` (touches only README.md), local added `612410f` (touches only `src/lib/*`) — zero overlap. Integrated
+with a plain **`git merge aaziko/Shivam --no-edit`** (ort, merge commit `bdffdef`, only README.md changed; my source files and the
+unrelated `.claude/settings.json`/repo-root `.txt` all untouched), then pushed. No rebase (would have been blocked by the modified
+`settings.json` anyway and rewrites history), no force, no discard.
+
+**Consequence.** History on `aaziko/Shivam`: `9bb0d42 → 996727d (README) → 612410f (Phase 71) → bdffdef (merge)`. Next session:
+if push rejects, fetch + `git log --oneline aaziko/Shivam..Shivam` / `..aaziko/Shivam` to see the divergence, then **merge** and
+push — never force. Now also captured in project `CLAUDE.md`.
+
 ## 2026-08-20 — Phase 70 built (App-Lock 5-min grace window); confirmed it's the biometric lock re-arming, NOT a token expiry
 
 **Context.** Owner: "app keeps logging me out / re-verifies every 2-3 hours." The triage (Phases 70) had flagged TWO possible
