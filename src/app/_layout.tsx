@@ -19,6 +19,7 @@ import 'react-native-gesture-handler';
  */
 import { startAmbientTracking, syncConsentWithPermission } from '@/lib/tracker';
 import { configurePushHandler, subscribeToPushTaps, syncPushRegistration } from '@/lib/push';
+import { maybeSyncCalendar, clearCalendarSync } from '@/lib/calendar';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -174,6 +175,29 @@ function PushGate() {
   return null;
 }
 
+/**
+ * PHASE 73 (Option B) — auto-add the signed-in member's assigned tasks + reminders to their PHONE
+ * calendar. On sign-in it runs a reconciliation pass (create new, update changed, delete
+ * completed/removed) into a dedicated "CGPE Connect" calendar; on each foreground it re-syncs
+ * (throttled). On sign-OUT it removes this user's mirrored events so a shared handset never leaks one
+ * person's tasks into the next person's calendar. Native-only, headless, silent — permission is
+ * requested lazily (only when there is something to add) and every failure is swallowed. Mounted
+ * once at the root beside `PushGate`; the sync decisions are pure + unit-tested in `calendarSync.ts`.
+ */
+function CalendarGate() {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (Platform.OS === 'web') return; // native-only: no phone calendar on web
+    if (!user) { void clearCalendarSync(); return; } // signed out → remove this user's events (no-op if none)
+    void maybeSyncCalendar(true); // force a pass on sign-in
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void maybeSyncCalendar(); // throttled re-sync on foreground
+    });
+    return () => sub.remove();
+  }, [user]);
+  return null;
+}
+
 function BrandTheme({ children }: { children: React.ReactNode }) {
   const base = useTheme();
   const { config } = useAppUi();
@@ -227,6 +251,9 @@ function RootNav() {
       {/* PHASE 72: register this device for team push on sign-in + route notification taps.
           Native-only, headless — see PushGate above. */}
       <PushGate />
+      {/* PHASE 73: auto-add assigned tasks/reminders to the phone calendar on sign-in/foreground,
+          remove them on sign-out. Native-only, headless — see CalendarGate above. */}
+      <CalendarGate />
       {/* PHASE 41d §5: block a consented 24/7 user behind a "turn location back on" notice while
           location is off (owner-locked immediate trigger). Overlay, native-only — see LocationBlock.
           Below AppLock's zIndex so the biometric device lock always wins if both are up. */}

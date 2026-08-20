@@ -14,6 +14,24 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**⏸️ 2026-08-20 — PHASE 72 MOBILE HALF BUILT + PUSHED (owner #3), NOW PENDING BACKEND+INFRA — do NOT mark done.** Owner chose
+**Tier B real push**. The mobile receiver is built + gated + pushed (`64f1afc`): `expo-notifications@~57.0.12`, token
+register/unregister, foreground + tap→deep-link, pure-tested `pushRouting.ts`. It is DORMANT until (a) the backend ships the
+device-token store + `/push/register`+`/unregister` + `broadcastToDepartment` + `sendPush` + the 4 trigger wirings (FILED to
+INBOX, owner relays) and (b) the owner sets up a **Firebase/FCM project** (hard infra prereq). **OWNER DIRECTIVE: keep 72 PENDING
+for the backend dev; EXECUTE/VERIFY this phase only when the owner signals "backend ne kaam kar diya"** — at that point verify the
+backend against its real code (the deploy-verification method: fetch + `merge-base --is-ancestor` + a no-auth curl 401/404) and
+confirm the app lights up, then fold into the batch APK. Spec: `docs/spec/PHASE-72.md`. Gates at build: `tsc` 0 · `npm test` 656
+(+12) · eslint 0.
+
+**✅ 2026-08-20 — PHASE 73 BUILT — owner chose OPTION B (auto-sync).** Assigned tasks/reminders AUTO-add to the member's phone
+calendar (not just a manual export). Pure client `[m]` (no `[api]`): `expo-calendar@~57.0.2` + app.json plugin +
+`READ/WRITE_CALENDAR`; pure-tested `calendarSync.ts` (`buildSyncItems` skips undated+completed, `planSync` idempotent
+create/update/delete reconciliation, `allDayRange`); native `calendar.ts` (dedicated "CGPE Connect" calendar, lazy permission,
+SDK-57 object API, sign-out cleanup); `CalendarGate` in `_layout` syncs on sign-in/foreground. Silent (no new i18n copy needed).
+Gates `tsc` 0 · `npm test` **669** (+13) · eslint 0. Rides the batch APK (native, not OTA). Defaults (vetoable): both
+tasks+reminders, SKIP undated, all-day events, dedicated calendar. Spec: `docs/spec/PHASE-73.md`.
+
 **✅ 2026-08-20 — PHASE 71 BUILT + PUSHED (owner #2 of the 70–73 batch).** The "location doesn't update / background not running /
 20 h straight-line route" complaint now has a code-driven fix. Today every route point is OS-delivery-driven and best-effort;
 under Doze/OEM-kill the gap between points can far exceed the requested ~60 s cadence, and the ~15-min reliability watchdog only

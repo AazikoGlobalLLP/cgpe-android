@@ -28,7 +28,9 @@
         "FOREGROUND_SERVICE_LOCATION",
         "REQUEST_IGNORE_BATTERY_OPTIMIZATIONS",
         "RECEIVE_BOOT_COMPLETED",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "READ_CALENDAR",
+        "WRITE_CALENDAR"
       ]
     },
     "web": {
@@ -89,6 +91,12 @@
         {
           "color": "#155DFB",
           "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "CGPE Connect adds your assigned tasks and reminders to your calendar so your deadlines show alongside your other events."
         }
       ]
     ],
