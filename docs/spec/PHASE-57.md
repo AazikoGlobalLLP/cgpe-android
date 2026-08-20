@@ -1,6 +1,22 @@
 # PHASE 57 — Offline support (read cache + safe write queue)
 
-**Status:** spec locked 2026-08-20 (owner approved `go`). Build order: **57a read cache first**, then 57b write queue.
+**Status:** spec locked 2026-08-20 (owner approved `go`). **57a read cache BUILT + PUSHED (`20eb4ed`).
+57b safe write queue BUILT (Notes) — Task-create wiring deferred (see Build log).** Build order: **57a read cache first**, then 57b write queue.
+
+## Build log
+- **57a (read cache) — DONE** `20eb4ed`: `offlineCache.ts` (pure) + `offlineStore.ts` + `freshness.ts` +
+  `SyncChip.tsx`; `cachedList()` wraps getTasks/getLeads/getReminders/getNotifications; chip on Tasks; purge on logout.
+- **57b (write queue) — DONE for Notes**: `writeQueue.ts` (pure) + `pendingWrites.ts` bus + `ui/pending.tsx`
+  (`usePendingWrites`/`useDropNotice`/`PendingBadge`); `addNote` → 3-outcome `AddNoteResult` (saved/queued/failed);
+  `flushWriteQueue()` (replay: 2xx→sync, 4xx/attempt-cap→drop+notice, 5xx/network→keep) + `QueueFlusher` gate in
+  `_layout` (sign-in / foreground / health-recovery); `notes.tsx` renders pending drafts + "Pending sync" badge +
+  offline composer + reconcile-on-flush + drop-notice banner. Gates `tsc` 0 · `npm test` 747 · eslint 0 new.
+  - **Deliberate sub-scope:** the queue MECHANISM is kind-generic (`QueueKind`), but only **Notes** creates are wired
+    (all 5 acceptance criteria are Notes; this bounds the UI blast radius to one screen). **Task-create (`addTask`)
+    is the documented remaining 57b piece** — add `'task'` to `QueueKind`, an enqueue in `addTask`'s network-catch, a
+    `replayWrite` branch, and a Tasks-list pending row. No new mechanism needed.
+  - **New English strings owe 5-lang copy** (spec row 6): "Pending sync", "Synced … may be out of date", the queued
+    toast, the drop-notice. Machine translation forbidden.
 Scope **mobile**, effort **XL**, **no contract change** (pure client-side; the backend never knows the app was offline).
 
 Grounded triage: `docs/spec/ISSUES-2026-08-18.md` §57. Integrates with the honesty channel

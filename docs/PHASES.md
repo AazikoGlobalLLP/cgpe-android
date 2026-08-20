@@ -14,6 +14,19 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 57b BUILT (safe write queue — Notes).** The second half of offline support: a note created while
+offline is no longer lost or falsely reported as saved. `addNote` now returns a 3-outcome `AddNoteResult` — **saved** (server
+accepted), **queued** (network was down → additive draft held to sync; NO success haptic, "saved on this device" toast), **failed**
+(server ANSWERED and refused → NOT queued). Pure tested seam `src/lib/writeQueue.ts` (parse/serialize, cap, `bumpAttempt`,
+`flushDecision`: 2xx→sync / 4xx+attempt-cap→drop / 5xx+network→keep); reactive `src/data/pendingWrites.ts` bus + `src/ui/pending.tsx`
+(`usePendingWrites`/`useDropNotice`/`PendingBadge`); `flushWriteQueue()` in api.ts (re-entrancy-guarded replay); `QueueFlusher` gate
+in `_layout` fires on **sign-in / foreground / health-recovery (next-success)**; queue **persists across logout** (per-user), read
+cache does not. `notes.tsx`: pending drafts render on top with a "Pending sync" badge, the composer is available offline, a flushed
+draft reconciles (temp-id→server-id via reload), a refused draft drops with a one-time banner. Gates `tsc` 0 · `npm test` **747**
+(+18 across 57a+57b) · eslint 0 new. **Deliberate sub-scope: the queue mechanism is kind-generic but only Notes is wired (all 5
+acceptance criteria are Notes) — Task-create is the documented remaining 57b piece.** New English strings owe 5-lang copy.
+JS-only (OTA-eligible), **device-unverified**. Spec: `docs/spec/PHASE-57.md` (Build log). Commit pending push.
+
 **✅ 2026-08-20 — PHASE 57a BUILT + PUSHED (owner chose Phase 57 offline after Phase 72 re-verified still blocked).** The read-cache
 half of offline support: a per-user, versioned AsyncStorage copy of the last SUCCESSFUL list read, so a failed re-fetch shows the last
 good rows with a **"Synced <time> · may be out of date"** chip instead of an empty screen — the honest **third state** (live / stale /

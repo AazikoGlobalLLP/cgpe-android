@@ -15,6 +15,8 @@ import { SwipeRow } from '@/ui/swipe';
 import type { SwipeAction } from '@/ui/swipe';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
+import { usePendingWrites, useDropNotice, PendingBadge } from '@/ui/pending';
+import { setDropNotice } from '@/data/pendingWrites';
 import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
 import { timeAgo } from '@/lib/format';
@@ -124,6 +126,12 @@ export default function Notes() {
   const [saving, setSaving] = useState(false);
   const [writeError, setWriteError] = useState<string | null>(null);
 
+  // PHASE 57b — offline write queue. The pending note drafts (created offline, awaiting sync) and a
+  // one-time "couldn't save" notice both come from the write-queue bus, so they survive an app kill
+  // and update the moment a background flush lands.
+  const pendingRaw = usePendingWrites('note');
+  const dropNotice = useDropNotice();
+
   /** Leak guards: nothing lands on this screen once it is gone, and no superseded
    *  request may overwrite a newer one. */
   const live = useRef(true);
@@ -198,16 +206,29 @@ export default function Notes() {
     setSaving(true);
     setWriteError(null);
 
-    const created = await api.addNote(text, draftCat, []);
+    const res = await api.addNote(text, draftCat, []);
     if (!live.current) return;
     setSaving(false);
 
-    if (!created) {
+    // PHASE 57b: the server ANSWERED and refused it — nothing saved, nothing queued.
+    if (res.status === 'failed') {
       haptics.error();
       setWriteError('That note was not saved. The server refused the write, so nothing has been added to your board.');
       return;
     }
 
+    // PHASE 57b: the network was down, so the additive draft is queued to sync later. This is NOT a
+    // success — the pending row renders from the write-queue bus, so no manual insert is needed.
+    if (res.status === 'queued') {
+      haptics.tap();   // a neutral acknowledgement, never the success buzz — it isn't on the server yet
+      setDraft('');
+      setComposing(false);
+      toast("Saved on this device — it'll sync when you're back online.", 'offline');
+      return;
+    }
+
+    // res.status === 'saved' — the server accepted it.
+    const created = res.note;
     haptics.success();
     setDraft('');
     setComposing(false);
@@ -297,6 +318,27 @@ export default function Notes() {
    *  another screen's outage to this board. */
   const outage = loadFailed || health.failures.includes('/notice-board');
 
+  // PHASE 57b: offline drafts render on TOP of the board, but only when unfiltered — a filter/search
+  // could hide a draft whose category doesn't match, which reads as a lost note. Temp ids never
+  // collide with server ids, so no dedup is needed beyond guarding a (theoretical) repeat.
+  const pendingNotes = useMemo(() => pendingRaw.map(api.noteDraftToBoardNote).reverse(), [pendingRaw]);
+  const showPending = cat === 'all' && !q.trim();
+  const listData = useMemo(() => {
+    if (!showPending || pendingNotes.length === 0) return items;
+    const pendingIds = new Set(pendingNotes.map((n) => n.id));
+    return [...pendingNotes, ...items.filter((n) => !pendingIds.has(n.id))];
+  }, [showPending, pendingNotes, items]);
+
+  // When the queue SHRINKS, a flush synced or dropped a draft: pull the server copy so a synced note
+  // swaps its temp id for the real one (a dropped draft simply disappears with the bus update).
+  const prevPending = useRef(pendingRaw.length);
+  useEffect(() => {
+    if (pendingRaw.length < prevPending.current && !loading) {
+      void load(1, q.trim(), cat, 'refresh');
+    }
+    prevPending.current = pendingRaw.length;
+  }, [pendingRaw.length, loading, load, q, cat]);
+
   const chips = useMemo(() => ([
     { key: 'all', label: 'All' },
     ...facets.categories.map((f) => ({ key: f.label, label: catMeta(f.label).label, count: f.value })),
@@ -308,8 +350,11 @@ export default function Notes() {
   const showControls = !noBoard && !(outage && items.length === 0);
   // Withheld until the board has resolved. Mounting it earlier would let an account with
   // no phone start a draft that is then unmounted (and lost) the moment the empty board
-  // comes back, on top of offering a write the server would certainly refuse.
-  const showComposer = !loading && !noBoard && !outage;
+  // comes back.
+  // PHASE 57b: no longer withheld on an OUTAGE — an offline write is now QUEUED (not refused), so
+  // the composer must stay available so a member can jot a note while the server is unreachable.
+  // (`noBoard` is false during an outage anyway, since it requires a resolved `!outage` read.)
+  const showComposer = !loading && !noBoard;
 
   const clearFilters = useCallback(() => {
     haptics.select();
@@ -379,6 +424,19 @@ export default function Notes() {
         </View>
       ) : null}
 
+      {/* PHASE 57b: a one-time notice when the server refused an offline draft on flush (a 4xx).
+          The draft is already removed from the queue — this just makes the removal honest. */}
+      {dropNotice ? (
+        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>
+          <Banner
+            tone="warning"
+            title="Some offline notes were not saved"
+            message={dropNotice}
+            onDismiss={() => setDropNotice(null)}
+          />
+        </View>
+      ) : null}
+
       {showControls ? (
         <View style={{
           paddingHorizontal: spacing.lg,
@@ -429,7 +487,7 @@ export default function Notes() {
         <BoardSkeleton />
       ) : (
         <FlatList<BoardNote>
-          data={items}
+          data={listData}
           keyExtractor={(n) => n.id}
           style={{ flex: 1 }}
           contentContainerStyle={{ paddingBottom: spacing.xxl }}
@@ -446,12 +504,12 @@ export default function Notes() {
               progressBackgroundColor={c.card}
             />
           }
-          ListHeaderComponent={items.length > 0 ? <Hairline top /> : null}
+          ListHeaderComponent={listData.length > 0 ? <Hairline top /> : null}
           ItemSeparatorComponent={NoteSeparator}
           ListEmptyComponent={empty}
           ListFooterComponent={
             <BoardFooter
-              count={items.length}
+              count={listData.length}
               loadingMore={loadingMore}
               hasMore={page < totalPages}
               onLoadMore={loadMore}
@@ -520,7 +578,9 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
     ? (revealed ? 'Hide original dictation' : 'Show original dictation')
     : (revealed ? 'Show less' : 'Show more');
 
-  const actions: SwipeAction[] = [
+  // PHASE 57b: a pending (offline-queued) draft isn't on the server yet, so pin/delete — both server
+  // writes — don't apply. No swipe actions until it syncs.
+  const actions: SwipeAction[] = note.pending ? [] : [
     {
       icon: note.pinned ? 'pin-outline' : 'pin',
       label: note.pinned ? 'Unpin' : 'Pin',
@@ -569,6 +629,7 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
             )}
 
             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+              {note.pending ? <PendingBadge /> : null}
               <Pill label={meta.label} tone={meta.tone} icon={meta.icon} small />
               {isVoice ? <Pill label="Voice note" tone="accent" icon="mic" small /> : null}
               {note.pinned ? <Pill label="Pinned" tone="primary" icon="pin" small /> : null}

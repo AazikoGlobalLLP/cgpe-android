@@ -20,6 +20,7 @@ import {
   cacheKey, isCacheKey, isUserCacheKey, serializeEntry, parseEntry, gcVictims,
   type CacheEntry,
 } from '@/lib/offlineCache';
+import { queueKey, parseQueue, serializeQueue, type QueuedWrite } from '@/lib/writeQueue';
 
 /** Write-through: store one endpoint's freshly-fetched rows for this user, stamped now. */
 export async function writeList<T>(userId: string, endpointKey: string, rows: T[]): Promise<void> {
@@ -53,6 +54,30 @@ export async function purgeUser(userId: string): Promise<void> {
     if (doomed.length) await AsyncStorage.multiRemove(doomed);
   } catch {
     // Purge must never block sign-out.
+  }
+}
+
+/* ------------------------------------------------------- Write queue (57b) */
+
+/** Load one user's persisted write queue (empty on a miss / corrupt / storage error). */
+export async function loadQueue(userId: string): Promise<QueuedWrite[]> {
+  try {
+    return parseQueue(await AsyncStorage.getItem(queueKey(userId)));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Persist one user's write queue. Unlike the read cache, the queue is NOT swept on sign-out — it
+ * holds the user's unsent work and must survive until it flushes (spec row 12).
+ */
+export async function saveQueue(userId: string, list: QueuedWrite[]): Promise<void> {
+  try {
+    await AsyncStorage.setItem(queueKey(userId), serializeQueue(list));
+  } catch {
+    // A queue write that fails just means the draft isn't persisted across a kill — the in-memory
+    // bus still shows it this session; never throw into the create path.
   }
 }
 

@@ -41,7 +41,8 @@ import { JobsProvider } from '@/store/jobs';
 import { AppUiProvider, useAppUi } from '@/store/appUi';
 import { JobPill } from '@/ui/JobPill';
 import { HealthBanner } from '@/ui/health-banner';
-import { getLocationConsent, needsConsentGate } from '@/data/api';
+import { getLocationConsent, needsConsentGate, flushWriteQueue } from '@/data/api';
+import { subscribeHealth } from '@/data/health';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -198,6 +199,29 @@ function CalendarGate() {
   return null;
 }
 
+/**
+ * PHASE 57b — flush the offline write queue. On sign-in (mount), on every app foreground, and when
+ * the outage clears (the health channel goes non-degraded = the "next-success" reconnect signal),
+ * replay any creates a member made while offline. `flushWriteQueue` is re-entrancy-guarded and a
+ * no-op on an empty queue, so firing from three triggers is safe. Mounted once at the root beside
+ * the other gates; headless, no setState. NOT web-gated — the queue works on web too. Gated on
+ * `user` so it runs only for a signed-in account and re-subscribes for the next one.
+ */
+function QueueFlusher() {
+  const { user } = useAuth();
+  useEffect(() => {
+    if (!user) return;
+    void flushWriteQueue();   // sign-in / cold start
+    const appSub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void flushWriteQueue();   // foreground (spec row 10)
+    });
+    // next-success: when the last failure clears, the network is back — try the queue.
+    const healthUnsub = subscribeHealth((h) => { if (!h.degraded) void flushWriteQueue(); });
+    return () => { appSub.remove(); healthUnsub(); };
+  }, [user]);
+  return null;
+}
+
 function BrandTheme({ children }: { children: React.ReactNode }) {
   const base = useTheme();
   const { config } = useAppUi();
@@ -254,6 +278,9 @@ function RootNav() {
       {/* PHASE 73: auto-add assigned tasks/reminders to the phone calendar on sign-in/foreground,
           remove them on sign-out. Native-only, headless — see CalendarGate above. */}
       <CalendarGate />
+      {/* PHASE 57b: replay offline-created notes on sign-in / foreground / reconnect.
+          Headless, all-platform — see QueueFlusher above. */}
+      <QueueFlusher />
       {/* PHASE 41d §5: block a consented 24/7 user behind a "turn location back on" notice while
           location is off (owner-locked immediate trigger). Overlay, native-only — see LocationBlock.
           Below AppLock's zIndex so the biometric device lock always wins if both are up. */}

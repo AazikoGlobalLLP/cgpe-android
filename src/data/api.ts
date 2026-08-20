@@ -42,6 +42,13 @@ import { reportFailure, reportSuccess } from './health';
 import { markFresh, markStale } from './freshness';
 import * as offlineStore from './offlineStore';
 import { decideRead, mergeById } from '@/lib/offlineCache';
+// PHASE 57b — the safe offline write queue. Pure decisions in `lib/writeQueue`; the reactive
+// in-memory mirror the UI renders from is `data/pendingWrites`.
+import {
+  addToQueue, removeFromQueue, bumpAttempt, flushDecision,
+  type QueuedWrite, type QueueKind, type FlushOutcome,
+} from '@/lib/writeQueue';
+import * as pendingBus from './pendingWrites';
 import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification, adaptLicPlan } from './adapt';
 // Types only. The seed arrays these modules once exported (`teamMembers`, `teamActivityFeed`,
 // `tasks`) were deleted — importing them is what kept sample records inside the shipped bundle,
@@ -81,6 +88,10 @@ export function setAuthToken(t: string | null) {
 }
 export function setCurrentUser(id: string | null, name?: string | null) {
   currentUserId = id; currentUserName = name || null;
+  // PHASE 57b: mirror this user's persisted write queue into the reactive bus (drops the previous
+  // user's on sign-out). Fire-and-forget — a screen re-renders when it lands.
+  if (id) void offlineStore.loadQueue(id).then(pendingBus.setPending).catch(() => {});
+  else pendingBus.resetPending();
 }
 export function isRealSession() { return sessionReal; }
 
@@ -3262,6 +3273,8 @@ export type BoardNote = {
   ownerRole: string;
   createdAt: string | null;
   updatedAt: string | null;
+  /** PHASE 57b: true for an offline draft that is queued to sync — drives the "Pending sync" badge. */
+  pending?: boolean;
 };
 
 export type NotesPage = {
@@ -3309,12 +3322,133 @@ export async function getNotes(opts: { search?: string; category?: string; page?
   };
 }
 
-export async function addNote(text: string, category = 'note', tags: string[] = []): Promise<BoardNote | null> {
-  if (!sessionReal || FORCE_DEMO) return null;
+/**
+ * PHASE 57b — a note create now has THREE honest outcomes, not two:
+ *   - `saved`  — the server accepted it (a real BoardNote with a server id).
+ *   - `queued` — the NETWORK was down (the request threw), so the additive draft was queued to
+ *                sync later. The returned note is an optimistic copy with a temp id + `pending`.
+ *   - `failed` — the server ANSWERED and refused it (a 4xx/5xx), or there was no session. This is
+ *                NOT queued: replaying a rejected write is wrong (spec rows 9/11).
+ * The screen fires a success haptic ONLY on `saved`; `queued` says "saved on this device".
+ */
+export type AddNoteResult =
+  | { status: 'saved'; note: BoardNote }
+  | { status: 'queued'; note: BoardNote }
+  | { status: 'failed' };
+
+export async function addNote(text: string, category = 'note', tags: string[] = []): Promise<AddNoteResult> {
+  if (!sessionReal || FORCE_DEMO) return { status: 'failed' };
+  const payload = { text, category, tags };
   try {
-    const { ok, json } = await req('/notice-board', { method: 'POST', body: JSON.stringify({ text, category, tags }) });
-    return ok && json?.success ? (json.data as BoardNote) : null;
-  } catch { return null; }
+    const { ok, json } = await req('/notice-board', { method: 'POST', body: JSON.stringify(payload) });
+    if (ok && json?.success) return { status: 'saved', note: json.data as BoardNote };
+    return { status: 'failed' };   // server answered but refused — NOT queued
+  } catch {
+    // Network failure (dead network / timeout abort) → queue the additive draft.
+    const draft = await enqueueWrite('note', payload);
+    return draft ? { status: 'queued', note: noteDraftToBoardNote(draft) } : { status: 'failed' };
+  }
+}
+
+/* ------------------------------------------------ Offline write queue (57b) */
+
+/** Append one create to the signed-in user's persisted queue + reactive bus. Null if no session. */
+async function enqueueWrite(kind: QueueKind, payload: Record<string, unknown>): Promise<QueuedWrite | null> {
+  const uid = currentUserId;
+  if (!uid) return null;
+  const draft: QueuedWrite = {
+    // A temp id the UI keys the pending row on, replaced by the server id once flushed. Uniqueness
+    // is best-effort (time + a little entropy); the queue is small and per-user.
+    id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    kind,
+    payload,
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  };
+  const next = addToQueue(await offlineStore.loadQueue(uid), draft);
+  await offlineStore.saveQueue(uid, next);
+  pendingBus.setPending(next);
+  return draft;
+}
+
+/** Render a queued note draft as a `BoardNote` so a screen shows it in the list, flagged pending. */
+export function noteDraftToBoardNote(d: QueuedWrite): BoardNote {
+  const p = d.payload as { text?: string; category?: string; tags?: string[] };
+  return {
+    id: d.id,
+    noticeId: null,
+    text: String(p.text ?? ''),
+    transcript: '',
+    sourceType: 'text',
+    category: String(p.category ?? 'note'),
+    tags: Array.isArray(p.tags) ? p.tags : [],
+    pinned: false,
+    status: 'pending',
+    ownerName: currentUserName ?? '',
+    ownerRole: '',
+    createdAt: d.createdAt,
+    updatedAt: d.createdAt,
+    pending: true,
+  };
+}
+
+/** Replay one queued create against its real endpoint. Returns the HTTP outcome for `flushDecision`. */
+async function replayWrite(draft: QueuedWrite): Promise<{ ok: boolean; status: number }> {
+  if (draft.kind === 'note') {
+    const { ok, status, json } = await req('/notice-board', {
+      method: 'POST',
+      body: JSON.stringify(draft.payload),
+    });
+    // A 200 with `success:false` is a refusal, not a success — map it to a drop-worthy status.
+    const serverOk = ok && json?.success !== false;
+    return { ok: serverOk, status: serverOk ? status : ok ? 422 : status };
+  }
+  return { ok: false, status: 400 };   // unknown kind → drop (should never happen)
+}
+
+let flushing = false;
+
+/**
+ * Replay every queued create for the signed-in user (spec rows 10/11). Called on sign-in, on app
+ * foreground, and when the outage clears (`QueueFlusher` in `_layout`). Re-entrancy-guarded so the
+ * three triggers can't overlap. Each draft: 2xx → removed (synced); 4xx / attempt-cap → removed
+ * (dropped, the caller surfaces a one-time notice); 5xx / network → kept for the next reconnect.
+ * Persists + updates the bus after each step so a mid-flush kill leaves a consistent queue.
+ */
+export async function flushWriteQueue(): Promise<{ synced: number; dropped: number }> {
+  const uid = currentUserId;
+  if (!uid || !sessionReal || flushing) return { synced: 0, dropped: 0 };
+  flushing = true;
+  let synced = 0;
+  let dropped = 0;
+  try {
+    let queue = await offlineStore.loadQueue(uid);
+    for (const draft of queue) {
+      let outcome: FlushOutcome;
+      try {
+        outcome = flushDecision(await replayWrite(draft), draft.attempts);
+      } catch {
+        outcome = flushDecision('threw', draft.attempts);
+      }
+      if (outcome === 'synced') { queue = removeFromQueue(queue, draft.id); synced++; }
+      else if (outcome === 'drop') { queue = removeFromQueue(queue, draft.id); dropped++; }
+      else { queue = bumpAttempt(queue, draft.id); }
+      await offlineStore.saveQueue(uid, queue);
+      pendingBus.setPending(queue);
+    }
+    if (dropped > 0) {
+      // The server refused these (a 4xx / attempt-cap). Surface it once — an offline draft that
+      // silently vanished would read as data loss.
+      pendingBus.setDropNotice(
+        dropped === 1
+          ? 'One offline note could not be saved and was removed.'
+          : `${dropped} offline notes could not be saved and were removed.`,
+      );
+    }
+  } finally {
+    flushing = false;
+  }
+  return { synced, dropped };
 }
 
 export async function updateNote(
