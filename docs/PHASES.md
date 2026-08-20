@@ -14,6 +14,27 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 57a BUILT + PUSHED (owner chose Phase 57 offline after Phase 72 re-verified still blocked).** The read-cache
+half of offline support: a per-user, versioned AsyncStorage copy of the last SUCCESSFUL list read, so a failed re-fetch shows the last
+good rows with a **"Synced <time> · may be out of date"** chip instead of an empty screen — the honest **third state** (live / stale /
+could-not-load) beside the degraded banner. Pure tested seam `src/lib/offlineCache.ts` (keys, (de)serialize, 30-day `gcVictims`, the
+3-state `decideRead`, `mergeById` = keeps this-session offline creates visible atop an older snapshot); device-only I/O
+`src/data/offlineStore.ts` (raw AsyncStorage — SecureStore size limits — failure-swallowing, once-per-session age GC); freshness bus
+`src/data/freshness.ts` (sibling to `health.ts`, drives the chip without changing any read's return type); `src/ui/SyncChip.tsx` (+
+`useDataFreshness`). `cachedList()` wraps **getTasks / getLeads / getReminders / getNotifications** — write-through on success, serve
+cache on failure; **online behaviour byte-identical**. **Row-3 (DPDP): Clients & Claims stay online-only — no client-book PII / ₹ at
+rest.** Purged on sign-out (`cache.*` sweep + `resetFreshness`). Chip wired on the Tasks tab (the acceptance screen; the other three
+cache rows already, chip is a 1-line follow-up). Gates `tsc` 0 · `npm test` **729** (+15) · eslint 0 new (2 pre-existing api.ts warns).
+**⚠️ New "Synced … may be out of date" string is hardcoded ENGLISH (spec row 6) — owes 5-lang HUMAN copy before it becomes
+`common.lastSynced` (machine translation forbidden).** JS-only (**OTA-eligible** — AsyncStorage already a dep), **device-unverified**.
+Commit `20eb4ed`, pushed `aaziko/Shivam`. Spec: `docs/spec/PHASE-57.md` (locked, owner-approved). **NEXT half = 57b safe write queue.**
+
+**⚠️ 2026-08-20 — PHASE 72 RE-VERIFIED STILL BLOCKED (fresh probe this session).** Backend push code exists in `../cgpe-backend-main`
+working tree but is **uncommitted** (`?? routes/push.js`/`models/PushToken.js`/`services/push.js`/`services/taskReminderScheduler.js`,
+` M routes/{tasks,leads}.js`/`utils/notify.js`), **absent from `origin/main`** (fetched tip `f65e56a`), and prod `POST /push/register`
+= **404** (health 200); FCM/EAS key still unset. cgpe-api's INBOX reply self-flags it "NOT yet committed/deployed." Do NOT cut the APK
+or mark 72 done. Unblock = owner relays: backend commit→merge `origin/main`→deploy→restart `:3001` + Firebase/FCM V1 key on EAS.
+
 **✅ 2026-08-20 — PHASE 55 BUILT + PUSHED (owner chose it while Phase 72 stays blocked on backend+Firebase).** The "app doesn't
 work on my WiFi / this phone" complaint is fixed on the client side. The single **4.5 s** timeout (which also blocked *sign-in*)
 is gone: reads **12 s**, login/OTP **15 s**, uploads **30 s** (owner-locked "Balanced"). An idempotent **read** now **retries once**
