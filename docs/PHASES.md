@@ -14,6 +14,18 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 55 BUILT + PUSHED (owner chose it while Phase 72 stays blocked on backend+Firebase).** The "app doesn't
+work on my WiFi / this phone" complaint is fixed on the client side. The single **4.5 s** timeout (which also blocked *sign-in*)
+is gone: reads **12 s**, login/OTP **15 s**, uploads **30 s** (owner-locked "Balanced"). An idempotent **read** now **retries once**
+(600 ms backoff) on a throw / 5xx / 429 and self-recovers; **writes/uploads never retry** (no double clock-in/send/upload). The
+outage banner now **names the failure** (slow-server / can't-reach-network / server-error) via a `FailureKind` threaded into
+`data/health`. `uploadFile` gained an **AbortController** (it had none — hung forever). NEW **`testConnection()` + Settings "Test
+connection"** verdict tells an app problem from a WiFi problem on-device. Pure tested seam `src/lib/netResilience.ts`.
+**⚠️ 501 EXCLUDED from retry** — it is this backend's "not deployed" quiet answer (like 404), not a fault (surfaced by two tests
+going red). Gates `tsc` 0 · `npm test` **714** (+24) · eslint 0 new. Commit `941c583`. **Honest limits (spec `docs/spec/PHASE-55.md`):**
+device-unverified (JS-only, rides the pending native batch APK); new English strings owe 5-lang copy; suite wall-time ~0.6 s → ~4 s
+(real-timer retry tests pay 600 ms each); DNS/captive-portal/firewall stay network-side. `[m]`-only, no contract change.
+
 **✅ 2026-08-20 — PHASE 65 BUILT + PUSHED (owner chose it over waiting on Phase 72's backend).** The last un-built mobile piece
 from the 63–69 batch is done: the master's Monitor roster + Agent map now source their people-universe from the deployed
 super_admin-gated `/live-locations` (walks EVERY profile) instead of `/team/task-overview` (grouped by `team_tasks` assignee), so
@@ -296,11 +308,16 @@ Phase 66 to show.** `git push` still 403s — every commit local.
   teammate/firm leads the LIST returns for a leader/member — the leader-tier trap. Fix: detail uses the same
   `visibilityScope/canSee` as the list (`utils/scope.js`), + parity on `PUT /:id:455`. **Mobile zero-change** (Lead has
   no `advisor_id`). Scope backend · S · quick. (Also corrects a stale `api.ts:908` comment.)
-- **Phase 55 — [m] Network resilience** (the "doesn't work on my WiFi/phone" complaint). `req()` has a **4.5 s** hard
-  timeout (`config.ts:65`), **zero retry**, no error-kind, no self-test; `login()` uses the same 4.5 s so a slow net
-  can't sign in; `uploadFile` has no AbortController. Fix: timeout→~12–15 s, bounded retry+backoff (GET+login, not
-  writes), distinguish timeout/DNS/TLS, `/health` "Test connection", abort uploads. Scope mobile · M. DNS/captive-
-  portal/firewall stay network-side (test `/health` in the phone browser).
+- **Phase 55 — [m] Network resilience** (the "doesn't work on my WiFi/phone" complaint). **✅ BUILT + PUSHED 2026-08-20
+  (commit `941c583`, `aaziko/Shivam`).** The 4.5 s timeout is gone (reads 12 s / login 15 s / upload 30 s, owner-locked
+  "Balanced"); idempotent reads retry once (600 ms backoff, throw/5xx/429 — 501 excluded as the "not-deployed" quiet
+  answer; writes/uploads never retry); `FailureKind` (timeout/network/server) threaded into `data/health` → kind-aware
+  banner; `uploadFile` AbortController; NEW `testConnection()` + Settings "Test connection" verdict. Pure seam
+  `src/lib/netResilience.ts`. `tsc` 0 · `npm test` **714** (+24) · eslint 0 new. Spec `docs/spec/PHASE-55.md`. **Remaining:**
+  device pass on a slow/flaky handset; 5-lang copy for the new strings; DNS/captive-portal/firewall stay network-side
+  (test `/health` in the phone browser). Original triage retained below. `req()` had a **4.5 s** hard
+  timeout (`config.ts:65`), **zero retry**, no error-kind, no self-test; `login()` used the same 4.5 s so a slow net
+  couldn't sign in; `uploadFile` had no AbortController. Scope mobile · M.
 - **Phase 56 — [m] iOS enablement (owner priority).** App IS buildable (plist via config plugins, `bundleIdentifier`
   set) but **never built for iOS**; missing = `eas.json` ios profile + an **Apple Developer account ($99/yr, hard
   prereq)**. Honest 24/7: iOS is first-class for login/data/map/Face ID + on-duty background route while the app runs,
@@ -1698,9 +1715,9 @@ All five ride ONE combined native APK (72/73 force a rebuild) — not yet cut. *
    `is_active` `[api]` note.
 
 **Also standing (lower priority):**
-Phases 54/55/56/57 from the 2026-08-18 batch (lead-open `[api]`, network resilience, iOS gated on an Apple account, offline);
-Phase 41 on-device verification (owner: do last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live,
-biometric, break-gate) on ≥2 phone brands.
+Phases 54/56/57 from the 2026-08-18 batch (lead-open `[api]`, iOS gated on an Apple account, offline) — **Phase 55 (network
+resilience) is now BUILT + PUSHED, `941c583`** (device pass + 5-lang copy remain); Phase 41 on-device verification (owner: do
+last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live, biometric, break-gate) on ≥2 phone brands.
 
 **⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
 iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability

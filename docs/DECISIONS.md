@@ -6,6 +6,39 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 55 built (network resilience); retry lives in `req()` for idempotent reads, 501 excluded
+
+**Context.** Owner re-confirmed Phase 72 (team push) is blocked on the backend + Firebase (re-verified prod
+`/push/register` → 404, push code uncommitted in `../cgpe-backend-main`), and chose to build **Phase 55**
+instead — the "app doesn't work on my WiFi / this phone" complaint. Spec `docs/spec/ISSUES-2026-08-18.md`
+§55 gave ranges, not exact numbers. Owner locked (AskUserQuestion) the **"Balanced"** preset and the **full**
+scope (Test-connection button + kind-aware banner).
+
+**Decision.**
+- **Numbers (owner-locked):** read timeout 4.5 s → **12 s**, login/OTP **15 s**, upload **30 s**, **1** retry
+  with **600 ms** exponential backoff. All in `src/constants/config.ts`. The exact seconds were a judgement
+  call (no p95 measurement of the failing networks exists).
+- **Retry belongs in `req()` and fires for IDEMPOTENT reads only** (a bare `req()` is a GET; every write
+  passes a method), and only on a throw (network / our abort) or a transient status. Writes/uploads get one
+  attempt so a clock-in / WhatsApp send / file upload can never double-fire.
+- **501 is EXCLUDED from `isRetryableStatus`** despite being a 5xx: this backend uses 501 as the "endpoint
+  not on the deployed build" signal, which `reportIfOutage` already treats as a quiet ANSWER (like 404).
+  Retrying it is pointless and breaks the quiet-answer contract. This was surfaced by two existing tests
+  (`api-break`, `api-live-locations`) going red — a real correctness find, not a test tweak.
+- **A kind-less `reportFailure(endpoint)` PRESERVES the last `FailureKind`** rather than nulling it, because
+  the common read path reports the same endpoint twice (`tryReal` with a kind, then the generic
+  `unavailable` without one). Kinds only ever come from the classifiers, so preserving can never introduce a
+  wrong one; it is cleared only when the failure list empties.
+- **`uploadFile` gains an AbortController** (it had none — hung forever). **`testConnection()`** pings the
+  unauthenticated `/health` with NO retry (a diagnostic reports the first result honestly) and drives a
+  Settings "Test connection" verdict.
+
+**Consequence.** `tsc` 0 · `npm test` **714** (+24) · eslint 0 new. Commit `941c583`, pushed `aaziko/Shivam`.
+Pure `[m]`, no contract change. **Two costs, accepted:** (1) the suite's wall-time rose ~0.6 s → ~4 s because
+real-timer api tests that exercise a retryable GET failure now each pay one real 600 ms backoff — a future
+cleanup could fake-timer those files; (2) a handful of new on-screen English strings owe 5-language human
+copy. **Device-unverified** (JS-only, rides the pending native batch APK). Full spec: `docs/spec/PHASE-55.md`.
+
 ## 2026-08-20 — Phase 65 built (full-staff monitor roster / map from `/live-locations`); Phase 72 "backend done" signal verified PREMATURE
 
 **Context.** Owner said "wait, look at this — backend finished the task" (Phase 72 push). Per the standing

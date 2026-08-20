@@ -90,7 +90,18 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   `api-leads.test.ts`, `api-whatsapp.test.ts` and `api-renewals.test.ts` are the pattern to copy.
   Timers are faked, so a call that reaches `unavailable()` **must not be awaited directly** — hold
   the promise, `await vi.advanceTimersByTimeAsync(400)`, then await it, or the test times out on
-  `wait()`.
+  `wait()`. **⚠️ RETRY-BACKOFF-IN-TEST TRAP (Phase 55, 2026-08-20): `req()` now retries IDEMPOTENT
+  reads once** (a bare `req()` = GET; writes pass a method and never retry) **on a throw / 5xx / 429**,
+  with a **600 ms backoff `wait()` BEFORE the retry** (`RETRY_ATTEMPTS`/`RETRY_BACKOFF_MS` in
+  `config.ts`; pure logic in `src/lib/netResilience.ts`). So a fake-timer test that drives a GET to a
+  throw or a 5xx must advance PAST the backoff (`advanceTimersByTimeAsync(2000)`, not 400) or it
+  hangs, and a failed-GET `toHaveBeenCalledTimes(1)` is now **2**. Real-timer api tests (api-geo,
+  api-commissions, …) pay a real 600 ms per retrying-failure test — the suite went ~0.6 s → ~4 s;
+  that's the retry, not a regression. **`501` is EXCLUDED from `isRetryableStatus`** on purpose: it is
+  this backend's "endpoint not deployed" quiet answer (like 404), NOT a transient fault — keep it in
+  step with `reportIfOutage`. Failure classification now carries a `FailureKind`
+  (`timeout`/`network`/`server`) into `data/health`; a kind-less `reportFailure` PRESERVES the last
+  kind (the read path reports the same endpoint twice). See `docs/spec/PHASE-55.md`.
 - `npm run lint` — **green as of Phase 15 (2026-08-11): 0 errors, 12 warnings.** Rule is still
   **no new errors**. **Takes longer than 120 s**, so it exceeds the default tool timeout — run it in
   the background or raise the timeout, and read the count off the `✖ N problems (…errors, …warnings)`

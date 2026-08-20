@@ -1,66 +1,79 @@
-# HANDOFF — CGPE Connect (Android) — Phase 65 built & pushed — 2026-08-20
+# HANDOFF — CGPE Connect (Android) — Phase 55 built & pushed — 2026-08-20
 
-Owner chose to build **Phase 65** (full-staff monitor roster) rather than wait on Phase 72's backend.
-Phase 65 is fully built, tested, and pushed. **Phase 72 stays PENDING** — the owner's "backend done"
-signal was verified PREMATURE (backend code is written but uncommitted, 404 on prod, no Firebase).
+Owner chose to build **Phase 55 (network resilience)** while Phase 72 stays blocked on the backend +
+Firebase. Phase 55 is built, gated, committed (`941c583`), and pushed to `aaziko/Shivam`. It is the
+"app doesn't work on my WiFi / this phone" fix. **Phase 72 is still PENDING** — re-verified premature at
+the start of this session (prod `/push/register` 404, backend push code uncommitted / not on `origin/main`,
+Firebase unset).
 
 ## Done
-- **Every team member now appears on the master's Monitor roster and Agent map — even one who has
-  never been assigned a task.** Before, the roster's universe was `/team/task-overview` (grouped by
-  `team_tasks` assignee), so a member with zero tasks silently vanished ("only appears after they open
-  the app"). Now, for a master, the universe is the super_admin-gated `/live-locations` (walks EVERY
-  profile), left-joined with the task stats. A never-active member shows as **off-duty with zeroed
-  stats** instead of disappearing; when they clock in, their pin appears on the map even with no task.
-- Non-masters are untouched (they 403 on `/live-locations` → fall back to the exact old path, quietly).
-- Gates green: `tsc` 0 · `npm test` **690** (+21: roster 9, api-live-locations 11, api-agents +1) ·
-  eslint 0 new. Committed `0c4fde1` and pushed to `aaziko/Shivam`.
+- **A slow / loaded network no longer fails the app the way it did.** The single aggressive **4.5 s**
+  timeout (which also blocked *sign-in*) is gone: reads now wait **12 s**, login/OTP **15 s**, uploads
+  **30 s**. A dropped SYN / stalled handshake on an idempotent **read** is now **retried once** (600 ms
+  backoff) and self-recovers, so a transient blip never reaches the user. **Writes and uploads are never
+  retried** (no double clock-in / send / upload).
+- **The outage banner now names the failure** — "The server is responding slowly" vs "Can't reach the
+  network" vs "The server had a problem" — instead of one generic line.
+- **`uploadFile` no longer hangs forever** on a stalled socket (it had NO AbortController); it now fails
+  cleanly at 30 s.
+- **New Settings → "Test connection"** pings `/health` and gives a plain verdict, so the owner can tell an
+  **app** problem from a **WiFi** problem on the phone itself, on-site.
+- Gates green: `tsc` 0 · `npm test` **714** (+24: `netResilience` 12, `api-resilience` 12) · eslint 0 new
+  errors (3 warnings all pre-existing).
 
 ## Files changed
-- `src/data/roster.ts` — NEW, pure + tested: `mergeRoster(live, overview)` (left-join by NAME) and
-  `liveOnDutyPins(live)` (clocked-in → map pins), plus `LiveLocation`/`OverviewMember` types.
-- `src/data/api.ts` — NEW `getLiveLocations()` + pure `mapLiveLocation()` (quiet-on-403/404 like
-  `getBreakLocations`); master paths added to `getTeam()` and `getAgentLocations()`.
-- `src/data/__tests__/roster.test.ts` — NEW (+9). `api-live-locations.test.ts` — NEW (+11).
-  `api-agents.test.ts` — updated for the new live-first ordering + 1 master-path case.
-- `docs/spec/PHASE-65.md` — NEW spec (decision, join-key rationale, honest limits).
-- **No screen file changed** — `monitor.tsx` and `agent-map.tsx` consume these functions unchanged.
+- `src/constants/config.ts` — owner-locked "Balanced" knobs: `REQUEST_TIMEOUT` 4500→**12000**, new
+  `LOGIN_TIMEOUT` 15000 / `UPLOAD_TIMEOUT` 30000 / `RETRY_ATTEMPTS` 1 / `RETRY_BACKOFF_MS` 600 / `HEALTH_PATH`.
+- `src/lib/netResilience.ts` — **NEW** pure seam: `isIdempotentMethod` / `isRetryableStatus` (⚠️ 501
+  EXCLUDED — it is this backend's "not deployed" quiet answer, not a fault) / `kindForThrown` / `backoffMs`.
+- `src/data/api.ts` — `req()` bounded-retry loop (idempotent reads only); `login`/`sendOtp`/`verifyOtp`/
+  `refreshBiometric` pass `LOGIN_TIMEOUT`; `uploadFile` gains an AbortController; NEW `testConnection()`;
+  failure-kind threaded into `reportIfOutage`/`tryReal`; stale "4.5 s" comments corrected.
+- `src/data/health.ts` — `HealthState.kind` + optional `kind` on `reportFailure` (a kind-less report
+  PRESERVES the last kind so the `tryReal`→`unavailable` double-report can't erase it).
+- `src/ui/health-banner.tsx` — kind-aware headline (falls back to generic when kind is null).
+- `src/app/settings.tsx` — "Connection" section + "Test connection" row → plain app-vs-WiFi verdict.
+- `src/lib/__tests__/netResilience.test.ts` (**NEW**, +12) · `src/data/__tests__/api-resilience.test.ts`
+  (**NEW**, +12: retry/no-retry/kind/testConnection/upload-abort). Six existing test files updated for the
+  new retry timing/counts (fake-timer advances bumped past the 600 ms backoff; api-geo 2→3, api-renewals
+  1→2 fetch; health resetHealth gains `kind:null`) — none weakened.
+- `docs/spec/PHASE-55.md` — **NEW** spec (owner numbers, honest limits, the 501 decision).
 
 ## Decisions made
-- **Universe from `/live-locations`, join by NORMALIZED NAME not id.** The two endpoints key on
-  different id spaces (`/live-locations` → `profile._id` 24-hex; `/team/task-overview` → `user_id`
-  field `user_...`), so an id-join enriches nobody. Verified `/profiles/:id` accepts BOTH id types
-  (`routes/profiles.js:100-103`), so a roster row carrying the `_id` still navigates correctly.
-- **`[api]` prereq verified DEPLOYED before building** (deploy-gap discipline): live probe of
-  `/live-locations` → 401 (present, gated), and the Phase-69 ObjectId fix is in the deployed code.
-- **Show every staff member (greyed off-duty), not only ever-located ones** — the owner's complaint
-  mandates it. Vetoable.
+- **501 is NOT retryable** even though it is a 5xx. In this backend 501 = "endpoint not on the deployed
+  build", which `reportIfOutage` already treats as a quiet ANSWER like 404 — retrying it is pointless and
+  would break that quiet-answer contract. Surfaced by two tests going red; the fix is in `isRetryableStatus`.
+- **Retry lives in `req()` and applies to idempotent reads only** (a bare `req()` is a GET; every write
+  passes a method). This is where the spec says to put it; the cost is a real test tax (see below).
+- **A kind-less `reportFailure` preserves the last kind** rather than nulling it — kinds only ever come from
+  the classifiers, so preserving one can never introduce a wrong one, and it survives the read path's
+  double-report.
+- **Balanced numbers + full phase** were owner-locked via AskUserQuestion (no p95 data existed, so the exact
+  seconds were a judgement call).
 
 ## Known broken / deliberately skipped
-- **Map now shows "who's out RIGHT NOW."** A member who clocked OUT earlier today is no longer drawn
-  as a grey pin while someone else is on duty (`/live-locations` gives no coord for an off-duty
-  member) — they still appear in the roster. More honest, but a deliberate behavior change.
-- **`/live-locations` returns ALL profiles** (`.find({})`, no `is_active`), and its payload carries
-  no `is_active`, so a deactivated ex-employee could appear in the master roster. Over-inclusion is
-  the safe direction; if stale accounts show up on-device, the fix is an `[api]` (add `is_active` /
-  filter server-side). NOT filed yet — a candidate, not a blocker.
-- **Device-unverified** — JS-only, rides the batch APK (no new native module).
-- **Phase 72 (team push) still PENDING** — see below; do NOT cut the APK or mark it done.
+- **Device-unverified** — JS-only (OTA-eligible) but rides the pending native batch APK (70/71/72/73), which
+  bring native modules. Real proof needs a slow/flaky handset (sign-in succeeds where 4.5 s failed; a blip
+  self-recovers; the banner names the kind; Test connection gives the right verdict).
+- **New on-screen English strings** (Settings "Connection"/"Test connection" + 3 verdict messages + 3 banner
+  titles) ship as English now and still owe **5-language human copy** (machine translation forbidden).
+- **Suite wall-time rose ~0.6 s → ~4 s** — real-timer api tests that exercise a retryable GET failure now
+  pay one real 600 ms backoff each. Correct, just slower; a future cleanup could fake-timer those files.
+- **`Retry-After` on a 429 is ignored** (fixed exponential backoff). Immaterial for a single bounded retry.
+- **DNS / captive-portal / firewall-blocked-`cgpe.in`** stay network-side — no client change fixes them;
+  Test connection + the on-phone browser `/health` check is how you confirm it's the network.
+- **Phase 72 (team push) still PENDING** — do NOT cut the APK or mark it done until the backend + Firebase
+  are verifiably live.
 
 ## Next session starts here
-- **Phase 72 executes on a *verified* "backend live" signal** (not just a claim). The owner said
-  "backend ne kaam kar diya" this session; I verified it is NOT live — the push code in
-  `../cgpe-backend-main` is **uncommitted** (`?? routes/push.js`, `models/PushToken.js`,
-  `services/push.js`; ` M notify.js/tasks.js`), NOT on `origin/main` (tip `2531817` = Phase 69), and
-  prod `/push/register` returns **404** (health 200). cgpe-api's own INBOX note confirms "NOT yet
-  committed/deployed." Firebase/FCM also still unset. So Phase 72 needs: (1) backend dev commits →
-  merges `origin/main` → deploys → restarts `:3001`; (2) owner sets up Firebase for `com.cgpe.connect`
-  + FCM V1 key → EAS; (3) then re-verify (probe must be **401** not 404, a test token registers, a
-  test push arrives) and cut the ONE combined APK (65+70+71+72+73). Verify method:
-  `git -C ../cgpe-backend-main fetch` + `git status` on the push files + no-auth `curl .../push/register`.
-- If no verified signal yet: there is no un-built mobile piece left in the 63–73 batches. Candidates
-  are the Phase-65 `is_active` `[api]` note (only if a device test shows ex-employees), or the
-  2026-08-18 batch (Phase 55 network resilience, Phase 56 iOS — needs an Apple account).
+- **No un-built mobile piece remains in the 63–73 batch.** Two real candidates: (a) **Phase 72** — execute
+  ONLY on a *verified* "backend live" signal (re-probe: `git -C ../cgpe-backend-main fetch` + check the push
+  files are committed/on `origin/main` + no-auth `curl .../push/register` → **401** not 404; and FCM set up),
+  then cut the ONE combined APK (65+70+71+72+73); or (b) **Phase 56 (iOS)** — owner priority but gated on an
+  **Apple Developer account ($99/yr)** decision. Phase 54 (`[api]` lead-open), 57 (offline, XL), 58 (needs
+  owner repro) also stand.
 - First command: `/boot`
-- Watch out for: **do NOT trust "backend done" — probe prod (401=live, 404=not) and check `git status`
-  in `../cgpe-backend-main` before cutting an APK or marking Phase 72 done.** A push-less APK looks
-  done but buzzes nothing.
+- Watch out for: **do NOT trust "backend done" for Phase 72 — probe prod (401=live, 404=not) and check
+  `git status` in `../cgpe-backend-main` before cutting an APK or marking it done.** And if you touch `req()`
+  again, remember retry now adds a 600 ms backoff `wait()` to read-failure tests (fake-timer tests must
+  advance past it) and 501 must stay out of `isRetryableStatus`.
