@@ -98,7 +98,7 @@ describe('getLicPlans — failure classification', () => {
   it('a 500 resolves empty AND raises the outage banner', async () => {
     fetchSpy.mockResolvedValue(reply(500, { success: false, message: 'boom' }));
     const promise = api.getLicPlans();
-    await vi.advanceTimersByTimeAsync(400);   // unavailable() → wait()
+    await vi.advanceTimersByTimeAsync(2000);   // Phase 55: a 500 is retryable → GET tries twice, then unavailable()
     expect(await promise).toEqual([]);
     expect(health.getHealth().degraded).toBe(true);
     expect(health.getHealth().failures).toEqual(['/lic-plans']);

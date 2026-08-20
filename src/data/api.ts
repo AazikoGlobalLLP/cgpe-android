@@ -25,7 +25,13 @@
  * and it no longer synthesises records — it only short-circuits the network.
  */
 import { Platform } from 'react-native';
-import { API_BASE_URL, FORCE_DEMO, MOCK_LATENCY, REQUEST_TIMEOUT } from '@/constants/config';
+import {
+  API_BASE_URL, FORCE_DEMO, MOCK_LATENCY, REQUEST_TIMEOUT,
+  LOGIN_TIMEOUT, UPLOAD_TIMEOUT, RETRY_ATTEMPTS, RETRY_BACKOFF_MS, HEALTH_PATH,
+} from '@/constants/config';
+import {
+  isIdempotentMethod, isRetryableStatus, kindForThrown, backoffMs, type FailureKind,
+} from '@/lib/netResilience';
 import { expireSession, resetSessionGuard } from '@/lib/session';
 // PHASE 7: one string in this file is read off a screen by somebody standing in a car park.
 // `nbsp` is the house guarantee that a value never wraps between its number and its unit.
@@ -134,7 +140,9 @@ function reportIfOutage(status: number, key: string): void {
     return;
   }
   suppressed.delete(key);
-  reportFailure(key);
+  // Everything that reaches here is a fault the server ANSWERED (a 5xx, or a reportable 4xx that
+  // indicates a malformed request) — so the honest kind for the banner is 'server' (Phase 55).
+  reportFailure(key, 'server');
 }
 
 /**
@@ -159,24 +167,44 @@ async function req(
   timeout = REQUEST_TIMEOUT,
   key: string = healthKey(path),
 ): Promise<any> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeout);
-  try {
-    const res = await fetch(`${API_BASE_URL}${path}`, {
-      ...opts,
-      signal: controller.signal,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
-        ...(opts.headers || {}),
-      },
-    });
-    const json = await res.json().catch(() => null);
-    reportAuth(res.status, !!authToken, key);
-    return { ok: res.ok, status: res.status, json };
-  } finally {
-    clearTimeout(timer);
+  // PHASE 55 — bounded retry for IDEMPOTENT reads only. A bare req() is a GET; every write/upload
+  // passes an explicit method and gets a single attempt so a clock-in / send / upload can never
+  // double-fire. A retry is spent only on a THROW (dead network / our timeout abort) or a transient
+  // server status (5xx / 429) — never a considered 4xx answer. Decisions are pure in
+  // `src/lib/netResilience.ts`; the timeout is the caller's (READ 12s / LOGIN 15s / UPLOAD 30s).
+  const maxAttempts = 1 + (isIdempotentMethod(opts.method as string | undefined) ? RETRY_ATTEMPTS : 0);
+  let lastError: any;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await wait(backoffMs(attempt - 1, RETRY_BACKOFF_MS));   // exponential backoff before a retry
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeout);
+    try {
+      const res = await fetch(`${API_BASE_URL}${path}`, {
+        ...opts,
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...(opts.headers || {}),
+        },
+      });
+      // A transient server fault on a read is worth one more try; on the LAST attempt (or any
+      // non-retryable status) fall through and return it so the caller classifies it as usual.
+      if (attempt < maxAttempts - 1 && isRetryableStatus(res.status)) {
+        clearTimeout(timer);
+        continue;
+      }
+      const json = await res.json().catch(() => null);
+      clearTimeout(timer);
+      reportAuth(res.status, !!authToken, key);
+      return { ok: res.ok, status: res.status, json };
+    } catch (e) {
+      clearTimeout(timer);
+      lastError = e;
+      // retry if an attempt remains; otherwise rethrow below (tryReal / login map it to a banner).
+    }
   }
+  throw lastError;
 }
 
 /**
@@ -217,7 +245,7 @@ function reportAuth(status: number, sentToken: boolean, key: string): void {
  * The three exits are NOT equivalent, and only two of them are outages:
  *   - a non-2xx is reported through `reportIfOutage`, which filters the statuses that are
  *     answers rather than faults (401/403/404/501 — see there);
- *   - a throw is always reported: that is a dead network or the 4.5 s abort;
+ *   - a throw is always reported (with its kind): a dead network, or the read-timeout abort;
  *   - a 200 whose body fails `validate` is ALSO reported, deliberately. The server answered,
  *     so it is a contract fault rather than an outage — but the caller's next move is to
  *     render a zeroed shell, and an unlabelled zero is the exact lie this channel exists to
@@ -238,10 +266,10 @@ async function tryReal<T>(
     if (!ok) { reportIfOutage(status, key); return null; }
     const data = json?.data ?? json;
     if (validate(data)) return data as T;
-    reportFailure(key);
+    reportFailure(key, 'server');   // 200 but the body is unusable — the server answered wrong
     return null;
-  } catch {
-    reportFailure(key);
+  } catch (e) {
+    reportFailure(key, kindForThrown(e));   // dead network → 'network'; our timeout abort → 'timeout'
     return null;
   }
 }
@@ -438,7 +466,7 @@ export async function getTaskReport(month: string, opts: TaskReportScope = {}): 
     if (!isObj(data) || !Array.isArray(data.members)) { reportFailure(key); return { status: 'error' }; }
     return { status: 'ok', report: mapTaskReport(data) };
   } catch {
-    reportFailure(key);            // dead network or the 4.5 s abort
+    reportFailure(key);            // dead network or the read-timeout abort
     return { status: 'error' };
   }
 }
@@ -651,6 +679,35 @@ const isUnreachable = (e: any) =>
   e?.name === 'AbortError' ||
   (typeof e?.message === 'string' && /fetch|network|Failed to fetch|Load failed|timeout/i.test(e.message));
 
+/**
+ * PHASE 55 — an on-device connectivity self-test for the "the app doesn't work on my WiFi"
+ * complaint. Pings the UNAUTHENTICATED `GET /health` directly: no token, its own AbortController at
+ * the read timeout, and NO retry (a diagnostic must report the FIRST result honestly, not paper
+ * over a flaky link). It touches neither the session nor the outage banner — it is a probe, not a
+ * data read — so the caller (Settings) can render the result inline. `ms` is the round-trip; on a
+ * failure `kind` names it so the UI can say "reached the server, it's slow" vs "can't reach the
+ * network at all" — which is exactly the app-vs-WiFi question the owner needs answered on-site.
+ */
+export type ConnectionTest =
+  | { ok: true; ms: number; status: number }
+  | { ok: false; ms: number; status?: number; kind: FailureKind };
+
+export async function testConnection(): Promise<ConnectionTest> {
+  const started = Date.now();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+  try {
+    const res = await fetch(`${API_BASE_URL}${HEALTH_PATH}`, { signal: controller.signal });
+    const ms = Date.now() - started;
+    // A non-2xx means the server IS reachable but unwell — a 'server' problem, not the user's network.
+    return res.ok ? { ok: true, ms, status: res.status } : { ok: false, ms, status: res.status, kind: 'server' };
+  } catch (e) {
+    return { ok: false, ms: Date.now() - started, kind: kindForThrown(e) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function login(
   id: string,
   pw: string,
@@ -659,7 +716,7 @@ export async function login(
     const { ok, status, json } = await req('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email_or_phone: id, password: pw }),
-    });
+    }, LOGIN_TIMEOUT);   // a single call the user waits on — give it more time than a read
     const data = ok ? (json?.data ?? json) : null;
     if (data?.token && data?.user) {
       sessionReal = true;
@@ -693,7 +750,7 @@ export async function sendOtp(phone: string): Promise<{ ok: boolean; message: st
     const { ok, json } = await req('/auth/request-otp', {
       method: 'POST',
       body: JSON.stringify({ email_or_phone: phone, phone }),
-    });
+    }, LOGIN_TIMEOUT);
     if (ok && json?.success !== false) {
       return { ok: true, message: json?.message || 'Code sent to your WhatsApp number.' };
     }
@@ -716,7 +773,7 @@ export async function verifyOtp(
     const { ok, json } = await req('/auth/verify-otp', {
       method: 'POST',
       body: JSON.stringify({ phone, email_or_phone: phone, code, otp: code }),
-    });
+    }, LOGIN_TIMEOUT);
     const data = ok ? (json?.data ?? json) : null;
     if (data?.token && data?.user) {
       sessionReal = true;
@@ -770,7 +827,7 @@ export async function refreshBiometricSession(
         refresh_token: refreshToken,
         ...(deviceId ? { device_id: deviceId } : {}),
       }),
-    });
+    }, LOGIN_TIMEOUT);
     if (ok) {
       const data = json?.data ?? json;
       // Require BOTH the fresh access token and a rotated refresh credential to re-seal. Starting
@@ -1376,7 +1433,7 @@ export async function getCommissionSummary(): Promise<CommissionSummaryResult> {
       },
     };
   } catch {
-    reportFailure(key);            // dead network or the 4.5 s abort
+    reportFailure(key);            // dead network or the read-timeout abort
     return { status: 'error' };
   }
 }
@@ -2358,7 +2415,7 @@ export async function getPayrollRoster(year: number, month: number): Promise<Pay
  *   - `empty` — HTTP **200** with `data:null`: the caller has no payroll profile. An explicit empty
  *               state, NOT an outage — the 200 already cleared health via `reportSuccess`, so no
  *               banner is raised and the screen shows its "not configured" copy.
- *   - `error` — a 5xx / dead network / 4.5 s abort / contract-shape miss. `reportIfOutage` raises the
+ *   - `error` — a 5xx / dead network / read-timeout abort / contract-shape miss. `reportIfOutage` raises the
  *               banner (except the answer statuses 401/403/404/501, which it suppresses); the screen
  *               shows its retryable error state. A well-formed `?month=` never draws the 400.
  */
@@ -2399,7 +2456,7 @@ export type TrackSession = { session_id: string; date: string; started_at: strin
  *          matching backend relax of the >100 m drop is filed to cgpe-api — owner relays.)
  * `refused` — the server understood these points and said no. Retrying cannot change the answer,
  *          so holding them only grows a bag of somebody's coordinates on a handset.
- * `retry` — a dead network, the 4.5 s abort, a 5xx, or a 429. Keep them for the next wake-up.
+ * `retry` — a dead network, the read-timeout abort, a 5xx, or a 429. Keep them for the next wake-up.
  * `signed-out` — 401. The credential is dead, so nothing this service records can ever be
  *          uploaded; the caller stops recording rather than filling a buffer with a person's
  *          movements that has nowhere to go.
@@ -2895,7 +2952,7 @@ export async function getLastLocation(userId?: string): Promise<LastLocationResu
     if (!loc) return { status: 'none' };
     return { status: 'ok', loc };
   } catch {
-    reportFailure(key);             // dead network or the 4.5 s abort
+    reportFailure(key);             // dead network or the read-timeout abort
     return { status: 'error' };
   }
 }
@@ -2908,6 +2965,11 @@ export async function generateReport(clientName: string): Promise<any | null> {
 /** Upload a captured/selected file -> POST /api/upload (multipart). Returns {url,key} or null. */
 export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 'image/jpeg'): Promise<{ url: string; key?: string } | null> {
   if (!sessionReal || FORCE_DEMO) { await wait(500); return { url: 'demo://uploaded/' + name }; }
+  // PHASE 55: an AbortController so a stalled upload FAILS at UPLOAD_TIMEOUT instead of hanging the
+  // screen forever (the old code had none). A multipart POST is non-idempotent → a single attempt,
+  // never retried; an abort surfaces as a caught throw and returns null, exactly like any failure.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT);
   try {
     const form = new FormData();
     if (Platform.OS === 'web') {
@@ -2920,11 +2982,12 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
       method: 'POST',
       headers: { ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}) }, // no Content-Type: let fetch set the multipart boundary
       body: form as any,
+      signal: controller.signal,
     });
     const json = await res.json().catch(() => null);
     const data = json?.data ?? json;
     return res.ok && data?.url ? { url: data.url, key: data.key } : null;
-  } catch { return null; }
+  } catch { return null; } finally { clearTimeout(timer); }
 }
 
 /* -------------------------------------------------------------- Campaigns */

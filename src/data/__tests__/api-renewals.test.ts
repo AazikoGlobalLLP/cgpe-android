@@ -187,8 +187,13 @@ describe('scanRenewals — pinned known behaviour worth arguing about', () => {
     health.resetHealth();
     fetchSpy.mockRejectedValue(new Error('network down'));
 
-    expect(await api.scanRenewals(30)).toEqual([]);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);   // totalPages stays 1, so the loop ends
+    // Phase 55: the first-page GET is now retried once (a backoff wait, then a 2nd attempt) before
+    // it gives up, so hold the promise and advance timers past the backoff rather than awaiting it
+    // directly, and expect 2 network calls for the ONE page (the loop still ends — totalPages is 1).
+    const p = api.scanRenewals(30);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(await p).toEqual([]);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);   // one page attempted, but a failed GET retries once
     expect(health.getHealth().degraded).toBe(true);
     expect(health.getHealth().failures).toEqual(['/clients']);
   });

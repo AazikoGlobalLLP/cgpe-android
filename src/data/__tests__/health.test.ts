@@ -133,7 +133,7 @@ describe('health.ts — the failure ledger', () => {
   it('resetHealth wipes everything, including the clock', async () => {
     health.reportFailure('/a');
     health.resetHealth();
-    expect(health.getHealth()).toEqual({ degraded: false, failures: [], at: null });
+    expect(health.getHealth()).toEqual({ degraded: false, failures: [], at: null, kind: null });
   });
 });
 

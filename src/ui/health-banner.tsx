@@ -25,9 +25,23 @@ import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HealthState, getHealth, subscribeHealth } from '@/data/health';
+import type { FailureKind } from '@/lib/netResilience';
 import { radius, shadow, spacing, type, useTheme } from '@/theme/theme';
 import { Txt } from './base';
 import { haptics } from '@/lib/haptics';
+
+/**
+ * PHASE 55 — name the failure so the user reacts correctly. The old banner said one generic line
+ * for every failure, sending someone to "check your connection" over a slow SERVER, or the reverse.
+ * The kind is the MOST RECENT failure's kind (`data/health`); `null` (a pre-Phase-55 report with no
+ * kind) falls back to the generic title. The "blank values are unconfirmed" line stays regardless —
+ * that honesty is the whole point of this banner.
+ */
+const KIND_TITLE: Record<FailureKind, string> = {
+  timeout: 'The server is responding slowly',
+  network: "Can't reach the network",
+  server: 'The server had a problem',
+};
 
 /** Subscribe a screen to outage state, for screens that want to tailor their empty copy. */
 export function useDataHealth(): HealthState {
@@ -61,6 +75,7 @@ export function HealthBanner() {
   if (!health.degraded || dismissed) return null;
 
   const count = health.failures.length;
+  const title = (health.kind && KIND_TITLE[health.kind]) || 'Some data could not load';
 
   return (
     <View
@@ -85,7 +100,7 @@ export function HealthBanner() {
     >
       <Ionicons name="cloud-offline-outline" size={19} color={c.warning} />
       <View style={{ flex: 1 }}>
-        <Txt weight="700" size={13}>Some data could not load</Txt>
+        <Txt weight="700" size={13}>{title}</Txt>
         {/* "could not be completed", not "did not reach the server": since Phase 3 this
             banner also covers a request the server DID answer, with a body the app cannot
             use. Telling someone to check their connection over a contract mismatch sends

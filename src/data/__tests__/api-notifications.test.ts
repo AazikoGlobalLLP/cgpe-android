@@ -177,7 +177,7 @@ describe('getNotifications', () => {
   it('an outage resolves EMPTY and raises the banner — never a fabricated feed', async () => {
     fetchSpy.mockRejectedValue(new Error('offline'));
     const p = api.getNotifications();         // reaches unavailable() → wait(), so do not await directly
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(2000);  // Phase 55: the GET retries once (backoff) before unavailable()
     const out = await p;
     expect(out).toEqual([]);
     expect(health.getHealth().degraded).toBe(true);

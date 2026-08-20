@@ -354,7 +354,7 @@ describe('sendWaMessage — the buffer it used to write to', () => {
 
     fetchSpy.mockRejectedValue(new Error('offline'));
     const threads = api.getWaThreads();
-    await vi.advanceTimersByTimeAsync(400);          // unavailable() → wait()
+    await vi.advanceTimersByTimeAsync(2000);         // Phase 55: read retry backoff (600) + unavailable() wait
     expect(await threads).toEqual([]);
   });
 
@@ -363,11 +363,11 @@ describe('sendWaMessage — the buffer it used to write to', () => {
     await api.sendWaMessage('custom:9876543210', 'Namaste');
 
     const threads = api.getWaThreads();
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(2000);         // Phase 55: the GET retries once before giving up
     expect(await threads).toEqual([]);
 
     const one = api.getWaThread('custom:9876543210');
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(2000);
     expect(await one).toBeUndefined();
   });
 });

@@ -158,7 +158,10 @@ describe('getGeofence — an unknown fence is unknown, not a guess', () => {
 
     fetchSpy.mockResolvedValueOnce(fenceReply());
     expect(await api.getGeofence()).toEqual(withOffices(FENCE));
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    // Phase 55: the FIRST (failed) read is a GET, so it now makes TWO attempts (one bounded retry
+    // after a backoff) before giving up — that is the 2 here; the SUCCESSFUL second read adds the
+    // 3rd. The point still holds: the failure was not cached, so the next call asks the server again.
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
   });
 
   it('does not cache a SUCCESS either, so a fence the master moves reaches a phone that stays open', async () => {

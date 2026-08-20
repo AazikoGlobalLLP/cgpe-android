@@ -61,8 +61,36 @@ export const API_BASE_URL =
         : PROD_API)
     : PROD_API; // NATIVE (APK / Expo Go) — no CORS limits, real data + real auth
 
-/** Per-request timeout (ms) before a call is treated as unreachable. */
-export const REQUEST_TIMEOUT = 4500;
+/**
+ * Network resilience knobs (Phase 55, owner-locked "Balanced" 2026-08-20).
+ *
+ * The old single 4.5 s timeout was too aggressive for a weak cell / loaded WiFi — a cold TLS
+ * handshake alone can eat 2–5 s, Home fans out ~6 parallel reads, and login used the same 4.5 s
+ * so a slow network could not even sign in. These are the owner-approved replacements. The exact
+ * seconds are a judgement call (no p95 measurement of the failing networks exists) — change them
+ * HERE, they are the single source of truth for `src/data/api.ts`.
+ */
+/** Per-READ timeout (ms) before a call is aborted and treated as unreachable. */
+export const REQUEST_TIMEOUT = 12000;
+/** Login / OTP timeout (ms). Longer than a read: it is a single call the user is actively waiting
+ *  on, and a failed sign-in strands them completely. It is a POST, so it is never auto-retried. */
+export const LOGIN_TIMEOUT = 15000;
+/** File-upload timeout (ms). Uploads are large and slow; this replaces "no AbortController at all"
+ *  (which hung forever on a stalled socket). A multipart POST — never auto-retried (no double-upload). */
+export const UPLOAD_TIMEOUT = 30000;
+
+/**
+ * Auto-retry for IDEMPOTENT reads only (a bare `req()` is a GET). A single dropped SYN / stalled
+ * handshake used to fail a read permanently; one bounded retry recovers the common transient.
+ * NEVER applied to writes/uploads (non-idempotent) or to 4xx answers — see `src/lib/netResilience.ts`.
+ */
+/** Number of RETRIES after the first attempt (1 ⇒ up to 2 tries total). */
+export const RETRY_ATTEMPTS = 1;
+/** Base backoff (ms) before a retry; exponential per retry index (600, 1200, …). */
+export const RETRY_BACKOFF_MS = 600;
+
+/** Unauthenticated health probe path used by the in-app "Test connection" diagnostic. */
+export const HEALTH_PATH = '/health';
 
 /** Delay (ms) `unavailable()` waits before resolving its empty result, so a fast failure
  *  doesn't flash a loading skeleton for a few ms. Pacing for the empty path, not fake data. */

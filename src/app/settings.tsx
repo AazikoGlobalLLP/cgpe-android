@@ -14,7 +14,8 @@ import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
 import { LANGS, useI18n } from '@/i18n';
 import type { Lang } from '@/i18n';
-import { APP } from '@/constants/config';
+import { testConnection } from '@/data/api';
+import { APP, REQUEST_TIMEOUT } from '@/constants/config';
 
 /* ------------------------------------------------------------------ *
  * Settings — grouped rows, real switches, honest failures.
@@ -80,6 +81,9 @@ export default function Settings() {
   const [waAlerts, setWaAlerts] = useState(true);
   const [prefsReady, setPrefsReady] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
+  /** PHASE 55 — the last connectivity-test verdict shown inline on the row; '' before the first run. */
+  const [connMsg, setConnMsg] = useState('');
+  const [testing, setTesting] = useState(false);
 
   /** False once this screen is gone. Read after every await, not just inside effects. */
   const live = useRef(true);
@@ -173,6 +177,56 @@ export default function Settings() {
     toast(`Language changed to ${opt.label}`, 'success');
   };
 
+  /**
+   * PHASE 55 — the "app vs WiFi" self-test. Pings the unauthenticated /health directly and turns the
+   * result into a plain-language verdict the owner can act on in the field: reachable-but-a-screen-is-
+   * empty points at the data/sign-in, a timeout points at a very slow link, a throw points at the WiFi
+   * itself (with the definitive browser check to confirm). Honest either way — it never says "fine"
+   * unless the server actually answered.
+   */
+  const runConnectionTest = async () => {
+    if (testing) return;
+    haptics.tap();
+    setTesting(true);
+    setConnMsg('Testing…');
+    setNotice(null);
+    const r = await testConnection();
+    if (!live.current) return;
+    setTesting(false);
+    if (r.ok) {
+      haptics.success();
+      setConnMsg(`Reached in ${r.ms} ms`);
+      setNotice({
+        tone: 'success',
+        title: 'Connected to the CGPE server',
+        message: `It answered in ${r.ms} ms on this network. If a screen still shows no data, the problem is the data itself or your sign-in — not the connection.`,
+      });
+      return;
+    }
+    haptics.warn();
+    const detail =
+      r.kind === 'timeout'
+        ? {
+            value: 'Too slow',
+            title: 'The server did not answer in time',
+            message: `No reply within ${Math.round(REQUEST_TIMEOUT / 1000)} seconds on this network. The connection is very slow — try mobile data or a different WiFi.`,
+          }
+        : r.kind === 'server'
+        ? {
+            value: `Error ${r.status ?? ''}`.trim(),
+            title: 'The server answered with an error',
+            message: `The server is reachable but returned ${r.status ?? 'an error'}. That is a server problem, not your network — please report it.`,
+          }
+        : {
+            value: 'No connection',
+            title: 'Cannot reach the CGPE server',
+            message:
+              'This network cannot reach cgpe.in. Open https://cgpe.in/internal/api/health in this phone’s browser on the same WiFi — if that also fails, it is the WiFi (captive portal or firewall), not the app.',
+          };
+    setConnMsg(detail.value);
+    setNotice({ tone: 'danger', title: detail.title, message: detail.message });
+  };
+
   const themeValue = c.scheme === 'dark' ? 'Dark, follows system' : 'Light, follows system';
 
   return (
@@ -199,6 +253,7 @@ export default function Settings() {
             <GroupSkeleton rows={1} />
             <GroupSkeleton rows={SCRIPT_LANGS.length} trailing="check" />
             <GroupSkeleton rows={ROMAN_LANGS.length} trailing="check" />
+            <GroupSkeleton rows={1} />
             <GroupSkeleton rows={4} />
           </>
         ) : (
@@ -320,6 +375,23 @@ export default function Settings() {
                 ))}
               </ListSection>
             </View>
+
+            {/* PHASE 55 — an on-device "app vs WiFi" check for the "doesn't work on my network"
+                complaint. It pings the server and gives a plain verdict, so the owner can tell a
+                real app fault from a network that just can't reach cgpe.in. */}
+            <ListSection
+              title="Connection"
+              footer="Checks whether this phone can reach the CGPE server right now. Use it when a screen won’t load, to tell an app problem from a WiFi problem."
+            >
+              <Appear index={0}>
+                <DataRow
+                  icon="pulse"
+                  label={testing ? 'Testing connection…' : 'Test connection'}
+                  value={connMsg}
+                  onPress={runConnectionTest}
+                />
+              </Appear>
+            </ListSection>
 
             {/* The old "About" row was labelled About and went to Account and privacy,
                 which is two different things wearing one label. The destination is kept,

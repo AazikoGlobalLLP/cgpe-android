@@ -22,6 +22,8 @@
  * either way: every field is 0 or empty, so nothing fabricated ever reaches the screen.
  */
 
+import type { FailureKind } from '@/lib/netResilience';
+
 export type HealthState = {
   /**
    * True while at least one endpoint is known-failed. PHASE 3 made this DERIVED — it is
@@ -44,13 +46,20 @@ export type HealthState = {
    * and a genuine outage would render as "nothing matched".
    */
   at: number | null;
+  /**
+   * The kind of the MOST RECENT reported failure (Phase 55), so the banner can say WHY — "the
+   * server is slow" vs "can't reach the network" vs "the server had a problem" — instead of one
+   * generic line. `null` when there is no failure, or when the caller reported one without a kind
+   * (every pre-Phase-55 call site still does — the banner falls back to its generic wording then).
+   */
+  kind: FailureKind | null;
 };
 
 type Listener = (s: HealthState) => void;
 
 const listeners = new Set<Listener>();
 
-let state: HealthState = { degraded: false, failures: [], at: null };
+let state: HealthState = { degraded: false, failures: [], at: null, kind: null };
 
 function emit() {
   const snapshot = state;
@@ -77,13 +86,18 @@ export function getHealth(): HealthState {
  * Failures are de-duplicated so a dashboard fanning out six calls does not list one
  * endpoint six times.
  */
-export function reportFailure(endpoint: string): void {
+export function reportFailure(endpoint: string, kind?: FailureKind): void {
   const failures = state.failures.includes(endpoint)
     ? state.failures
     : [...state.failures, endpoint].slice(-12);
   // `at` is re-stamped even when the endpoint is already listed. See the field's doc comment:
   // `search.tsx` reads this clock to scope an outage to one query.
-  state = { degraded: true, failures, at: Date.now() };
+  // `kind` names the failure for the banner. A kind-less report PRESERVES the last kind rather than
+  // erasing it — this matters because the common read path reports the SAME endpoint twice (`tryReal`
+  // classifies it WITH a kind, then the generic `unavailable` re-reports it kind-less), and because
+  // kinds only ever come from the classifiers, so preserving one can never introduce a WRONG kind.
+  // It is cleared to null only when the failure list empties (`reportSuccess` / `resetHealth`).
+  state = { degraded: true, failures, at: Date.now(), kind: kind ?? state.kind };
   emit();
 }
 
@@ -116,13 +130,15 @@ export function reportFailure(endpoint: string): void {
 export function reportSuccess(endpoint: string): void {
   if (!state.failures.includes(endpoint)) return;
   const failures = state.failures.filter((e) => e !== endpoint);
-  state = { degraded: failures.length > 0, failures, at: state.at };
+  // Drop the failure-kind label once nothing is failing; keep it while other endpoints remain down
+  // (it names the most recent failure, which is a fair banner summary during a partial outage).
+  state = { degraded: failures.length > 0, failures, at: state.at, kind: failures.length > 0 ? state.kind : null };
   emit();
 }
 
 /** Clear health state on logout so the next session starts clean. */
 export function resetHealth(): void {
-  state = { degraded: false, failures: [], at: null };
+  state = { degraded: false, failures: [], at: null, kind: null };
   emit();
 }
 

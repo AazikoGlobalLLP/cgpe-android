@@ -245,7 +245,7 @@ describe('addLead — a Lead document, not the app\'s own object', () => {
     // buffer, which must still be empty.
     fetchSpy.mockRejectedValue(new Error('network down'));
     const list = api.getLeads();
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(2000);   // Phase 55: the GET retries once before the empty fallback
     expect(await list).toEqual([]);
   });
 
@@ -277,7 +277,7 @@ describe('addLead — a Lead document, not the app\'s own object', () => {
     // The note is gone, so a REAL outage on the next read is still reported...
     fetchSpy.mockRejectedValue(new Error('network down'));
     const list = api.getLeads();
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(2000);   // Phase 55: the GET retries once before the empty fallback
     // ...and that read also proves nothing was buffered: it falls back to the local buffer.
     expect(await list).toEqual([]);
     expect(health.getHealth().failures).toEqual(['/leads']);
@@ -330,7 +330,7 @@ describe('getLeads — the list envelope and the module gate', () => {
     fetchSpy.mockResolvedValue(reply(500, { success: false, error: 'Server Error' }));
 
     const promise = api.getLeads();
-    await vi.advanceTimersByTimeAsync(400);
+    await vi.advanceTimersByTimeAsync(2000);   // Phase 55: a 500 is retryable, so the GET tries twice first
 
     expect(await promise).toEqual([]);
     expect(health.getHealth().failures).toEqual(['/leads']);
