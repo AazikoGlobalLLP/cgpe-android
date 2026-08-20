@@ -1,79 +1,53 @@
-# HANDOFF — CGPE Connect (Android) — Phase 55 built & pushed — 2026-08-20
+# HANDOFF — CGPE Connect (Android) — Phase 57 (offline support, a+b) built & pushed — 2026-08-20
 
-Owner chose to build **Phase 55 (network resilience)** while Phase 72 stays blocked on the backend +
-Firebase. Phase 55 is built, gated, committed (`941c583`), and pushed to `aaziko/Shivam`. It is the
-"app doesn't work on my WiFi / this phone" fix. **Phase 72 is still PENDING** — re-verified premature at
-the start of this session (prod `/push/register` 404, backend push code uncommitted / not on `origin/main`,
-Firebase unset).
+Owner re-verified Phase 72 (team push) is **still blocked** on the backend + Firebase, then chose to build
+**Phase 57 (offline support)** — spec-locked, approved, and built in two pushed slices: **57a read cache** and
+**57b safe write queue (Notes)**. `[m]`-only, **no contract change** (offline is pure client-side — the backend
+never learns the app was offline). JS-only and **OTA-eligible** (AsyncStorage was already a dependency), so it does
+NOT need the pending native APK.
 
 ## Done
-- **A slow / loaded network no longer fails the app the way it did.** The single aggressive **4.5 s**
-  timeout (which also blocked *sign-in*) is gone: reads now wait **12 s**, login/OTP **15 s**, uploads
-  **30 s**. A dropped SYN / stalled handshake on an idempotent **read** is now **retried once** (600 ms
-  backoff) and self-recovers, so a transient blip never reaches the user. **Writes and uploads are never
-  retried** (no double clock-in / send / upload).
-- **The outage banner now names the failure** — "The server is responding slowly" vs "Can't reach the
-  network" vs "The server had a problem" — instead of one generic line.
-- **`uploadFile` no longer hangs forever** on a stalled socket (it had NO AbortController); it now fails
-  cleanly at 30 s.
-- **New Settings → "Test connection"** pings `/health` and gives a plain verdict, so the owner can tell an
-  **app** problem from a **WiFi** problem on the phone itself, on-site.
-- Gates green: `tsc` 0 · `npm test` **714** (+24: `netResilience` 12, `api-resilience` 12) · eslint 0 new
-  errors (3 warnings all pre-existing).
+- **A failed list re-fetch now shows the last good rows, not an empty screen.** Tasks / Leads / Reminders /
+  Notifications serve their last SUCCESSFUL read from a per-user cache when the network drops, with a **"Synced
+  <time> · may be out of date"** chip (wired on Tasks) beside the existing "couldn't reach server" banner. No prior
+  load → the honest "could not load" empty state (zero fabricated rows). Client-book PII + ₹ figures (Clients/Claims)
+  are deliberately NOT cached (DPDP). Cache is purged on sign-out.
+- **A note jotted while offline is no longer lost or falsely reported as saved.** `addNote` now has three honest
+  outcomes — **saved** / **queued** (network down → additive draft, "Pending sync" badge, no success buzz, "saved on
+  this device" toast) / **failed** (server answered and refused → NOT queued). The draft survives an app kill, renders
+  on top of the board, and auto-syncs on sign-in / foreground / reconnect; a server-refused draft drops with a
+  one-time notice (no infinite retry). The composer is now available offline. Clock-in / WhatsApp / search never queue.
+- Gates green: `tsc` 0 · `npm test` **747** (+18: `offlineCache` 15, `writeQueue` 14, `api-notes-queue` 4 — net of shared) ·
+  eslint 0 new errors (pre-existing warnings only).
 
 ## Files changed
-- `src/constants/config.ts` — owner-locked "Balanced" knobs: `REQUEST_TIMEOUT` 4500→**12000**, new
-  `LOGIN_TIMEOUT` 15000 / `UPLOAD_TIMEOUT` 30000 / `RETRY_ATTEMPTS` 1 / `RETRY_BACKOFF_MS` 600 / `HEALTH_PATH`.
-- `src/lib/netResilience.ts` — **NEW** pure seam: `isIdempotentMethod` / `isRetryableStatus` (⚠️ 501
-  EXCLUDED — it is this backend's "not deployed" quiet answer, not a fault) / `kindForThrown` / `backoffMs`.
-- `src/data/api.ts` — `req()` bounded-retry loop (idempotent reads only); `login`/`sendOtp`/`verifyOtp`/
-  `refreshBiometric` pass `LOGIN_TIMEOUT`; `uploadFile` gains an AbortController; NEW `testConnection()`;
-  failure-kind threaded into `reportIfOutage`/`tryReal`; stale "4.5 s" comments corrected.
-- `src/data/health.ts` — `HealthState.kind` + optional `kind` on `reportFailure` (a kind-less report
-  PRESERVES the last kind so the `tryReal`→`unavailable` double-report can't erase it).
-- `src/ui/health-banner.tsx` — kind-aware headline (falls back to generic when kind is null).
-- `src/app/settings.tsx` — "Connection" section + "Test connection" row → plain app-vs-WiFi verdict.
-- `src/lib/__tests__/netResilience.test.ts` (**NEW**, +12) · `src/data/__tests__/api-resilience.test.ts`
-  (**NEW**, +12: retry/no-retry/kind/testConnection/upload-abort). Six existing test files updated for the
-  new retry timing/counts (fake-timer advances bumped past the 600 ms backoff; api-geo 2→3, api-renewals
-  1→2 fetch; health resetHealth gains `kind:null`) — none weakened.
-- `docs/spec/PHASE-55.md` — **NEW** spec (owner numbers, honest limits, the 501 decision).
+- `src/lib/offlineCache.ts` — **NEW** pure seam (57a): keys, (de)serialize, 30-day `gcVictims`, 3-state `decideRead`, `mergeById`.
+- `src/lib/writeQueue.ts` — **NEW** pure seam (57b): parse/serialize, `MAX_QUEUE` cap, `bumpAttempt`, `flushDecision`.
+- `src/data/offlineStore.ts` — **NEW** device-only AsyncStorage I/O for both cache (writeList/readList/GC/purge) and queue (loadQueue/saveQueue).
+- `src/data/freshness.ts` — **NEW** bus (sibling to `health.ts`) driving the stale chip without changing any read's return type.
+- `src/data/pendingWrites.ts` — **NEW** reactive bus for queued drafts + a one-time drop notice.
+- `src/data/api.ts` — `cachedList()` wraps getTasks/getLeads/getReminders/getNotifications; `addNote`→3-outcome `AddNoteResult`; `enqueueWrite`/`noteDraftToBoardNote`/`flushWriteQueue`; `setCurrentUser` loads the queue into the bus.
+- `src/ui/SyncChip.tsx` — **NEW** stale chip + `useDataFreshness`. `src/ui/pending.tsx` — **NEW** `usePendingWrites`/`useDropNotice`/`PendingBadge`.
+- `src/app/_layout.tsx` — **NEW** `QueueFlusher` gate (flush on sign-in / foreground / health-recovery).
+- `src/app/(tabs)/tasks.tsx` — SyncChip wired. `src/app/notes.tsx` — pending drafts + badge + offline composer + reconcile-on-flush + drop-notice banner.
+- `src/store/auth.tsx` — sign-out sweep now drops `cache.*` + `resetFreshness()`; the write QUEUE persists (per-user).
+- `docs/spec/PHASE-57.md` — **NEW** locked spec + Build log. `docs/spec/GLOSSARY.md` — read-cache / 3-state / freshness terms.
 
 ## Decisions made
-- **501 is NOT retryable** even though it is a 5xx. In this backend 501 = "endpoint not on the deployed
-  build", which `reportIfOutage` already treats as a quiet ANSWER like 404 — retrying it is pointless and
-  would break that quiet-answer contract. Surfaced by two tests going red; the fix is in `isRetryableStatus`.
-- **Retry lives in `req()` and applies to idempotent reads only** (a bare `req()` is a GET; every write
-  passes a method). This is where the spec says to put it; the cost is a real test tax (see below).
-- **A kind-less `reportFailure` preserves the last kind** rather than nulling it — kinds only ever come from
-  the classifiers, so preserving one can never introduce a wrong one, and it survives the read path's
-  double-report.
-- **Balanced numbers + full phase** were owner-locked via AskUserQuestion (no p95 data existed, so the exact
-  seconds were a judgement call).
+- **Cache operational lists only; EXCLUDE client-book PII + ₹** (owner row 3). No sensitive plaintext at rest in AsyncStorage.
+- **Reconnect = next-success + foreground** (owner row 10) — JS-only, OTA-eligible; no NetInfo native module.
+- **Enqueue ONLY on a network throw; a server refusal (4xx/5xx) is never queued** — replaying a rejected write is wrong.
+- **57b wired for NOTES only** (mechanism is kind-generic). All 5 acceptance criteria are Notes; this bounds the UI blast radius.
+- **Pure seams in `lib/`, device I/O split out** — the Vitest AsyncStorage stub is a no-op, so every decision is unit-tested and only the thin storage calls are device-only (same pattern as `netResilience`/`staleBuffer`).
 
 ## Known broken / deliberately skipped
-- **Device-unverified** — JS-only (OTA-eligible) but rides the pending native batch APK (70/71/72/73), which
-  bring native modules. Real proof needs a slow/flaky handset (sign-in succeeds where 4.5 s failed; a blip
-  self-recovers; the banner names the kind; Test connection gives the right verdict).
-- **New on-screen English strings** (Settings "Connection"/"Test connection" + 3 verdict messages + 3 banner
-  titles) ship as English now and still owe **5-language human copy** (machine translation forbidden).
-- **Suite wall-time rose ~0.6 s → ~4 s** — real-timer api tests that exercise a retryable GET failure now
-  pay one real 600 ms backoff each. Correct, just slower; a future cleanup could fake-timer those files.
-- **`Retry-After` on a 429 is ignored** (fixed exponential backoff). Immaterial for a single bounded retry.
-- **DNS / captive-portal / firewall-blocked-`cgpe.in`** stay network-side — no client change fixes them;
-  Test connection + the on-phone browser `/health` check is how you confirm it's the network.
-- **Phase 72 (team push) still PENDING** — do NOT cut the APK or mark it done until the backend + Firebase
-  are verifiably live.
+- **Task-create queue wiring** — the documented remaining 57b piece: add `'task'` to `QueueKind`, an enqueue in `addTask`'s network-catch, a `replayWrite` branch, a Tasks-list pending row. No new mechanism needed.
+- **Device-unverified** — AsyncStorage round-trip only proves out on a handset (the test stub is a no-op). OTA-eligible.
+- **New English strings owe 5-language human copy** — "Synced … may be out of date", "Pending sync", the queued toast, the drop notice. Machine translation forbidden; not yet i18n keys.
+- **Notes has no read cache** (only its write queue) — notes can carry sensitive dictation; excluded on the same PII principle.
+- **Phase 72 (team push) STILL blocked** — re-verified this session: push code uncommitted in `../cgpe-backend-main`, absent from `origin/main` (tip `f65e56a`), prod `/push/register` → 404, FCM unset. Do NOT cut the APK or mark it done.
 
 ## Next session starts here
-- **No un-built mobile piece remains in the 63–73 batch.** Two real candidates: (a) **Phase 72** — execute
-  ONLY on a *verified* "backend live" signal (re-probe: `git -C ../cgpe-backend-main fetch` + check the push
-  files are committed/on `origin/main` + no-auth `curl .../push/register` → **401** not 404; and FCM set up),
-  then cut the ONE combined APK (65+70+71+72+73); or (b) **Phase 56 (iOS)** — owner priority but gated on an
-  **Apple Developer account ($99/yr)** decision. Phase 54 (`[api]` lead-open), 57 (offline, XL), 58 (needs
-  owner repro) also stand.
+- Phase 57 finish: wire **Task-create** into the write queue (small, uses the existing mechanism) — OR pick up Phase 72 only if the backend+Firebase are *verifiably* live, or Phase 56 (iOS, needs an Apple Developer account decision).
 - First command: `/boot`
-- Watch out for: **do NOT trust "backend done" for Phase 72 — probe prod (401=live, 404=not) and check
-  `git status` in `../cgpe-backend-main` before cutting an APK or marking it done.** And if you touch `req()`
-  again, remember retry now adds a 600 ms backoff `wait()` to read-failure tests (fake-timer tests must
-  advance past it) and 501 must stay out of `isRetryableStatus`.
+- Watch out for: **the backend repo is `CGPE-CURRENT-PROJECT/cgpe-backend-main`, NOT `Shivam-Aaziko-Dev-MERN/cgpe-backend-main`** — a `cd 2>/dev/null` to the wrong path silently runs git in the ANDROID repo and gives false "backend" answers. Use `git -C /f/Shivam-Aaziko-Dev-MERN/CGPE-CURRENT-PROJECT/cgpe-backend-main` and confirm with the prod curl (401=live, 404=not).

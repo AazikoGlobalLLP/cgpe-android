@@ -1749,9 +1749,11 @@ All five ride ONE combined native APK (72/73 force a rebuild) — not yet cut. *
    `is_active` `[api]` note.
 
 **Also standing (lower priority):**
-Phases 54/56/57 from the 2026-08-18 batch (lead-open `[api]`, iOS gated on an Apple account, offline) — **Phase 55 (network
-resilience) is now BUILT + PUSHED, `941c583`** (device pass + 5-lang copy remain); Phase 41 on-device verification (owner: do
-last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after go-live, biometric, break-gate) on ≥2 phone brands.
+Phases 54/56 from the 2026-08-18 batch (lead-open `[api]`; iOS gated on an Apple account). **Phase 55 (network resilience) BUILT +
+PUSHED `941c583`** (device pass + 5-lang copy remain). **Phase 57 (offline support) BUILT + PUSHED — 57a read cache `20eb4ed`, 57b
+write queue (Notes) `e318e06`; REMAINING = Task-create queue wiring (small, uses the existing mechanism) + 5-lang copy + a device
+pass.** Phase 41 on-device verification (owner: do last). Owner physical pass on `b01f4164` still owed (bg-GPS, geofence after
+go-live, biometric, break-gate) on ≥2 phone brands.
 
 **⚠️ Phase 56 (iOS) is an owner PRIORITY but gated on a decision:** it needs an **Apple Developer account ($99/yr)** before any
 iOS build is possible. Ask the owner to buy it + pick TestFlight vs ad-hoc, then it's an L mobile-only phase. iOS reliability

@@ -6,6 +6,32 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-20 — Phase 57 built (offline support: read cache 57a + safe write queue 57b, Notes)
+
+**Context.** With Phase 72 re-verified still blocked (prod `/push/register` → 404, push code uncommitted in
+`../cgpe-backend-main`, FCM unset), the owner chose **Phase 57 (offline support)** — an XL, design-first feature
+with undefined scope. Spec-locked via a decision table (`docs/spec/PHASE-57.md`) and owner-approved (`go`).
+
+**Decision.**
+- **Cache OPERATIONAL lists only (Tasks/Reminders/Notifications/Leads); EXCLUDE client-book PII + ₹** (Clients/Claims
+  stay online-only). DPDP: no sensitive plaintext at rest in AsyncStorage. Per-user, versioned (`cache.v1.<uid>.<key>`),
+  purged on sign-out.
+- **Three read states** — live / stale (cache shown + "Synced <time>" chip + degraded banner) / could-not-load
+  (empty + banner, zero fabricated rows). Served ONLY when a re-fetch fails and a cache entry exists.
+- **Write queue (57b): enqueue ONLY on a network throw**; a server ANSWER that refuses (4xx/5xx) is `failed`, never
+  queued. Flush replays: 2xx→sync, 4xx/attempt-cap→drop+notice, 5xx/network→keep. Reconnect = **next-success +
+  foreground** (JS-only, OTA — no NetInfo). Queue **persists across logout** (per-user); read cache does not.
+- **57b wired for NOTES only** — the mechanism is kind-generic (`QueueKind`) but all 5 acceptance criteria are Notes,
+  so wiring one screen bounds the risk. **Task-create is the documented remaining 57b piece.**
+- **Pure seams (`lib/offlineCache.ts`, `lib/writeQueue.ts`) fully unit-tested; device I/O (`data/offlineStore.ts`)
+  split out** because the Vitest AsyncStorage stub is a no-op — the same discipline as `netResilience`/`staleBuffer`.
+- **New on-screen English strings ship as English** and owe 5-language HUMAN copy before becoming i18n keys
+  (`common.lastSynced` etc.) — machine translation forbidden, and a fake-translated key passes the parity test dishonestly.
+
+**Consequence.** 57a `20eb4ed`, 57b `e318e06`, both on `aaziko/Shivam`. Gates `tsc` 0 · `npm test` 747 (+18) · eslint 0
+new. JS-only / OTA-eligible → does NOT ride the pending native APK. Device-unverified (AsyncStorage round-trip is
+device-only). Remaining: Task-create wiring; 5-lang copy; a device pass (create offline → badge → reconnect → syncs).
+
 ## 2026-08-20 — Phase 55 built (network resilience); retry lives in `req()` for idempotent reads, 501 excluded
 
 **Context.** Owner re-confirmed Phase 72 (team push) is blocked on the backend + Firebase (re-verified prod
