@@ -34,6 +34,7 @@ import * as BackgroundTask from 'expo-background-task';
 import { Accelerometer } from 'expo-sensors';
 import { storage } from './storage';
 import { watchdogAction } from './watchdog';
+import { isBufferStale, WATCHDOG_INTERVAL_MS } from './staleBuffer';
 import { dropMocked, shouldSignalWithdrawal, locationBlockReason, type BlockReason } from './antiCircumvention';
 import {
   classifyMotion,
@@ -67,8 +68,12 @@ const ROUTE_TASK = 'cgpe-field-route';
  * Renaming it orphans a schedule already registered on an upgraded device, so it stays put.
  */
 const WATCHDOG_TASK = 'cgpe-track-watchdog';
-/** 15 min is the Android floor for a periodic background task (expo-background-task, SDK 57). */
-const WATCHDOG_INTERVAL_MIN = 15;
+/**
+ * 15 min is the Android floor for a periodic background task (expo-background-task, SDK 57). Derived
+ * from the shared ms constant so this cadence and PHASE 71's freshness threshold (`STALE_AFTER_MS =
+ * 60 min − this interval`, in `staleBuffer.ts`) can never drift apart.
+ */
+const WATCHDOG_INTERVAL_MIN = WATCHDOG_INTERVAL_MS / (60 * 1000);
 
 const STATE_KEY = 'track.state';
 /** Written by the previous (foreground-watch) implementation. Cleaned up, never read. */
@@ -585,6 +590,49 @@ if (!TaskManager.isTaskDefined(WATCHDOG_TASK)) {
 }
 
 /**
+ * PHASE 71 — how long a single forced fix may take before the watchdog gives up on it. A background
+ * WorkManager tick has a bounded execution window, and `getCurrentPositionAsync` has no timeout of its
+ * own, so an indoor / cold-GPS fix that never arrives must not hang the serial chain for the whole
+ * window. On timeout we skip this tick and the next one (~15 min later) retries.
+ */
+const FORCED_FIX_TIMEOUT_MS = 30 * 1000;
+
+/** Resolve `p`, or reject after `ms`. Keeps a hang-prone native call from stalling the watchdog. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
+/**
+ * PHASE 71 — take ONE location fix right now and feed it through `ingest`, so a live shift or 24/7
+ * session that the OS location stream has starved (Doze / OEM battery-kill) still records a point
+ * within the ceiling. High accuracy on purpose: like PHASE 63's shift profile, a High (~10 m) fix
+ * survives the backend's shift-point >100 m drop, so a coarser reading would be silently discarded.
+ * Best-effort and bounded — a fix that does not arrive inside `FORCED_FIX_TIMEOUT_MS` is abandoned and
+ * the next tick retries. Reusing `ingest` (not a bespoke post) means de-dup, mock-drop, shift/ambient
+ * attribution and delivery all stay in the ONE honest write path — the forced point is treated exactly
+ * like an OS-delivered one.
+ */
+async function captureForcedPoint(): Promise<void> {
+  let loc: Location.LocationObject | null = null;
+  try {
+    loc = await withTimeout(
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      FORCED_FIX_TIMEOUT_MS,
+    );
+  } catch {
+    return; // no fix in the window (indoors, GPS cold, timeout) — the next watchdog tick retries
+  }
+  if (!loc) return;
+  await ingest([loc]);
+}
+
+/**
  * One watchdog check. Reads intent from persisted storage (a fresh headless context has no module
  * state), asks the OS whether the service is actually running, and acts on the pure decision
  * (`watchdogAction`). Runs inside `serial` so it cannot race a concurrent location-batch ingest.
@@ -594,6 +642,14 @@ async function watchdogTick(): Promise<void> {
   const state = await readState();
   const isRunning = await Location.hasStartedLocationUpdatesAsync(ROUTE_TASK).catch(() => false);
   const action = watchdogAction({ armed, hasShift: !!state.sid, running: isRunning });
+  if (action === 'retire') {
+    // Neither a shift nor 24/7 is active. Nothing to guard — stop waking the device (§3 battery), and
+    // record nothing: there is no session to attribute a forced point to. A stray service still
+    // running here is torn down by the next `ingest`, which owns dropping the unattributable buffer
+    // safely; the watchdog only stops watching.
+    await retireWatchdog();
+    return;
+  }
   if (action === 'rearm') {
     // Killed by the OS or lost to a reboot. Bring the recorder back with the neutral, pre-resolved
     // notification — a headless restart has no i18n context (§12.4). Attribution resumes on its own:
@@ -601,13 +657,17 @@ async function watchdogTick(): Promise<void> {
     // there is one, otherwise as ambient.
     await startService(await readNotif());
     running = true;
-  } else if (action === 'retire') {
-    // Neither a shift nor 24/7 is active. Nothing to guard — stop waking the device (§3 battery). A
-    // stray service still running here is torn down by the next `ingest`, which owns dropping the
-    // unattributable buffer safely; the watchdog only stops watching.
-    await retireWatchdog();
   }
-  // 'idle': recorder healthy, nothing to do.
+  // PHASE 71 — recording SHOULD be live now (action was 'idle' or we just re-armed). The OS location
+  // stream is best-effort: under Doze it can be starved for far longer than the requested ~60 s
+  // cadence, leaving a long flat gap in the route. If the newest recorded point is stale, take one
+  // fix now so a live shift never goes a full hour without a point. The trigger sits a whole watchdog
+  // interval below the 60-min ceiling (`staleBuffer.ts`), so a point missed at one tick is still
+  // caught within the hour at the next. HONEST CEILING: WorkManager is itself Doze-deferred, so this
+  // is best-effort, not a hard real-time guarantee.
+  if (isBufferStale(state.lastAt, Date.now())) {
+    await captureForcedPoint();
+  }
 }
 
 /** Body of the location task. Runs inside `serial`, so it owns the persisted state exclusively. */
