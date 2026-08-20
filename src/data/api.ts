@@ -36,6 +36,7 @@ import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMe
 // `tasks`) were deleted — importing them is what kept sample records inside the shipped bundle,
 // one `??` away from reaching a screen. Task data comes from getTasks; team data from /profiles.
 import type { TeamMember, TeamActivity } from './team';
+import { mergeRoster, liveOnDutyPins, type LiveLocation } from './roster';
 import { Task, TaskStatus } from './tasks';
 import type {
   Claim, Client, Commission, Contest, Lead, LeadStage, LicPlan,
@@ -1847,6 +1848,13 @@ function adaptMember(raw: any): TeamMember {
  *  phones, manager and live task counts), falling back to /profiles. */
 export async function getTeam(): Promise<TeamMember[]> {
   const ov = await getTaskOverview();
+  // Phase 65: a master's roster universe is the FULL staff directory. GET /time-tracker/live-locations
+  // (super_admin-gated) iterates every profile, so left-joining it with the task-overview stats surfaces
+  // a member with zero assigned team-tasks — who used to vanish from the roster — as an off-duty row with
+  // zeroed stats instead. A non-master 403s → [] here and keeps the existing task-overview roster below
+  // exactly as it was. Duty comes from the live row itself, so no attendance-pin cross-reference is needed.
+  const live = await getLiveLocations();
+  if (live.length) return mergeRoster(live, ov?.members ?? []);
   if (ov && ov.members.length) {
     // Cross-reference the live attendance pins so "clocked in" is real (was hardcoded
     // false, so Team/Admin dashboards always said "0/15" even with 14 on duty).
@@ -2656,6 +2664,54 @@ const toPin = (row: any, p: any, live = true): AgentPin | null => {
   };
 };
 
+/* --------------------------------------------------- Live locations (Phase 65, master roster) */
+/**
+ * Pure wire→app mapper for one `/live-locations` row. Keyed by `profile._id` (`userId`); `lat`/`lng`
+ * are lifted from `currentLocation` and left `undefined` when the member is off duty (never a fake
+ * 0,0). Exported for the test.
+ */
+export function mapLiveLocation(row: any): LiveLocation | null {
+  const uid = row?.userId ?? row?.user_id;
+  if (uid == null || String(uid) === '') return null;
+  const loc = row?.currentLocation || {};
+  return {
+    userId: String(uid),
+    name: String(row?.full_name || row?.name || 'Member'),
+    email: typeof row?.email === 'string' && row.email ? row.email : undefined,
+    role: String(row?.role || 'advisor'),
+    isClockedIn: !!row?.isClockedIn,
+    isOnBreak: !!row?.isOnBreak,
+    lat: num2(loc.lat),
+    lng: num2(loc.lng),
+    lastActivity: typeof row?.lastActivity === 'string' ? row.lastActivity : undefined,
+  };
+}
+
+/**
+ * PHASE 65 — the master's full-staff live roster. `GET /time-tracker/live-locations` is super_admin-
+ * gated server-side (routes/timeTracker.js:1008) and iterates EVERY profile, so it is the universe the
+ * monitor/map must draw from (unlike task-overview, which only lists members with a team-task). It is
+ * called on every getTeam/getAgentLocations load INCLUDING by non-masters, so its `!ok` branch must be
+ * a quiet empty answer for a permission/deploy result: `reportIfOutage` suppresses 401/403/404/501
+ * (a non-master, or a pre-deploy build) and `unavailable` honours that; only a real 5xx/network faults
+ * the banner. Same posture as `getBreakLocations`.
+ */
+export async function getLiveLocations(): Promise<LiveLocation[]> {
+  const KEY = '/time-tracker/live-locations';
+  if (!sessionReal || FORCE_DEMO) return [] as LiveLocation[];
+  try {
+    const { ok, status, json } = await req(KEY, {}, REQUEST_TIMEOUT, KEY);
+    if (!ok) {
+      reportIfOutage(status, KEY);
+      return unavailable(KEY, [] as LiveLocation[]);
+    }
+    const rows: any[] = Array.isArray(json?.data) ? json.data : [];
+    return rows.map(mapLiveLocation).filter(Boolean) as LiveLocation[];
+  } catch {
+    return unavailable(KEY, [] as LiveLocation[]);
+  }
+}
+
 export async function getAgentLocations(): Promise<AgentPin[]> {
   // PHASE 10. This used to return three invented agents pinned at real Gujarat coordinates
   // (Anand, Nadiad, Borsad) with `onDuty: true` and a live timestamp. On the master's agent
@@ -2674,6 +2730,16 @@ export async function getAgentLocations(): Promise<AgentPin[]> {
   // under the existing `/attendance` health key, not a competing `/team/task-overview` row
   // (getTaskOverview owns that one).
   if (!sessionReal || FORCE_DEMO) return unavailable('/attendance', [] as AgentPin[]);
+  // Phase 65: a master gets on-duty pins for the WHOLE staff directory in ONE call. /live-locations
+  // returns each clocked-in member's live clock-in coordinate, so a member with no assigned team-task
+  // — invisible to the task-overview universe below — now shows a pin the moment they clock in. A
+  // non-master 403s → [] and falls straight through to the per-member fan-out. When nobody is clocked
+  // in with a coordinate we also fall through, to the last-known fan-out (unchanged).
+  const live = await getLiveLocations();
+  if (live.length) {
+    const pins = liveOnDutyPins(live);
+    if (pins.length) return pins;
+  }
   const overview = await tryReal<any>('/team/task-overview?scope=all', {}, (d) => d && Array.isArray(d.members), '/attendance');
   const people = ((overview?.members || []) as any[]).filter((p) => p.user_id).slice(0, 20);
   const today = new Date().toISOString().slice(0, 10);

@@ -48,15 +48,24 @@ const clockedOut = (lat: number, lng: number) =>
  * Route the stub by path: the roster call to `/team/task-overview`, everything else to the
  * per-user attendance fan-out keyed by the user_id in the URL. Query strings (`?scope=all`,
  * `?date=…`) are ignored so the FIRST attendance pass ("today") always resolves.
+ *
+ * PHASE 65: `getAgentLocations` now tries the super_admin-gated `/time-tracker/live-locations` FIRST.
+ * This file pins the NON-MASTER / task-overview path, so live-locations is served a 403 by default
+ * (exactly a leader's response) — the app suppresses it (quiet, no banner) and falls through to the
+ * task-overview fan-out these tests describe. A test wanting the master path sets `live`.
  */
-function serve(opts: { overview?: unknown; overviewStatus?: number; attendance?: Record<string, unknown> }) {
+function serve(opts: { overview?: unknown; overviewStatus?: number; attendance?: Record<string, unknown>; live?: unknown; liveStatus?: number }) {
   fetchSpy.mockImplementation(async (url: string) => {
+    if (url.includes('/live-locations')) return reply(opts.liveStatus ?? 403, opts.live ?? { success: false, message: 'Access denied' });
     if (url.includes('/team/task-overview')) return reply(opts.overviewStatus ?? 200, opts.overview);
     const m = url.match(/\/attendance\/user\/([^?]+)/);
     if (m) return reply(200, opts.attendance?.[decodeURIComponent(m[1])] ?? { success: true, data: [] });
     return reply(404, { success: false });
   });
 }
+
+/** The task-overview URL the app hit (Phase 65: no longer necessarily the first fetch). */
+const overviewUrl = () => urls().find((u) => u.includes('/team/task-overview'));
 
 const urls = () => fetchSpy.mock.calls.map((c) => String(c[0]));
 
@@ -77,7 +86,7 @@ describe('getAgentLocations — the roster comes from task-overview, never /prof
     });
     await api.getAgentLocations();
 
-    expect(urls()[0]).toContain('/team/task-overview');
+    expect(overviewUrl()).toContain('/team/task-overview');
     expect(urls().some((u) => u.includes('/profiles'))).toBe(false);
   });
 
@@ -86,7 +95,7 @@ describe('getAgentLocations — the roster comes from task-overview, never /prof
     // `mode:'own'` (see the header note) and their agent map shows only themselves. Pinned.
     serve({ overview: { success: true, data: { members: [] } } });
     await api.getAgentLocations();
-    expect(urls()[0]).toContain('/team/task-overview?scope=all');
+    expect(overviewUrl()).toContain('/team/task-overview?scope=all');
   });
 
   it('unwraps the { data: { members } } envelope (validator is a members array, not a bare array)', async () => {
@@ -97,6 +106,22 @@ describe('getAgentLocations — the roster comes from task-overview, never /prof
 
     serve({ overview: { success: true, data: { totals: {} } } }); // no members array
     expect(await api.getAgentLocations()).toEqual([]);
+  });
+
+  it('PHASE 65: a master gets on-duty pins straight from /live-locations, with NO attendance fan-out', async () => {
+    // When live-locations answers (super_admin), each clocked-in member's coordinate becomes a pin in
+    // one call — including a member with no team-task, whom the task-overview universe would drop.
+    serve({
+      liveStatus: 200,
+      live: { success: true, data: [
+        { userId: 'oid-asha', full_name: 'Asha', role: 'advisor', isClockedIn: true, isOnBreak: false, currentLocation: { lat: 21.2, lng: 72.8 }, lastActivity: '2026-08-20T09:00:00Z' },
+      ] },
+    });
+    const pins = await api.getAgentLocations();
+
+    expect(pins).toEqual([{ id: 'oid-asha', name: 'Asha', inLat: 21.2, inLng: 72.8, inTime: '2026-08-20T09:00:00Z', onDuty: true }]);
+    expect(urls().some((u) => u.includes('/attendance/user/'))).toBe(false); // no per-member fan-out
+    expect(overviewUrl()).toBeUndefined();                                   // task-overview not needed
   });
 });
 
@@ -114,7 +139,7 @@ describe('getAgentLocations — the leader path (DONE-WHEN, at the wire)', () =>
     expect(pins).toEqual([
       expect.objectContaining({ id: 'u-asha', name: 'Asha', inLat: 21.20878, inLng: 72.839281, onDuty: true }),
     ]);
-    expect(urls()[0]).toContain('/team/task-overview');
+    expect(overviewUrl()).toContain('/team/task-overview');
     expect(urls().some((u) => u.includes('/profiles'))).toBe(false);
   });
 
