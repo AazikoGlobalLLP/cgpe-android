@@ -17,6 +17,9 @@ export type Task = {
   steps: TaskStep[];
   createdAt: string;
   completedAt?: string;
+  /** PHASE 57b: an offline-queued create not yet on the server. Renders a "Pending sync" badge and
+   *  is inert (no swipe, no complete, not tappable) until it flushes. Absent/false = a real task. */
+  pending?: boolean;
 };
 
 export const TASK_STATUS: Record<TaskStatus, { label: string; tone: any }> = {

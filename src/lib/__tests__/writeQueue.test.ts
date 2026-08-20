@@ -60,6 +60,14 @@ describe('parse / serialize', () => {
     ]);
     expect(parseQueue(raw).map((d) => d.id)).toEqual(['good', 'good2']);
   });
+  it('accepts BOTH the note and task kinds (57b Task-create), still rejecting others', () => {
+    const raw = JSON.stringify([
+      draft({ id: 'a-note', kind: 'note' }),
+      draft({ id: 'a-task', kind: 'task' }),
+      { id: 'a-lead', kind: 'lead', payload: {}, createdAt: 'x', attempts: 0 },   // unknown → dropped
+    ]);
+    expect(parseQueue(raw).map((d) => d.id)).toEqual(['a-note', 'a-task']);
+  });
 });
 
 describe('mutations', () => {

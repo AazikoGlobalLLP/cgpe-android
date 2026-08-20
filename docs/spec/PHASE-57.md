@@ -1,7 +1,7 @@
 # PHASE 57 — Offline support (read cache + safe write queue)
 
 **Status:** spec locked 2026-08-20 (owner approved `go`). **57a read cache BUILT + PUSHED (`20eb4ed`).
-57b safe write queue BUILT (Notes) — Task-create wiring deferred (see Build log).** Build order: **57a read cache first**, then 57b write queue.
+57b safe write queue BUILT (Notes `e318e06`) + **Task-create now wired** (this session).** Build order: **57a read cache first**, then 57b write queue.
 
 ## Build log
 - **57a (read cache) — DONE** `20eb4ed`: `offlineCache.ts` (pure) + `offlineStore.ts` + `freshness.ts` +
@@ -11,10 +11,21 @@
   `flushWriteQueue()` (replay: 2xx→sync, 4xx/attempt-cap→drop+notice, 5xx/network→keep) + `QueueFlusher` gate in
   `_layout` (sign-in / foreground / health-recovery); `notes.tsx` renders pending drafts + "Pending sync" badge +
   offline composer + reconcile-on-flush + drop-notice banner. Gates `tsc` 0 · `npm test` 747 · eslint 0 new.
-  - **Deliberate sub-scope:** the queue MECHANISM is kind-generic (`QueueKind`), but only **Notes** creates are wired
-    (all 5 acceptance criteria are Notes; this bounds the UI blast radius to one screen). **Task-create (`addTask`)
-    is the documented remaining 57b piece** — add `'task'` to `QueueKind`, an enqueue in `addTask`'s network-catch, a
-    `replayWrite` branch, and a Tasks-list pending row. No new mechanism needed.
+  - **~~Deliberate sub-scope~~ — Task-create NOW WIRED (this session):** `'task'` added to `QueueKind`/`KINDS`
+    (pure `writeQueue.ts`); `addTask` rewritten from the always-looks-saved `Task & {forbidden?}` to a FOUR-outcome
+    `AddTaskResult` (`saved`/`queued`/`forbidden`/`failed`) — a network throw enqueues an additive draft, a 403 is
+    `forbidden`, any other server refusal is `failed`, NEITHER is queued (replaying a rejected write is wrong). A
+    shared `taskCreateBody()` builds the `/team/tasks` POST for BOTH the first attempt and the replay so they can't
+    drift; `taskDraftToTask()` renders a queued draft as a `Task` with `pending:true`; `replayWrite` gained a `task`
+    branch. `task-new.tsx` now branches on the four outcomes (success haptic only on `saved`; `queued` → neutral
+    "saved on this device" toast + navigate to the Tasks tab; `failed` → an honest "not created" notice). Tasks tab
+    (`(tabs)/tasks.tsx`): pending drafts pinned above the server-confirmed filtered list (so they never distort the
+    hero/counts), each inert (no swipe/complete/tap) with a "Pending sync" badge; a one-time drop-notice banner; a
+    reconcile-on-flush effect refetches when the queue shrinks so the synced task lands as a confirmed row. Drop
+    notice reworded kind-agnostic ("offline change(s)"). Gates `tsc` 0 · `npm test` **755** (+8: writeQueue task-kind
+    +1, `api-task-queue` +7) · eslint 0 new. Tests: `src/data/__tests__/api-task-queue.test.ts` (4-outcome contract),
+    `writeQueue.test.ts` (both kinds accepted). Still **device-unverified** (AsyncStorage stub is a no-op); new
+    English strings still owe 5-lang copy.
   - **New English strings owe 5-lang copy** (spec row 6): "Pending sync", "Synced … may be out of date", the queued
     toast, the drop-notice. Machine translation forbidden.
 Scope **mobile**, effort **XL**, **no contract change** (pure client-side; the backend never knows the app was offline).

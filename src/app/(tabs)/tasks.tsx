@@ -16,6 +16,8 @@ import type { SwipeAction } from '@/ui/swipe';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { SyncChip } from '@/ui/SyncChip';
+import { usePendingWrites, useDropNotice, PendingBadge } from '@/ui/pending';
+import { setDropNotice } from '@/data/pendingWrites';
 import { haptics } from '@/lib/haptics';
 
 import { useT } from '@/i18n';
@@ -216,6 +218,21 @@ export default function Tasks() {
   // while the numerator eases down — the card never flashes an impossible "2 / 1" mid-animation.
   const shownDone = Math.min(useCountUp(today.done), today.total);
 
+  // PHASE 57b — offline write queue. Task drafts created offline live in the pending bus (loaded from
+  // storage on sign-in, so they survive an app kill); they render here with a "Pending sync" badge,
+  // and a one-time drop notice reports any the server later refused. Newest draft on top.
+  const pendingTasks = usePendingWrites('task');
+  const dropNotice = useDropNotice();
+  const pendingCards = useMemo(() => pendingTasks.map(api.taskDraftToTask).reverse(), [pendingTasks]);
+
+  // When a draft flushes (the queue shrinks) the real server task now exists — refetch so it lands as
+  // a confirmed row while the pending card drops away in the same pass.
+  const prevPending = useRef(pendingTasks.length);
+  useEffect(() => {
+    if (pendingTasks.length < prevPending.current && !loading) void load(false);
+    prevPending.current = pendingTasks.length;
+  }, [pendingTasks.length, loading, load]);
+
   const pickFilter = (next: Filter) => {
     if (next === filter) return;
     haptics.select();
@@ -290,6 +307,16 @@ export default function Tasks() {
       >
         {/* Phase 57a: shown only when these rows came from the offline cache after a failed refetch. */}
         <SyncChip endpointKey={tasksKey} />
+
+        {/* Phase 57b: a one-time notice for any offline task draft the server later refused (dropped). */}
+        {dropNotice ? (
+          <Banner
+            tone="warning"
+            title="An offline task was not saved"
+            message={dropNotice}
+            onDismiss={() => setDropNotice(null)}
+          />
+        ) : null}
         {loading ? <TasksSkeleton /> : (
           <>
             {/* HERO — how much of today is left. */}
@@ -392,6 +419,17 @@ export default function Tasks() {
                 />
               </ScrollView>
             </Appear>
+
+            {/* Phase 57b: offline task drafts, pinned above the (server-confirmed) filtered list so
+                they stay visible under every filter and never distort the hero/counts, which reflect
+                only real tasks. Each is inert — no swipe, no complete, not tappable — until it flushes. */}
+            {pendingCards.length > 0 ? (
+              <View style={{ gap: 10 }}>
+                {pendingCards.map((task, i) => (
+                  <TaskCard key={task.id} task={task} index={i} onPress={() => {}} />
+                ))}
+              </View>
+            ) : null}
 
             {notice ? (
               <Banner
@@ -505,16 +543,19 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
   const pr = TASK_PRIORITY[task.priority];
   const prog = taskProgress(task);
   const isDone = task.status === 'done';
+  // Phase 57b: a pending (offline-queued) draft is not on the server yet, so it must be inert — no
+  // swipe, no complete, no navigation to a detail that can't load — and carry a "Pending sync" badge.
+  const isPending = !!task.pending;
   const overdue = dueBucket(task) === 'overdue' && !isDone;
   const prTint = task.priority === 'high' ? c.danger : task.priority === 'medium' ? c.warning : c.faint;
   const stepsDone = task.steps.filter((s) => s.done).length;
 
   const actions: SwipeAction[] = [];
-  if (!isDone && onDone) actions.push({ icon: 'checkmark-done', label: 'Done', tone: 'success', onPress: onDone });
-  if (!isDone && task.clientPhone) {
+  if (!isPending && !isDone && onDone) actions.push({ icon: 'checkmark-done', label: 'Done', tone: 'success', onPress: onDone });
+  if (!isPending && !isDone && task.clientPhone) {
     actions.push({ icon: 'call', label: t('common.call'), tone: 'primary', onPress: () => { haptics.tap(); call(task.clientPhone!); } });
   }
-  if (isDone && onReopen) actions.push({ icon: 'arrow-undo', label: 'Reopen', tone: 'warning', onPress: onReopen });
+  if (!isPending && isDone && onReopen) actions.push({ icon: 'arrow-undo', label: 'Reopen', tone: 'warning', onPress: onReopen });
 
   const due = `${overdue ? 'Overdue · ' : ''}${fmtDay(task.dueDate)} · ${fmtTime(task.dueDate)}${task.client ? ` · ${task.client}` : ''}`;
 
@@ -564,7 +605,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
             </View>
 
             <Row style={{ gap: 6, flexWrap: 'wrap' }}>
-              <Pill label={st.label} tone={st.tone} small />
+              {isPending ? <PendingBadge /> : <Pill label={st.label} tone={st.tone} small />}
               <Pill label={pr.label} tone={pr.tone} small />
               <Pill label={task.category} tone="neutral" small />
             </Row>

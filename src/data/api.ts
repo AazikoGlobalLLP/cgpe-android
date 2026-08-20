@@ -55,7 +55,7 @@ import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMe
 // one `??` away from reaching a screen. Task data comes from getTasks; team data from /profiles.
 import type { TeamMember, TeamActivity } from './team';
 import { mergeRoster, liveOnDutyPins, type LiveLocation } from './roster';
-import { Task, TaskStatus } from './tasks';
+import { Task, TaskStatus, TaskPriority } from './tasks';
 import type {
   Claim, Client, Commission, Contest, Lead, LeadStage, LicPlan,
   Reminder, User, WaThread, WaMessage, AppNotification,
@@ -626,34 +626,90 @@ export async function reassignTask(id: string, assigneeName: string): Promise<bo
  * it needs `cgpe-api` to build it first. Until then the checklist renders read-only. */
 const PRIORITY2P: Record<string, string> = { high: 'P1', medium: 'P2', low: 'P3' };
 
+/**
+ * The `/team/tasks` create body, built from the app-shaped create fields. Extracted so the FIRST
+ * online attempt (`addTask`) and an OFFLINE replay (`replayWrite`) send a byte-identical body — the
+ * fields are resolved once at enqueue time, so a replay hours later can't drift (e.g. re-derive a
+ * different assignee). PHASE 57b (Task-create).
+ */
+function taskCreateBody(p: Record<string, unknown>) {
+  return {
+    title: String(p.title ?? 'New task'),
+    details: p.description ? String(p.description) : null,
+    assigneeName: String(p.assigneeName ?? currentUserName ?? 'Unassigned'),
+    priority: PRIORITY2P[String(p.priority ?? 'medium')] || 'P2',
+    dueAt: String(p.dueDate ?? ''),
+    type: String(p.category ?? 'task').toLowerCase(),
+    clientName: String(p.client ?? ''),
+    status: 'open',
+  };
+}
+
+/**
+ * PHASE 57b (Task-create) — a task create has FOUR honest outcomes, mirroring `addNote`:
+ *   - `saved`     — the server accepted it (a real `Task` with the server id).
+ *   - `queued`    — the NETWORK was down (the request threw), so the additive draft was queued to
+ *                   sync later. The returned task is an optimistic copy with a temp id + `pending`.
+ *   - `forbidden` — a 403: this account may not create tasks. NOT queued (retry can't help).
+ *   - `failed`    — the server ANSWERED and refused it (any other 4xx/5xx), or there is no session.
+ *                   NOT queued: replaying a rejected write is wrong (spec rows 9/11).
+ * The form fires a success haptic ONLY on `saved`; `queued` is a neutral "saved on this device".
+ */
+export type AddTaskResult =
+  | { status: 'saved'; task: Task }
+  | { status: 'queued'; task: Task }
+  | { status: 'forbidden' }
+  | { status: 'failed' };
+
 /** Create a REAL team task (admin/leader only on the backend). */
-export async function addTask(data: Partial<Task> & { assigneeName?: string }): Promise<Task & { forbidden?: boolean }> {
+export async function addTask(data: Partial<Task> & { assigneeName?: string }): Promise<AddTaskResult> {
   const local: Task = {
     id: 't' + (Date.now() % 100000), title: data.title || 'New task', description: data.description || '',
     status: 'todo', priority: data.priority || 'medium', category: data.category || 'Task',
     dueDate: data.dueDate || new Date().toISOString(), assignedBy: currentUserName || 'Admin', client: data.client,
     steps: [], createdAt: new Date().toISOString(),
   };
-  if (sessionReal && !FORCE_DEMO) {
-    try {
-      const { ok, status, json } = await req('/team/tasks', {
-        method: 'POST',
-        body: JSON.stringify({
-          title: local.title,
-          details: local.description || null,
-          assigneeName: data.assigneeName || currentUserName || 'Unassigned',
-          priority: PRIORITY2P[local.priority] || 'P2',
-          dueAt: local.dueDate,
-          type: (local.category || 'task').toLowerCase(),
-          clientName: local.client || '',
-          status: 'open',
-        }),
-      });
-      if (status === 403) return { ...local, forbidden: true };
-      if (ok && json?.data?.id) return { ...local, id: String(json.data.id) };
-    } catch { /* fall through */ }
+  // The exact create fields, resolved ONCE so an online POST and an offline replay send an identical
+  // body. This is what a queued draft stores (see `taskDraftToTask` for the display shape).
+  const payload = {
+    title: local.title, description: local.description, client: local.client ?? '',
+    priority: local.priority, category: local.category, dueDate: local.dueDate,
+    assigneeName: data.assigneeName || currentUserName || 'Unassigned',
+  };
+  if (FORCE_DEMO) { state.tasks.unshift(local); await wait(200); return { status: 'saved', task: clone(local) }; }
+  if (!sessionReal) return { status: 'failed' };
+  try {
+    const { ok, status, json } = await req('/team/tasks', { method: 'POST', body: JSON.stringify(taskCreateBody(payload)) });
+    if (status === 403) return { status: 'forbidden' };
+    if (ok && json?.data?.id) return { status: 'saved', task: { ...local, id: String(json.data.id) } };
+    return { status: 'failed' };   // server answered but refused — NOT queued
+  } catch {
+    // Network failure (dead network / timeout abort) → queue the additive draft to sync later.
+    const draft = await enqueueWrite('task', payload);
+    return draft ? { status: 'queued', task: taskDraftToTask(draft) } : { status: 'failed' };
   }
-  state.tasks.unshift(local); await wait(200); return clone(local);
+}
+
+/** Render a queued task draft as a `Task` so the Tasks screen shows it in a list, flagged pending. */
+export function taskDraftToTask(d: QueuedWrite): Task {
+  const p = d.payload as {
+    title?: string; description?: string; client?: string;
+    priority?: TaskPriority; category?: string; dueDate?: string;
+  };
+  return {
+    id: d.id,
+    title: String(p.title ?? 'New task'),
+    description: String(p.description ?? ''),
+    status: 'todo',
+    priority: (p.priority as TaskPriority) ?? 'medium',
+    category: String(p.category ?? 'Task'),
+    dueDate: String(p.dueDate ?? ''),
+    assignedBy: currentUserName ?? '',
+    client: p.client ? String(p.client) : undefined,
+    steps: [],
+    createdAt: d.createdAt,
+    pending: true,
+  };
 }
 
 /**
@@ -3403,6 +3459,15 @@ async function replayWrite(draft: QueuedWrite): Promise<{ ok: boolean; status: n
     const serverOk = ok && json?.success !== false;
     return { ok: serverOk, status: serverOk ? status : ok ? 422 : status };
   }
+  if (draft.kind === 'task') {
+    const { ok, status, json } = await req('/team/tasks', {
+      method: 'POST',
+      body: JSON.stringify(taskCreateBody(draft.payload)),
+    });
+    // Success needs the server id; a 200 without one is an odd refusal, not a success → drop.
+    const serverOk = ok && !!json?.data?.id;
+    return { ok: serverOk, status: serverOk ? status : ok ? 422 : status };
+  }
   return { ok: false, status: 400 };   // unknown kind → drop (should never happen)
 }
 
@@ -3438,11 +3503,11 @@ export async function flushWriteQueue(): Promise<{ synced: number; dropped: numb
     }
     if (dropped > 0) {
       // The server refused these (a 4xx / attempt-cap). Surface it once — an offline draft that
-      // silently vanished would read as data loss.
+      // silently vanished would read as data loss. Kind-agnostic ("change") — Notes AND Tasks queue.
       pendingBus.setDropNotice(
         dropped === 1
-          ? 'One offline note could not be saved and was removed.'
-          : `${dropped} offline notes could not be saved and were removed.`,
+          ? 'One offline change could not be saved and was removed.'
+          : `${dropped} offline changes could not be saved and were removed.`,
       );
     }
   } finally {

@@ -23,8 +23,8 @@ export const MAX_QUEUE = 100;
 /** A draft kept-failing this many times is dropped (with a notice) — a poison-write backstop. */
 export const MAX_ATTEMPTS = 5;
 
-/** The kinds of create the queue can replay. Extensible: add 'task' when Task-create is wired. */
-export type QueueKind = 'note';
+/** The kinds of create the queue can replay. Notes (57b) + Tasks (57b finish). Extensible. */
+export type QueueKind = 'note' | 'task';
 
 export type QueuedWrite = {
   /** Client temp id (e.g. `pending-<ts>-<rand>`). Replaced by the server id once flushed. */
@@ -46,7 +46,7 @@ export function isQueueKey(key: string): boolean {
   return key.startsWith(QUEUE_PREFIX);
 }
 
-const KINDS: QueueKind[] = ['note'];
+const KINDS: QueueKind[] = ['note', 'task'];
 
 function isQueuedWrite(o: any): o is QueuedWrite {
   return (

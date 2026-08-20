@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-20 — PHASE 57b FINISHED (Task-create wired into the offline write queue).** The documented remaining 57b
+piece is done: a task created while offline is no longer lost or falsely reported as saved. `addTask` was rewritten from
+the always-looks-saved `Task & {forbidden?}` to a FOUR-outcome `AddTaskResult` — **saved** (server accepted, real id) /
+**queued** (network threw → additive draft held to sync, temp id + `pending`, NO success haptic) / **forbidden** (403) /
+**failed** (any other server refusal — NOT queued; replaying a rejected write is wrong). `'task'` added to
+`QueueKind`/`KINDS` (pure `writeQueue.ts`); a shared `taskCreateBody()` builds the `/team/tasks` POST for BOTH the first
+attempt and the replay (can't drift); `taskDraftToTask()` renders a queued draft as a `Task`; `replayWrite` gained a
+`task` branch (2xx-with-id → sync, else drop/keep per `flushDecision`). `task-new.tsx` branches the four outcomes
+(success buzz only on `saved`; `queued` → neutral "saved on this device" toast + navigate to Tasks tab; `failed` → an
+honest "not created" notice). Tasks tab: pending drafts pinned above the server-confirmed filtered list (never distort
+the hero/counts), each inert (no swipe/complete/tap) with a **"Pending sync"** badge; a one-time drop-notice banner; a
+reconcile-on-flush effect refetches when the queue shrinks so the synced task lands as a confirmed row. Drop notice
+reworded kind-agnostic. Gates `tsc` 0 · `npm test` **755** (+8: `api-task-queue` 7, writeQueue task-kind 1) · eslint 0
+new. **Deliberate scope: creates only** (Leads-create is the only remaining additive create still unqueued — optional).
+New English strings still owe 5-lang copy; **device-unverified** (AsyncStorage stub is a no-op), JS-only → OTA-eligible.
+Spec: `docs/spec/PHASE-57.md` (Build log). Commit + push pending.
+
 **✅ 2026-08-20 — PHASE 57b BUILT (safe write queue — Notes).** The second half of offline support: a note created while
 offline is no longer lost or falsely reported as saved. `addNote` now returns a 3-outcome `AddNoteResult` — **saved** (server
 accepted), **queued** (network was down → additive draft held to sync; NO success haptic, "saved on this device" toast), **failed**

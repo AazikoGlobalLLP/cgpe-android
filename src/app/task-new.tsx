@@ -156,7 +156,9 @@ export default function TaskNew() {
     if (!live.current) return;
     setSaving(false);
 
-    if (created.forbidden) {
+    // PHASE 57b — four honest outcomes, no fabricated success. A 403, and a server refusal, each say
+    // so; a network failure is QUEUED (offline draft) with a neutral toast, never the success buzz.
+    if (created.status === 'forbidden') {
       haptics.warn();
       setNotice({
         tone: 'warning',
@@ -166,9 +168,27 @@ export default function TaskNew() {
       return;
     }
 
+    if (created.status === 'failed') {
+      haptics.error();
+      setNotice({
+        tone: 'warning',
+        title: 'Task was not created',
+        message: 'The server refused the request, so nothing was added. Check the details and try again in a moment.',
+      });
+      return;
+    }
+
+    if (created.status === 'queued') {
+      haptics.tap();   // a neutral acknowledgement, never the success buzz — it isn't on the server yet
+      toast("Saved on this device — it'll sync when you're back online.", 'offline');
+      router.replace('/(tabs)/tasks');   // the Tasks tab shows it with a "Pending sync" badge
+      return;
+    }
+
+    // created.status === 'saved' — the server accepted it.
     haptics.success();
     toast(assignee !== UNASSIGNED ? `Task assigned to ${assignee}.` : 'Task created.', 'success');
-    router.replace(`/task/${created.id}`);
+    router.replace(`/task/${created.task.id}`);
   };
 
   const roster = members ?? [];
