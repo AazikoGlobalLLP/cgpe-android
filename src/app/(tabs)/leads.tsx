@@ -6,6 +6,7 @@ import { Eyebrow, Header, Metric, Row, Screen, Txt } from '@/ui/base';
 import { Button, Chips, Fab, Field, SearchBar } from '@/ui/controls';
 import { Banner, EmptyState, Meter, Skeleton, useToast } from '@/ui/feedback';
 import { DataRow, ListSection, Pill } from '@/ui/data';
+import { SyncChip } from '@/ui/SyncChip';
 import { PersonRow } from '@/ui/identity';
 import { Sheet } from '@/ui/sheet';
 import { SwipeRow } from '@/ui/swipe';
@@ -380,6 +381,12 @@ export default function Leads() {
             />
           </View>
         ) : null}
+
+        {/* Phase 57a: shown only when the pipeline came from the offline cache after a failed refetch,
+            so populated-but-stale rows never read as live data (audit 2026-08-21, #9). */}
+        <View style={{ paddingHorizontal: spacing.lg }}>
+          <SyncChip endpointKey="leads" />
+        </View>
 
         {/* PHASE 57: a one-time notice for any offline lead draft the server later refused (dropped). */}
         {dropNotice ? (

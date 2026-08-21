@@ -8,6 +8,7 @@ import { Card, Header, Row, Screen, SectionHeader, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
 import { IconBtn } from '@/ui/controls';
 import { Banner, EmptyState, Skeleton } from '@/ui/feedback';
+import { SyncChip } from '@/ui/SyncChip';
 import type { FeedbackTone } from '@/ui/feedback';
 import { Spine, SpineRow } from '@/ui/spine';
 import type { SpineTone } from '@/ui/spine';
@@ -250,6 +251,10 @@ export default function Reminders() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => void load(true)} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
       >
+        {/* Phase 57a: shown only when these reminders came from the offline cache after a failed
+            refetch, so populated-but-stale rows never read as live data (audit 2026-08-21, #9). */}
+        <SyncChip endpointKey="reminders" />
+
         {notice ? (
           <Banner
             tone={notice.tone}

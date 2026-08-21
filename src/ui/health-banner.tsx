@@ -104,11 +104,14 @@ export function HealthBanner() {
         {/* "could not be completed", not "did not reach the server": since Phase 3 this
             banner also covers a request the server DID answer, with a body the app cannot
             use. Telling someone to check their connection over a contract mismatch sends
-            them chasing a network problem they do not have. */}
+            them chasing a network problem they do not have. "missing OR out of date" (not the
+            old "blank values are unconfirmed"): since Phase 57 the read cache serves populated
+            but STALE rows on a failed refetch, so a list can be wrong without being blank — the
+            per-screen SyncChip stamps those (audit 2026-08-21, #9). */}
         <Txt size={11.5} color={c.muted} style={{ marginTop: 1 }} numberOfLines={2}>
           {count === 1
-            ? 'One request could not be completed. Blank values here are unconfirmed.'
-            : `${count} requests could not be completed. Blank values here are unconfirmed.`}
+            ? 'One request could not be completed. Some values may be missing or out of date.'
+            : `${count} requests could not be completed. Some values may be missing or out of date.`}
         </Txt>
       </View>
       <Pressable

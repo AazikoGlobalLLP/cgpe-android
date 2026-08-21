@@ -8,6 +8,7 @@ import { Header, Row, Screen, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
 import { Button } from '@/ui/controls';
 import { Banner, EmptyState, Skeleton } from '@/ui/feedback';
+import { SyncChip } from '@/ui/SyncChip';
 import { Pill } from '@/ui/data';
 import { Spine, SpineRow } from '@/ui/spine';
 import type { SpineTone } from '@/ui/spine';
@@ -297,6 +298,10 @@ export default function Notifications() {
           />
         }
       >
+        {/* Phase 57a: shown only when these notifications came from the offline cache after a failed
+            refetch, so populated-but-stale rows never read as live data (audit 2026-08-21, #9). */}
+        <SyncChip endpointKey="notifications" />
+
         {refused ? (
           <Banner
             tone="warning"
