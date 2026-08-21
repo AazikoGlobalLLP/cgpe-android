@@ -3541,19 +3541,26 @@ export async function flushWriteQueue(): Promise<{ synced: number; dropped: numb
   let synced = 0;
   let dropped = 0;
   try {
-    let queue = await offlineStore.loadQueue(uid);
-    for (const draft of queue) {
+    // Iteration order only. The per-step persist below re-reads the LATEST queue AFTER each replay,
+    // so a draft the user enqueues mid-flush (while replayWrite awaits the network) is preserved
+    // rather than clobbered by a stale wholesale snapshot (audit 2026-08-21, #5). A draft added
+    // mid-flush isn't in this snapshot, so it simply replays on the next flush — never lost.
+    const drafts = await offlineStore.loadQueue(uid);
+    for (const draft of drafts) {
       let outcome: FlushOutcome;
       try {
         outcome = flushDecision(await replayWrite(draft), draft.attempts);
       } catch {
         outcome = flushDecision('threw', draft.attempts);
       }
-      if (outcome === 'synced') { queue = removeFromQueue(queue, draft.id); synced++; }
-      else if (outcome === 'drop') { queue = removeFromQueue(queue, draft.id); dropped++; }
-      else { queue = bumpAttempt(queue, draft.id); }
-      await offlineStore.saveQueue(uid, queue);
-      pendingBus.setPending(queue);
+      if (outcome === 'synced') synced++;
+      else if (outcome === 'drop') dropped++;
+      // Re-read AFTER the await: `latest` includes anything enqueued during this replay. Mutating
+      // only draft.id (removeFromQueue / bumpAttempt are id-keyed) leaves a concurrent draft intact.
+      const latest = await offlineStore.loadQueue(uid);
+      const next = outcome === 'keep' ? bumpAttempt(latest, draft.id) : removeFromQueue(latest, draft.id);
+      await offlineStore.saveQueue(uid, next);
+      pendingBus.setPending(next);
     }
     if (dropped > 0) {
       // The server refused these (a 4xx / attempt-cap). Surface it once — an offline draft that
