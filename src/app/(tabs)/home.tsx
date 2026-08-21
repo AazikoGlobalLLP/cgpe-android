@@ -127,10 +127,36 @@ function clockedInLine(iso: string | undefined, fallback: string): string {
   return isNaN(dt.getTime()) ? fallback : `Clocked in ${fmtTime(dt)}`;
 }
 
+/** Resolve `p`, or reject after `ms`. A local copy of `tracker.ts`'s helper — importing it here
+ *  would pull the tracker's background-only native modules (task-manager / sensors / background-task)
+ *  into this screen's module graph, which the CLAUDE.md native-module-in-test-graph rule forbids. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); },
+    );
+  });
+}
+
+/* Foreground fix bounds (audit 2026-08-21, #1). `getCurrentPositionAsync` has NO timeout of its own,
+ * so a High-accuracy fix that never arrives — an office basement, an interior room, a rural dead zone —
+ * would leave the clock-in / clock-out / break button spinning FOREVER with no error and no recovery
+ * (the busy flag is cleared only in a `finally` downstream of the await). These bounds guarantee getFix
+ * always settles, so the finally always runs and the button un-sticks. */
+const FIX_TIMEOUT_MS = 12_000;       // wait for a fresh High fix, then fall back
+const LASTKNOWN_TIMEOUT_MS = 4_000;  // the cached last fix should be instant; bound it anyway
+const GEOCODE_TIMEOUT_MS = 5_000;    // reverse-geocode needs the network; never let it hang the fix
+
 /**
- * Capture a GPS fix (with accuracy and a reverse-geocoded place name). Returns null when
- * the user denies location: attendance is confirmed by geofence, so a clock event without
- * a fix is not something this screen may fabricate.
+ * Capture a GPS fix (with accuracy and a reverse-geocoded place name). Returns null when the user
+ * denies location OR no fix can be obtained in time: attendance is confirmed by geofence, so a clock
+ * event without a fix is not something this screen may fabricate — and a null is safely handled by
+ * every caller (clock-in shows "Location needed"; clock-out / break tolerate `fix === null`).
+ *
+ * Every hang-prone native call is bounded (see the constants above), so this ALWAYS settles — the
+ * whole point of the fix: an unbounded await used to strand the attendance button spinning forever.
  *
  * Module scope on purpose — it closes over nothing, which keeps `toggleClock` stable.
  */
@@ -138,10 +164,21 @@ async function getFix(): Promise<{ lat: number; lng: number; accuracy?: number; 
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') return null;
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+    let pos: Location.LocationObject | null;
+    try {
+      pos = await withTimeout(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), FIX_TIMEOUT_MS);
+    } catch {
+      // The fresh High fix never arrived (indoors / cold GPS / dead zone). Fall back to the last
+      // known fix so the button always resolves; null if the OS has none cached either.
+      pos = await withTimeout(Location.getLastKnownPositionAsync(), LASTKNOWN_TIMEOUT_MS).catch(() => null);
+    }
+    if (!pos) return null;
     let place = 'On field';
     try {
-      const g = await Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      const g = await withTimeout(
+        Location.reverseGeocodeAsync({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+        GEOCODE_TIMEOUT_MS,
+      );
       place = g[0]?.city || g[0]?.district || g[0]?.region || 'On field';
     } catch { place = 'Location captured'; }
     return { lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy ?? undefined, city: place };
