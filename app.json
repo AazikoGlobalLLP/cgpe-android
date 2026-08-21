@@ -4,7 +4,7 @@
     "slug": "ANDROID",
     "version": "1.10.0",
     "orientation": "portrait",
-    "icon": "./assets/images/cgpe-logo.png",
+    "icon": "./assets/images/android-icon-cgpe.png",
     "scheme": "cgpe",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -19,7 +19,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
-        "foregroundImage": "./assets/images/cgpe-logo.png"
+        "foregroundImage": "./assets/images/android-icon-cgpe-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
       "softwareKeyboardLayoutMode": "resize",
