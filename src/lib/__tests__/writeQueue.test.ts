@@ -108,11 +108,15 @@ describe('flushDecision — spec row 11', () => {
     expect(flushDecision({ ok: false, status: 500 }, 0)).toBe('keep');
     expect(flushDecision({ ok: false, status: 503 }, 1)).toBe('keep');
   });
-  it('a network throw under the cap → keep', () => {
+  it('a network throw is ALWAYS kept — it never reached the server, so never counts toward the cap (audit #3)', () => {
     expect(flushDecision('threw', 0)).toBe('keep');
+    // Regression pin: this was 'drop', the bug that silently DELETED a never-sent create after
+    // MAX_ATTEMPTS offline flushes and told the user it "could not be saved".
+    expect(flushDecision('threw', MAX_ATTEMPTS - 1)).toBe('keep');
+    expect(flushDecision('threw', MAX_ATTEMPTS + 10)).toBe('keep');
   });
-  it('past MAX_ATTEMPTS a transient failure is DROPPED (poison-write backstop)', () => {
-    expect(flushDecision('threw', MAX_ATTEMPTS - 1)).toBe('drop');
+  it('a server-ANSWERED 5xx past MAX_ATTEMPTS is DROPPED (poison-write backstop)', () => {
     expect(flushDecision({ ok: false, status: 500 }, MAX_ATTEMPTS - 1)).toBe('drop');
+    expect(flushDecision({ ok: false, status: 503 }, MAX_ATTEMPTS)).toBe('drop');
   });
 });

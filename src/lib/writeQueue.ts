@@ -10,9 +10,10 @@
  *  - Enqueue ONLY on a network failure (a thrown request — dead network / timeout abort). A server
  *    ANSWER that refuses the write (a 4xx/5xx) is NOT queued: retrying a rejected write is wrong.
  *  - On flush: a 2xx is `synced` (remove); a 4xx is `drop` (the server refused — retrying can't
- *    help, tell the user once); a 5xx or a fresh throw is `keep` (transient — try again next time).
- *  - A `keep` bumps an attempt counter; past `MAX_ATTEMPTS` the draft is dropped as a safety
- *    backstop so a permanently-failing write can't sit in the queue forever.
+ *    help, tell the user once); a 5xx or a network throw is `keep` (transient — try again next time).
+ *  - A `keep` bumps an attempt counter; past `MAX_ATTEMPTS` a draft that keeps getting a 5xx ANSWER
+ *    is dropped as a poison-write backstop. A network THROW never counts toward that cap — it never
+ *    reached the server, so it is never a poison write (the MAX_QUEUE bound still limits growth).
  */
 
 export const QUEUE_PREFIX = 'queue.v1.';
@@ -97,8 +98,9 @@ export type FlushOutcome = 'synced' | 'drop' | 'keep';
  * the draft's count BEFORE this attempt.
  *   - 2xx                         → synced (remove)
  *   - 4xx                         → drop   (server refused; retry won't help — notify once)
- *   - 5xx / threw, under the cap  → keep   (transient — try again next reconnect)
- *   - anything, at/over the cap   → drop   (poison-write backstop)
+ *   - network throw               → keep   (never reached the server — NOT a poison write, retry)
+ *   - 5xx under the cap           → keep   (transient server fault — try again next reconnect)
+ *   - 5xx at/over the cap         → drop   (poison-write backstop — a server that keeps 5xx-ing)
  */
 export function flushDecision(
   result: { ok: boolean; status: number } | 'threw',
@@ -107,6 +109,12 @@ export function flushDecision(
   if (result !== 'threw' && result.ok) return 'synced';
   const clientRefusal = result !== 'threw' && result.status >= 400 && result.status < 500;
   if (clientRefusal) return 'drop';
-  // 5xx or a network throw: transient — keep, unless we've already tried too many times.
+  // A network THROW never reached the server, so it is not a poison write and must NEVER count
+  // toward the drop cap — else a genuinely-offline draft is silently deleted after MAX_ATTEMPTS
+  // offline flushes and the user is falsely told it "could not be saved" (audit 2026-08-21, #3).
+  // req() only throws on a dead network / timeout abort; a server ANSWER is always {ok,status}, so
+  // 'threw' unambiguously means "never transmitted". The MAX_QUEUE bound still limits growth.
+  if (result === 'threw') return 'keep';
+  // A server-ANSWERED 5xx that keeps failing IS a poison write — drop it past the cap.
   return attempts + 1 >= MAX_ATTEMPTS ? 'drop' : 'keep';
 }
