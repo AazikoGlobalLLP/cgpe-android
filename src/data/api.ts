@@ -1361,16 +1361,17 @@ export async function scanRenewals(
       .map((c) => ({ id: c.id, name: c.name, phone: c.phone, premium: c.totalPremium, policyNo: c.policies[0]?.number || '', dueDate: c.policies[0]?.nextRenewal || '' }));
   }
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  let page = 1, totalPages = 1, scanned = 0;
+  let page = 1, totalPages = 1, scanned = 0, consecutiveFailures = 0;
   do {
     let json: any = null;
+    let pageFailed = false;
     // PHASE 3: a skipped page is reported. A renewal audience shrunk by an outage used to be
     // indistinguishable from "nobody is due" — and this list decides who gets contacted about
     // a lapsing policy, so a silently short one costs real renewals.
     try {
       const r = await req(`/clients?limit=${CLIENT_PAGE}&page=${page}&scope=all`, {}, REQUEST_TIMEOUT, '/clients');
-      if (r.ok) json = r.json; else reportIfOutage(r.status, '/clients');
-    } catch { reportFailure('/clients'); }
+      if (r.ok) json = r.json; else { reportIfOutage(r.status, '/clients'); pageFailed = true; }
+    } catch { reportFailure('/clients'); pageFailed = true; }
     const rows: any[] = json?.data || [];
     totalPages = Number(json?.totalPages) || totalPages;
     for (const raw of rows) {
@@ -1395,6 +1396,12 @@ export async function scanRenewals(
     scanned += rows.length;
     onProgress?.(scanned, found.length, totalPages * CLIENT_PAGE);
     page += 1;
+    // CIRCUIT BREAKER (audit 2026-08-21, #8): on a blackhole network every page hangs the full
+    // timeout+retry (~25s) and this loop would otherwise grind through all ~N pages (>30 min) with
+    // frozen progress and no abort, blocking the WhatsApp campaign queued behind it. Two consecutive
+    // failed pages = a proven-dead network → stop and return the partial result (the outage banner is
+    // already raised above). A single transient blip resets the counter so a healthy scan runs on.
+    if (pageFailed) { if (++consecutiveFailures >= 2) break; } else { consecutiveFailures = 0; }
   } while (page <= totalPages && page <= maxPages);
   return found;
 }

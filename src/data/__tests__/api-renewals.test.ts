@@ -227,6 +227,28 @@ describe('scanRenewals — paging and progress', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(3);
   });
 
+  it('CIRCUIT BREAKER: stops after 2 consecutive failed pages instead of grinding every page (audit #8)', async () => {
+    // Page 1 succeeds and claims 10 pages; the network then dies. Without the breaker the loop would
+    // walk pages 2..10, each hanging the full timeout+retry (~25s) — >30 min of frozen progress that
+    // blocks the campaign queued behind it. The breaker must stop after the 2nd consecutive failure.
+    vi.setSystemTime(new Date(2026, 7, 10, 10, 0, 0));
+    health.resetHealth();
+    fetchSpy
+      .mockResolvedValueOnce(okJson({ data: [row({ _id: 'p1', fupDate: '2019-08-15T00:00:00' })], totalPages: 10 }))
+      .mockRejectedValue(new Error('network down'));   // every page from 2 onward throws
+
+    const p = api.scanRenewals(30);
+    await vi.advanceTimersByTimeAsync(5000);            // past both retry backoffs (600ms each)
+    const out = await p;
+
+    expect(out).toHaveLength(1);                        // the PARTIAL result from page 1 is returned
+    expect(out[0].id).toBe('p1');
+    // page1 (1 ok) + page2 (throw + 1 retry = 2) + page3 (throw + 1 retry = 2) = 5, then BREAK.
+    // Pages 4..10 are never fetched — that is the whole point.
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
+    expect(health.getHealth().degraded).toBe(true);
+  });
+
   it('requests the paginated client book with scope=all', async () => {
     // Asserted on the PATH SUFFIX only. The full URL depends on API_BASE_URL, which is chosen
     // from Platform.OS — and Platform comes from a test stub, so asserting the whole string
