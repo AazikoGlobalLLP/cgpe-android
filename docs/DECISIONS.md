@@ -3612,3 +3612,40 @@ translates a gap.** The app already ships English/हिन्दी/ગુજ�
 index.tsx`, 5×74 keys). Hinglish = Hindi-in-Latin, Gujlish = Gujarati-in-Latin (user's definition).
 A missing key is a *finding to report*, not a gap to fill with a guessed transliteration — a wrong
 Hinglish string is worse than an obvious English fallback.
+
+---
+
+## 2026-08-21 — Phase 75 (daily-flow bug cluster: C1 keyboard, A2/A1 overdue-as-today)
+
+**Decision: C1 — fix the dead soft-keyboard in bottom sheets by focusing on `Modal.onShow`, not
+`autoFocus`.** On Android an `autoFocus` `TextInput` inside an RN `Modal` requests focus before the modal
+window is attached, so the soft keyboard never rises (owner report: Break button → no keyboard). `Field`
+and `SearchBar` are now `forwardRef`; `Sheet` fires a new `onShown` on the Modal's `onShow` (50 ms
+settle); the break, clock-out-reason (`home.tsx`) and claim client-picker (`claim-new.tsx`) sheets focus
+their input there and DROP `autoFocus` — a lingering `autoFocus` would mark the input "focused" with no
+keyboard and defeat the `onShown` focus. Deterministic (the OS "shown" signal), reusable for any future
+sheet input.
+
+**Decision: A2 — "Today's Progress = 0 / nothing scheduled" is NOT a mobile bug; keep the backend rule
+and fix the mobile screen (owner chose Option 2).** The ticket→team_tasks mirror dates a claimed ticket
+by `ticket.createdAt` (its own older open date) — the owner's own 2026-08-18 rule
+(`../cgpe-backend-main/routes/tickets.js:382`) — so a ticket opened last week but claimed today buckets
+Overdue, and the today-only progress read 0. Reversing it would hide genuinely-overdue tickets, so the
+owner kept it. New pure `todayWorkload` (due-today ∪ open-overdue ∪ completed-today) drives the Tasks
+hero; the 'today' empty state now nudges to Overdue.
+
+**Decision: A1 — "the clock-in location screen" = the Home clock-in hero.** Owner clarified it is the top
+of Home (the clock-in button area where today's tasks show). It used the same today-only `todayProgress`,
+so the overdue ticket read "nothing scheduled" there too. Switched the Home hero to `todayWorkload`, which
+re-unifies Home + the Tasks tab under ONE definition (the "never disagree" invariant is preserved, not
+broken); `todayProgress` is retained only as a tested reference. Right sequence: A2 was built Tasks-only
+first (to avoid changing the danger-zone Home unasked), then the owner explicitly asked for the Home hero,
+so extending it there became correct rather than presumptuous.
+
+**Decision: the "app won't open on some networks" report is LOGGED for on-device triage, not blind-fixed
+(§F, HIGH PRIORITY).** The old aggressive 4.5 s `REQUEST_TIMEOUT` is already 12 s + one retry (Phase 55),
+and the splash clears on storage-auth + bundled fonts (never the network) with all startup net calls
+fail-open — so a network-caused splash-hang is NOT expected from the current code. The report needs the
+crash-vs-hang-vs-blank answer + `adb logcat` + the phone-browser `/health` test on the failing network
+BEFORE any code change. "Both WiFi AND mobile data" is the key oddity (old APK / DNS-IPv6 / device crash
+are the suspects). F2 (systematic loophole hunt) is best as a multi-agent workflow on owner opt-in.

@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-21 — PHASE 75: daily-flow bug cluster (C1 keyboard + A2/A1 overdue-as-today) + reliability item logged.**
+Owner picked the "daily-flow bugs" (A1/A2/C1) over B1/D4. All three built, gate-green (`tsc` 0 · `npm test` **769** ·
+eslint 0 new), pushed to `aaziko/Shivam` (`e10e9a2` C1, `e9a970f` A2, `5592465` A1, `1775649` docs). **`[m]` only, no
+contract change.**
+- **C1 — soft keyboard dead in bottom sheets → FIXED.** RN-Android fires a `Field`/`SearchBar` `autoFocus` before the
+  `Modal` window attaches, so the keyboard never rose (owner: Break → no keyboard). `Field`+`SearchBar` are now
+  `forwardRef`; `Sheet` gains `onShown` (fired on `Modal.onShow`, 50 ms settle); the break + clock-reason sheets
+  (`home.tsx`) and the claim client-picker (`claim-new.tsx`, unreported twin) focus on `onShown` and drop `autoFocus`.
+- **A2 — "Today's Progress = 0 / nothing scheduled" → NOT a mobile bug; fixed the screen (owner Option 2).** The mirror
+  dates a claimed ticket by its own older open date (2026-08-18 rule, `tickets.js:382`) → an old ticket claimed today
+  buckets Overdue. New pure `todayWorkload` (due-today ∪ open-overdue ∪ completed-today) drives the Tasks hero; 'today'
+  empty state nudges to Overdue. Backend rule kept.
+- **A1 — ticket-task missing from the "clock-in location screen" = the Home clock-in HERO** (owner clarified). Same
+  today-only bug; switched the Home hero to `todayWorkload`, re-unifying Home + Tasks. `todayProgress` now unused in prod
+  (kept as a tested reference).
+- **NEW §F in `docs/OWNER-BACKLOG-2026-08-21.md` (HIGH PRIORITY, logged not built):** "app won't open on his home WiFi
+  AND mobile data" + hunt undiscovered loopholes. Current state recorded so it isn't re-derived: timeout is already 12 s
+  (Phase 55, not 4.5 s), splash never waits on the network, startup net calls fail-open. Needs on-device triage
+  (crash / splash-hang / opens-blank) + `adb logcat` + the phone-browser `/health` test BEFORE any code change.
+- **Device-unverified** (native keyboard + hero render): owner opens Break → keyboard should pop; Tasks + Home hero
+  should show the overdue ticket. Owner still owes the FCM key upload + a fresh APK (C1/A2/A1 + the Phase-74 icon fix).
+
 **✅ 2026-08-21 — PHASE 74: Android push enablement + launcher-icon fit + owner-backlog triage.** Owner created the Firebase
 project (`com-cgpe-connect`) + added `google-services.json`. Wired `android.googleServicesFile` in `app.json` and **cut a
 push-enabled APK** (EAS `0d68ac07`, git `ce9b1e6`, v1.10.0, direct `.apk`
@@ -1801,17 +1823,21 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-21 — after Phase 74 push-enablement + icon + backlog triage):**
+**CURRENT next 3 (2026-08-21 — after Phase 75 daily-flow cluster C1/A2/A1 + §F logged):**
 
-1. **Verify Android push END-TO-END.** Owner uploads the FCM V1 service-account key (`npx eas-cli credentials -p android` →
-   Google Service Account → FCM V1 → the JSON), installs APK `0d68ac07`, logs in, creates a task → a closed phone must get the
-   notification. If it doesn't, read the exact `eas credentials` screen / check FCM is configured. This is the gate on push.
-2. **Cut ONE clean build carrying the icon fix** (and confirmed push) once #1 passes — the current installed APK has the OLD
-   icon; commit `5c8ac46` fixes it but only rides a rebuild. `npx eas-cli build -p android --profile preview --non-interactive`.
-3. **Start the triaged owner backlog** (`docs/OWNER-BACKLOG-2026-08-21.md`) — spec-lock first where flagged, then take the
-   highest-value mobile item (candidates: **B1** master detail, **D4** tasks calendar view, **C1/C2** break-keyboard +
-   clock-out-reason, **A1/A2** ticket-task on clock-in + Today's Progress). Backend/data items (A3, B2/B4/B5, D5, E1, E2, D1
-   enforcement) go via the owner-relay INBOX item; **D1** section-visibility is mostly an admin-panel RBAC-config job.
+1. **Triage §F "app won't open on some networks" (HIGH PRIORITY, `docs/OWNER-BACKLOG-2026-08-21.md`).** Get the
+   crash-vs-splash-hang-vs-opens-blank answer from the owner, then on the failing network: `adb logcat` on the device
+   (USB/ADB works from here) + open `https://cgpe.in/internal/api/health` in the phone browser. **Do NOT bump a timeout or
+   rebuild an APK "to fix WiFi" before that on-phone test** — the timeout is already 12 s (Phase 55) and the splash never
+   waits on the network. Suspects: old/broken installed APK (check `base.apk` SHA-256), DNS/IPv6 vs the IPv4-only backend,
+   or a device-specific launch crash.
+2. **Owner: upload the FCM V1 service-account key + cut ONE fresh APK** carrying C1/A2/A1 + the Phase-74 icon fix. Push still
+   won't deliver until the key is on EAS (`npx eas-cli credentials -p android` → Google Service Account → FCM V1 → the JSON);
+   then `npx eas-cli build -p android --profile preview --non-interactive` and re-test push + the three fixes on the phone.
+3. **Then the rest of the backlog.** Highest-value mobile items still open: **B1** master detail, **D4** tasks calendar view,
+   **C2** clock-out reason (needs the hour threshold — spec-lock), the break/UX items **D6**, **D3** team-screen reorder.
+   Backend/data (A3, B2/B4/B5, D5, E1, E2, D1 enforcement) via the owner-relay INBOX; **D1** is mostly an admin-panel
+   RBAC-config job. **F2** (systematic loophole hunt) is a multi-agent workflow on owner opt-in.
 
 **Superseded (2026-08-20 next-3 — the 70–73 batch AND Phase 65 are BUILT + PUSHED; those now ride the Phase-74 push APK):**
 

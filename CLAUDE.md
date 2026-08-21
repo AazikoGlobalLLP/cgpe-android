@@ -222,9 +222,12 @@ place, biometric hardware, real writes (clock-in / WhatsApp send) — those live
 healthy + fast (HTTP 200, ~40 ms, IPv4-only — verify with `curl -w '%{time_total}' https://cgpe.in/internal/api/health`).
 So a WiFi-only failure means that WiFi can't reach `cgpe.in` (captive portal / firewall / no real
 internet). The definitive test is the owner opening `https://cgpe.in/internal/api/health` in the phone
-browser ON that WiFi. Only if it loads there but the app still fails is it app-side — then the lever is
-the aggressive **4.5 s `REQUEST_TIMEOUT`** (`src/constants/config.ts`), raised + a retry. **Do not
-rebuild an APK to "fix WiFi" before that on-phone test.**
+browser ON that WiFi. Only if it loads there but the app still fails is it app-side — the
+`REQUEST_TIMEOUT` (`src/constants/config.ts`) is **already 12 s + one retry** (Phase 55, 2026-08-20 —
+NOT the old 4.5 s), so a timeout bump is NOT the lever. And the splash never waits on the network
+(`_layout.tsx` clears it on storage-auth + bundled fonts; startup net calls are fail-open), so a
+network-caused splash-hang is not expected — triage on-device first (crash / splash-hang / opens-blank),
+see `docs/OWNER-BACKLOG-2026-08-21.md` §F. **Do not rebuild an APK to "fix WiFi" before that on-phone test.**
 
 **Write commit messages to a file and use `git commit -F <file>`.** A multi-line `-m` here-string
 breaks under PowerShell 5.1 as soon as the message contains a double quote: PowerShell splits it and

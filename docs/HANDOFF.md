@@ -1,54 +1,38 @@
-# HANDOFF — CGPE Connect (Android) — Phase 74 (Android push enablement + launcher icon + owner backlog triage) — 2026-08-21
+# HANDOFF — CGPE Connect (Android) — Phase 75 (daily-flow bug cluster C1+A2+A1 + reliability item logged) — 2026-08-21
 
-Two things shipped this session, plus a large NEW owner backlog was **triaged** (not built — the owner asked only to
-identify mobile vs backend and hand off). `[m]` only; no contract change from the shipped work.
+Owner picked the "daily-flow bug cluster" (A1/A2/C1) over the bigger features (B1/D4). All three are
+built, gate-green, and pushed to `aaziko/Shivam`. Two turned out to be the same root cause on two
+surfaces. A new HIGH-PRIORITY reliability item ("app won't open on some networks") was logged for
+triage. `[m]` only — no contract change.
 
 ## Done
-- **The app can now do Android push (build side is complete).** Owner created a Firebase project (`com-cgpe-connect`) and
-  added `google-services.json`; it is now **wired in `app.json`** (`android.googleServicesFile`) and a **push-enabled APK is
-  cut** — EAS build `0d68ac07-e05e-4abe-8100-1755b8a91065`, profile `preview`, v1.10.0, git `ce9b1e6`, direct
-  `.apk`: `https://expo.dev/artifacts/eas/SgvwNK6KD0bNInbOO87K3g32-_Gf1OhRkAStPxk74WI.apk`. Backend push endpoints are LIVE on
-  prod (`/push/register` → 401). **Push will not DELIVER until the owner uploads the FCM V1 key to EAS (still pending).**
-- **The launcher / app-drawer icon now fits.** The adaptive icon was using the raw non-square logo edge-to-edge, so the
-  round/rounded mask cropped it. Generated a **1024² adaptive foreground** with the CGPE logo padded into the central ~60%
-  safe zone, plus a **square white main icon** (fixes the 827×975 non-square source). Rides the NEXT build.
-- **The FCM service-account key is secured.** It landed untracked in the repo; added a `.gitignore` rule so the secret can
-  never be committed. `google-services.json` (client config, safe) is committed for the build.
-- **The whole 2026-08-21 owner backlog is triaged** in `docs/OWNER-BACKLOG-2026-08-21.md` — ~18 items split into
-  `[m]` / `[api]` / `[admin]` / `[data-ops]`, with the ones that need owner spec-lock flagged.
+- **The break / clock-out-reason / claim client-picker sheets raise the soft keyboard on their own again (C1).** Root cause was RN-Android firing `autoFocus` before the sheet's modal window attaches; they now focus the input on the modal's `onShow`.
+- **A just-claimed but overdue ticket now shows as today's work, not "nothing scheduled" (A2 + A1).** Both the Tasks tab hero AND the Home clock-in hero now count due-today ∪ open-overdue as "today's actionable work". The Tasks "today" empty state now says "N overdue — check the Overdue view" instead of "today is clear".
+- **A high-priority reliability item is documented** (`docs/OWNER-BACKLOG-2026-08-21.md` §F): "app won't open on his home WiFi AND mobile data" + a systematic loophole hunt — with the triage plan and the current-state facts.
 
 ## Files changed
-- `app.json` — `android.googleServicesFile` added; `icon` → `android-icon-cgpe.png`; `adaptiveIcon.foregroundImage` → `android-icon-cgpe-foreground.png` (splash logo untouched).
-- `google-services.json` — NEW, committed (Firebase client config for `com.cgpe.connect`; safe to commit).
-- `.gitignore` — NEW rules: `*-firebase-adminsdk-*.json`, `google-service-account*.json` (the FCM V1 SECRET, never commit).
-- `assets/images/android-icon-cgpe-foreground.png` — NEW, 1024² padded adaptive foreground (logo at 60% safe zone).
-- `assets/images/android-icon-cgpe.png` — NEW, 1024² square white main icon.
-- `docs/OWNER-BACKLOG-2026-08-21.md` — NEW, the triaged owner backlog.
-- Commits: `ce9b1e6` (push enablement), `5c8ac46` (icon fit).
+- `src/ui/controls.tsx` — `Field` & `SearchBar` are now `forwardRef` to their `TextInput` (so a caller can imperatively focus).
+- `src/ui/sheet.tsx` — `Sheet` gains an `onShown?` hook fired from the Modal's `onShow` (with a 50 ms settle) — the reliable moment to focus.
+- `src/app/(tabs)/home.tsx` — break + clock-reason sheets wired to `onShown` + a ref, `autoFocus` dropped (C1); clock-in hero switched to `todayWorkload` + overdue sublabel (A1).
+- `src/app/claim-new.tsx` — client-picker search wired to `onShown` + a ref (C1's unreported twin, a core write path).
+- `src/data/tasks.ts` — new pure `todayWorkload` = due-today ∪ open-overdue ∪ completed-today (the shared Home+Tasks headline).
+- `src/app/(tabs)/tasks.tsx` — hero uses `todayWorkload`; the 'today' empty state nudges to Overdue when overdue > 0 (A2).
+- `src/data/__tests__/tasks.test.ts` — +6 `todayWorkload` pins (suite 763 → **769**).
+- `docs/OWNER-BACKLOG-2026-08-21.md` — new **§F** (reliability, HIGH PRIORITY).
 
 ## Decisions made
-- **Transport = FCM/Firebase; the key Expo needs is the FCM V1 SERVICE ACCOUNT JSON (Service accounts tab → Generate new
-  private key), NOT the Web Push / VAPID key** (owner grabbed the VAPID one by mistake). Legacy Cloud Messaging API stays
-  DISABLED — V1 is what Expo uses.
-- **FCM key upload is an owner interactive step, not mine.** `eas credentials` has no non-interactive flag and this session's
-  stdin is EOF; the EAS CLI is already authed (`shivam-bhadoriya`), so the owner needs NO expo.dev login/email — they run
-  `npx eas-cli credentials -p android` in a normal terminal and point it at the JSON.
-- **Icon fixed by padding into the Android adaptive safe zone** (central ~60% of 1024²), not by shrinking the source in-place —
-  the mask reserves the outer ~33%, so a full-bleed foreground always crops. New files only; brand + `#ffffff` are grounded.
-- **The backlog was triaged, not built** — the owner's instruction was "identify mine vs backend, then /handoff."
+- **C1: focus on `Modal.onShow` via a ref, NOT `autoFocus`.** On Android `autoFocus` fires before the modal window attaches, so the keyboard never rises. `autoFocus` was *removed* from the migrated fields — keeping it would let the input read "focused" with no keyboard and pre-empt the `onShown` focus.
+- **A2: keep the backend ticket-date rule, fix the mobile screen (owner chose Option 2).** The mirror deliberately dates a claimed ticket by its own older open date (`../cgpe-backend-main/routes/tickets.js:382`, the 2026-08-18 owner rule), so it buckets Overdue. Rather than reverse that, the app now counts open-overdue as today's actionable work.
+- **A1 = the Home clock-in hero** (owner clarified: "home screen me clock-in button jaha today's task dikhte hai"). Same `todayWorkload`, which re-unifies Home + Tasks (both share it again; `todayProgress` is now called by no screen, kept only as a tested reference).
+- **The network item is logged, not built** — it needs on-device triage (crash vs splash-hang vs opens-blank) first. The old 4.5 s timeout is already 12 s (Phase 55), so that is not the lever.
 
 ## Known broken / deliberately skipped
-- **Push does not deliver yet** — the FCM V1 service-account key is not uploaded to EAS (owner's `eas credentials` step; they
-  hit a Windows "Press any key" terminal quirk — retry in PowerShell, or just install+login+create-a-task to test).
-- **Icon fix is not in the installed APK** — it rides the next build (owner asked for it "before the next build" — done in code).
-- **Nothing from `docs/OWNER-BACKLOG-2026-08-21.md` is built.** Several items need owner spec-lock first (C2 hour threshold,
-  D6 what-to-simplify, B2/B5 the consent-vs-visibility reality).
+- **All three fixes are device-unverified** — native keyboard (C1) and the hero render (A1/A2) can't be proven by tsc/vitest/web. Owner check: open **Break** → keyboard should pop by itself; the Tasks tab + Home hero should now show the overdue ticket instead of "nothing scheduled".
+- **§F (app-won't-open) is unstarted** — awaiting the crash/hang/blank answer + an on-device `adb logcat` and the phone-browser health test on the failing network.
+- **Push still doesn't deliver** — the owner still owes the FCM V1 service-account key upload to EAS (from Phase 74). A fresh APK carrying C1/A2/A1 + the icon fix is not yet cut.
+- C2 / D6 / B2 / B5 still need owner spec-lock (unchanged from the Phase-74 triage).
 
 ## Next session starts here
-- **Phase 75: verify push end-to-end, then pick the highest-value backlog item.** First confirm FCM is uploaded (install APK
-  → login → create a task → does a closed phone get the notification?). If yes, cut ONE clean build that also carries the icon
-  fix. Then start the triaged backlog — likely **B1 (master detail)** or **D4 (tasks calendar view)**, after spec-locking.
+- **Phase 76: triage §F — why the app won't open on some networks.** Get the crash/hang/blank answer from the owner, then `adb logcat` on the failing device + open `https://cgpe.in/internal/api/health` in the phone browser on that network, BEFORE any code change. In parallel: the owner's FCM key upload + a fresh APK (C1/A2/A1 + icon).
 - First command: `/boot`
-- Watch out for: the FCM **service-account** key (Service accounts tab) vs the **VAPID** key (Web config) — only the former
-  works; and it is a **secret** (already gitignored — keep it that way). Backend deploy gap is CLOSED (`origin/main` `10e1f76`),
-  so re-diagnose "not working" items as mobile-render / backend-data / config, NOT as un-deployed backend.
+- Watch out for: **do NOT rebuild an APK to "fix WiFi" before the on-phone health test**, and the timeout is already **12 s** (Phase 55) — don't chase the stale "4.5 s" number.

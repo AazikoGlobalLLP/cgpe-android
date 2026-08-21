@@ -1,21 +1,14 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-21
-**Working on right now:** Turning on push notifications for Android, and cleaning up a long list of app feedback into a clear "who does what" plan.
+**Working on right now:** Fixing the everyday problems you spotted while using the app, and logging a serious "the app won't open on some networks" issue to chase down next.
 
 **Done this week:**
-- **Push notifications are almost on.** You created the Firebase account and added its file; we connected it to the app and
-  built a fresh app file (APK) that supports notifications. One small step is left on your side to finish it (below).
-- **Fixed the app icon.** The CGPE logo was getting cut off in the phone's app menu because it filled the whole square; we
-  padded it so it now sits neatly inside the circle. It will show correctly in the next app build.
-- **Turned your big walkthrough feedback into an organised plan.** We went through every point you raised (tasks not showing
-  on the clock-in screen, attendance, the live-location map, break/clock-out, roles, reports, cleanup, and more) and sorted
-  each one into: our app work, the backend team's work, or a data/setup task. It's written down so nothing is lost.
+- **The keyboard now comes up when you tap "Break" (and the clock-out reason box).** Before, tapping them opened the box but the keyboard stayed hidden, so you couldn't type. Fixed in the app — it reaches your phone with the next app build.
+- **A ticket you take on now shows as today's work.** Earlier, if the ticket was a few days old, taking it on today made it count as "overdue", so the home clock-in area and the Tasks screen said "nothing scheduled" — it looked like the task had vanished. It now correctly appears as today's work in both places. Reaches your phone with the next build.
+- **Wrote down the "app won't open on some networks" problem as a top priority.** You said the app won't open on your home WiFi and on mobile data. We recorded exactly how we'll find the cause on a real phone, so it's ready to chase straight away.
 
 **Blocked on:**
-- **Push needs one action from you:** upload the Firebase "service account key" to our build service (one command in the
-  terminal — no website login needed). Until then notifications won't actually arrive, even though everything else is ready.
-- Several feedback items need you to confirm exact details before we build them (e.g. after how many hours clock-out should
-  ask a reason; exactly what to hide to keep the team screen simple).
+- **Push still needs your one step** — uploading the Firebase key to our build service — before notifications actually arrive.
+- **The "won't open" problem needs a 30-second check from your phone:** when it fails, does the app (a) close, (b) get stuck on the logo, or (c) open but show nothing? And can you open `cgpe.in/internal/api/health` in your phone's browser on that same network? That one answer tells us exactly where the fault is.
 
-**Next:** Finish push (your one step, then we re-test on a real phone), then start working through the feedback list —
-beginning with the app items; the backend and setup items go to the backend team and to you to action.
+**Next:** Chase the "app won't open" issue on a real phone, finish push (your key + one fresh app build that also carries this week's fixes), then work through the rest of your feedback list.
