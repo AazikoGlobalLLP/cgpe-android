@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "233563872567",
+    "project_id": "com-cgpe-connect",
+    "storage_bucket": "com-cgpe-connect.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:233563872567:android:69f89fbea3cb670efc8eb2",
+        "android_client_info": {
+          "package_name": "com.cgpe.connect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAHv7OI82jCA5QIQ8VFPwK4gCSa60WLHxs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

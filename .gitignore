@@ -33,6 +33,11 @@ yarn-error.*
 # local env files
 .env*.local
 
+# Firebase FCM V1 service account key — SECRET (grants push/admin on the Firebase
+# project). NEVER commit — it goes ONLY to EAS credentials, never into the app/build.
+*-firebase-adminsdk-*.json
+google-service-account*.json
+
 # typescript
 *.tsbuildinfo
 
