@@ -9,6 +9,26 @@
 
 ---
 
+## Remediation status — 2026-08-21 (this session)
+
+**8 of 9 defects fixed client-side, gates green (`tsc` 0 · tests **772** · lint 0 new errors), pushed to `aaziko/Shivam`.** All are OTA-eligible (JS-only) — they reach the field team on the next over-the-air update, no reinstall.
+
+| Defect | Commit | Notes |
+|---|---|---|
+| #1 clock hang | `f3e0801` | `getFix` bounded — 12 s fresh fix + last-known fallback + 5 s geocode; always settles |
+| #6 trapped dead session | `5e34067` | one-line `resetSessionGuard()` on session restore |
+| #3 offline-delete-and-blame | `6b8f5fc` | a network throw never counts toward the poison-cap; +test |
+| #4 consent-key leak on sign-out | `0304164` | drop `track.ambient`/`notif`/`motion` in `purgeUserScopedCaches` |
+| #5 enqueue-during-flush race | `4c065cf` | atomic per-id read-modify-write; +2 tests (in-memory AsyncStorage) |
+| #5(401) cross-attribution | `fd59b76` | purge outgoing sid on a different-user sign-in (device-verify) |
+| #8 renewals grind | `3e920cf` | 2-consecutive-failure circuit-breaker; +test |
+| #9 stale-cache marker | `1a16d5d` | SyncChip on Leads/Reminders/Notifications + honest HealthBanner copy |
+| **#7 duplicate creates** | — | **backend-blocked**: the idempotency key is a contract addition → filed to `contracts/INBOX.md` (2026-08-21 → cgpe-api), together with the `/track/points` ownership check for #5. App-side wiring (~3 one-line changes) lands once the backend confirms the field/header name. |
+
+**Device-verify owed** (not provable by tsc / vitest / web): #1 on a real dead-GPS spot, the shared-handset sign-out/handover paths (#4/#5), and the SyncChip/banner render. **Two [api] relays owed** to the owner (INBOX 2026-08-21): the `/track/points` ownership check and the create-endpoint idempotency key.
+
+---
+
 ## 1. Bottom line (plain read)
 
 The everyday happy paths are sound; every confirmed problem lives at the two edges you already worry about — **unreliable or blocked networks, and shared handsets passed between field staff.** The three headline risks: (1) in a basement, concrete building, or rural dead zone, **Clock In / Out / Break can spin forever with no error and no recovery** — an agent literally cannot start or end their shift; (2) records typed on a bad network can be **silently lost and blamed on the user, or silently duplicated** in the pipeline; and (3) on a shared phone, one user's **24/7-location consent, session, and GPS can bleed into the next user**, producing false compliance events, unconsented tracking, and shift routes attributed to the wrong person. A few of these write bad data the backend keeps (a false opt-out event, a re-opened shift, a duplicate lead), so those need a paired backend guard to fully close — but **every load-bearing client fix is JavaScript-only and ships over-the-air**, with no new install for the field team. Honest read: **the app is not yet production-safe for a non-technical field team on unreliable networks, but the gap is a focused, mostly small set of fixes — not a rewrite.**
