@@ -182,8 +182,8 @@ describe('todayProgress — belongs = due-today ∪ completed-today', () => {
  * todayWorkload — the Tasks-tab headline (PHASE 75, owner report A2). Same shape as
  * `todayProgress` but the belongs-set ALSO includes OPEN overdue tasks, because an overdue item
  * (e.g. a ticket claimed today, dated by its own older open date) is actionable today and must not
- * read as "0 / nothing scheduled". Home keeps the tighter `todayProgress` — the divergence is
- * deliberate, so these pins also assert the two functions differ exactly on open-overdue.
+ * read as "0 / nothing scheduled". Home's clock-in hero and the Tasks tab SHARE this; `todayProgress`
+ * (pure due-today) is retained as a reference, so these pins also assert the two differ on open-overdue.
  * ------------------------------------------------------------------------------------------- */
 describe('todayWorkload — belongs = due-today ∪ open-overdue ∪ completed-today', () => {
   it('is {0,0,0} for an empty list', () => {

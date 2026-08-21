@@ -208,10 +208,10 @@ export default function Tasks() {
     return open.filter((x) => dueBucket(x) === filter);
   }, [list, filter]);
 
-  // PHASE 75 (A2): the headline counts "today's ACTIONABLE work" = due-today ∪ OPEN-overdue, so an
+  // PHASE 75 (A2/A1): the headline counts "today's ACTIONABLE work" = due-today ∪ OPEN-overdue, so an
   // overdue item (e.g. a ticket claimed today but dated by its own older open date) shows here
   // instead of reading "0 / nothing scheduled". This matches THIS screen's header ("N due now" =
-  // today + overdue). Home's hero deliberately keeps the tighter `todayProgress` (pure "due today").
+  // today + overdue) AND Home's clock-in hero, which shares `todayWorkload` so the two never drift.
   const today = useMemo(() => todayWorkload(list), [list]);
 
   // The one count-up on this screen. It moves only when a task actually closes. Clamp to the

@@ -30,7 +30,7 @@ import { useT } from '@/i18n';
 import * as api from '@/data/api';
 import { getHealth } from '@/data/health';
 import type { AppNotification, Claim, Lead, Reminder } from '@/data/types';
-import { CATEGORY_ICON, Task, dueBucket as bucket, taskProgress, todayProgress } from '@/data/tasks';
+import { CATEGORY_ICON, Task, dueBucket as bucket, taskProgress, todayWorkload } from '@/data/tasks';
 import { CLAIM_STATUS, REMINDER_ICON, STAGE_META } from '@/data/labels';
 import { fmtDay, fmtTime, inrShort, timeAgo } from '@/lib/format';
 import { whatsapp } from '@/lib/actions';
@@ -94,8 +94,8 @@ const FETCH_LIMIT = 25;
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
 
-// `bucket` (dueBucket) and `todayProgress` are imported from @/data/tasks so Home and the Tasks
-// tab share one definition of "which day is this due" and "today's progress" — see that module.
+// `bucket` (dueBucket) and `todayWorkload` are imported from @/data/tasks so Home and the Tasks
+// tab share one definition of "which day is this due" and "today's actionable work" — see that module.
 
 function isToday(iso: string | undefined): boolean {
   if (!iso) return false;
@@ -1155,9 +1155,10 @@ export default function Home() {
     const overdue = open.filter((x) => bucket(x) === 'overdue');
     const dueToday = open.filter((x) => bucket(x) === 'today');
     const inProgress = open.filter((x) => x.status === 'in_progress');
-    // Shared with the Tasks tab (`todayProgress`) so the two "today" counts can never drift, and
-    // so a reopen or an undated task no longer makes the ratio jump. See @/data/tasks.
-    const prog = todayProgress(tasks);
+    // PHASE 75 (A1): "today's actionable work" = due-today ∪ open-overdue, shared with the Tasks tab
+    // (`todayWorkload`) so the two never drift. An overdue ticket (claimed today but dated by its own
+    // older open date) now counts in the clock-in hero instead of reading "nothing scheduled".
+    const prog = todayWorkload(tasks);
     return {
       overdue,
       dueToday,
@@ -2087,7 +2088,9 @@ export default function Home() {
                                 / {day.todayTotal}
                               </Txt>
                             </Row>
-                            <Txt size={font.sub} color={c.muted} numberOfLines={1}>tasks done today</Txt>
+                            <Txt size={font.sub} color={c.muted} numberOfLines={1}>
+                              {day.overdue.length > 0 ? `done · ${day.overdue.length} overdue` : 'tasks done today'}
+                            </Txt>
                             <ProgressBar
                               value={pct}
                               tone={pct >= 1 ? c.success : c.primary}

@@ -108,9 +108,9 @@ export function todayProgress(
  * (e.g. a ticket claimed today but opened days ago — the backend mirror dates it by the ticket's
  * own open date, so it buckets 'overdue') saw "0 / nothing scheduled", which read as "nothing to do".
  *
- * This is the Tasks tab's headline ONLY, a deliberate divergence from `todayProgress`: the Tasks
- * screen already frames its header as "N due now" (today + overdue), so its hero matches that. Home's
- * hero keeps the tighter `todayProgress` (a pure "how much of TODAY is left" snapshot).
+ * This is the SHARED "today's work" headline for BOTH Home's clock-in hero and the Tasks tab, so the
+ * two never drift (the Tasks screen also frames its header as "N due now" = today + overdue). The
+ * stricter `todayProgress` (pure due-today) is retained as the reference the pins below contrast against.
  *
  * Reopen stays stable exactly like `todayProgress`: an overdue task belongs to the set whether it is
  * open (open-overdue) or done-today (completed-today), so completing/reopening it moves only the
