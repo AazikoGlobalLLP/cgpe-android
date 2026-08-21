@@ -73,3 +73,50 @@ running the bg tracker (new APK) + each person's consent. It is NOT a one-file m
 - C2 exact hour threshold for the clock-out reason.
 - D6 exact list of what to hide/simplify for team members.
 - B2/B5 owner's expectation vs the platform reality that a location can only be shown if the person consented + shared it.
+
+---
+
+## F. Reliability — "the app won't open on some networks" + the hidden-loophole hunt ⚠️ HIGH PRIORITY (owner, 2026-08-21)
+
+Owner report: on **his home WiFi AND his mobile data**, the app does not open / work. He believes several
+WiFi/networks are **blocking the app**, and that there are **many more loopholes we haven't found yet** —
+all to be found and solved. Flagged **high priority**.
+
+**What is ALREADY true (so the next session does NOT re-derive it):**
+- The old aggressive **4.5 s** timeout is GONE — Phase 55 raised `REQUEST_TIMEOUT` to **12 s**,
+  `LOGIN_TIMEOUT` to 15 s, and added one auto-retry for idempotent reads (`src/constants/config.ts`).
+- There is **no network-type check anywhere in `src/`** — the app never requires WiFi or mobile data;
+  native always targets `https://cgpe.in/internal/api`.
+- The **splash does NOT wait on the network**: `_layout.tsx` clears it on `ready` (auth token loaded from
+  *storage*) + `fontsReady` (bundled faces) + the animated splash — all local. Every startup network call
+  (`/rbac/app-ui`, consent, push-register, calendar, queue-flush) is **fail-open / best-effort** and cannot
+  hang the splash. So "splash spins forever because the network is down" is NOT expected from the current
+  code — which is exactly why the report needs a real on-device look rather than a blind timeout bump.
+- Backend is healthy, **IPv4-only**, ~40 ms (`curl https://cgpe.in/internal/api/health`).
+
+**THE ONE QUESTION THAT SPLITS THE DIAGNOSIS (get from the owner / a device FIRST):** when it "doesn't
+open", does the app (a) **crash/close** immediately, (b) **hang on the splash/logo** forever, or (c) **open
+but every screen is empty with the red outage banner**?
+- (a) crash → launch-time native/JS error, likely device/OS-specific and **network-INDEPENDENT** →
+  capture `adb logcat` on the failing device (USB/ADB works from here — see CLAUDE.md).
+- (b) splash hang → something in boot IS awaiting the network despite the above, or a font/asset/storage
+  read stalls → repro with `adb logcat`; hunt an un-timed `await` in the boot path.
+- (c) opens-but-blank → the network genuinely can't reach `cgpe.in` → **definitive test: open
+  `https://cgpe.in/internal/api/health` in the phone browser ON that WiFi/data.** If it fails there too it's
+  the network/ISP/DNS/captive-portal/droplet, not the app — but the app should still fail *gracefully*.
+
+**Why "both WiFi AND mobile data" is the key oddity:** mobile data reaching no public HTTPS host is
+unusual. Suspects to rule out before touching `src/`: an **old/broken installed APK** (confirm the
+on-device `base.apk` SHA-256 vs the EAS artifact — every `preview` build is `v1.10.0`, so version strings
+can't tell builds apart), a **DNS/IPv6 issue** (backend is IPv4-only — an IPv6-only data APN could fail
+name/route), or a **device-specific launch crash**.
+
+**F1 = [m] + [verify]** — needs an on-device diagnosis pass (USB/ADB `logcat` + the browser health test on
+each failing network) BEFORE any code change. Do NOT rebuild an APK to "fix WiFi" before that on-phone test.
+
+**F2 — the systematic loophole hunt ("many more we can't find").** A proactive sweep for hidden edge cases:
+every write path's failure honesty, every empty-vs-outage branch, timeout/retry on a slow network,
+offline-queue correctness, permission-denied paths, shared-handset leakage, cold-start/route-restore. Best
+run as a **multi-agent review workflow** (parallel finders per module → adversarial verify) — this needs the
+owner to opt in ("use a workflow" / "ultracode") since it spawns many agents; until then it is a manual,
+module-by-module audit.
