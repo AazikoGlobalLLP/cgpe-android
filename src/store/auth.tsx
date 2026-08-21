@@ -132,6 +132,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setBiometricEnabled(bio === '1' || (bio == null && has));
         if (token && savedUser) {
           api.setAuthToken(token);
+          // Re-arm expiry detection for the RESTORED session, exactly as persist() does for a fresh
+          // login. Without this, a JS runtime that survived an OEM background-kill with the expiry
+          // latch still set (from a prior headless 401) would restore the session but never fire the
+          // real 401 — trapping the user in a silently-dead session full of false-empty "no tasks /
+          // no clients" screens until they force-quit (audit 2026-08-21, #6).
+          resetSessionGuard();
           const pu = JSON.parse(savedUser);
           api.setCurrentUser(pu.id, pu.name);
           setUser(pu);
