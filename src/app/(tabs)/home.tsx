@@ -727,48 +727,23 @@ export default function Home() {
 
     if (isRefresh) setRefreshing(true);
     try {
-      const [tk, rm, nt, saved] = await Promise.all([
+      /* ---------- ONE parallel batch (perf fix 2026-08-21) ----------
+       * These reads used to run in THREE SEQUENTIAL phases (tasks/reminders/notifications, then the
+       * clock state, then the heavy widget data), so the Home skeleton cleared only after the SUM of
+       * the slowest read in each phase. On a Master account phase 3 carries the heavy org-snapshot /
+       * team / whole-book (`scope=all`) queries, so the dashboard sat on a skeleton for the additive
+       * total — the "content loads forever" the owner reported. The reads are mutually independent,
+       * so firing them as ONE batch makes Home wait for the SINGLE slowest read, not the sum.
+       *
+       * Every leg is still gated on a visible widget asking for it (an unneeded leg resolves null and
+       * is never written), and failure honesty is unchanged: a failed read resolves empty and reports
+       * to data/health, so a widget says "did not load" rather than showing stale rows. */
+      const [tk, rm, nt, saved, serverClock, pr, ld, nb, cls, tks, tm, snap] = await Promise.all([
         api.getTasks(isTeam),
         need.reminders ? api.getReminders() : Promise.resolve<Reminder[]>([]),
         api.getNotifications(),
         AsyncStorage.getItem(clockKey),
-      ]);
-      if (!current()) return;
-
-      setTasks(tk);
-      setReminders(rm);
-      setNotifs(nt);
-      setUnread(nt.filter((n) => !n.read).length);
-      if (saved) {
-        // Paint the cached value immediately so the hero does not flash. The server
-        // reconciles it below and wins any disagreement.
-        try { setClock(JSON.parse(saved) as ClockState); } catch { /* stay off duty */ }
-      }
-
-      // AUTHORITATIVE per-user clock state. The DayLog is resolved from the JWT server-side,
-      // so this reflects THIS user on ANY device, and it corrects a stale local cache left
-      // behind by whoever used the handset before. A null result means the state could not be
-      // read; we keep the cached value rather than wrongly showing "Clock in" on a blip.
-      const serverClock = await api.getClockState();
-      if (!current()) return;
-      if (serverClock) {
-        const next: ClockState = serverClock.isClockedIn
-          ? { in: true, time: serverClock.since || new Date().toISOString(), place: 'On duty', onBreak: serverClock.isOnBreak }
-          : { in: false };
-        setClock(next);
-        AsyncStorage.setItem(clockKey, JSON.stringify(next)).catch(() => {});
-      }
-
-      /* ---------- widget data ----------
-       * One parallel batch, and every leg is conditional on a visible widget asking for it.
-       * A leg that was not needed resolves null and is simply never written.
-       *
-       * THE WRITE IS GATED ON "DID WE ASK", NOT ON "DID SOMETHING COME BACK". Gating on the
-       * value would mean a failed refresh silently kept the previous rows on screen, which
-       * is this app's cardinal sin: stale figures presented as current. A failed fetch
-       * already resolves empty and reports to `data/health`, so taking the answer verbatim
-       * is what lets the widget below say "did not load" instead of showing yesterday. */
-      const [pr, ld, nb, cls, tks, tm, snap] = await Promise.all([
+        api.getClockState(),
         need.prospects ? api.getProspects({ limit: FETCH_LIMIT }) : Promise.resolve(null),
         need.leads ? api.getLeads() : Promise.resolve(null),
         need.notes ? api.getNotes({ limit: FETCH_LIMIT }) : Promise.resolve(null),
@@ -778,6 +753,25 @@ export default function Home() {
         need.snapshot ? api.getOrgSnapshot() : Promise.resolve(null),
       ]);
       if (!current()) return;
+
+      setTasks(tk);
+      setReminders(rm);
+      setNotifs(nt);
+      setUnread(nt.filter((n) => !n.read).length);
+
+      // AUTHORITATIVE per-user clock state. The DayLog is resolved from the JWT server-side, so this
+      // reflects THIS user on ANY device and corrects a stale local cache left by whoever used the
+      // handset before. Prefer the server value; fall back to the cached one ONLY if the server read
+      // failed, so a blip never wrongly shows "Clock in".
+      if (serverClock) {
+        const next: ClockState = serverClock.isClockedIn
+          ? { in: true, time: serverClock.since || new Date().toISOString(), place: 'On duty', onBreak: serverClock.isOnBreak }
+          : { in: false };
+        setClock(next);
+        AsyncStorage.setItem(clockKey, JSON.stringify(next)).catch(() => {});
+      } else if (saved) {
+        try { setClock(JSON.parse(saved) as ClockState); } catch { /* stay off duty */ }
+      }
 
       if (need.prospects) setProspects(pr ? pr.data : []);
       if (need.leads) setLeads(ld ?? []);
