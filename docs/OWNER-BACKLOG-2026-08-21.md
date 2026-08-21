@@ -114,6 +114,46 @@ name/route), or a **device-specific launch crash**.
 **F1 = [m] + [verify]** — needs an on-device diagnosis pass (USB/ADB `logcat` + the browser health test on
 each failing network) BEFORE any code change. Do NOT rebuild an APK to "fix WiFi" before that on-phone test.
 
+### F1 — CODE-SIDE AUDIT DONE (Phase 76, 2026-08-21) — read this before touching `src/`
+
+The boot path was re-audited line-by-line (not assumed from the earlier prose). Findings are conclusive:
+
+- **The splash gate `!ready || !fontsReady || !splashDone` is 100 % network-INDEPENDENT.** A dead or slow
+  network CANNOT hang the splash — hypothesis (b) is ruled out by the code:
+  - `auth.ready` flips true after **local** SecureStore/AsyncStorage reads only (`store/auth.tsx` mount effect;
+    `setReady(true)` sits in the `finally`) — no network call in the path.
+  - `fontsReady` is bundled Geist TTFs; `useFonts` returns `loaded || !!error` (`theme/fonts.ts:37-40`), so it
+    resolves true even if a face fails to decode. No network.
+  - `splashDone` is an **unconditional** `setTimeout(onDone, 1900)` (`ui/Splash.tsx:34`) — fires regardless.
+  - `AppUiProvider` **always renders its children** (`store/appUi.tsx:535`); it never withholds `RootNav`
+    behind the `/rbac/app-ui` fetch. Every root gate (Consent/Push/Calendar/QueueFlusher/PermissionMonitor) is
+    `void`-ed / best-effort and fires AFTER first paint, so none can block boot.
+- **Login on a dead network is honest and bounded** — POST, single attempt, aborts after `LOGIN_TIMEOUT`
+  15 s → throws `NetworkError` → login screen clears the spinner (`(auth)/login.tsx:156`) and shows an
+  "offline" Banner + Retry. It does NOT spin forever.
+- **Reads on a dead network** retry once (600 ms) then throw → `tryReal` reports the outage → empty result +
+  the red `<HealthBanner/>` (the honest option (c)).
+
+**So "won't open" reduces to only two code-consistent shapes:** (a) a launch **crash** — which is
+network-INDEPENDENT, so it would fail on EVERY network, fitting only an old/broken installed APK (confirm by
+`base.apk` SHA-256 vs the EAS artifact) or the fact he only ever uses those two networks; or (c) the app
+**opens but cannot reach `cgpe.in`** on those networks (signed-in → empty screens + red banner; signed-out →
+login shows the offline banner). In case (c) the app is already failing gracefully — the fault is the network,
+not the app, which is exactly why a blind APK rebuild fixes nothing.
+
+**NEW LEADING HYPOTHESIS for "mobile data too" → [api]/OPS, not [m]:** `cgpe.in` has an **A record but NO
+AAAA record** (verified 2026-08-21 via Google 8.8.8.8; `curl -6 https://cgpe.in/...` → "could not resolve
+host"; IPv4 `72.61.233.113` answers 200 in ~40-190 ms). An **IPv6-only carrier APN** (common on Jio in India)
+with no NAT64/DNS64 cannot route to an IPv4-only host, while every dual-stack app keeps working — a clean fit
+for "his mobile data fails but other apps are fine." **Fix is server-side: add an AAAA record + enable IPv6 on
+the droplet/nginx (or confirm the carrier path has NAT64).** CONFIRM with the browser test below before filing.
+
+**THE ONE OWNER TEST THAT SETTLES IT (do this FIRST, no code):** on each failing network, open
+`https://cgpe.in/internal/api/health` in the **phone browser**. Fails there too → it's the
+network/DNS/IPv6/captive-portal/ISP (not the app) → the IPv6/AAAA fix above or a different network. Loads there
+but the app still fails → THEN it's app-side → connect USB and capture `adb logcat` at launch. Also get the
+crash-vs-splash-hang-vs-empty-banner answer (a/b/c) — but note (b) is already ruled out by the audit above.
+
 **F2 — the systematic loophole hunt ("many more we can't find").** A proactive sweep for hidden edge cases:
 every write path's failure honesty, every empty-vs-outage branch, timeout/retry on a slow network,
 offline-queue correctness, permission-denied paths, shared-handset leakage, cold-start/route-restore. Best
