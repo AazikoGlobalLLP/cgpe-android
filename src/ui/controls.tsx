@@ -512,10 +512,10 @@ const INPUT_H = 48;
 const FIELD_H = 50;
 const FIELD_MULTILINE_H = 92;
 
-export function SearchBar({ value, onChange, placeholder, autoFocus, onSubmit, style }: {
+export const SearchBar = React.forwardRef(function SearchBar({ value, onChange, placeholder, autoFocus, onSubmit, style }: {
   value: string; onChange: (v: string) => void; placeholder?: string; autoFocus?: boolean;
   onSubmit?: () => void; style?: StyleProp<ViewStyle>;
-}) {
+}, ref: React.ForwardedRef<TextInput>) {
   const c = useTheme();
   const { spacing, radius, font } = c;
   const [focused, setFocused] = useState(false);
@@ -527,6 +527,7 @@ export function SearchBar({ value, onChange, placeholder, autoFocus, onSubmit, s
     }, style]}>
       <Ionicons name="search" size={18} color={focused ? c.primary : c.faint} />
       <TextInput
+        ref={ref}
         value={value}
         onChangeText={onChange}
         placeholder={placeholder}
@@ -554,9 +555,9 @@ export function SearchBar({ value, onChange, placeholder, autoFocus, onSubmit, s
       )}
     </View>
   );
-}
+});
 
-export function Field({
+export const Field = React.forwardRef(function Field({
   label, value, onChange, placeholder, keyboardType, multiline, secure,
   hint, error, icon, autoFocus, maxLength, autoCapitalize,
 }: {
@@ -574,7 +575,7 @@ export function Field({
    * 'none'.
    */
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
-}) {
+}, ref: React.ForwardedRef<TextInput>) {
   const c = useTheme();
   const { spacing, radius, font } = c;
   const [focused, setFocused] = useState(false);
@@ -604,6 +605,7 @@ export function Field({
         ) : null}
 
         <TextInput
+          ref={ref}
           value={value}
           onChangeText={onChange}
           placeholder={placeholder}
@@ -650,4 +652,4 @@ export function Field({
       ) : null}
     </View>
   );
-}
+});

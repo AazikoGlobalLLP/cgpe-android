@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -107,6 +107,9 @@ export default function ClaimNew() {
   const [picked, setPicked] = useState<Client | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [q, setQ] = useState('');
+  // PHASE 75 (C1 twin): focus the picker search on the modal's `onShown` — `autoFocus` fires
+  // before the Sheet's modal attaches on Android, so the soft keyboard never rises. See `Sheet.onShown`.
+  const pickerSearchRef = useRef<TextInput>(null);
   const [results, setResults] = useState<Client[]>([]);
   const [searching, setSearching] = useState(false);
   const [clientError, setClientError] = useState('');
@@ -504,16 +507,17 @@ export default function ClaimNew() {
       <Sheet
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
+        onShown={() => pickerSearchRef.current?.focus()}
         title="Choose a client"
         subtitle="Search runs across your whole book"
         height={pickerHeight}
       >
         <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
           <SearchBar
+            ref={pickerSearchRef}
             value={q}
             onChange={setQ}
             placeholder="Name, policy number or mobile"
-            autoFocus
           />
 
           {searching ? (

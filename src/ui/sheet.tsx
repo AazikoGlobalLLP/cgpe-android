@@ -55,10 +55,15 @@ const DISMISS_AT = 0.3;
 const FLICK_VY = 900;
 
 export function Sheet({
-  visible, onClose, title, children, height = 'auto', subtitle, scroll = true, footer,
+  visible, onClose, onShown, title, children, height = 'auto', subtitle, scroll = true, footer,
 }: {
   visible: boolean;
   onClose: () => void;
+  /** PHASE 75: fires ~when the modal window is actually presented (RN Modal `onShow`) — the
+   *  reliable moment to imperatively focus a field. A field's own `autoFocus` fires before the
+   *  window attaches on Android, so the soft keyboard never rises; callers that need a focused
+   *  input pass `onShown` + a ref to the `Field` and call `.focus()` here instead. */
+  onShown?: () => void;
   title?: string;
   children: React.ReactNode;
   /** 'auto' sizes to content (capped to the screen); a number pins the height. */
@@ -164,6 +169,10 @@ export function Sheet({
       statusBarTranslucent
       animationType="none"
       onRequestClose={onClose}
+      // A field's `autoFocus` fires before this window attaches on Android, so the keyboard
+      // never comes up. Callers pass `onShown` + a ref and focus the field here; the short
+      // delay clears the present so `.focus()` reliably raises the soft keyboard.
+      onShow={onShown ? () => setTimeout(onShown, 50) : undefined}
     >
       {/* Gesture handlers inside an RN Modal need their own root on Android. */}
       <GestureHandlerRootView style={{ flex: 1 }}>

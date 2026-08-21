@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -555,6 +555,11 @@ export default function Home() {
   const [clockReasonSheet, setClockReasonSheet] = useState(false);
   const [clockReason, setClockReason] = useState('');
   const [clockReasonCtx, setClockReasonCtx] = useState<{ early?: boolean; outOfRange?: boolean; message?: string } | null>(null);
+  // PHASE 75 (owner report C1): the break- and clock-reason Sheets focus their input via these
+  // refs on the modal's `onShown`, because a `Field`'s `autoFocus` fires before the modal window
+  // attaches on Android, so the soft keyboard never rises. See `Sheet.onShown` + `Field` forwardRef.
+  const breakFieldRef = useRef<TextInput>(null);
+  const clockReasonFieldRef = useRef<TextInput>(null);
   const { confirm } = useConfirm();
   // Lazy initialiser: Date.now() is impure, so it must not run in the render body on every
   // pass (react-hooks/purity). Passing the thunk defers it to mount; the value is identical.
@@ -2239,6 +2244,7 @@ export default function Home() {
       <Sheet
         visible={breakSheet}
         onClose={() => { if (!breaking) setBreakSheet(false); }}
+        onShown={() => breakFieldRef.current?.focus()}
         title={t('break.reasonTitle')}
         footer={
           <Row style={{ gap: spacing.sm }}>
@@ -2260,12 +2266,12 @@ export default function Home() {
         }
       >
         <Field
+          ref={breakFieldRef}
           label={t('break.reasonPlaceholder')}
           value={breakReason}
           onChange={setBreakReason}
           multiline
           maxLength={500}
-          autoFocus
         />
       </Sheet>
 
@@ -2277,6 +2283,7 @@ export default function Home() {
       <Sheet
         visible={clockReasonSheet}
         onClose={() => { if (!clocking) setClockReasonSheet(false); }}
+        onShown={() => clockReasonFieldRef.current?.focus()}
         title={clock.in ? t('clock.reasonTitleOut') : t('clock.reasonTitleIn')}
         footer={
           <Row style={{ gap: spacing.sm }}>
@@ -2299,6 +2306,7 @@ export default function Home() {
         }
       >
         <Field
+          ref={clockReasonFieldRef}
           label={
             clockReasonCtx?.message
             || (clockReasonCtx?.early
@@ -2309,7 +2317,6 @@ export default function Home() {
           onChange={setClockReason}
           multiline
           maxLength={500}
-          autoFocus
         />
       </Sheet>
     </Screen>
