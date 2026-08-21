@@ -153,6 +153,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const persist = async (u: User, token: string, refreshToken?: string) => {
+    /* SHARED-HANDSET GUARD (audit 2026-08-21, #5).
+     *
+     * A 401 expiry does a PARTIAL teardown (onSessionExpired nulls the token but does NOT purge
+     * per-user caches or stop the recorder), so the outgoing user's live tracker session id
+     * (`track.state`) survives. If a DIFFERENT user then signs in here, the still-running recorder
+     * would post the NEW user's GPS onto the PREVIOUS user's shift (the backend keys the batch by
+     * session_id with no ownership check) — corrupting attendance and re-opening a sealed shift.
+     *
+     * So when the account signing in differs from the one still stored, purge the outgoing user's
+     * per-user caches (drops `track.state`/sid, clock.*, cache.*, and the 24/7 keys) BEFORE the new
+     * token is written — ordering it first means a location batch racing this handover still sees
+     * the dead token and self-heals as 'signed-out' rather than uploading under the new token. A
+     * SAME-user re-auth (biometric restore after a silent expiry, priorId === u.id) skips the purge,
+     * so an in-progress shift recorder + its sid survive untouched. clear() is deliberately NOT used
+     * here — it would destroy the biometric binding + REFRESH_KEY that a biometric restore needs. */
+    try {
+      const priorRaw = await storage.get(USER_KEY);
+      const priorId = priorRaw ? (JSON.parse(priorRaw)?.id ?? null) : null;
+      if (priorId && priorId !== u.id) await purgeUserScopedCaches();
+    } catch { /* a malformed stored user must never block a fresh sign-in */ }
     api.setAuthToken(token);
     api.setCurrentUser(u.id, u.name);
     resetSessionGuard();   // re-arm expiry detection for the new session
