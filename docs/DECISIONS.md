@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-21 — Phase 74: Android push enablement + launcher-icon fit + owner-backlog triage
+
+**Context.** Owner created a Firebase project for `com.cgpe.connect` and added `google-services.json`, wanting real
+team push (Phase 72 mobile was already built). Owner also cannot get a paid Apple account, reported a mis-fitting
+launcher icon, and dictated a large walkthrough backlog asking for a mobile-vs-backend triage + `/handoff`.
+
+**Decision.**
+- **Wired `android.googleServicesFile` + cut a push-enabled APK** (`0d68ac07`, git `ce9b1e6`). The FCM transport is
+  Firebase FCM V1 (Expo's path). The credential Expo needs is the **SERVICE ACCOUNT JSON** (Firebase → Service accounts →
+  Generate new private key), NOT the **Web Push/VAPID** key the owner first copied; the Legacy Cloud Messaging API stays
+  disabled. Delivery stays dormant until that JSON is uploaded to EAS.
+- **FCM upload is an owner interactive step.** `eas credentials` is menu-only (no non-interactive flag) and this session's
+  stdin is EOF, so I cannot run it; but the EAS CLI is already authed as `shivam-bhadoriya`, so the owner needs no
+  expo.dev login/email — `npx eas-cli credentials -p android` in a real terminal, point at the JSON. (Owner hit a Windows
+  single-keypress "Press any key" quirk → retry in PowerShell, or verify by install+login+create-task instead.)
+- **Secured the service-account key** via `.gitignore` (`*-firebase-adminsdk-*.json`); it is a real secret and must only
+  live in EAS credentials, never a commit. `google-services.json` (client config) IS committed — safe, ships in every APK.
+- **Fixed the launcher icon by padding into the adaptive safe zone.** The adaptive foreground was the raw 827×975 logo
+  used edge-to-edge, so every launcher mask cropped it. New `android-icon-cgpe-foreground.png` = 1024² transparent with the
+  logo at the central ~60%; new `android-icon-cgpe.png` = 1024² square white main icon. Rides the next build (commit
+  `5c8ac46`). Generated with jimp in the scratchpad (no ImageMagick/sharp present; project deps untouched).
+- **Apple account reversal recorded** (owner CANNOT buy it): no cable-free/permanent/TestFlight/App-Store/iOS-push path
+  exists without the paid $99/yr program; the only free route is a Mac + free Apple ID + cabled `expo run:ios --device`
+  (7-day expiry, ≤3 apps, no push). For a whole team of iPhones there is no free scalable option — this is an Apple wall.
+- **Triaged the owner backlog rather than building it** (owner's explicit instruction). Full split in
+  `docs/OWNER-BACKLOG-2026-08-21.md` (~18 items, `[m]`/`[api]`/`[admin]`/`[data-ops]`).
+
+**Consequence.** Android push is one owner step (FCM upload) + one clean rebuild away from live. The icon fix is in code
+for the next build. The backlog is a durable, classified worklist; backend/data/OPS parts are filed to `contracts/INBOX.md`
+for the owner to relay. Nothing from the backlog is built yet; several items need an owner spec-lock first.
+
 ## 2026-08-20 — Phase 56: iOS enablement (editor-side prep + account-free compile proof)
 
 **Context.** The app always *targeted* iOS (`ios.bundleIdentifier` set, permission strings via config plugins) but was

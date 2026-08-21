@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-21 — PHASE 74: Android push enablement + launcher-icon fit + owner-backlog triage.** Owner created the Firebase
+project (`com-cgpe-connect`) + added `google-services.json`. Wired `android.googleServicesFile` in `app.json` and **cut a
+push-enabled APK** (EAS `0d68ac07`, git `ce9b1e6`, v1.10.0, direct `.apk`
+`https://expo.dev/artifacts/eas/SgvwNK6KD0bNInbOO87K3g32-_Gf1OhRkAStPxk74WI.apk`). Backend push endpoints are LIVE on prod
+(`/push/register`→401). **Push does NOT deliver yet** — the **FCM V1 SERVICE ACCOUNT key** (Firebase → Service accounts →
+Generate new private key, NOT the Web Push/VAPID key) must be uploaded to EAS by the owner (`npx eas-cli credentials -p
+android`; CLI already authed, no expo.dev login needed; owner hit a Windows "Press any key" terminal quirk → retry in
+PowerShell or verify by install+login+create-task). Service-account key gitignored (`*-firebase-adminsdk-*.json`) — it is a
+SECRET. **Launcher icon fixed** (commit `5c8ac46`): the adaptive foreground used the raw 827×975 logo edge-to-edge so masks
+cropped it → new 1024² adaptive foreground with the logo at the central ~60% safe zone + a square white main icon; rides the
+next build. **Large owner backlog (2026-08-21) TRIAGED, not built** (owner's instruction) — `docs/OWNER-BACKLOG-2026-08-21.md`,
+~18 items split `[m]`/`[api]`/`[admin]`/`[data-ops]`; backend/data parts filed to `contracts/INBOX.md` for the owner to relay.
+**⚠️ Apple reversal:** owner CANNOT buy the Apple account — no free cable-free/permanent/TestFlight/App-Store/iOS-push path
+exists; team iOS = $99/yr + TestFlight is the only route (see `docs/spec/PHASE-56.md` + memory).
+
 **🍏 2026-08-20 — PHASE 56 editor-side prep BUILT + config-validated (owner chose iOS enablement; gated on an Apple account).**
 The app always *targeted* iOS but was **never built for it** — no `ios` build profile existed and iOS signing needs Apple
 credentials. Did every piece that does NOT need the $99/yr Apple Developer account, `[m]` only, **no contract change**:
@@ -1786,8 +1801,19 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-20 — the 70–73 batch AND Phase 65 are now BUILT + PUSHED on the mobile side. Detail: `docs/PHASES.md`
-§Now, `docs/DECISIONS.md` 2026-08-20):**
+**CURRENT next 3 (2026-08-21 — after Phase 74 push-enablement + icon + backlog triage):**
+
+1. **Verify Android push END-TO-END.** Owner uploads the FCM V1 service-account key (`npx eas-cli credentials -p android` →
+   Google Service Account → FCM V1 → the JSON), installs APK `0d68ac07`, logs in, creates a task → a closed phone must get the
+   notification. If it doesn't, read the exact `eas credentials` screen / check FCM is configured. This is the gate on push.
+2. **Cut ONE clean build carrying the icon fix** (and confirmed push) once #1 passes — the current installed APK has the OLD
+   icon; commit `5c8ac46` fixes it but only rides a rebuild. `npx eas-cli build -p android --profile preview --non-interactive`.
+3. **Start the triaged owner backlog** (`docs/OWNER-BACKLOG-2026-08-21.md`) — spec-lock first where flagged, then take the
+   highest-value mobile item (candidates: **B1** master detail, **D4** tasks calendar view, **C1/C2** break-keyboard +
+   clock-out-reason, **A1/A2** ticket-task on clock-in + Today's Progress). Backend/data items (A3, B2/B4/B5, D5, E1, E2, D1
+   enforcement) go via the owner-relay INBOX item; **D1** section-visibility is mostly an admin-panel RBAC-config job.
+
+**Superseded (2026-08-20 next-3 — the 70–73 batch AND Phase 65 are BUILT + PUSHED; those now ride the Phase-74 push APK):**
 
 Phases **65** (`0c4fde1`), **70** (`cd134ba`), **71** (`612410f`), **72 mobile** (`64f1afc`), **73** (`aa8469f`) are all built +
 pushed to `aaziko/Shivam`. `git push aaziko Shivam` works; the remote can be ahead (web-UI README) → fetch + **merge**, never force.

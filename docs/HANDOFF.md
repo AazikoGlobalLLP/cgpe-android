@@ -1,58 +1,54 @@
-# HANDOFF — CGPE Connect (Android) — Phase 56 (iOS enablement) — 2026-08-20
+# HANDOFF — CGPE Connect (Android) — Phase 74 (Android push enablement + launcher icon + owner backlog triage) — 2026-08-21
 
-Owner chose Phase 56 after Phase 57 completed. All the iOS work that does **not** need an Apple Developer account is done,
-and the iOS build is **proven to compile** (a free EAS iOS-Simulator build finished green). `[m]`-only, **no contract change**.
-Commits `49bb951` (config) + `ee8df2b` (docs), pushed `aaziko/Shivam`.
+Two things shipped this session, plus a large NEW owner backlog was **triaged** (not built — the owner asked only to
+identify mobile vs backend and hand off). `[m]` only; no contract change from the shipped work.
 
 ## Done
-- **The iPhone build of the app now provably compiles.** An Apple-account-free EAS **iOS-Simulator build FINISHED green** —
-  build `9649bf51-ca6e-4359-90a8-d3b4c5a80f30`, profile `ios-simulator`, SDK 57.0.0, from git `49bb951` — so the whole native
-  iOS target builds with the full module set (reanimated, webview, secure-store, local-auth, location, background-task,
-  notifications, sensors, calendar). Artifact (Mac-only `.app` tarball):
-  `https://expo.dev/artifacts/eas/52sqyiyIWBy73eNMCZXV1IsPt9TmHMIbBA5oImmgIzg.tar.gz`.
-- **`eas.json` can now build for iOS.** New `ios-simulator` profile (no Apple account needed); `preview` = Android APK / iOS
-  ad-hoc and `production` = TestFlight/App Store are ready for the moment credentials exist.
-- **The iOS app icon is the CGPE brand, not the Expo placeholder.** `ios.icon` was still `./assets/expo.icon` (the default
-  blue-arrow grid); it now points at a generated 1024² opaque CGPE mark on `#ffffff` (matching the Android adaptive icon).
-- **The App-Store export-compliance prompt is pre-answered** (`ios.config.usesNonExemptEncryption:false` — the app is
-  HTTPS-only, so this is factually correct and removes a per-upload question).
-- Whole iOS native config validated with `npx expo config --type introspect`: `UIBackgroundModes:[processing,location,fetch]`
-  + `BGTaskSchedulerPermittedIdentifiers` auto-injected by the plugins, all CGPE permission strings resolve.
+- **The app can now do Android push (build side is complete).** Owner created a Firebase project (`com-cgpe-connect`) and
+  added `google-services.json`; it is now **wired in `app.json`** (`android.googleServicesFile`) and a **push-enabled APK is
+  cut** — EAS build `0d68ac07-e05e-4abe-8100-1755b8a91065`, profile `preview`, v1.10.0, git `ce9b1e6`, direct
+  `.apk`: `https://expo.dev/artifacts/eas/SgvwNK6KD0bNInbOO87K3g32-_Gf1OhRkAStPxk74WI.apk`. Backend push endpoints are LIVE on
+  prod (`/push/register` → 401). **Push will not DELIVER until the owner uploads the FCM V1 key to EAS (still pending).**
+- **The launcher / app-drawer icon now fits.** The adaptive icon was using the raw non-square logo edge-to-edge, so the
+  round/rounded mask cropped it. Generated a **1024² adaptive foreground** with the CGPE logo padded into the central ~60%
+  safe zone, plus a **square white main icon** (fixes the 827×975 non-square source). Rides the NEXT build.
+- **The FCM service-account key is secured.** It landed untracked in the repo; added a `.gitignore` rule so the secret can
+  never be committed. `google-services.json` (client config, safe) is committed for the build.
+- **The whole 2026-08-21 owner backlog is triaged** in `docs/OWNER-BACKLOG-2026-08-21.md` — ~18 items split into
+  `[m]` / `[api]` / `[admin]` / `[data-ops]`, with the ones that need owner spec-lock flagged.
 
 ## Files changed
-- `eas.json` — added the `ios-simulator` build profile (`distribution:internal`, `ios.simulator:true`).
-- `app.json` — `ios.config.usesNonExemptEncryption:false`; `ios.icon` → `./assets/images/ios-icon.png`.
-- `assets/images/ios-icon.png` — NEW: generated opaque 1024² CGPE icon (cgpe-logo composited on white; brand source is
-  827×975 with alpha, unusable directly as an iOS icon).
-- `docs/spec/PHASE-56.md` — NEW: spec + plain-language owner runbook (TestFlight vs ad-hoc vs simulator) + honest iOS limits.
-- `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md` — board + decisions + manager status.
+- `app.json` — `android.googleServicesFile` added; `icon` → `android-icon-cgpe.png`; `adaptiveIcon.foregroundImage` → `android-icon-cgpe-foreground.png` (splash logo untouched).
+- `google-services.json` — NEW, committed (Firebase client config for `com.cgpe.connect`; safe to commit).
+- `.gitignore` — NEW rules: `*-firebase-adminsdk-*.json`, `google-service-account*.json` (the FCM V1 SECRET, never commit).
+- `assets/images/android-icon-cgpe-foreground.png` — NEW, 1024² padded adaptive foreground (logo at 60% safe zone).
+- `assets/images/android-icon-cgpe.png` — NEW, 1024² square white main icon.
+- `docs/OWNER-BACKLOG-2026-08-21.md` — NEW, the triaged owner backlog.
+- Commits: `ce9b1e6` (push enablement), `5c8ac46` (icon fit).
 
 ## Decisions made
-- **`ios-simulator` profile is the account-free compile proof** — a simulator build needs no Apple credentials (SDK-57 docs),
-  so the iOS target could be built and verified BEFORE the owner spends on the Apple account. It ran green.
-- **Regenerated the iOS icon rather than reuse an existing asset** — `icon.png` is the Expo default (wrong brand) and
-  `cgpe-logo.png` is non-square + alpha (invalid iOS icon). Compositing the brand mark on the already-written-down `#ffffff`
-  is grounded (not an invented colour) and mirrors Android; written to a NEW file so nothing was overwritten.
-- **`usesNonExemptEncryption:false` is correct, not a guess** — `src/data/api.ts` uses only standard TLS/HTTPS `fetch`, the
-  Apple "exempt" case.
-- **Did NOT hand-add iOS background-mode / BGTaskScheduler plist keys** — the `expo-background-task` plugin injects them via
-  CNG prebuild (verified in the introspected config). This is a CNG project (no `ios/`/`android/` dir).
-- **Honest iOS 24/7 limit is documented, not papered over** — iOS records the on-duty route while alive/backgrounded, but
-  stops after force-quit and stays off after reboot until reopened (Apple platform rule). Do NOT promise Android parity.
+- **Transport = FCM/Firebase; the key Expo needs is the FCM V1 SERVICE ACCOUNT JSON (Service accounts tab → Generate new
+  private key), NOT the Web Push / VAPID key** (owner grabbed the VAPID one by mistake). Legacy Cloud Messaging API stays
+  DISABLED — V1 is what Expo uses.
+- **FCM key upload is an owner interactive step, not mine.** `eas credentials` has no non-interactive flag and this session's
+  stdin is EOF; the EAS CLI is already authed (`shivam-bhadoriya`), so the owner needs NO expo.dev login/email — they run
+  `npx eas-cli credentials -p android` in a normal terminal and point it at the JSON.
+- **Icon fixed by padding into the Android adaptive safe zone** (central ~60% of 1024²), not by shrinking the source in-place —
+  the mask reserves the outer ~33%, so a full-bleed foreground always crops. New files only; brand + `#ffffff` are grounded.
+- **The backlog was triaged, not built** — the owner's instruction was "identify mine vs backend, then /handoff."
 
 ## Known broken / deliberately skipped
-- **No real-iPhone / TestFlight build yet** — blocked on the Apple Developer account ($99/yr). Owner confirmed 2026-08-20 they
-  WILL get it. Nothing more is buildable for a physical iPhone until it exists.
-- **iOS push (APNs) is out of scope** — separate from the Android FCM work (Phase 72), which is itself still backend-blocked.
-- **Generic Apple-default Info.plist strings** for `NSMotionUsageDescription` / `NSReminders*` / `NSMicrophone*` — pass a
-  build; tighten to specific copy only if/when submitting to the App Store (not a blocker).
-- **316 MB upload archive** — add an `.easignore` (exclude `e2e/artifacts`, etc.) before doing repeated iOS builds.
+- **Push does not deliver yet** — the FCM V1 service-account key is not uploaded to EAS (owner's `eas credentials` step; they
+  hit a Windows "Press any key" terminal quirk — retry in PowerShell, or just install+login+create-a-task to test).
+- **Icon fix is not in the installed APK** — it rides the next build (owner asked for it "before the next build" — done in code).
+- **Nothing from `docs/OWNER-BACKLOG-2026-08-21.md` is built.** Several items need owner spec-lock first (C2 hour threshold,
+  D6 what-to-simplify, B2/B5 the consent-vs-visibility reality).
 
 ## Next session starts here
-- **No un-owned mobile-buildable phase remains.** Phase 56 is done; Phase 57 is done; Phases 65/70/71/73 built; Phase 72 is
-  backend/Firebase-blocked. Either (a) resume Phase 56 the moment the owner has the Apple account — build TestFlight per
-  `docs/spec/PHASE-56.md` §4 and verify Face ID / map / background route on a real iPhone — or (b) take a new owner request.
+- **Phase 75: verify push end-to-end, then pick the highest-value backlog item.** First confirm FCM is uploaded (install APK
+  → login → create a task → does a closed phone get the notification?). If yes, cut ONE clean build that also carries the icon
+  fix. Then start the triaged backlog — likely **B1 (master detail)** or **D4 (tasks calendar view)**, after spec-locking.
 - First command: `/boot`
-- Watch out for: **do NOT re-run the iOS simulator build to "check" — it's already proven green (`9649bf51`, git `49bb951`).**
-  The only iOS work left needs the Apple account. And the backend repo is `CGPE-CURRENT-PROJECT/cgpe-backend-main`, NOT
-  `Shivam-Aaziko-Dev-MERN/cgpe-backend-main` (a `cd` to the wrong path silently runs git in ANDROID).
+- Watch out for: the FCM **service-account** key (Service accounts tab) vs the **VAPID** key (Web config) — only the former
+  works; and it is a **secret** (already gitignored — keep it that way). Backend deploy gap is CLOSED (`origin/main` `10e1f76`),
+  so re-diagnose "not working" items as mobile-render / backend-data / config, NOT as un-deployed backend.

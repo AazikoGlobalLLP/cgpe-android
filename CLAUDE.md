@@ -178,6 +178,33 @@ URL only shows an Install button when opened ON the Android phone). So when the 
 you can deliver one — do not tell them shipping is blocked. (`--non-interactive` is required — stdin is
 EOF here — and `build:view` does NOT accept `--non-interactive`, only `--json`.)
 
+**ANDROID PUSH / FCM (Phase 74, 2026-08-21) — do not re-derive.** `expo-notifications` is wired; `app.json` has
+`android.googleServicesFile: "./google-services.json"` (committed — client config, safe) and the Firebase project is
+`com-cgpe-connect`. To make push **deliver**, EAS needs the **FCM V1 SERVICE ACCOUNT key = a JSON** from Firebase Console →
+**Service accounts** tab → *Generate new private key* — **NOT** the Web Push / **VAPID** key under Cloud Messaging → Web
+config (that's browser push, useless here — the owner grabbed it by mistake once). Keep the Legacy Cloud Messaging API
+**DISABLED**; V1 is what Expo uses. The service-account JSON is a **SECRET** — it is gitignored (`*-firebase-adminsdk-*.json`)
+and goes ONLY to EAS credentials, never a commit/chat. **`eas credentials` is interactive-only (no non-interactive flag), so
+YOU cannot upload it here (stdin EOF)** — the owner runs `npx eas-cli credentials -p android` in a REAL terminal (CLI already
+authed as `shivam-bhadoriya` → no expo.dev login/email needed) → Google Service Account → FCM V1 → point at the JSON. If they
+hit a Windows "Press any key" loop, that's a terminal keypress quirk → retry in PowerShell, or just verify push by
+install+login+create-a-task. The APK itself does NOT need the key (it's server-side at Expo), so build first, upload in
+parallel. Push endpoints are LIVE on prod (`/push/register`→401).
+
+**ICON GENERATION — no ImageMagick/sharp here; use jimp in the scratchpad.** The Android **adaptive** icon foreground must be
+a **square PNG with the logo padded into the central ~60%** (the launcher mask crops the outer ~33%) — using the raw
+`cgpe-logo.png` (827×975, edge-to-edge) as `adaptiveIcon.foregroundImage` gets it cropped/oversized in the app drawer. Fixed
+Phase 74 (`5c8ac46`): `assets/images/android-icon-cgpe-foreground.png` (1024² transparent, logo at 60%) +
+`android-icon-cgpe.png` (1024² square white main `icon`); splash still uses `cgpe-logo.png`. Regenerate with a jimp script in
+the scratchpad (`npm i jimp@0.22.12` there — do NOT add it to the project; `scaleToFit` + `new Jimp(1024,1024,0x00000000)` +
+`composite` + `writeAsync`). Do not point the adaptive foreground back at the raw logo.
+
+**⚠️ APPLE ACCOUNT — owner CANNOT buy it (2026-08-21, supersedes the earlier "will get it").** There is NO free
+cable-free/permanent/TestFlight/App-Store/iOS-push path — the paid $99/yr Apple Developer Program is the only one, and it's
+off the table. Max without paying = a Mac + free Apple ID + cabled `expo run:ios --device` (7-day expiry, ≤3 apps, no push);
+for a team of iPhones there is no free scalable route. Do NOT invent a workaround or promise iOS store/push. See
+`docs/spec/PHASE-56.md` + memory `phase56-ios-enablement`.
+
 **USB/ADB DEVICE TESTING WORKS FROM HERE (proven 2026-08-19).** The owner can connect the phone by USB and
 you can drive it (screenshots, taps, install). `adb` isn't installed → download Google **platform-tools** to
 the scratchpad (`.../scratchpad/platform-tools/adb.exe`, a zip, no admin install). The owner must enable
