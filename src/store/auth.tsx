@@ -210,10 +210,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * outgoing user's live session id and their buffered, unsent GPS points therefore
      * survived sign-out, and the next person on a shared handset could have had those
      * coordinates uploaded under the previous user's session. SecureStore has no
-     * enumerate-keys API, so these have to be named explicitly. */
+     * enumerate-keys API, so these have to be named explicitly.
+     *
+     * The 24/7 (off-duty) tracker keys live here too and were MISSED (audit 2026-08-21, #4):
+     * `track.ambient` is the consent/arm flag. If it survives sign-out, the next user reads as
+     * already-consented, so on a foreground where THEIR OS background permission is not "always"
+     * `syncConsentWithPermission` fires a FALSE consent-WITHDRAWAL POST under their id (notifying
+     * every super-admin), and a separately-consented next user's recorder silently auto-resumes
+     * from the previous user's flag. Dropping `track.ambient` makes `ambientArmed()` read false,
+     * so that path returns early and the next stray OS batch tears the leftover service down
+     * cleanly via ingest's unattributable branch. `track.notif`/`track.motion` carry the previous
+     * user's language/motion state. (`track.batteryOptAsked` is install-scoped — it correctly
+     * survives a user switch, so it is deliberately NOT removed.) */
     await Promise.all([
       storage.remove('track.state'),
       storage.remove('track.sessionId'),   // legacy key from the foreground-watch tracker
+      storage.remove('track.ambient'),     // 24/7 consent/arm flag — must NEVER carry to the next user
+      storage.remove('track.notif'),       // outgoing user's resolved notification strings/language
+      storage.remove('track.motion'),      // outgoing user's motion-classifier state
     ]).catch(() => {});
   };
 
