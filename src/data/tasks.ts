@@ -102,6 +102,35 @@ export function todayProgress(
 }
 
 /**
+ * PHASE 75 (owner report A2, 2026-08-21) — "today's ACTIONABLE work": due-today ∪ OPEN-overdue,
+ * plus anything completed today. Overdue tasks ARE today's work — you must clear them today — so
+ * the Tasks tab's headline counts them. Without this, a member whose only work was an overdue item
+ * (e.g. a ticket claimed today but opened days ago — the backend mirror dates it by the ticket's
+ * own open date, so it buckets 'overdue') saw "0 / nothing scheduled", which read as "nothing to do".
+ *
+ * This is the Tasks tab's headline ONLY, a deliberate divergence from `todayProgress`: the Tasks
+ * screen already frames its header as "N due now" (today + overdue), so its hero matches that. Home's
+ * hero keeps the tighter `todayProgress` (a pure "how much of TODAY is left" snapshot).
+ *
+ * Reopen stays stable exactly like `todayProgress`: an overdue task belongs to the set whether it is
+ * open (open-overdue) or done-today (completed-today), so completing/reopening it moves only the
+ * numerator, never the denominator — no oscillating ratio.
+ */
+export function todayWorkload(
+  list: Task[],
+  now: Date = new Date(),
+): { total: number; done: number; pct: number } {
+  const belongs = list.filter((t) => {
+    const b = dueBucket(t, now);
+    if (b === 'today') return true;
+    if (b === 'overdue' && t.status !== 'done') return true;       // open overdue = actionable today
+    return t.status === 'done' && isSameDay(t.completedAt, now);   // credited on the day it closes
+  });
+  const done = belongs.filter((t) => t.status === 'done').length;
+  return { total: belongs.length, done, pct: belongs.length ? done / belongs.length : 0 };
+}
+
+/**
  * PHASE 10. The seeded `tasks` array that used to live here has been removed.
  *
  * It held ten fabricated work items carrying invented policyholder names, invented

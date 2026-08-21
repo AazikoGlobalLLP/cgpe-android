@@ -8,7 +8,7 @@
  * src/data/tasks.ts has ZERO imports, so this file needs no stub and no environment.
  */
 import { describe, expect, it } from 'vitest';
-import { dueBucket, taskProgress, todayProgress, type Task, type TaskStatus, type TaskStep } from '@/data/tasks';
+import { dueBucket, taskProgress, todayProgress, todayWorkload, type Task, type TaskStatus, type TaskStep } from '@/data/tasks';
 
 /** Minimal Task. Only `status` and `steps` are read by taskProgress. */
 function task(status: TaskStatus, steps: TaskStep[]): Task {
@@ -175,5 +175,55 @@ describe('todayProgress — belongs = due-today ∪ completed-today', () => {
       mk({ dueDate: '', status: 'todo' }),                            // undated open         → excluded
     ];
     expect(todayProgress(list, NOW)).toEqual({ total: 3, done: 2, pct: 2 / 3 });
+  });
+});
+
+/* -------------------------------------------------------------------------------------------
+ * todayWorkload — the Tasks-tab headline (PHASE 75, owner report A2). Same shape as
+ * `todayProgress` but the belongs-set ALSO includes OPEN overdue tasks, because an overdue item
+ * (e.g. a ticket claimed today, dated by its own older open date) is actionable today and must not
+ * read as "0 / nothing scheduled". Home keeps the tighter `todayProgress` — the divergence is
+ * deliberate, so these pins also assert the two functions differ exactly on open-overdue.
+ * ------------------------------------------------------------------------------------------- */
+describe('todayWorkload — belongs = due-today ∪ open-overdue ∪ completed-today', () => {
+  it('is {0,0,0} for an empty list', () => {
+    expect(todayWorkload([], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+  });
+
+  it('counts a due-today task exactly like todayProgress', () => {
+    expect(todayWorkload([mk({ dueDate: dayAt(0), status: 'todo' })], NOW)).toEqual({ total: 1, done: 0, pct: 0 });
+    expect(todayWorkload([mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) })], NOW)).toEqual({ total: 1, done: 1, pct: 1 });
+  });
+
+  it('INCLUDES an open overdue task — the A2 fix — where todayProgress EXCLUDES it', () => {
+    expect(todayWorkload([mk({ dueDate: dayAt(-1), status: 'todo' })], NOW)).toEqual({ total: 1, done: 0, pct: 0 });
+    // The exact difference the fix exists for: todayProgress still returns 0 (→ "nothing scheduled").
+    expect(todayProgress([mk({ dueDate: dayAt(-1), status: 'todo' })], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+  });
+
+  it('credits an overdue task completed today, and reopening it only moves the numerator', () => {
+    const done = todayWorkload([mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(0) })], NOW);
+    const reopened = todayWorkload([mk({ dueDate: dayAt(-1), status: 'todo', completedAt: undefined })], NOW);
+    expect(done).toEqual({ total: 1, done: 1, pct: 1 });
+    expect(reopened).toEqual({ total: 1, done: 0, pct: 0 });
+    expect(reopened.total).toBe(done.total); // denominator stays put across complete↔reopen
+  });
+
+  it('excludes an overdue task completed on a PREVIOUS day, and an undated OPEN task', () => {
+    expect(todayWorkload([mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(-1) })], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+    expect(todayWorkload([mk({ dueDate: '', status: 'todo' })], NOW)).toEqual({ total: 0, done: 0, pct: 0 });
+  });
+
+  it('aggregates a mixed list: due-today + open-overdue + overdue-done-today, excluding history/upcoming/undated', () => {
+    const list = [
+      mk({ dueDate: dayAt(0), status: 'todo' }),                        // due today, open       → denom
+      mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) }), // due today, done       → denom+num
+      mk({ dueDate: dayAt(-1), status: 'todo' }),                       // overdue, open         → denom
+      mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(0) }),// overdue, done today   → denom+num
+      mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(-1) }),// done yesterday       → excluded
+      mk({ dueDate: dayAt(1), status: 'todo' }),                        // upcoming              → excluded
+      mk({ dueDate: '', status: 'todo' }),                             // undated open          → excluded
+    ];
+    expect(todayWorkload(list, NOW)).toEqual({ total: 4, done: 2, pct: 2 / 4 });
   });
 });

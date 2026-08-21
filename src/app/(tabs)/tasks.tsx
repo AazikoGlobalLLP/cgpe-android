@@ -24,7 +24,7 @@ import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
 import * as api from '@/data/api';
-import { CATEGORY_ICON, Task, TaskStatus, TASK_PRIORITY, TASK_STATUS, dueBucket, taskProgress, todayProgress } from '@/data/tasks';
+import { CATEGORY_ICON, Task, TaskStatus, TASK_PRIORITY, TASK_STATUS, dueBucket, taskProgress, todayWorkload } from '@/data/tasks';
 import { fmtDay, fmtTime } from '@/lib/format';
 import { call } from '@/lib/actions';
 
@@ -208,10 +208,11 @@ export default function Tasks() {
     return open.filter((x) => dueBucket(x) === filter);
   }, [list, filter]);
 
-  // Today's completion = today's tasks done vs all of today's tasks. Schedule-/completion-based
-  // and shared with Home (`todayProgress`) so the two headline counts can never disagree, and so
-  // an undated task or a reopen no longer makes the ratio jump. See @/data/tasks.
-  const today = useMemo(() => todayProgress(list), [list]);
+  // PHASE 75 (A2): the headline counts "today's ACTIONABLE work" = due-today ∪ OPEN-overdue, so an
+  // overdue item (e.g. a ticket claimed today but dated by its own older open date) shows here
+  // instead of reading "0 / nothing scheduled". This matches THIS screen's header ("N due now" =
+  // today + overdue). Home's hero deliberately keeps the tighter `todayProgress` (pure "due today").
+  const today = useMemo(() => todayWorkload(list), [list]);
 
   // The one count-up on this screen. It moves only when a task actually closes. Clamp to the
   // (instant) total so that when a reopened task LEAVES today's set — denominator drops at once
@@ -248,7 +249,7 @@ export default function Tasks() {
    * air — the failure of one write must never revert a different, successful one.
    */
   const setStatus = async (task: Task, status: TaskStatus, refusedTitle: string) => {
-    // Snapshot completedAt too: the optimistic write stamps it now (below) so `todayProgress`
+    // Snapshot completedAt too: the optimistic write stamps it now (below) so `todayWorkload`
     // credits the close to today; a rollback must put the prior value (usually undefined) back.
     const before = { status: task.status, steps: task.steps, completedAt: task.completedAt };
     setList((cur) => cur.map((x) => (
@@ -283,7 +284,16 @@ export default function Tasks() {
   const quickDone = (task: Task) => setStatus(task, 'done', 'Task was not closed');
   const reopen = (task: Task) => setStatus(task, 'todo', 'Task was not reopened');
 
-  const empty = EMPTY_COPY[filter];
+  // PHASE 75 (A2): on the default 'today' filter an empty list must not claim "today is clear"
+  // while work is overdue — point the user at the Overdue view instead (owner report, 2026-08-21).
+  const empty = filter === 'today' && counts.overdue > 0
+    ? {
+        icon: 'time-outline' as IconName,
+        title: 'Nothing due today',
+        subtitle: `But ${counts.overdue} ${counts.overdue === 1 ? 'task is' : 'tasks are'} overdue — check the Overdue view.`,
+        add: false,
+      }
+    : EMPTY_COPY[filter];
   // Three different facts, three different messages. An empty list under an outage means
   // "could not load"; an empty BOOK means "nothing has been assigned yet"; an empty view
   // means "this filter has nothing in it". They demand opposite reactions from the user.
@@ -333,7 +343,9 @@ export default function Tasks() {
                             / {today.total}
                           </Txt>
                         </Row>
-                        <Txt size={font.sub} color={c.muted} numberOfLines={1}>tasks done today</Txt>
+                        <Txt size={font.sub} color={c.muted} numberOfLines={1}>
+                          {counts.overdue > 0 ? `done · ${counts.overdue} overdue` : 'tasks done today'}
+                        </Txt>
                       </>
                     ) : (
                       <>
