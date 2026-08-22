@@ -118,6 +118,21 @@ const en = {
   'consent.blockedTitle': 'Turn location back on to use CGPE Connect',
   'consent.blockedBody': 'Location sharing is required for this app. Please turn location and the "Allow all the time" permission back on to continue.',
   'consent.blockedAction': 'Open settings',
+  // D4 + D6b (owner copy, 2026-08-22) — Tasks time views + first-run guide.
+  'tasks.viewWeek': 'This week', 'tasks.viewMonth': 'This month', 'tasks.viewCalendar': 'Calendar',
+  'tasks.tomorrow': 'Tomorrow', 'tasks.yesterday': 'Yesterday',
+  'tasks.emptyTodayTitle': 'Nothing due today',
+  'tasks.emptyTodayBody': 'Today is clear — nothing due and nothing overdue. Add a task to plan the rest of the day.',
+  'tasks.emptyWeekTitle': 'Nothing this week',
+  'tasks.emptyWeekBody': 'No task falls in this week. Try This month or the Calendar to look further ahead.',
+  'tasks.emptyMonthTitle': 'Nothing this month',
+  'tasks.emptyMonthBody': 'No task is scheduled in this calendar month.',
+  'tasks.emptyCalendarBody': 'No task is due on the selected day. Pick another day from the strip above.',
+  'guide.welcome': 'Welcome', 'guide.title': 'Your day in 3 steps',
+  'guide.step1Title': 'Clock in', 'guide.step1Body': 'Tap Clock in when you reach the office to start your day.',
+  'guide.step2Title': "See today's tasks", 'guide.step2Body': 'Your work for today is listed right here on this screen.',
+  'guide.step3Title': 'Mark done', 'guide.step3Body': 'Swipe a task, or tap the tick, once it is finished.',
+  'guide.gotIt': 'Got it',
 };
 
 /** Every dictionary carries exactly the English key set. */
@@ -178,6 +193,21 @@ const gu: Dict = {
   'consent.blockedTitle': 'CGPE Connect નો ઉપયોગ કરવા માટે લોકેશન ફરીથી ચાલુ કરો',
   'consent.blockedBody': 'આ એપ માટે લોકેશન શેરિંગ ફરજિયાત છે. આગળ વધવા માટે કૃપા કરીને લોકેશન અને "Allow all the time" પરમિશન ફરીથી ચાલુ કરો.',
   'consent.blockedAction': 'સેટિંગ્સ ખોલો',
+  // D4 + D6b (owner copy, 2026-08-22)
+  'tasks.viewWeek': 'આ અઠવાડિયે', 'tasks.viewMonth': 'આ મહિને', 'tasks.viewCalendar': 'કેલેન્ડર',
+  'tasks.tomorrow': 'આવતીકાલે', 'tasks.yesterday': 'ગઈકાલે',
+  'tasks.emptyTodayTitle': 'આજે કંઈ બાકી નથી',
+  'tasks.emptyTodayBody': 'આજે બધું ક્લિયર છે — આજે કંઈ બાકી નથી અને કંઈ ઓવરડ્યૂ પણ નથી. બાકીના દિવસનું આયોજન કરવા માટે ટાસ્ક ઉમેરો.',
+  'tasks.emptyWeekTitle': 'આ અઠવાડિયે કંઈ નથી',
+  'tasks.emptyWeekBody': 'આ અઠવાડિયામાં કોઈ ટાસ્ક નથી. આગળના ટાસ્ક જોવા માટે આ મહિનો અથવા કેલેન્ડર જુઓ.',
+  'tasks.emptyMonthTitle': 'આ મહિને કંઈ નથી',
+  'tasks.emptyMonthBody': 'આ કેલેન્ડર મહિનામાં કોઈ ટાસ્ક શેડ્યૂલ નથી.',
+  'tasks.emptyCalendarBody': 'પસંદ કરેલા દિવસે કોઈ ટાસ્ક બાકી નથી. ઉપરની સ્ટ્રિપમાંથી બીજો દિવસ પસંદ કરો.',
+  'guide.welcome': 'સ્વાગત છે', 'guide.title': 'તમારો દિવસ 3 પગલાંમાં',
+  'guide.step1Title': 'ક્લોક ઇન', 'guide.step1Body': 'ઓફિસ પહોંચ્યા પછી તમારો દિવસ શરૂ કરવા માટે Clock in પર ટેપ કરો.',
+  'guide.step2Title': 'આજના ટાસ્ક જુઓ', 'guide.step2Body': 'આજનું તમારું કામ આ જ સ્ક્રીન પર અહીં દર્શાવેલું છે.',
+  'guide.step3Title': 'પૂર્ણ તરીકે માર્ક કરો', 'guide.step3Body': 'ટાસ્ક પૂર્ણ થયા પછી તેને સ્વાઇપ કરો અથવા ટિક પર ટેપ કરો.',
+  'guide.gotIt': 'સમજાયું',
 };
 
 const hi: Dict = {
@@ -234,6 +264,21 @@ const hi: Dict = {
   'consent.blockedTitle': 'CGPE Connect का उपयोग करने के लिए लोकेशन दोबारा चालू करें',
   'consent.blockedBody': 'इस ऐप के लिए लोकेशन शेयरिंग अनिवार्य है। आगे बढ़ने के लिए कृपया लोकेशन और "Allow all the time" परमिशन दोबारा चालू करें।',
   'consent.blockedAction': 'सेटिंग्स खोलें',
+  // D4 + D6b (owner copy, 2026-08-22)
+  'tasks.viewWeek': 'इस हफ्ते', 'tasks.viewMonth': 'इस महीने', 'tasks.viewCalendar': 'कैलेंडर',
+  'tasks.tomorrow': 'कल', 'tasks.yesterday': 'कल',
+  'tasks.emptyTodayTitle': 'आज कुछ भी बाकी नहीं है',
+  'tasks.emptyTodayBody': 'आज सब क्लियर है — आज कुछ भी बाकी नहीं है और कुछ भी ओवरड्यू नहीं है। बाकी दिन की योजना बनाने के लिए एक टास्क जोड़ें।',
+  'tasks.emptyWeekTitle': 'इस हफ्ते कुछ नहीं है',
+  'tasks.emptyWeekBody': 'इस हफ्ते कोई टास्क नहीं है। आगे के टास्क देखने के लिए इस महीने या कैलेंडर को देखें।',
+  'tasks.emptyMonthTitle': 'इस महीने कुछ नहीं है',
+  'tasks.emptyMonthBody': 'इस कैलेंडर महीने में कोई टास्क शेड्यूल नहीं है।',
+  'tasks.emptyCalendarBody': 'चुने गए दिन कोई टास्क बाकी नहीं है। ऊपर की स्ट्रिप से कोई दूसरा दिन चुनें।',
+  'guide.welcome': 'स्वागत है', 'guide.title': 'आपका दिन 3 स्टेप्स में',
+  'guide.step1Title': 'क्लॉक इन', 'guide.step1Body': 'ऑफिस पहुँचने के बाद अपना दिन शुरू करने के लिए Clock in पर टैप करें।',
+  'guide.step2Title': 'आज के टास्क देखें', 'guide.step2Body': 'आज का आपका काम इसी स्क्रीन पर यहाँ दिया गया है।',
+  'guide.step3Title': 'पूरा मार्क करें', 'guide.step3Body': 'टास्क पूरा होने के बाद उसे स्वाइप करें या टिक पर टैप करें।',
+  'guide.gotIt': 'समझ गया',
 };
 
 /**
@@ -295,6 +340,21 @@ const hiEn: Dict = {
   'consent.blockedTitle': 'CGPE Connect use karne ke liye location wapas on karein',
   'consent.blockedBody': 'Is app ke liye location sharing mandatory hai. Aage badhne ke liye kripya location aur "Allow all the time" permission wapas on karein.',
   'consent.blockedAction': 'Settings kholein',
+  // D4 + D6b (owner copy, 2026-08-22)
+  'tasks.viewWeek': 'Is hafte', 'tasks.viewMonth': 'Is mahine', 'tasks.viewCalendar': 'Calendar',
+  'tasks.tomorrow': 'Kal', 'tasks.yesterday': 'Kal',
+  'tasks.emptyTodayTitle': 'Aaj kuch bhi due nahi hai',
+  'tasks.emptyTodayBody': 'Aaj sab clear hai — kuch bhi due nahi hai aur kuch bhi overdue nahi hai. Baaki din plan karne ke liye ek task add karein.',
+  'tasks.emptyWeekTitle': 'Is hafte kuch nahi hai',
+  'tasks.emptyWeekBody': 'Is hafte koi task nahi hai. Aage ke tasks dekhne ke liye This month ya Calendar dekhein.',
+  'tasks.emptyMonthTitle': 'Is mahine kuch nahi hai',
+  'tasks.emptyMonthBody': 'Is calendar month mein koi task scheduled nahi hai.',
+  'tasks.emptyCalendarBody': 'Selected day par koi task due nahi hai. Upar wali strip se koi doosra din choose karein.',
+  'guide.welcome': 'Swagat hai', 'guide.title': 'Aapka din 3 steps mein',
+  'guide.step1Title': 'Clock in', 'guide.step1Body': 'Office pahunchne ke baad apna din start karne ke liye Clock in par tap karein.',
+  'guide.step2Title': 'Aaj ke tasks dekhein', 'guide.step2Body': 'Aaj ka aapka kaam isi screen par yahin listed hai.',
+  'guide.step3Title': 'Done mark karein', 'guide.step3Body': 'Task complete hone ke baad use swipe karein ya tick par tap karein.',
+  'guide.gotIt': 'Samajh gaya',
 };
 
 /**
@@ -356,6 +416,21 @@ const guEn: Dict = {
   'consent.blockedTitle': 'CGPE Connect use karva maate location fari chalu karo',
   'consent.blockedBody': 'Aa app maate location sharing farajiyat chhe. Aagal vadharva maate krupya location ane "Allow all the time" permission fari chalu karo.',
   'consent.blockedAction': 'Settings kholo',
+  // D4 + D6b (owner copy, 2026-08-22)
+  'tasks.viewWeek': 'Aa athvadiye', 'tasks.viewMonth': 'Aa mahine', 'tasks.viewCalendar': 'Calendar',
+  'tasks.tomorrow': 'Aavtikale', 'tasks.yesterday': 'Gaikale',
+  'tasks.emptyTodayTitle': 'Aaje kai pan baki nathi',
+  'tasks.emptyTodayBody': 'Aaje badhu clear chhe — kai pan baki nathi ane kai pan overdue pan nathi. Bakina divasnu planning karva mate ek task umero.',
+  'tasks.emptyWeekTitle': 'Aa athvadiye kai nathi',
+  'tasks.emptyWeekBody': 'Aa athvadiyama koi task nathi. Aagalna tasks jova mate Aa mahino athva Calendar juo.',
+  'tasks.emptyMonthTitle': 'Aa mahine kai nathi',
+  'tasks.emptyMonthBody': 'Aa calendar mahinama koi task schedule nathi.',
+  'tasks.emptyCalendarBody': 'Pasand karela divase koi task baki nathi. Uparni strip mathi bijo divas pasand karo.',
+  'guide.welcome': 'Swagat chhe', 'guide.title': 'Tamaro divas 3 steps ma',
+  'guide.step1Title': 'Clock in', 'guide.step1Body': 'Office pahonchya pachi tamaro divas sharu karva mate Clock in par tap karo.',
+  'guide.step2Title': 'Aajna tasks juo', 'guide.step2Body': 'Aajnu tamaru kaam aa j screen par ahi listed chhe.',
+  'guide.step3Title': 'Puru mark karo', 'guide.step3Body': 'Task puro thai gaya pachi tene swipe karo athva tick par tap karo.',
+  'guide.gotIt': 'Samajayu',
 };
 
 /**

@@ -53,7 +53,10 @@ describe('i18n dictionaries — parity and value quality', () => {
     // human copy in all 5 languages (supplied in-chat), not machine-translated.
     // Bumped 107 → 111 for the 4 `clock.reasonNeeded*` keys (Phase 50 edge-case notices, 2026-08-20) —
     // owner human copy in all 5 languages (supplied in-chat), not machine-translated.
-    expect(EN_KEYS.length).toBe(111);
+    // Bumped 111 → 132 for the 21 D4 `tasks.view*`/`tasks.empty*`/`tasks.tomorrow`/`tasks.yesterday` +
+    // D6b `guide.*` keys (2026-08-22) — owner human copy in all 5 languages (supplied in-chat), not
+    // machine-translated.
+    expect(EN_KEYS.length).toBe(132);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

@@ -2433,18 +2433,19 @@ export default function Home() {
  * (like the app's other not-yet-localised screens). */
 function HomeGuideCard({ onDismiss }: { onDismiss: () => void }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, radius, font } = c;
   const steps: { icon: IconName; title: string; body: string }[] = [
-    { icon: 'location', title: 'Clock in', body: 'Tap Clock in when you reach the office to start your day.' },
-    { icon: 'list', title: "See today's tasks", body: 'Your work for today is listed right here on this screen.' },
-    { icon: 'checkmark-done', title: 'Mark done', body: 'Swipe a task, or tap the tick, once it is finished.' },
+    { icon: 'location', title: t('guide.step1Title'), body: t('guide.step1Body') },
+    { icon: 'list', title: t('guide.step2Title'), body: t('guide.step2Body') },
+    { icon: 'checkmark-done', title: t('guide.step3Title'), body: t('guide.step3Body') },
   ];
   return (
     <Card>
       <Row style={{ alignItems: 'flex-start' }}>
         <View style={{ flex: 1 }}>
-          <Eyebrow>Welcome</Eyebrow>
-          <Txt size={font.h3} weight="800" style={{ marginTop: 2 }}>Your day in 3 steps</Txt>
+          <Eyebrow>{t('guide.welcome')}</Eyebrow>
+          <Txt size={font.h3} weight="800" style={{ marginTop: 2 }}>{t('guide.title')}</Txt>
         </View>
         <IconBtn icon="close" size={34} bg={c.cardAlt} color={c.muted} accessibilityLabel="Dismiss the guide" onPress={onDismiss} />
       </Row>
@@ -2464,7 +2465,7 @@ function HomeGuideCard({ onDismiss }: { onDismiss: () => void }) {
           </Row>
         ))}
       </View>
-      <Button label="Got it" variant="primary" full onPress={onDismiss} style={{ marginTop: spacing.lg }} />
+      <Button label={t('guide.gotIt')} variant="primary" full onPress={onDismiss} style={{ marginTop: spacing.lg }} />
     </Card>
   );
 }

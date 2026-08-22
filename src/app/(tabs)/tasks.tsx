@@ -99,39 +99,23 @@ function sortTasks(arr: Task[]): Task[] {
   });
 }
 
-/** A human day header for the week/month day groups. */
-function dayHeading(ms: number): string {
+/** A human day header for the week/month day groups. Today/Tomorrow/Yesterday are localised;
+ *  other days fall back to a weekday + date (`fmtDay`), which needs no translation. */
+function dayHeading(ms: number, t: ReturnType<typeof useT>): string {
   const today = startOfDayMs(new Date());
-  if (ms === today) return 'Today';
-  if (ms === today + DAY_MS) return 'Tomorrow';
-  if (ms === today - DAY_MS) return 'Yesterday';
+  if (ms === today) return t('tasks.today');
+  if (ms === today + DAY_MS) return t('tasks.tomorrow');
+  if (ms === today - DAY_MS) return t('tasks.yesterday');
   return `${WD[new Date(ms).getDay()]}, ${fmtDay(new Date(ms))}`;
 }
 
-/** One honest empty message per time view — the four facts are genuinely different. */
-const VIEW_EMPTY: Record<TaskView, { icon: IconName; title: string; subtitle: string; add?: boolean }> = {
-  today: {
-    icon: 'checkmark-done-circle',
-    title: 'Nothing due today',
-    subtitle: 'Today is clear — nothing due and nothing overdue. Add a task to plan the rest of the day.',
-    add: true,
-  },
-  week: {
-    icon: 'calendar-outline',
-    title: 'Nothing this week',
-    subtitle: 'No task falls in this week. Try This month or the Calendar to look further ahead.',
-  },
-  month: {
-    icon: 'calendar-outline',
-    title: 'Nothing this month',
-    subtitle: 'No task is scheduled in this calendar month.',
-  },
-  calendar: {
-    icon: 'calendar-clear-outline',
-    title: 'This day is clear',
-    subtitle: 'No task is due on the selected day. Pick another day from the strip above.',
-    add: true,
-  },
+/** Per-view empty-state icon + whether the state offers an "add task" action. The title/body
+ *  strings are resolved with literal `t()` keys at the call site (owner copy, all 5 languages). */
+const VIEW_META: Record<TaskView, { icon: IconName; add?: boolean }> = {
+  today: { icon: 'checkmark-done-circle', add: true },
+  week: { icon: 'calendar-outline' },
+  month: { icon: 'calendar-outline' },
+  calendar: { icon: 'calendar-clear-outline', add: true },
 };
 
 /* ---------- loading ----------
@@ -361,8 +345,17 @@ export default function Tasks() {
   // Per-view empty copy. The A2 "you have overdue work" caveat is no longer needed: the Today
   // view's set (todayWorkloadTasks) ALREADY includes open-overdue tasks, so if it is empty there
   // genuinely is nothing overdue. The calendar's empty names the selected day.
-  const empty = VIEW_EMPTY[view];
-  const emptyTitle = view === 'calendar' ? `${dayHeading(selDay)} is clear` : empty.title;
+  const empty = VIEW_META[view];
+  const emptyTitle =
+    view === 'today' ? t('tasks.emptyTodayTitle')
+      : view === 'week' ? t('tasks.emptyWeekTitle')
+        : view === 'month' ? t('tasks.emptyMonthTitle')
+          : dayHeading(selDay, t);
+  const emptyBody =
+    view === 'today' ? t('tasks.emptyTodayBody')
+      : view === 'week' ? t('tasks.emptyWeekBody')
+        : view === 'month' ? t('tasks.emptyMonthBody')
+          : t('tasks.emptyCalendarBody');
   // Three different facts, three different messages. An empty list under an outage means
   // "could not load"; an empty BOOK means "nothing has been assigned yet"; an empty view
   // means "this filter has nothing in it". They demand opposite reactions from the user.
@@ -471,10 +464,10 @@ export default function Tasks() {
               >
                 <Segmented<TaskView>
                   options={[
-                    { key: 'today', label: 'Today' },
-                    { key: 'week', label: 'This week' },
-                    { key: 'month', label: 'This month' },
-                    { key: 'calendar', label: 'Calendar' },
+                    { key: 'today', label: t('tasks.today') },
+                    { key: 'week', label: t('tasks.viewWeek') },
+                    { key: 'month', label: t('tasks.viewMonth') },
+                    { key: 'calendar', label: t('tasks.viewCalendar') },
                   ]}
                   value={view}
                   onChange={pickView}
@@ -550,8 +543,8 @@ export default function Tasks() {
                 <Card>
                   <EmptyState
                     icon={empty.icon}
-                    title={empty.title}
-                    subtitle={empty.subtitle}
+                    title={emptyTitle}
+                    subtitle={emptyBody}
                     action={empty.add ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                   />
                 </Card>
@@ -560,7 +553,7 @@ export default function Tasks() {
                   {(view === 'week' ? weekGroups : monthGroups).map((g) => (
                     <View key={g.day} style={{ gap: 10 }}>
                       <Row style={{ alignItems: 'center', gap: spacing.sm }}>
-                        <Txt size={font.sub} weight="800" numberOfLines={1} style={{ flex: 1 }}>{dayHeading(g.day)}</Txt>
+                        <Txt size={font.sub} weight="800" numberOfLines={1} style={{ flex: 1 }}>{dayHeading(g.day, t)}</Txt>
                         <Pill label={String(g.tasks.length)} tone="neutral" small numeric />
                       </Row>
                       {g.tasks.map((task, i) => (
@@ -584,7 +577,7 @@ export default function Tasks() {
                   <EmptyState
                     icon={empty.icon}
                     title={emptyTitle}
-                    subtitle={empty.subtitle}
+                    subtitle={emptyBody}
                     action={empty.add ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                   />
                 </Card>
