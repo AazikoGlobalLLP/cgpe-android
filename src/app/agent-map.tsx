@@ -115,14 +115,23 @@ export default function AgentMap() {
 
   const retry = useCallback(() => { setLoading(true); load(); }, [load]);
 
-  const { onDuty, off, tracked } = useMemo(() => {
-    const people = pins.length > 0 ? pins.map(fromPin) : team.map(fromMember);
+  const { onDuty, off, roster, tracked } = useMemo(() => {
+    // B5 (owner: "show ALL members + all locations"). The roster LIST is the FULL staff universe
+    // from getTeam()/mergeRoster — every member, on duty or not. Previously the list was built from
+    // `pins` whenever a single pin existed, and `pins` = liveOnDutyPins = only members who are
+    // clocked in AND have a finite GPS coordinate. So one such member hid the entire rest of the
+    // team ("1 on duty, 1 tracked"). Now the list always comes from `team`; the MAP still plots only
+    // `pins` (a location a member never shared cannot be plotted — honest). `tracked` stays the count
+    // of map-locatable pins, so the empty state can still say "nobody is being tracked yet" truthfully.
+    // Fall back to pins only when the roster is empty (an outage), so a master still sees the locatable.
+    const people = team.length > 0 ? team.map(fromMember) : pins.map(fromPin);
     return {
       onDuty: people.filter((p) => p.onDuty),
       off: people.filter((p) => !p.onDuty),
-      tracked: people.length,
+      roster: people,
+      tracked: pins.length,
     };
-  }, [pins, team]);
+  }, [team, pins]);
 
   // PHASE 66: flatten the per-member break lists into the flat point array LeafletMap draws, carrying
   // each point's member name onto its popup.
@@ -154,7 +163,7 @@ export default function AgentMap() {
     <Screen>
       <Header
         title="Agent locations"
-        subtitle={`${onDuty.length} on duty, ${tracked} tracked`}
+        subtitle={`${onDuty.length} on duty · ${roster.length} in team · ${tracked} on map`}
         back
       />
 
@@ -268,7 +277,8 @@ export default function AgentMap() {
         {off.length > 0 ? (
           <Appear index={5}>
             <ListSection title={`Off duty (${off.length})`}>
-              {off.slice(0, 12).map((p, i) => (
+              {/* B5: show the WHOLE team, not a truncated 12 — the owner explicitly wants every member. */}
+              {off.map((p, i) => (
                 <Appear key={p.id} index={i}>
                   <PersonRow
                     name={p.name}
