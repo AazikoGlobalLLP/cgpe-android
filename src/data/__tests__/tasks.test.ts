@@ -8,7 +8,11 @@
  * src/data/tasks.ts has ZERO imports, so this file needs no stub and no environment.
  */
 import { describe, expect, it } from 'vitest';
-import { dueBucket, taskProgress, todayProgress, todayWorkload, type Task, type TaskStatus, type TaskStep } from '@/data/tasks';
+import {
+  dueBucket, taskProgress, todayProgress, todayWorkload, todayWorkloadTasks,
+  weekRange, monthRange, tasksInRange, groupTasksByDay,
+  type Task, type TaskStatus, type TaskStep,
+} from '@/data/tasks';
 
 /** Minimal Task. Only `status` and `steps` are read by taskProgress. */
 function task(status: TaskStatus, steps: TaskStep[]): Task {
@@ -225,5 +229,91 @@ describe('todayWorkload — belongs = due-today ∪ open-overdue ∪ completed-t
       mk({ dueDate: '', status: 'todo' }),                             // undated open          → excluded
     ];
     expect(todayWorkload(list, NOW)).toEqual({ total: 4, done: 2, pct: 2 / 4 });
+  });
+});
+
+/* -------------------------------------------------------------------------------------------
+ * D4 (owner, 2026-08-22) — the Tasks-tab TIME VIEWS: weekRange / monthRange / tasksInRange /
+ * groupTasksByDay / todayWorkloadTasks. NOW is Tuesday 18 Aug 2026 (local noon), so the ISO week
+ * runs Mon 17 Aug → Mon 24 Aug (end exclusive) and the month runs 1 Aug → 1 Sep (end exclusive).
+ * ------------------------------------------------------------------------------------------- */
+describe('weekRange — Monday-start ISO week containing now', () => {
+  it('returns [Mon 17 Aug 00:00, Mon 24 Aug 00:00) for a Tuesday now', () => {
+    const r = weekRange(NOW);
+    expect(r.start).toBe(new Date(2026, 7, 17, 0, 0, 0, 0).getTime());
+    expect(r.end).toBe(new Date(2026, 7, 24, 0, 0, 0, 0).getTime());
+  });
+  it('spans exactly 7 days', () => {
+    const r = weekRange(NOW);
+    expect(r.end - r.start).toBe(7 * 24 * 60 * 60 * 1000);
+  });
+  it('is stable across the whole week (Monday and Sunday give the same bounds)', () => {
+    const mon = weekRange(new Date(2026, 7, 17, 9, 0, 0));
+    const sun = weekRange(new Date(2026, 7, 23, 23, 0, 0));
+    expect(mon).toEqual(sun);
+  });
+});
+
+describe('monthRange — calendar month containing now', () => {
+  it('returns [1 Aug 00:00, 1 Sep 00:00) for an August now', () => {
+    const r = monthRange(NOW);
+    expect(r.start).toBe(new Date(2026, 7, 1, 0, 0, 0, 0).getTime());
+    expect(r.end).toBe(new Date(2026, 8, 1, 0, 0, 0, 0).getTime());
+  });
+});
+
+describe('tasksInRange — due day within [start, end), all statuses, undated excluded', () => {
+  it('keeps only tasks whose due day is inside the week, boundaries handled (start inclusive, end exclusive)', () => {
+    const week = weekRange(NOW);
+    const inMon = mk({ id: 'mon', dueDate: dayAt(-1) });   // 17 Aug — the inclusive start
+    const inTue = mk({ id: 'tue', dueDate: dayAt(0) });    // 18 Aug
+    const inSun = mk({ id: 'sun', dueDate: dayAt(5) });    // 23 Aug — last day in
+    const outNextMon = mk({ id: 'nm', dueDate: dayAt(6) });// 24 Aug — the exclusive end, OUT
+    const outPrevSun = mk({ id: 'ps', dueDate: dayAt(-2) });// 16 Aug — OUT
+    const got = tasksInRange([inMon, inTue, inSun, outNextMon, outPrevSun], week.start, week.end).map((t) => t.id);
+    expect(got).toEqual(['mon', 'tue', 'sun']);
+  });
+  it('keeps a DONE task in range (a time view shows what was closed, not only what is open)', () => {
+    const week = weekRange(NOW);
+    const doneInWeek = mk({ id: 'd', dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) });
+    expect(tasksInRange([doneInWeek], week.start, week.end).map((t) => t.id)).toEqual(['d']);
+  });
+  it('excludes an undated task from every range', () => {
+    const month = monthRange(NOW);
+    expect(tasksInRange([mk({ dueDate: '' })], month.start, month.end)).toEqual([]);
+  });
+});
+
+describe('groupTasksByDay — grouped by due calendar day, days ascending, undated dropped', () => {
+  it('buckets tasks by their local day and orders the groups earliest-first', () => {
+    const list = [
+      mk({ id: 'b', dueDate: dayAt(1) }),
+      mk({ id: 'a1', dueDate: dayAt(0) }),
+      mk({ id: 'a2', dueDate: dayAt(0) }),
+      mk({ id: 'undated', dueDate: '' }),
+    ];
+    const groups = groupTasksByDay(list);
+    expect(groups.length).toBe(2);
+    expect(groups[0].day).toBeLessThan(groups[1].day);
+    expect(groups[0].tasks.map((t) => t.id)).toEqual(['a1', 'a2']);
+    expect(groups[1].tasks.map((t) => t.id)).toEqual(['b']);
+  });
+  it('returns [] for an all-undated list', () => {
+    expect(groupTasksByDay([mk({ dueDate: '' }), mk({ dueDate: '' })])).toEqual([]);
+  });
+});
+
+describe('todayWorkloadTasks — the SET behind the todayWorkload counts', () => {
+  it('returns the exact tasks that make up the todayWorkload total (counts can never disagree)', () => {
+    const list = [
+      mk({ id: 'today', dueDate: dayAt(0), status: 'todo' }),
+      mk({ id: 'openOverdue', dueDate: dayAt(-1), status: 'todo' }),
+      mk({ id: 'doneToday', dueDate: dayAt(-1), status: 'done', completedAt: dayAt(0) }),
+      mk({ id: 'upcoming', dueDate: dayAt(1), status: 'todo' }),
+      mk({ id: 'undated', dueDate: '', status: 'todo' }),
+    ];
+    const set = todayWorkloadTasks(list, NOW);
+    expect(set.map((t) => t.id).sort()).toEqual(['doneToday', 'openOverdue', 'today']);
+    expect(set.length).toBe(todayWorkload(list, NOW).total);
   });
 });

@@ -24,7 +24,11 @@ import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
 import * as api from '@/data/api';
-import { CATEGORY_ICON, Task, TaskStatus, TASK_PRIORITY, TASK_STATUS, dueBucket, taskProgress, todayWorkload } from '@/data/tasks';
+import {
+  CATEGORY_ICON, Task, TaskStatus, TaskView, TASK_PRIORITY, TASK_STATUS,
+  dueBucket, taskProgress, todayWorkload, todayWorkloadTasks, tasksInRange, groupTasksByDay,
+  weekRange, monthRange,
+} from '@/data/tasks';
 import { fmtDay, fmtTime } from '@/lib/format';
 import { call } from '@/lib/actions';
 
@@ -37,11 +41,14 @@ import { call } from '@/lib/actions';
  *   1. HOW MUCH OF TODAY IS LEFT?   The hero. One figure, counted up when it changes,
  *      because the change IS the information: a task closing should be felt as the number
  *      moving, not discovered by re-reading a static label.
- *   2. WHAT SHOULD I LOOK AT?       The segmented filter. Five exclusive views over the
- *      same list, each with its own honest empty state — "nothing overdue" and "nothing
- *      upcoming" are different facts and must not share one generic message.
+ *   2. WHAT SHOULD I LOOK AT?       The time toggle (D4, owner 2026-08-22): Today / This week /
+ *      This month / Calendar, default Calendar. One list, four windows onto it — Today is the
+ *      shared actionable set, week/month group by day, Calendar is a month strip you tap a day
+ *      on. Each window has its own honest empty state; "nothing this week" and "this day is
+ *      clear" are different facts and must not share one generic message.
  *   3. CAN I CLOSE IT FROM HERE?    Swipe. Walking, one-handed, with the phone in the same
- *      hand holding a file, opening a task to tick it is three interactions too many.
+ *      hand holding a file, opening a task to tick it is three interactions too many. Every
+ *      view renders the same TaskCard, so complete/reopen work identically in all four.
  *
  * NO GRADIENT IN THE HERO. The previous version wrapped this card in the deep hero ramp,
  * which put the app's rationed signature on a surface that is on screen the entire session.
@@ -64,39 +71,66 @@ import { call } from '@/lib/actions';
  * RefreshControl turning forever.
  * ------------------------------------------------------------------ */
 
-type Filter = 'today' | 'overdue' | 'in_progress' | 'upcoming' | 'done';
+// `dueBucket` + the time-view helpers live in @/data/tasks so Home and this screen share one
+// (unit-tested) definition. D4 (owner, 2026-08-22) replaced the five status filters with four
+// TIME views — Today / This week / This month / Calendar, default Calendar.
 
-// `dueBucket` + `todayProgress` now live in @/data/tasks so Home and this screen share one
-// definition (and it is unit-tested). Home imports the same pair.
+const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+const CELL_W = 54;
+const CELL_H = 70;
 
-/** One honest message per view. A shared "All clear" would misreport four of the five. */
-const EMPTY_COPY: Record<Filter, { icon: IconName; title: string; subtitle: string; add?: boolean }> = {
+/** Local midnight of a date, in ms. India has no DST, so a day window is exactly DAY_MS wide. */
+function startOfDayMs(d: Date): number {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.getTime();
+}
+
+/** Open tasks first, done last; within each, earliest due first (undated sinks to the end). */
+function sortTasks(arr: Task[]): Task[] {
+  return arr.slice().sort((a, b) => {
+    const ad = a.status === 'done' ? 1 : 0;
+    const bd = b.status === 'done' ? 1 : 0;
+    if (ad !== bd) return ad - bd;
+    const at = new Date(a.dueDate).getTime();
+    const bt = new Date(b.dueDate).getTime();
+    return (Number.isNaN(at) ? Infinity : at) - (Number.isNaN(bt) ? Infinity : bt);
+  });
+}
+
+/** A human day header for the week/month day groups. */
+function dayHeading(ms: number): string {
+  const today = startOfDayMs(new Date());
+  if (ms === today) return 'Today';
+  if (ms === today + DAY_MS) return 'Tomorrow';
+  if (ms === today - DAY_MS) return 'Yesterday';
+  return `${WD[new Date(ms).getDay()]}, ${fmtDay(new Date(ms))}`;
+}
+
+/** One honest empty message per time view — the four facts are genuinely different. */
+const VIEW_EMPTY: Record<TaskView, { icon: IconName; title: string; subtitle: string; add?: boolean }> = {
   today: {
     icon: 'checkmark-done-circle',
     title: 'Nothing due today',
-    subtitle: 'Today is clear. Add a task to plan the rest of the day.',
+    subtitle: 'Today is clear — nothing due and nothing overdue. Add a task to plan the rest of the day.',
     add: true,
   },
-  overdue: {
-    icon: 'time-outline',
-    title: 'Nothing overdue',
-    subtitle: 'Every task from an earlier day has been closed.',
-  },
-  in_progress: {
-    icon: 'play-circle-outline',
-    title: 'Nothing in progress',
-    subtitle: 'Open a task and start it, and it will be listed here.',
-  },
-  upcoming: {
+  week: {
     icon: 'calendar-outline',
-    title: 'Nothing upcoming',
-    subtitle: 'No task is scheduled after today.',
-    add: true,
+    title: 'Nothing this week',
+    subtitle: 'No task falls in this week. Try This month or the Calendar to look further ahead.',
   },
-  done: {
-    icon: 'trophy-outline',
-    title: 'Nothing completed yet',
-    subtitle: 'Tasks you close are collected here for the rest of the day.',
+  month: {
+    icon: 'calendar-outline',
+    title: 'Nothing this month',
+    subtitle: 'No task is scheduled in this calendar month.',
+  },
+  calendar: {
+    icon: 'calendar-clear-outline',
+    title: 'This day is clear',
+    subtitle: 'No task is due on the selected day. Pick another day from the strip above.',
+    add: true,
   },
 };
 
@@ -159,7 +193,10 @@ export default function Tasks() {
   const [list, setList] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter, setFilter] = useState<Filter>('today');
+  // D4: the active time view (default Calendar) and, for the calendar, the selected day. The
+  // lazy initialiser makes the strip open on today without a Date.now() call in render.
+  const [view, setView] = useState<TaskView>('calendar');
+  const [selDay, setSelDay] = useState(() => startOfDayMs(new Date()));
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
 
   /** Latest read wins. Anything older is discarded rather than written over fresher rows. */
@@ -201,12 +238,44 @@ export default function Tasks() {
     };
   }, [list]);
 
-  const filtered = useMemo(() => {
-    const open = list.filter((x) => x.status !== 'done');
-    if (filter === 'done') return list.filter((x) => x.status === 'done');
-    if (filter === 'in_progress') return open.filter((x) => x.status === 'in_progress');
-    return open.filter((x) => dueBucket(x) === filter);
-  }, [list, filter]);
+  // D4 — the four time views over one task list. Each renders real TaskCards (swipe-complete and
+  // reopen keep working); week/month are grouped by day, all statuses within the range (a time
+  // view shows what is scheduled AND what was closed in the period). Today reuses the shared
+  // `todayWorkloadTasks` set, so the list can never disagree with the hero's headline count.
+  const todayTasks = useMemo(() => sortTasks(todayWorkloadTasks(list)), [list]);
+  const weekGroups = useMemo(() => {
+    const r = weekRange();
+    return groupTasksByDay(tasksInRange(list, r.start, r.end)).map((g) => ({ day: g.day, tasks: sortTasks(g.tasks) }));
+  }, [list]);
+  const monthGroups = useMemo(() => {
+    const r = monthRange();
+    return groupTasksByDay(tasksInRange(list, r.start, r.end)).map((g) => ({ day: g.day, tasks: sortTasks(g.tasks) }));
+  }, [list]);
+
+  // Calendar strip: every day of the current month, dotted where there is OPEN work.
+  const monthDays = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const mo = now.getMonth();
+    const lastDate = new Date(y, mo + 1, 0).getDate();
+    return Array.from({ length: lastDate }, (_, i) => {
+      const dt = new Date(y, mo, i + 1);
+      return { ms: startOfDayMs(dt), date: i + 1, wd: WD[dt.getDay()] };
+    });
+  }, []);
+  const openByDay = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const x of list) {
+      if (x.status === 'done') continue;
+      const d = startOfDayMs(new Date(x.dueDate));
+      if (Number.isNaN(d)) continue;
+      m.set(d, (m.get(d) ?? 0) + 1);
+    }
+    return m;
+  }, [list]);
+  const selDayTasks = useMemo(() => sortTasks(tasksInRange(list, selDay, selDay + DAY_MS)), [list, selDay]);
+  // Open the strip a few days before today so the current day is visible without scrolling.
+  const stripOffset = useMemo(() => Math.max(0, new Date().getDate() - 3) * (CELL_W + spacing.sm), [spacing.sm]);
 
   // PHASE 75 (A2/A1): the headline counts "today's ACTIONABLE work" = due-today ∪ OPEN-overdue, so an
   // overdue item (e.g. a ticket claimed today but dated by its own older open date) shows here
@@ -234,11 +303,16 @@ export default function Tasks() {
     prevPending.current = pendingTasks.length;
   }, [pendingTasks.length, loading, load]);
 
-  const pickFilter = (next: Filter) => {
-    if (next === filter) return;
+  const pickView = (next: TaskView) => {
+    if (next === view) return;
     haptics.select();
     setNotice(null);
-    setFilter(next);
+    setView(next);
+  };
+  const pickDay = (ms: number) => {
+    if (ms === selDay) return;
+    haptics.select();
+    setSelDay(ms);
   };
 
   /**
@@ -284,16 +358,11 @@ export default function Tasks() {
   const quickDone = (task: Task) => setStatus(task, 'done', 'Task was not closed');
   const reopen = (task: Task) => setStatus(task, 'todo', 'Task was not reopened');
 
-  // PHASE 75 (A2): on the default 'today' filter an empty list must not claim "today is clear"
-  // while work is overdue — point the user at the Overdue view instead (owner report, 2026-08-21).
-  const empty = filter === 'today' && counts.overdue > 0
-    ? {
-        icon: 'time-outline' as IconName,
-        title: 'Nothing due today',
-        subtitle: `But ${counts.overdue} ${counts.overdue === 1 ? 'task is' : 'tasks are'} overdue — check the Overdue view.`,
-        add: false,
-      }
-    : EMPTY_COPY[filter];
+  // Per-view empty copy. The A2 "you have overdue work" caveat is no longer needed: the Today
+  // view's set (todayWorkloadTasks) ALREADY includes open-overdue tasks, so if it is empty there
+  // genuinely is nothing overdue. The calendar's empty names the selected day.
+  const empty = VIEW_EMPTY[view];
+  const emptyTitle = view === 'calendar' ? `${dayHeading(selDay)} is clear` : empty.title;
   // Three different facts, three different messages. An empty list under an outage means
   // "could not load"; an empty BOOK means "nothing has been assigned yet"; an empty view
   // means "this filter has nothing in it". They demand opposite reactions from the user.
@@ -381,60 +450,65 @@ export default function Tasks() {
                   marginVertical: spacing.lg, marginHorizontal: -spacing.lg,
                 }} />
 
-                {/* gap 16 against each stat's -8 margin: the hit areas end up exactly
-                    adjacent, never overlapping, while the first and last stay optically
-                    flush with the card's own padding. */}
+                {/* At-a-glance counts. Since D4 the screen navigates by TIME view (below), so
+                    these three are an informational read-out rather than filters — overdue work
+                    is reachable in the Today view, which includes open-overdue tasks. */}
                 <Row style={{ gap: spacing.lg }}>
-                  <HeroStat
-                    label={t('tasks.overdue')}
-                    value={counts.overdue}
-                    tint={counts.overdue > 0 ? c.danger : c.faint}
-                    active={filter === 'overdue'}
-                    onPress={() => pickFilter('overdue')}
-                  />
-                  <HeroStat
-                    label={t('tasks.inProgress')}
-                    value={counts.in_progress}
-                    tint={c.primary}
-                    active={filter === 'in_progress'}
-                    onPress={() => pickFilter('in_progress')}
-                  />
-                  <HeroStat
-                    label={t('tasks.upcoming')}
-                    value={counts.upcoming}
-                    tint={c.accent}
-                    active={filter === 'upcoming'}
-                    onPress={() => pickFilter('upcoming')}
-                  />
+                  <HeroStat label={t('tasks.overdue')} value={counts.overdue} tint={counts.overdue > 0 ? c.danger : c.faint} />
+                  <HeroStat label={t('tasks.inProgress')} value={counts.in_progress} tint={c.primary} />
+                  <HeroStat label={t('tasks.upcoming')} value={counts.upcoming} tint={c.accent} />
                 </Row>
               </Card>
             </Appear>
 
-            {/* Five exclusive views over one list. The track scrolls because five labels
-                do not fit a phone, and truncating them would make the filter unreadable. */}
+            {/* D4: four TIME views. Default Calendar. The track scrolls only if the labels
+                overflow a narrow phone; truncating them would make the toggle unreadable. */}
             <Appear index={1}>
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingRight: spacing.xs }}
               >
-                <Segmented<Filter>
+                <Segmented<TaskView>
                   options={[
-                    { key: 'today', label: t('tasks.today') },
-                    { key: 'overdue', label: t('tasks.overdue') },
-                    { key: 'in_progress', label: t('tasks.inProgress') },
-                    { key: 'upcoming', label: t('tasks.upcoming') },
-                    { key: 'done', label: t('tasks.doneLabel') },
+                    { key: 'today', label: 'Today' },
+                    { key: 'week', label: 'This week' },
+                    { key: 'month', label: 'This month' },
+                    { key: 'calendar', label: 'Calendar' },
                   ]}
-                  value={filter}
-                  onChange={pickFilter}
+                  value={view}
+                  onChange={pickView}
                 />
               </ScrollView>
             </Appear>
 
-            {/* Phase 57b: offline task drafts, pinned above the (server-confirmed) filtered list so
-                they stay visible under every filter and never distort the hero/counts, which reflect
-                only real tasks. Each is inert — no swipe, no complete, not tappable — until it flushes. */}
+            {/* Calendar view only: the month day-strip. Tap a day to see its tasks below. */}
+            {view === 'calendar' ? (
+              <Appear index={2}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentOffset={{ x: stripOffset, y: 0 }}
+                  contentContainerStyle={{ gap: spacing.sm, paddingVertical: 2 }}
+                >
+                  {monthDays.map((d) => (
+                    <TaskDayCell
+                      key={d.ms}
+                      wd={d.wd}
+                      date={d.date}
+                      count={openByDay.get(d.ms) ?? 0}
+                      active={d.ms === selDay}
+                      label={`${d.wd} ${d.date}, ${openByDay.get(d.ms) ?? 0} open`}
+                      onPress={() => pickDay(d.ms)}
+                    />
+                  ))}
+                </ScrollView>
+              </Appear>
+            ) : null}
+
+            {/* Phase 57b: offline task drafts, pinned above the (server-confirmed) list so they stay
+                visible under every view and never distort the hero/counts, which reflect only real
+                tasks. Each is inert — no swipe, no complete, not tappable — until it flushes. */}
             {pendingCards.length > 0 ? (
               <View style={{ gap: 10 }}>
                 {pendingCards.map((task, i) => (
@@ -452,44 +526,82 @@ export default function Tasks() {
               />
             ) : null}
 
-            {filtered.length === 0 ? (
+            {outage ? (
               <Card>
-                {outage ? (
-                  <EmptyState
-                    icon="cloud-offline"
-                    title="Tasks did not load"
-                    subtitle="The server could not be reached, so this is not a confirmed empty list. Pull down to refresh."
-                    action={{ label: 'Retry', onPress: () => load(true) }}
-                  />
-                ) : bookEmpty ? (
-                  <EmptyState
-                    icon="clipboard-outline"
-                    title="No tasks yet"
-                    subtitle="Nothing has been assigned to you, and you have not created anything. Add the first task to start your day."
-                    action={{ label: t('tasks.add'), onPress: () => router.push('/task-new') }}
-                  />
-                ) : (
+                <EmptyState
+                  icon="cloud-offline"
+                  title="Tasks did not load"
+                  subtitle="The server could not be reached, so this is not a confirmed empty list. Pull down to refresh."
+                  action={{ label: 'Retry', onPress: () => load(true) }}
+                />
+              </Card>
+            ) : bookEmpty ? (
+              <Card>
+                <EmptyState
+                  icon="clipboard-outline"
+                  title="No tasks yet"
+                  subtitle="Nothing has been assigned to you, and you have not created anything. Add the first task to start your day."
+                  action={{ label: t('tasks.add'), onPress: () => router.push('/task-new') }}
+                />
+              </Card>
+            ) : view === 'week' || view === 'month' ? (
+              /* Grouped by day. */
+              (view === 'week' ? weekGroups : monthGroups).length === 0 ? (
+                <Card>
                   <EmptyState
                     icon={empty.icon}
                     title={empty.title}
                     subtitle={empty.subtitle}
                     action={empty.add ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                   />
-                )}
-              </Card>
+                </Card>
+              ) : (
+                <View style={{ gap: spacing.lg }}>
+                  {(view === 'week' ? weekGroups : monthGroups).map((g) => (
+                    <View key={g.day} style={{ gap: 10 }}>
+                      <Row style={{ alignItems: 'center', gap: spacing.sm }}>
+                        <Txt size={font.sub} weight="800" numberOfLines={1} style={{ flex: 1 }}>{dayHeading(g.day)}</Txt>
+                        <Pill label={String(g.tasks.length)} tone="neutral" small numeric />
+                      </Row>
+                      {g.tasks.map((task, i) => (
+                        <TaskCard
+                          key={task.id}
+                          task={task}
+                          index={i}
+                          onPress={() => router.push(`/task/${task.id}`)}
+                          onDone={() => quickDone(task)}
+                          onReopen={() => reopen(task)}
+                        />
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              )
             ) : (
-              <View style={{ gap: 10 }}>
-                {filtered.map((task, i) => (
-                  <TaskCard
-                    key={task.id}
-                    task={task}
-                    index={i}
-                    onPress={() => router.push(`/task/${task.id}`)}
-                    onDone={() => quickDone(task)}
-                    onReopen={() => reopen(task)}
+              /* Today or Calendar: a single flat day list. */
+              (view === 'today' ? todayTasks : selDayTasks).length === 0 ? (
+                <Card>
+                  <EmptyState
+                    icon={empty.icon}
+                    title={emptyTitle}
+                    subtitle={empty.subtitle}
+                    action={empty.add ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                   />
-                ))}
-              </View>
+                </Card>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {(view === 'today' ? todayTasks : selDayTasks).map((task, i) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      index={i}
+                      onPress={() => router.push(`/task/${task.id}`)}
+                      onDone={() => quickDone(task)}
+                      onReopen={() => reopen(task)}
+                    />
+                  ))}
+                </View>
+              )
             )}
           </>
         )}
@@ -506,30 +618,53 @@ export default function Tasks() {
 }
 
 /* ---------- HeroStat ----------
- * A count that is also the way into its view. Making these inert would leave three
- * numbers on the card that answer "how many" and refuse to answer "which ones". */
-function HeroStat({ label, value, tint, active, onPress }: {
-  label: string; value: number; tint: string; active: boolean; onPress: () => void;
+ * Since D4 the screen navigates by time view, so these are an at-a-glance read-out of the day's
+ * shape (overdue / in progress / upcoming) rather than filters. */
+function HeroStat({ label, value, tint }: { label: string; value: number; tint: string }) {
+  const c = useTheme();
+  const { font } = c;
+  return (
+    <View
+      style={{ flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: 6 }}
+      accessible
+      accessibilityLabel={`${label}, ${value} tasks`}
+    >
+      <Metric value={String(value)} size={19} color={value > 0 ? tint : c.faint} />
+      <Txt size={font.tiny} weight="600" color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>
+        {label}
+      </Txt>
+    </View>
+  );
+}
+
+/* ---------- TaskDayCell ----------
+ * D4: one day in the Calendar view's month strip. Mirrors the Calendar screen's day cell —
+ * weekday, date, and a dot when the day carries OPEN work — so the two read as one system. */
+function TaskDayCell({ wd, date, count, active, label, onPress }: {
+  wd: string; date: number; count: number; active: boolean; label: string; onPress: () => void;
 }) {
   const c = useTheme();
-  const { spacing, radius, font } = c;
+  const { radius } = c;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${label}, ${value} tasks`}
+      accessibilityLabel={label}
       accessibilityState={{ selected: active }}
       style={({ pressed }) => [{
-        flex: 1, minHeight: 44, justifyContent: 'center',
-        paddingVertical: 6, paddingHorizontal: spacing.sm, marginHorizontal: -spacing.sm,
-        borderRadius: radius.md,
-        backgroundColor: pressed ? c.cardAlt : active ? c.cardAlt : 'transparent',
+        width: CELL_W, height: CELL_H, borderRadius: radius.md,
+        alignItems: 'center', justifyContent: 'center',
+        backgroundColor: active ? c.primary : c.card,
+        borderWidth: StyleSheet.hairlineWidth, borderColor: active ? c.primary : c.border,
+        opacity: pressed ? 0.75 : 1,
       }]}
     >
-      <Metric value={String(value)} size={19} color={value > 0 ? tint : c.faint} />
-      <Txt size={font.tiny} weight="600" color={active ? c.text : c.muted} numberOfLines={1} style={{ marginTop: 2 }}>
-        {label}
-      </Txt>
+      <Txt size={11} weight="600" color={active ? c.onPrimary : c.muted}>{wd}</Txt>
+      <Metric value={String(date)} size={18} color={active ? c.onPrimary : c.text} style={{ marginTop: 2 }} />
+      <View style={{
+        width: 5, height: 5, borderRadius: 3, marginTop: 4,
+        backgroundColor: count > 0 ? (active ? c.onPrimary : c.accent) : 'transparent',
+      }} />
     </Pressable>
   );
 }

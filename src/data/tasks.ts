@@ -120,14 +120,80 @@ export function todayWorkload(
   list: Task[],
   now: Date = new Date(),
 ): { total: number; done: number; pct: number } {
-  const belongs = list.filter((t) => {
+  const belongs = todayWorkloadTasks(list, now);
+  const done = belongs.filter((t) => t.status === 'done').length;
+  return { total: belongs.length, done, pct: belongs.length ? done / belongs.length : 0 };
+}
+
+/**
+ * The actual "today's actionable work" SET behind `todayWorkload` — extracted so the Tasks tab's
+ * Today VIEW renders the very tasks the headline counts (they can never disagree). Membership is
+ * exactly `todayWorkload`'s: due-today ∪ OPEN-overdue ∪ completed-today.
+ */
+export function todayWorkloadTasks(list: Task[], now: Date = new Date()): Task[] {
+  return list.filter((t) => {
     const b = dueBucket(t, now);
     if (b === 'today') return true;
     if (b === 'overdue' && t.status !== 'done') return true;       // open overdue = actionable today
     return t.status === 'done' && isSameDay(t.completedAt, now);   // credited on the day it closes
   });
-  const done = belongs.filter((t) => t.status === 'done').length;
-  return { total: belongs.length, done, pct: belongs.length ? done / belongs.length : 0 };
+}
+
+/* ------------------------------------------------------------------ *
+ * D4 (owner, 2026-08-22) — time views for the Tasks tab: Today / This week / This month /
+ * Calendar. All ranges are pure and injectable-`now` so they are unit-tested, and all exclude
+ * UNDATED tasks (dueDate '') — a task with no date has no place on a time axis, the same rule
+ * dueBucket uses when it sorts an undated task to 'upcoming'.
+ * ------------------------------------------------------------------ */
+
+export type TaskView = 'today' | 'week' | 'month' | 'calendar';
+
+/**
+ * `[start, end)` in ms for the week containing `now`. Documented choice: weeks run
+ * Monday→Sunday (ISO), so "this week" is the same set whichever day it is viewed on.
+ */
+export function weekRange(now: Date = new Date()): { start: number; end: number } {
+  const s = new Date(now);
+  s.setHours(0, 0, 0, 0);
+  const mondayOffset = (s.getDay() + 6) % 7; // Sun(0)->6, Mon(1)->0, ... Sat(6)->5
+  s.setDate(s.getDate() - mondayOffset);
+  const e = new Date(s);
+  e.setDate(e.getDate() + 7);
+  return { start: s.getTime(), end: e.getTime() };
+}
+
+/** `[start, end)` in ms for the calendar month containing `now`. */
+export function monthRange(now: Date = new Date()): { start: number; end: number } {
+  const s = new Date(now.getFullYear(), now.getMonth(), 1);
+  const e = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return { start: s.getTime(), end: e.getTime() };
+}
+
+/**
+ * Tasks whose DUE day (local midnight) falls within `[start, end)` ms. Undated/invalid tasks
+ * are excluded. Every status is kept: a time view shows what is scheduled AND what was closed
+ * in that period, so a completed task still appears on the day it was due.
+ */
+export function tasksInRange(list: Task[], start: number, end: number): Task[] {
+  return list.filter((t) => {
+    const d = startOfDay(new Date(t.dueDate));
+    return !Number.isNaN(d) && d >= start && d < end;
+  });
+}
+
+/** Group tasks by their due CALENDAR DAY (ms at local midnight), days ascending. Undated excluded. */
+export function groupTasksByDay(list: Task[]): { day: number; tasks: Task[] }[] {
+  const m = new Map<number, Task[]>();
+  for (const t of list) {
+    const d = startOfDay(new Date(t.dueDate));
+    if (Number.isNaN(d)) continue;
+    const arr = m.get(d);
+    if (arr) arr.push(t);
+    else m.set(d, [t]);
+  }
+  return Array.from(m.entries())
+    .sort((a, b) => a[0] - b[0])
+    .map(([day, tasks]) => ({ day, tasks }));
 }
 
 /**
