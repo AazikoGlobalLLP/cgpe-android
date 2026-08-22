@@ -21,6 +21,7 @@ import { useRouter } from 'expo-router';
 import { radius, shadow, spacing, type, useTheme } from '@/theme/theme';
 import { Card, Grad, IconName, Metric, SectionHeader, Txt } from '@/ui/base';
 import { Pill } from '@/ui/data';
+import type { Tone } from '@/ui/data';
 import { Avatar } from '@/ui/identity';
 import { Appear } from '@/ui/motion';
 import { TIER_THEME, Tier } from '@/store/roles';
@@ -157,6 +158,64 @@ function MemberRow({ member, onPress, showDuty, trailing }: {
         </Txt>
       </View>
       {trailing}
+    </Card>
+  );
+}
+
+/** On-duty first, then signed-in, then by name — the master's "who is active now" order. */
+function byDuty(list: TeamMember[]): TeamMember[] {
+  return list.slice().sort((a, b) => {
+    if (a.clockedIn !== b.clockedIn) return a.clockedIn ? -1 : 1;
+    if (a.online !== b.online) return a.online ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
+/**
+ * A detailed member row for the Master breakdown (B1): identity + live duty + every real
+ * figure the server returned. Figures mirror the team/[id] KPI logic exactly and are shown
+ * only when > 0, so a member with nothing reported reads "no figures yet" rather than a
+ * wall of fabricated zeros.
+ */
+function MemberDetailRow({ member, onPress }: { member: TeamMember; onPress: () => void }) {
+  const c = useTheme();
+  const s = member.stats;
+  const meta = [member.role.replace(/_/g, ' '), member.branch].filter(Boolean).join(' · ');
+  const figures: { label: string; tone: Tone; icon: IconName }[] = [];
+  if (s.premiumMtd > 0) figures.push({ label: inrShort(s.premiumMtd), tone: 'success', icon: 'cash-outline' });
+  if (s.clients > 0) figures.push({ label: `${s.clients} clients`, tone: 'primary', icon: 'people-outline' });
+  if (s.policiesMtd > 0) figures.push({ label: `${s.policiesMtd} done`, tone: 'accent', icon: 'documents-outline' });
+  if (s.renewalPct > 0) figures.push({ label: `${s.renewalPct}% renewals`, tone: 'info', icon: 'refresh-outline' });
+  if (s.leads > 0) figures.push({ label: `${s.leads} open work`, tone: 'warning', icon: 'flame-outline' });
+  if (s.openClaims > 0) figures.push({ label: `${s.openClaims} claims`, tone: 'danger', icon: 'shield-half-outline' });
+
+  return (
+    <Card onPress={onPress} style={{ gap: 10 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <View>
+          <Avatar name={member.name} size={40} />
+          <View style={{
+            position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6,
+            backgroundColor: member.clockedIn ? c.success : member.online ? c.primary : c.faint,
+            borderWidth: 2, borderColor: c.card,
+          }} />
+        </View>
+        <View style={{ flex: 1, marginLeft: 12 }}>
+          <Txt weight="700" size={14} numberOfLines={1}>{member.name}</Txt>
+          <Txt size={12} color={c.muted} numberOfLines={1} style={{ marginTop: 1 }}>{meta || 'Team member'}</Txt>
+        </View>
+        {member.clockedIn ? <Pill label="On duty" tone="success" small dot />
+          : member.online ? <Pill label="Signed in" tone="info" small dot />
+            : <Pill label="Off" tone="neutral" small />}
+      </View>
+
+      {figures.length > 0 ? (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {figures.map((f) => <Pill key={f.icon} label={f.label} tone={f.tone} small icon={f.icon} numeric />)}
+        </View>
+      ) : (
+        <Txt size={12} color={c.faint}>No performance figures reported yet.</Txt>
+      )}
     </Card>
   );
 }
@@ -325,20 +384,48 @@ export function MasterDashboard({ team, tasks, snapshot, notifications }: {
         ]} />
       </View>
 
-      <View>
-        <SectionHeader title={`Admins (${admins.length})`} action="All teams" onAction={() => router.push('/team')} />
-        <View style={{ gap: 10 }}>
-          {(admins.length ? admins : team).slice(0, 4).map((m, i) => (
-            <Appear key={m.id} index={i}>
-              <MemberRow
-                member={m}
-                onPress={() => router.push(`/team/${m.id}`)}
-                trailing={<Txt weight="800" size={13} color={th.accent} numeric>{inrShort(m.stats.premiumMtd)}</Txt>}
-              />
-            </Appear>
-          ))}
+      {/* DETAILED PER-MEMBER BREAKDOWN (B1, owner 2026-08-22). The master asked to see the
+          team in full, not a 4-row admin summary. Every member is shown, grouped as
+          admins/leaders then agents, on-duty first within each group, each with their real
+          figures. A stat is drawn only when the server actually returned it (>0) — an absent
+          figure is never painted as a zero (the same honesty rule as team/[id] and the org
+          tiles above). Tap a row for that member's full activity. */}
+      {admins.length > 0 ? (
+        <View>
+          <SectionHeader title={`Admins & leaders (${admins.length})`} action="All teams" onAction={() => router.push('/team')} />
+          <View style={{ gap: 10 }}>
+            {byDuty(admins).map((m, i) => (
+              <Appear key={m.id} index={Math.min(i, 8)}>
+                <MemberDetailRow member={m} onPress={() => router.push(`/team/${m.id}`)} />
+              </Appear>
+            ))}
+          </View>
         </View>
-      </View>
+      ) : null}
+
+      {agents.length > 0 ? (
+        <View>
+          <SectionHeader
+            title={`Agents (${agents.length})`}
+            action={admins.length ? undefined : 'All teams'}
+            onAction={admins.length ? undefined : () => router.push('/team')}
+          />
+          <View style={{ gap: 10 }}>
+            {byDuty(agents).map((m, i) => (
+              <Appear key={m.id} index={Math.min(i, 8)}>
+                <MemberDetailRow member={m} onPress={() => router.push(`/team/${m.id}`)} />
+              </Appear>
+            ))}
+          </View>
+        </View>
+      ) : null}
+
+      {/* No one on any roster the master can see — honest, distinct from an outage. */}
+      {team.length === 0 ? (
+        <Card>
+          <Txt size={13} color={c.muted}>No team members are on a roster you can see yet.</Txt>
+        </Card>
+      ) : null}
 
       {notifications.length > 0 && (
         <View>
