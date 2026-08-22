@@ -793,17 +793,48 @@ async function cachedList<T extends { id: string }>(
  * word the two differently. Both block entry; only the message differs.
  * ------------------------------------------------------------------------- */
 
-/** Thrown when the backend could not be reached at all, as opposed to rejecting us. */
+/**
+ * Thrown when a request did not produce an answer — but NOT always because the server was
+ * unreachable. `kind` splits the two cases that feel identical to `fetch` but demand opposite
+ * reactions from the user, so the login screen can word them honestly instead of always saying
+ * "check your connection":
+ *   - 'timeout' : OUR AbortController fired — a connection WAS made (a real TCP+TLS session to
+ *     `cgpe.in`) but the reply did not arrive in time. Telling this user to "check your
+ *     connection" is wrong: their connection is up, the round-trip is just slow or stalled (the
+ *     2026-08-22 IPv6/NAT64-MTU symptom is exactly this — the app opened the socket, the server's
+ *     full-size packets were dropped on the reduced-MTU path, and the app aborted at the timeout).
+ *   - 'network' : `fetch` itself threw before any answer — no route to host (DNS/TLS/refused/offline).
+ * Both still block entry; only the message and the user's next move differ.
+ */
 export class NetworkError extends Error {
-  constructor(message = 'Could not reach the CGPE server. Check your connection and try again.') {
-    super(message);
+  readonly kind: 'timeout' | 'network';
+  constructor(kind: 'timeout' | 'network' = 'network', message?: string) {
+    super(
+      message ??
+        (kind === 'timeout'
+          ? 'The CGPE server is taking too long to respond. It may be busy, or the connection is slow — please try again.'
+          : 'Could not reach the CGPE server. Check your connection and try again.'),
+    );
     this.name = 'NetworkError';
+    this.kind = kind;
   }
 }
 
 const isUnreachable = (e: any) =>
   e?.name === 'AbortError' ||
   (typeof e?.message === 'string' && /fetch|network|Failed to fetch|Load failed|timeout/i.test(e.message));
+
+/**
+ * Which flavour of `NetworkError` a thrown failure is. An `AbortError` (our timeout fired) or a
+ * message that names a timeout means the server was reached but did not answer in time; anything
+ * else `fetch` threw is a genuine no-route-to-host. Mirrors `netResilience.kindForThrown` but
+ * collapses 'server' out (a thrown failure never carries a status) and also honours a timeout
+ * spelled in the error message, which some transports do.
+ */
+const unreachableKind = (e: any): 'timeout' | 'network' =>
+  e?.name === 'AbortError' || (typeof e?.message === 'string' && /timeout|timed out/i.test(e.message))
+    ? 'timeout'
+    : 'network';
 
 /**
  * PHASE 55 — an on-device connectivity self-test for the "the app doesn't work on my WiFi"
@@ -861,7 +892,7 @@ export async function login(
     // The server answered and refused. Surface its own wording where it gave one.
     throw new Error(json?.error || json?.message || 'Invalid credentials. Please check and try again.');
   } catch (e: any) {
-    if (isUnreachable(e)) throw new NetworkError();
+    if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
     throw e;
   }
 }
@@ -882,7 +913,7 @@ export async function sendOtp(phone: string): Promise<{ ok: boolean; message: st
     }
     return { ok: false, message: json?.error || json?.message || 'Could not send the code. Please try again.' };
   } catch (e: any) {
-    if (isUnreachable(e)) throw new NetworkError();
+    if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
     return { ok: false, message: 'Could not send the code. Please try again.' };
   }
 }
@@ -913,7 +944,7 @@ export async function verifyOtp(
     }
     return null;
   } catch (e: any) {
-    if (isUnreachable(e)) throw new NetworkError();
+    if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
     return null;
   }
 }

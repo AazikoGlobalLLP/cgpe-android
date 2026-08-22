@@ -48,8 +48,12 @@ import { APP } from '@/constants/config';
 
 type Mode = 'password' | 'otp';
 
-/** A submit that failed. `network` never reached the server; `refused` was rejected by it. */
-type Failure = { kind: 'network' | 'refused'; message: string };
+/**
+ * A submit that failed. `network` never reached the server; `timeout` reached it but got no reply
+ * in time (a slow/stalled round-trip, NOT a down connection — so it must not say "check your
+ * connection"); `refused` was rejected by the server.
+ */
+type Failure = { kind: 'network' | 'timeout' | 'refused'; message: string };
 
 const MODES: { key: Mode; label: string }[] = [
   { key: 'password', label: 'Password' },
@@ -62,9 +66,9 @@ const ON_HERO = '#ffffff';
 const ON_HERO_SUB = 'rgba(255,255,255,0.75)';
 const ON_HERO_FAINT = 'rgba(255,255,255,0.55)';
 
-/** Split "could not reach the server" from "the server refused us". */
+/** Split "could not reach the server" from "the server is slow" from "the server refused us". */
 function describe(e: unknown, fallback: string): Failure {
-  if (e instanceof api.NetworkError) return { kind: 'network', message: e.message };
+  if (e instanceof api.NetworkError) return { kind: e.kind, message: e.message };
   const message = (e as { message?: string } | null)?.message;
   return { kind: 'refused', message: message || fallback };
 }
@@ -301,14 +305,17 @@ export default function Login() {
   };
 
   const failureBanner = failure ? (
-    failure.kind === 'network' ? (
+    failure.kind !== 'refused' ? (
       <Banner
         tone="offline"
-        icon="cloud-offline"
+        // A timeout means the server WAS reached but is slow — a clock, not a struck-out cloud,
+        // and copy that never tells the user to "check your connection" (theirs is up).
+        icon={failure.kind === 'timeout' ? 'time-outline' : 'cloud-offline'}
         title={
-          mode === 'password' ? 'Your details were not sent'
-            : otpSent ? 'Your code was not checked'
-              : 'The code request was not sent'
+          failure.kind === 'timeout' ? 'The server is taking too long'
+            : mode === 'password' ? 'Your details were not sent'
+              : otpSent ? 'Your code was not checked'
+                : 'The code request was not sent'
         }
         message={failure.message}
         action={{ label: 'Try again', onPress: retry }}
