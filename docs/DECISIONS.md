@@ -3649,3 +3649,35 @@ fail-open — so a network-caused splash-hang is NOT expected from the current c
 crash-vs-hang-vs-blank answer + `adb logcat` + the phone-browser `/health` test on the failing network
 BEFORE any code change. "Both WiFi AND mobile data" is the key oddity (old APK / DNS-IPv6 / device crash
 are the suspects). F2 (systematic loophole hunt) is best as a multi-agent workflow on owner opt-in.
+
+---
+
+## 2026-08-22 — Phase 76: the "app won't open / can't reach server" is a NETWORK-MTU issue, not the app (RESOLVED)
+
+**Decision: "Could not reach the CGPE server" was a path-MTU / IPv6 problem, fixed server-side; there is
+no app-side fix and none should be attempted.** Diagnosed on the owner's real device via ADB (platform-tools
+downloaded to the session scratchpad; a static aarch64 `curl` pushed for a non-browser test):
+- The app OPENS fine (splash + Home chrome render); it is *requests* that fail. The app establishes a real
+  TCP+TLS connection to `cgpe.in:443` (seen ESTABLISHED ~14 s in `/proc/net/tcp`, then aborts at the 15 s
+  `LOGIN_TIMEOUT`) — so it is **NOT** a connect/DNS/reachability failure. The app **mislabels this timeout**
+  as "could not reach the server."
+- The backend is healthy and fast for everyone on IPv4 (nginx/1.24.0, every endpoint <0.1 s from a PC; no
+  CDN/WAF). The phone's **browser works** (small responses / copes with translation); the app's native
+  OkHttp — and a static `curl` on the same device — both time out.
+- **Root cause:** the owner's phones are on **IPv6-only mobile networks (interface has only an IPv6 address,
+  MTU 1300)**, and **`cgpe.in` is IPv4-only (A record, NO AAAA — re-confirmed via 8.8.8.8)**. So an IPv6-only
+  phone reaches the IPv4-only server only through carrier **NAT64/DNS64** (`ping6 cgpe.in` works = the NAT64
+  path is live). Over that path at MTU 1300, the server's full-size TLS/response packets don't survive the
+  translation → the app's handshake stalls. The same reduced-MTU stall was the earlier "Home loads forever."
+- **Fix (server/infra, NOT app):** the owner's senior applied a **TCP MSS clamp** on the droplet
+  (`iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1200`) → the app
+  started working immediately, confirming the diagnosis. The **permanent** fix is to **dual-stack `cgpe.in`**
+  (assign the droplet an IPv6 address, `listen [::]:443 ssl;`, add an AAAA record) so IPv6-only phones reach
+  it natively — filed to `contracts/INBOX.md` (2026-08-22 → cgpe-api/OPS). **No app rebuild fixes this.**
+
+**Decision: shipped 8 of 9 adversarially-confirmed audit defects client-side; #7 is backend-blocked.** The
+F2 loophole hunt ran as a multi-agent workflow (24 agents → 12 confirmed → 9 distinct); all fixes are in
+`docs/AUDIT-2026-08-21-loophole-hunt.md` with a per-defect commit map, gates green (`tsc` 0 · tests 772 ·
+lint 0 new). **#7 (duplicate creates on a lost-ack retry)** needs a client idempotency key — a *contract*
+addition — so it was filed to INBOX (2026-08-22 → cgpe-api), not built with an invented field. Paired [api]
+ask: `/track/points` session-ownership check (audit #5 defense-in-depth).

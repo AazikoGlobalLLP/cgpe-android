@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-22 — PHASE 76: §F network diagnosis (RESOLVED) + F2 loophole audit (8/9 fixed) + fresh APK.**
+- **RESOLVED — "app won't open / can't reach server" was a NETWORK-MTU issue, not the app.** Diagnosed on
+  the owner's real device via ADB: the phones are on **IPv6-only mobile (MTU 1300)** but **`cgpe.in` is
+  IPv4-only (no AAAA)**, so traffic crosses carrier **NAT64** and the server's full-size packets are dropped
+  on the reduced-MTU path → the app's TLS handshake stalls → 15 s timeout (which the app mislabels as
+  "could not reach server"). The app itself opens a real TLS connection and sends its request; the reply
+  never arrives, while the same server answers a PC in 40 ms and the phone browser copes. **The owner's
+  senior applied the server-side fix (TCP MSS clamp) and the app started working immediately — no rebuild.**
+  Permanent fix owed: **dual-stack `cgpe.in` (add AAAA + IPv6)** — filed `contracts/INBOX.md` 2026-08-22.
+- **F2 loophole audit done** (multi-agent workflow, 24 agents → 12 confirmed → **9 distinct** defects, all at
+  the two owner-named edges: bad networks + shared handsets). **8 fixed client-side, pushed, gates green
+  (`tsc` 0 · `npm test` 772 · lint 0 new).** #7 (duplicate creates) is backend-blocked (needs a client
+  idempotency key = contract addition → filed, not built). Full report + per-defect commit map:
+  `docs/AUDIT-2026-08-21-loophole-hunt.md`. Fixes: #1 clock-hang, #6 trapped-session (1-line), #3 offline
+  poison-cap, #4 consent-key leak, #5 flush-race + 401 cross-attribution, #8 renewals grind, #9 stale-cache
+  SyncChip.
+- **Home perf:** merged Home's 3 sequential fetch phases into ONE parallel batch (Master dashboards were
+  waiting for the sum of the slowest read per phase).
+- **Fresh APK cut** (EAS `a03e64cb`, v1.10.0, git `15f679e`) with all 8 audit fixes + the Home perf fix.
+- **Still owed:** app-side "timeout vs unreachable" message honesty fix (offered, not built); device-verify
+  of the 8 fixes; the FCM key upload (Phase 74); dual-stacking cgpe.in (permanent network fix).
+
 **✅ 2026-08-21 — PHASE 75: daily-flow bug cluster (C1 keyboard + A2/A1 overdue-as-today) + reliability item logged.**
 Owner picked the "daily-flow bugs" (A1/A2/C1) over B1/D4. All three built, gate-green (`tsc` 0 · `npm test` **769** ·
 eslint 0 new), pushed to `aaziko/Shivam` (`e10e9a2` C1, `e9a970f` A2, `5592465` A1, `1775649` docs). **`[m]` only, no
@@ -1823,21 +1845,22 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-21 — after Phase 75 daily-flow cluster C1/A2/A1 + §F logged):**
+**CURRENT next 3 (2026-08-22 — after Phase 76: network issue RESOLVED, app works, F2 audit shipped):**
 
-1. **Triage §F "app won't open on some networks" (HIGH PRIORITY, `docs/OWNER-BACKLOG-2026-08-21.md`).** Get the
-   crash-vs-splash-hang-vs-opens-blank answer from the owner, then on the failing network: `adb logcat` on the device
-   (USB/ADB works from here) + open `https://cgpe.in/internal/api/health` in the phone browser. **Do NOT bump a timeout or
-   rebuild an APK "to fix WiFi" before that on-phone test** — the timeout is already 12 s (Phase 55) and the splash never
-   waits on the network. Suspects: old/broken installed APK (check `base.apk` SHA-256), DNS/IPv6 vs the IPv4-only backend,
-   or a device-specific launch crash.
-2. **Owner: upload the FCM V1 service-account key + cut ONE fresh APK** carrying C1/A2/A1 + the Phase-74 icon fix. Push still
-   won't deliver until the key is on EAS (`npx eas-cli credentials -p android` → Google Service Account → FCM V1 → the JSON);
-   then `npx eas-cli build -p android --profile preview --non-interactive` and re-test push + the three fixes on the phone.
-3. **Then the rest of the backlog.** Highest-value mobile items still open: **B1** master detail, **D4** tasks calendar view,
-   **C2** clock-out reason (needs the hour threshold — spec-lock), the break/UX items **D6**, **D3** team-screen reorder.
-   Backend/data (A3, B2/B4/B5, D5, E1, E2, D1 enforcement) via the owner-relay INBOX; **D1** is mostly an admin-panel
-   RBAC-config job. **F2** (systematic loophole hunt) is a multi-agent workflow on owner opt-in.
+1. **Resume the remaining owner-backlog mobile phases (owner confirmed the app works and wants to continue).**
+   Highest-value open items: **B1** master detail · **D4** tasks calendar view · **C2** clock-out reason
+   (needs the hour-threshold spec-lock) · **D3** team-screen reorder · **D6** UX simplification (undefined
+   adjective → spec-lock first). Plus the tiny **app-side "timeout vs unreachable" message honesty fix**
+   (offered this session, not built): a stalled/slow response should read "the server is taking too long,"
+   not "could not reach the server."
+2. **Owner/OPS relays owed** (filed to `contracts/INBOX.md`): **dual-stack `cgpe.in`** (AAAA + IPv6) — the
+   permanent fix for the IPv6-only-mobile network path (an MSS clamp is the live stopgap); the two audit
+   [api] asks (`/track/points` ownership check, create-endpoint idempotency key for #7); and the **FCM V1
+   service-account key** upload to EAS (Phase 74) before push delivers.
+3. **Device-verify the 8 shipped audit fixes** on the fresh APK (EAS `a03e64cb`) — native GPS timeout on a
+   dead-GPS spot (#1), shared-handset sign-out/handover (#4/#5), SyncChip/banner render (#9). Backend/data
+   backlog (A3, B2/B4/B5, D5, E1, E2, D1 enforcement) via the owner-relay INBOX; **D1** is mostly an
+   admin-panel RBAC-config job.
 
 **Superseded (2026-08-20 next-3 — the 70–73 batch AND Phase 65 are BUILT + PUSHED; those now ride the Phase-74 push APK):**
 

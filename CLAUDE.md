@@ -229,6 +229,27 @@ NOT the old 4.5 s), so a timeout bump is NOT the lever. And the splash never wai
 network-caused splash-hang is not expected — triage on-device first (crash / splash-hang / opens-blank),
 see `docs/OWNER-BACKLOG-2026-08-21.md` §F. **Do not rebuild an APK to "fix WiFi" before that on-phone test.**
 
+**⚠️ "Can't reach server" on ALL networks CAN be an IPv6/NAT64 MTU issue — a SERVER fix, not an app bug
+(PROVEN on-device 2026-08-22, Phase 76).** Symptom: the app opens fine but every request shows "Could not
+reach the CGPE server"; the phone BROWSER loads `cgpe.in` fine; it fails on WiFi AND mobile AND another
+hotspot. Do NOT chase it as an app bug or bump timeouts. What it actually is: the app **establishes** a
+real TCP+TLS connection to `cgpe.in:443` (visible ESTABLISHED in `/proc/net/tcp`) but the **response never
+arrives** and it aborts at `LOGIN_TIMEOUT`/`REQUEST_TIMEOUT` — the app **mislabels a timeout as
+"unreachable."** Root cause found via ADB: the owner's phones are on **IPv6-only mobile (interface has only
+an IPv6 addr, MTU 1300)** and **`cgpe.in` is IPv4-only (A but NO AAAA)**, so traffic crosses carrier
+**NAT64**, and the server's full-size packets get dropped on the reduced-MTU path → the app's TLS stalls
+(the browser copes). **Fix is SERVER-side:** clamp the droplet's TCP MSS
+(`iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1200`) — this made
+the app work instantly — and the permanent fix is to **dual-stack `cgpe.in` (add an AAAA record + IPv6 on
+nginx)**. There is NO clean app-side fix. **ADB device-diagnosis works from here** (proven repeatedly):
+`platform-tools` in the session scratchpad; drive the device (screenshots via `exec-out screencap -p`, taps
+via `input tap`, dismiss the keyboard with the keyboard's own hide-chevron NOT `keyevent 4` which resets a
+form); watch a connection with `cat /proc/net/tcp6 | grep <hex-ip>` (72.61.233.113 = `71E93D48`, :443 =
+`01BB`, state 01=ESTABLISHED/06=TIME_WAIT); test path-MTU with `ping -M do -s <size> cgpe.in` (a >1400-byte
+DF drop = reduced MTU); a static aarch64 `curl` can be pushed to `/data/local/tmp` (use PowerShell for the
+adb push/shell so Git Bash doesn't mangle `/data/...` paths; the static curl can't use Android DNS, so pass
+`--resolve cgpe.in:443:72.61.233.113`).
+
 **Write commit messages to a file and use `git commit -F <file>`.** A multi-line `-m` here-string
 breaks under PowerShell 5.1 as soon as the message contains a double quote: PowerShell splits it and
 git reads the fragments as pathspecs (`error: pathspec 'could' did not match any file(s)`). The body
