@@ -191,6 +191,9 @@ type ClockState = { in: boolean; time?: string; place?: string; onBreak?: boolea
  *  office-hours figure (`services/payrollEngine.js`), not an invented number. */
 const MIN_SHIFT_MS = 8.5 * 60 * 60 * 1000;
 
+/** D6b — the one-time "your day in 3 steps" guide flag for non-tech team members. */
+const GUIDE_KEY = 'cgpe.home.guide.v1';
+
 /* ================================================================== *
  * Reading the role config
  *
@@ -603,6 +606,10 @@ export default function Home() {
   const [nowTick, setNowTick] = useState(() => Date.now());
   /** Screen-specific refusals and failures. The app-wide HealthBanner covers outages. */
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message?: string } | null>(null);
+  // D6b (owner, 2026-08-22): a one-time, plain-language "your day in 3 steps" card for non-tech
+  // TEAM members. Starts hidden and is raised only after the flag reads unset (so it never flashes
+  // for a returning user); "Got it" persists the flag. Admins/masters never see it.
+  const [showGuide, setShowGuide] = useState(false);
   /** The fail-open escape hatch: true once we have waited long enough for the config. */
   const [configTimedOut, setConfigTimedOut] = useState(false);
 
@@ -656,8 +663,19 @@ export default function Home() {
     // configured relative order. A stable partition: nothing else is reordered, and if the
     // role's config carries no `kpi_strip` the list is returned untouched.
     const kpi = ordered.filter((w) => w.key === 'kpi_strip');
-    return kpi.length ? [...kpi, ...ordered.filter((w) => w.key !== 'kpi_strip')] : ordered;
-  }, [configWidgets, config, fallbackWidgets]);
+    let body = ordered.filter((w) => w.key !== 'kpi_strip');
+    // D6a (owner, 2026-08-22): a LEANER Home for non-tech TEAM members. The secondary "reference"
+    // tiles (notice board, campaigns, segments, families, knowledge base, commissions, attendance —
+    // the LINK_WIDGETS) sink below the day's actionable widgets (my tasks, leads, prospects, claims,
+    // quick actions), so a member's real work leads the screen and the browse-y tiles do not compete
+    // with it. A stable partition — relative order within each group is kept — and it applies ONLY to
+    // the team tier; admins/masters keep the role-configured order exactly as the panel set it.
+    if (isTeam) {
+      const isSecondary = (k: string) => k in LINK_WIDGETS;
+      body = [...body.filter((w) => !isSecondary(w.key)), ...body.filter((w) => isSecondary(w.key))];
+    }
+    return kpi.length ? [...kpi, ...body] : body;
+  }, [configWidgets, config, fallbackWidgets, isTeam]);
 
   const hero: HeroMode = readHero(config);
 
@@ -1079,6 +1097,19 @@ export default function Home() {
     setClockReasonSheet(false);
     void toggleClock(r);
   }, [clockReason, clocking, toggleClock]);
+
+  // D6b: read the one-time guide flag once, for team members only, and persist "seen" on dismiss.
+  useEffect(() => {
+    if (!isTeam) return;
+    let alive = true;
+    AsyncStorage.getItem(GUIDE_KEY).then((seen) => { if (alive && !seen) setShowGuide(true); }).catch(() => {});
+    return () => { alive = false; };
+  }, [isTeam]);
+  const dismissGuide = useCallback(() => {
+    haptics.tap();
+    setShowGuide(false);
+    AsyncStorage.setItem(GUIDE_KEY, '1').catch(() => {});
+  }, []);
 
   /* ---------- PHASE 52: break ----------
    * Break start/stop hits the already-live endpoints (`api.startBreak`/`stopBreak`). Location is
@@ -2202,16 +2233,21 @@ export default function Home() {
                               {dutyLine}
                             </Txt>
                           </View>
-                          {!clock.in ? (
-                            <Button
-                              label={t('home.clockIn')}
-                              icon="location"
-                              variant="primary"
-                              loading={clocking}
-                              onPress={toggleClock}
-                            />
-                          ) : null}
                         </Row>
+                        {/* D6c (owner, 2026-08-22): before clocking in, the day's FIRST action is a
+                            big, full-width, labelled button — the most obvious thing on the screen —
+                            so a non-tech field member never hunts for how to start their shift. */}
+                        {!clock.in ? (
+                          <Button
+                            label={t('home.clockIn')}
+                            icon="location"
+                            variant="primary"
+                            loading={clocking}
+                            onPress={toggleClock}
+                            full
+                            style={{ marginTop: spacing.md }}
+                          />
+                        ) : null}
                         {/* PHASE 52: once on the clock, Break + Clock out sit side by side. */}
                         {clock.in ? (
                           <Row style={{ gap: spacing.sm, marginTop: spacing.md }}>
@@ -2250,6 +2286,13 @@ export default function Home() {
                   message={notice.message}
                   onDismiss={() => setNotice(null)}
                 />
+              </View>
+            ) : null}
+
+            {/* D6b: the one-time 3-step guide for non-tech team members, above the dashboard. */}
+            {isTeam && showGuide ? (
+              <View style={{ paddingHorizontal: spacing.lg, marginTop: showHero ? spacing.md : spacing.lg }}>
+                <Appear><HomeGuideCard onDismiss={dismissGuide} /></Appear>
               </View>
             ) : null}
 
@@ -2380,5 +2423,48 @@ export default function Home() {
         />
       </Sheet>
     </Screen>
+  );
+}
+
+/* ---------- HomeGuideCard ----------
+ * D6b (owner, 2026-08-22): a one-time, plain-language "your day in 3 steps" card for non-tech
+ * team members, so a new field member knows the daily flow without hesitating. Shown once, then
+ * dismissed forever. English copy is a first draft pending the owner's 5-language translation
+ * (like the app's other not-yet-localised screens). */
+function HomeGuideCard({ onDismiss }: { onDismiss: () => void }) {
+  const c = useTheme();
+  const { spacing, radius, font } = c;
+  const steps: { icon: IconName; title: string; body: string }[] = [
+    { icon: 'location', title: 'Clock in', body: 'Tap Clock in when you reach the office to start your day.' },
+    { icon: 'list', title: "See today's tasks", body: 'Your work for today is listed right here on this screen.' },
+    { icon: 'checkmark-done', title: 'Mark done', body: 'Swipe a task, or tap the tick, once it is finished.' },
+  ];
+  return (
+    <Card>
+      <Row style={{ alignItems: 'flex-start' }}>
+        <View style={{ flex: 1 }}>
+          <Eyebrow>Welcome</Eyebrow>
+          <Txt size={font.h3} weight="800" style={{ marginTop: 2 }}>Your day in 3 steps</Txt>
+        </View>
+        <IconBtn icon="close" size={34} bg={c.cardAlt} color={c.muted} accessibilityLabel="Dismiss the guide" onPress={onDismiss} />
+      </Row>
+      <View style={{ gap: spacing.md, marginTop: spacing.md }}>
+        {steps.map((s, i) => (
+          <Row key={s.title} style={{ gap: spacing.md, alignItems: 'flex-start' }}>
+            <View style={{
+              width: 36, height: 36, borderRadius: radius.md, backgroundColor: c.primarySoft,
+              alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Ionicons name={s.icon} size={18} color={c.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Txt size={font.body} weight="700">{i + 1}. {s.title}</Txt>
+              <Txt size={font.sub} color={c.muted} style={{ marginTop: 1 }}>{s.body}</Txt>
+            </View>
+          </Row>
+        ))}
+      </View>
+      <Button label="Got it" variant="primary" full onPress={onDismiss} style={{ marginTop: spacing.lg }} />
+    </Card>
   );
 }
