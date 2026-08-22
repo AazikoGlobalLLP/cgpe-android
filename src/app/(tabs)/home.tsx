@@ -836,6 +836,25 @@ export default function Home() {
     setNotice(null);
     haptics.tap();
     try {
+      // C2 (owner, 2026-08-22): clocking OUT before the 8h30m shift is complete must carry a
+      // reason ("early jaane ka kya reason hai?"). The worked time is known without GPS, so ask
+      // for it up front, then re-run carrying the reason — api.clockOut sends it to the server,
+      // which stores it and notifies a master (the Phase 50 reason contract; `clock.reasonEarly`
+      // = "You are clocking out before your shift ends. Your manager will be notified."). Skipped
+      // once a reason is in hand (the sheet's re-send) and for clock-IN. The server may ALSO ask
+      // for its own early/out-of-range rules (res.needsReason below); both share this one Sheet.
+      if (clock.in && !reason) {
+        const since = clock.time ? Date.parse(clock.time) : NaN;
+        const workedMs = Number.isFinite(since) ? Date.now() - since : NaN;
+        if (Number.isFinite(workedMs) && workedMs >= 0 && workedMs < MIN_SHIFT_MS) {
+          haptics.warn();
+          setClockReasonCtx({ early: true });
+          setClockReason('');
+          setClockReasonSheet(true);
+          return; // the `finally` releases `clocking`; the sheet's submit re-runs with the reason
+        }
+      }
+
       const fix = await getFix();
       if (!mounted.current) return;
 
@@ -1050,7 +1069,7 @@ export default function Home() {
     } finally {
       if (mounted.current) setClocking(false);
     }
-  }, [clocking, clock.in, clock.onBreak, clockKey, t]);
+  }, [clocking, clock.in, clock.time, clock.onBreak, clockKey, t]);
 
   // PHASE 50: the reason prompt re-runs the SAME clock action, this time carrying the typed reason,
   // so the success path (start/stop tracking, clock state, haptics) is reused untouched.
