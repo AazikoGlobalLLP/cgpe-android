@@ -3726,3 +3726,29 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   the header); an old draft with no key replays as before. No contract change (pure consumer).
 - Gates: `tsc` 0 · `npm test` 787 (+9) · eslint 0 new errors. Commit `0b93985`, pushed `aaziko/Shivam`.
   INBOX reply filed under the cgpe-api ask (2026-08-22), grepped back to survive concurrent writes.
+
+## 2026-08-22 — Owner backlog D3 / B1 / D4 / C2 / D6 ("implement everything, perfectly")
+- **C2 clock-out reason threshold = 8h30m of worked time** (owner-locked in chat). Matches the existing
+  `MIN_SHIFT_MS` payroll office-hours figure — not a new invented number. Prompt copy reuses the Phase-50
+  `clock.reasonEarly` ("clocking out before your shift ends…"), so NO new i18n was needed for C2. Reason
+  routes to super_admin (Phase 50). Client pre-check runs before GPS; the sheet's submit re-sends with the reason.
+- **D4 replaces the five Tasks status filters** (today/overdue/in_progress/upcoming/done) with four TIME views
+  (Today / This week / This month / Calendar, default Calendar) — the owner's explicit request. Not a second
+  filter row. Overdue/in-progress tasks stay reachable in the Today view (it includes open-overdue); completed
+  tasks appear in their due-period views. Hero's three counts became informational. Week = Monday-start ISO week.
+  Calendar strip is current-month only (no prev/next month nav — deferred).
+- **D3 target was the Home day-figure boxes**, NOT a team screen — owner clarified (Overdue / In-progress /
+  Due-today / Follow-ups / Open-claims / Open-tickets = the `kpi_strip` widget). Hoisted to lead the dashboard.
+- **D6d (hide advanced sections) shipped as NO CODE.** The More screen's admin group already renders only when
+  `caps.manageTeam` (false for the team tier) and preview-as-team hides it too, so every admin/oversight surface
+  (Monitor, Agent-map, Movement, Team-perf, Payroll, Analytics, Campaigns, Notify, Viewing-as) is already hidden
+  from team members. The remaining sales↔ops content split (D1/D2) is a per-department **admin-panel config**
+  (`nav.hidden`/`nav.tabs`) the app already obeys everywhere — deliberately NOT duplicated with client-side
+  department literals (would fight the config architecture + the "role/department = backend, not client literals"
+  rule). Owner handed a plain-language relay for the panel instead.
+- **INBOX left unedited** this session — it was visibly mid-flux from sibling sessions (content shifted between
+  two reads minutes apart). To avoid clobbering their replies, the D1 config ask was handed to the owner as a
+  plain-language relay rather than written into `INBOX.md`.
+- Gates each phase: `tsc` 0 · `npm test` 797 · eslint 0 errors (1 pre-existing i18n warning). Commits
+  `be207a6` (D3), `2cda2d3` (B1), `bf9575a` (D4), `aee594c` (C2), `d4b0471` (D6a/b/c), `2531484` (i18n),
+  all pushed `aaziko/Shivam`. Owner supplied 5-language copy same day → 21 new i18n keys, parity 111 → 132.

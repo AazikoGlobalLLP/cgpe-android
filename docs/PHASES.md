@@ -14,6 +14,20 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-22 — OWNER BACKLOG D3 / B1 / D4 / C2 / D6: "implement everything, perfectly."**
+Owner directive to build the whole open backlog. All five items built, gated (`tsc` 0 · `npm test`
+**797** · eslint 0 errors), one commit per phase, pushed `aaziko/Shivam`, then localized in all 5
+languages from owner copy. JS-only / OTA-eligible; **device-unverified**; no new APK yet.
+- **D3** (`be207a6`) — Home day-figure strip (`kpi_strip`) hoisted to lead the dashboard (stable partition).
+- **B1** (`2cda2d3`) — Master dashboard full per-member breakdown (`MemberDetailRow`/`byDuty`), real figures only.
+- **D4** (`bf9575a`) — Tasks tab → Today/This week/This month/Calendar (default Calendar); month day-strip;
+  pure tested helpers in `data/tasks.ts` (+10 tests). Replaces the 5 status filters.
+- **C2** (`aee594c`) — clock-out before **8h30m** worked → mandatory reason (reuses Phase-50 sheet + `clock.reasonEarly`).
+- **D6a/b/c** (`d4b0471`) — team-tier: leaner Home, one-time "Your day in 3 steps" guide, full-width Clock-in.
+  **D6d = NO CODE** (admin/oversight already hidden from team; sales↔ops split is admin-panel config).
+- **i18n** (`2531484`) — 21 new keys × 5 languages (owner copy); parity 111 → 132.
+- **Still owed:** device pass + a fresh APK; the D1/D2 sales↔ops split is an admin-panel config the owner relays.
+
 **✅ 2026-08-22 — PHASE 78: client Idempotency-Key wiring (closes audit #7, duplicate-create).**
 A create whose ack was lost after the server committed was re-POSTed by the offline write-queue on
 reconnect, inserting a second identical row (a duplicate lead double-counts the pipeline). cgpe-api
@@ -1876,14 +1890,16 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-22 — after Phase 78: client idempotency wiring shipped, closes audit #7):**
+**CURRENT next 3 (2026-08-22 — after the D3/B1/D4/C2/D6 owner-backlog batch shipped + localized):**
 
-1. **Resume the remaining owner-backlog mobile phases (owner confirmed the app works and wants to continue).**
-   Highest-value open items: **B1** master detail · **D4** tasks calendar view · **C2** clock-out reason
-   (needs the hour-threshold spec-lock) · **D3** team-screen reorder · **D6** UX simplification (undefined
-   adjective → spec-lock first). _(Audit #7 duplicate-create is now DONE client-side — Phase 78, `0b93985`;
-   the sign-in timeout-honesty fix landed Phase 77, `5960677`.)_
-2. **Owner/OPS relays owed** (filed to `contracts/INBOX.md`): **dual-stack `cgpe.in`** (AAAA + IPv6) — the
+1. **Cut a fresh APK and device-verify the batch.** D3/B1/D4/C2/D6a-c are all shipped + localized but
+   **device-unverified** and not in an APK. Owner to decide: build one EAS `preview` APK so all of them
+   (plus the earlier audit fixes) reach the phone together, then walk C2 (clock out < 8h30m), the new
+   Tasks time views, and the team-member leaner Home + guide. _(B1/D4/C2/D3/D6 are DONE — commits
+   `be207a6`/`2cda2d3`/`bf9575a`/`aee594c`/`d4b0471`/`2531484`.)_
+2. **Owner/OPS relays owed** (filed to `contracts/INBOX.md`): **the D1/D2 sales↔ops split** — in the admin
+   panel's UI-RBAC screen, hide `leads`+`prospects` for Operations and `claims`+`tickets` for Sales (the
+   app already enforces `nav.hidden`); **dual-stack `cgpe.in`** (AAAA + IPv6) — the
    permanent fix for the IPv6-only-mobile network path (an MSS clamp is the live stopgap); the backend
    **droplet redeploy + `:3001` restart** so the shipped idempotency dedupe (Backend Phase 81) and the
    `/track/points` ownership check actually run on prod; and the **FCM V1 service-account key** upload to
