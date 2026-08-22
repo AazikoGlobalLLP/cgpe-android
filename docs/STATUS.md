@@ -1,17 +1,20 @@
 # Status — CGPE Connect (Android)
-
 **Updated:** 2026-08-22
-
-**Working on right now:** Making the app simpler and clearer for the field team, and finishing the tasks and attendance improvements the owner asked for.
+**Working on right now:** Fixing the master's live map so it shows the whole team, not just one person.
 
 **Done this week:**
-- The important daily numbers (overdue, in progress, due today, open claims, open tickets) now sit at the top of the home screen instead of the bottom.
-- The owner's "master" view now shows every team member in detail — their attendance and their figures — instead of just a short summary.
-- The Tasks screen now works like a calendar: you can switch between Today, This week, This month, and a monthly calendar, and it opens on the calendar by default.
-- If someone clocks out before finishing a full shift (8 hours 30 minutes), the app now asks them why, and that reason goes to the owner.
-- New field members get a one-time "your day in 3 steps" welcome card, the home screen is cleaner for them, and the "Clock in" button is now big and obvious.
-- Everything new was translated into all the app's languages (Gujarati, Hindi, and the two romanised versions).
+- The "Agent locations" screen now shows **every team member**, on duty or not. Before, if only one
+  person was clocked in with GPS on, the manager saw just that one person and everyone else disappeared
+  ("1 on duty, 1 tracked"). Now the full team list is always shown, with clear counts.
+- Checked the two related requests and confirmed they already work as intended: the "Live location"
+  button for a person (it honestly says when a location isn't available yet), and the earlier task,
+  calendar, clock-out, and simpler-home changes.
 
-**Blocked on:** Nothing on our side. Two things need the owner: (1) a quick admin-panel setting so sales staff don't see operations screens and vice-versa, and (2) a new app build to put all of this on the phones for testing.
+**Blocked on:**
+- To show a **red "clocked-out" dot** on the live map, the server needs to send that location back — a
+  small change on the backend side (the app is already ready to draw it).
+- One member ("Pavitra") shows no map location — need the backend team to confirm her phone actually
+  sent its location during that trip.
 
-**Next:** Build a fresh test copy of the app so the team can try all of this on their phones.
+**Next:** Decide whether to build a fresh installable app now (so the team can test everything on their
+phones together), or start the next item on the list.

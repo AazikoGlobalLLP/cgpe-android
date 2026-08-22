@@ -3752,3 +3752,23 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - Gates each phase: `tsc` 0 · `npm test` 797 · eslint 0 errors (1 pre-existing i18n warning). Commits
   `be207a6` (D3), `2cda2d3` (B1), `bf9575a` (D4), `aee594c` (C2), `d4b0471` (D6a/b/c), `2531484` (i18n),
   all pushed `aaziko/Shivam`. Owner supplied 5-language copy same day → 21 new i18n keys, parity 111 → 132.
+
+## 2026-08-22 — Owner backlog B2–B5 (live location)
+- Verified all four against real backend code (`cgpe-backend-main/routes/timeTracker.js`,
+  `models/DayLog.js`) before editing. `/live-locations` already returns EVERY profile (clocked-in and
+  not); `/last-location` serves on- or off-duty last point; `/break-locations` gives orange break pins;
+  `clockOutLoc` is stored on the day log but not surfaced by any live-map endpoint.
+- **B5 (shipped, `0e2a77b`):** the bug was in `src/app/agent-map.tsx`, not the backend — the roster LIST
+  was built from `pins` (`liveOnDutyPins` = clocked-in AND finite GPS) whenever ≥1 pin existed, using the
+  full `team` roster only as a zero-pin fallback. One located member therefore hid the whole directory.
+  Fix: list = full `team` universe always (fallback to `pins` only on an outage); map still plots only
+  `pins`; header shows three honest counts; Off-duty section un-capped. Gates `tsc` 0 · `npm test` 797 ·
+  eslint 0. This also cures B4's "member doesn't appear in the list" symptom.
+- **B2:** already built (`team/[id].tsx` Live button → `/last-location`) and honest; no code. Real
+  off-duty data is a platform/consent/APK matter, not an app bug.
+- **B3:** ruled a backend ask — the app already renders red `outLat/outLng` clock-out pins, but the live
+  map has no data source until `/live-locations` (or a companion endpoint) surfaces the stored
+  `clockOutLoc`. Handed to the owner as a relay; INBOX left untouched (concurrent-write corruption risk,
+  per the prior batch's rationale).
+- **B4:** map pin is a data question (Pavitra's points may have been dropped: accuracy > 100 m, or a
+  session-less batch). List half is fixed by B5. Owner/backend to verify.

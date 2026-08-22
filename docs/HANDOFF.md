@@ -1,72 +1,54 @@
-# HANDOFF — CGPE Connect (Android) — Owner backlog D3/B1/D4/C2/D6 — 2026-08-22
+# HANDOFF — CGPE Connect (Android) — Owner backlog B2–B5 (live location) — 2026-08-22
 
-The owner said "implement everything (D3/B1/D4/C2/D6), perfectly, take the time." All five
-owner-backlog items were built, gated (tsc 0 · npm test 797 · eslint 0 errors), committed one
-per phase, and pushed to `aaziko Shivam`. All new English strings were then localized in all 5
-languages from owner-supplied copy. Everything is JS-only / OTA-eligible and **device-unverified**.
+Owner picked the B2–B5 live-location cluster (`docs/OWNER-BACKLOG-2026-08-21.md` §B — "the hardest
+cluster"). All four items were verified against the **real** backend code
+(`cgpe-backend-main/routes/timeTracker.js`, `models/DayLog.js`) before any edit. Exactly one was a
+buildable app bug (B5); it shipped and cascaded to fix B4's list symptom. B2 was already done and
+honest; B3 needs a backend field first. Gates green (`tsc` 0 · `npm test` 797 · eslint 0), committed,
+pushed `aaziko/Shivam`. JS-only / OTA-eligible; **device-unverified**.
 
 ## Done
-- **D3** (`be207a6`) — Home's day-figure boxes (Overdue / In-progress / Due-today / Follow-ups /
-  Open-claims / Open-tickets = the `kpi_strip` widget) now **lead** the dashboard instead of sitting
-  below the task list. Stable partition in the `widgets` memo; every other widget keeps its order.
-- **B1** (`2cda2d3`) — the Master dashboard shows the **whole team in detail**: grouped Admins &
-  leaders / Agents, on-duty first, each row a new `MemberDetailRow` with every real figure the server
-  returned (premium MTD, clients, done, renewals %, open work, open claims) — shown only when > 0,
-  never a fabricated zero. Replaced the truncated admins-only "Admins (4)" list.
-- **D4** (`bf9575a`) — the Tasks tab is now **Today / This week / This month / Calendar** (default
-  Calendar). Calendar = a month day-strip (opens on today, dotted where there's open work) → tap a day
-  to see its tasks. Today = the shared `todayWorkloadTasks` set. Week/Month group by day. Every view
-  renders the same `TaskCard`, so swipe/tap complete + reopen still work. Pure tested date helpers in
-  `data/tasks.ts` (+10 unit tests).
-- **C2** (`aee594c`) — clocking out before completing **8h30m** of worked time now prompts a mandatory
-  reason ("early jaane ka kya reason hai?") that is sent to the server (stored + a master is notified).
-  Reuses the existing Phase-50 reason Sheet and the 5-language `clock.reasonEarly` copy.
-- **D6a/b/c** (`d4b0471`) — for **team members only**: (a) a leaner Home (secondary reference tiles
-  sink below the actionable widgets), (b) a one-time dismissible "Your day in 3 steps" guide card, and
-  (c) a full-width, prominent **Clock in** button before the shift starts.
-- **i18n** (`2531484`) — 21 new keys (`tasks.view*` / `tasks.empty*` / `tasks.tomorrow` /
-  `tasks.yesterday` + `guide.*`) wired into all 5 dictionaries from owner copy; parity test 111 → 132.
+- **B5** (`0e2a77b`) — the Agent-locations screen now lists the **whole staff directory**, not just
+  GPS-located pins. Before, one member clocked-in-with-GPS hid everyone else ("1 on duty, 1 tracked").
+  Now the roster LIST always comes from `getTeam()`/`mergeRoster` (the full super_admin live-locations
+  universe); the MAP still plots only real `pins` (a location nobody shared is never fabricated). Header
+  reads "N on duty · M in team · K on map"; the Off-duty section no longer truncates at 12.
+- **B4 (list half)** — a member with no assigned task and/or no GPS point now appears as an off-duty
+  roster row (side-effect of the B5 fix). Their **map pin** remains a data question (did points upload?).
+- **B2 — confirmed already built + honest** (no code): `team/[id].tsx` `openLive` → `getLastLocation` →
+  `/last-location` serves a member's newest point on OR off duty with a freshness label. Off-duty data
+  only exists with 24/7 consent + bg tracker + the new native APK — a platform reality, not a bug.
 
 ## Files changed
-- `src/app/(tabs)/home.tsx` — D3 kpi_strip hoist + D6a team widget partition + D6b guide
-  (state/effect/`HomeGuideCard`) + D6c full-width Clock-in + C2 short-shift reason pre-check + guide i18n.
-- `src/screens/dashboards.tsx` — B1: `MemberDetailRow` + `byDuty`; MasterDashboard full team breakdown.
-- `src/app/(tabs)/tasks.tsx` — D4: 4 time views, month strip (`TaskDayCell`), day-grouped week/month,
-  informational hero stats; i18n via `t()`.
-- `src/data/tasks.ts` — D4 pure helpers: `TaskView`, `weekRange`, `monthRange`, `tasksInRange`,
-  `groupTasksByDay`, `todayWorkloadTasks` (todayWorkload refactored to reuse it).
-- `src/data/__tests__/tasks.test.ts` — +10 D4 helper tests (now 37 in file, suite 797).
-- `src/i18n/index.tsx` — 21 new keys × 5 languages (owner copy).
-- `src/i18n/__tests__/dictionaries.test.ts` — parity count 111 → 132.
+- `src/app/agent-map.tsx` — B5: roster list built from the full `team` universe (fallback to `pins` only
+  on an outage); map still plots `pins`; honest header counts; Off-duty cap of 12 removed.
 
 ## Decisions made
-- **C2 threshold = 8h30m** (owner-locked; matches the existing `MIN_SHIFT_MS` payroll figure). Reason
-  routes to super_admin (Phase 50). No new i18n — reuses `clock.reasonEarly`.
-- **D4 replaces the 5 status filters** rather than adding a second row. Overdue/in-progress tasks stay
-  reachable in the Today view (it includes open-overdue); done tasks appear in their due-period views.
-  Hero's 3 counts became informational (navigation is now by time view). Week = Monday-start ISO week.
-- **D6d (hide advanced sections) needed NO code** — the More screen's admin group already renders only
-  when `caps.manageTeam` (false for team), and preview-as-team hides it too. The sales↔ops content
-  split (D1/D2) is an admin-panel config job the app already obeys via `nav.hidden`/`nav.tabs`; it was
-  deliberately NOT duplicated with client department literals.
-- **INBOX not edited** — it was mid-flux from sibling sessions; a plain-language relay was handed to the
-  owner instead (see Next session / DECISIONS).
+- **B5 roster = `team` always; map = `pins` always.** The two answer different questions: "who is on
+  staff / on duty" (list) vs "whose live location can we plot" (map). Conflating them was the bug.
+- **Header shows three honest counts** ("on duty · in team · on map") rather than the old ambiguous
+  "N tracked", which implied N people had a GPS fix when only pins do.
+- **B3 is a backend ask, not app code.** The red "Clock-out" map layer the legend promises has no live
+  data source: `/live-locations` returns only the clock-**in** point. The clock-**out** coord is already
+  stored (`DayLog.clockOutLoc`, set on clock-out) — it just isn't surfaced. The app already draws red
+  `outLat/outLng` pins, so once the field ships the app follow-up is tiny.
+- **INBOX not edited** (same call as the prior batch): concurrent-write corruption risk; the owner-relay
+  courier is the proven path. The B3 ask + B4 data check were handed to the owner in plain language.
 
 ## Known broken / deliberately skipped
-- **Device-unverified** — C2 needs a real clocked-in session; the Tasks/Home changes need a device pass.
-  OTA-eligible (JS-only). No new APK cut yet.
-- **Calendar view is current-month only** — no prev/next month navigation (possible follow-up).
-- **D1/D2 sales↔ops split** — owner must relay to the admin panel: *"In the UI-RBAC screen, for the
-  Operations role hide `leads` + `prospects`; for the Sales role hide `claims` + `tickets`."* The app
-  already enforces it once set.
-- **Push delivery** still needs the owner's FCM V1 service-account key on EAS (Phase 74) — unchanged.
-- **"Can't reach server"** on some networks is still the MTU/IPv6 server-path issue (dual-stack `cgpe.in`
-  owed by OPS), NOT an app bug — unchanged.
+- **Device-unverified** — B5 is a master-only screen needing a real super_admin session + members with
+  live locations. OTA-eligible (JS-only); no new APK cut yet.
+- **B3 red clock-out layer** — not built; blocked on the backend surfacing `clockOutLoc` on
+  `/live-locations`. Relay filed with the owner, not INBOX.
+- **B4 map pin for Pavitra** — a data question (points with accuracy > 100 m are dropped server-side;
+  a session-less batch is discarded). Owner/backend to verify her points uploaded.
+- **B2 off-duty real data** — requires each person's 24/7 consent + the bg tracker + the new native APK;
+  platform/ops, unchanged.
 
 ## Next session starts here
-- Owner to decide: **cut a fresh APK** so all of D3/B1/D4/C2/D6 reach the phone for a device test,
-  and/or pick the next backlog cluster (A3 attendance, B2–B5 live-location, D5 fuzzy search, E2 report).
+- Owner to decide: **cut a fresh APK** (bundles B5 + the D3/B1/D4/C2/D6 batch + Phases 77/78 for a
+  device test), and/or start the next backlog cluster (A3 attendance · D5 fuzzy search · E2 report).
 - First command: `/boot`
-- Watch out for: **D4 changed the whole Tasks screen** — the old 5 status filters are gone; if the owner
-  reports "where did Overdue/Done go", they're in the Today view (open-overdue) and each task's due-period
-  view (done), by design. And the Calendar strip is current month only.
+- Watch out for: **B5 is master-only** — a non-master still sees "Master access only" by design
+  (`canSeeLiveLocation`). And the map deliberately plots fewer people than the list (only shared GPS) —
+  that gap is correct, not a regression. Don't "fix" it by fabricating pins.

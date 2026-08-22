@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-22 — OWNER BACKLOG B2–B5 (live location): the hardest cluster, verified-first.**
+Owner picked B2–B5. All four checked against real backend code before any edit; one buildable app bug
+(B5) shipped, gated (`tsc` 0 · `npm test` **797** · eslint 0), pushed `aaziko/Shivam` (`0e2a77b`).
+JS-only / OTA-eligible; **device-unverified**; no new APK yet.
+- **B5** (`0e2a77b`) — `agent-map.tsx` now lists the WHOLE staff universe (`getTeam`/`mergeRoster`), not
+  just GPS-located `pins`. One clocked-in-with-GPS member used to hide everyone ("1 on duty, 1 tracked").
+  Map still plots only real pins; header = "N on duty · M in team · K on map"; Off-duty cap of 12 removed.
+- **B4 (list half)** — fixed by B5 (a task-less / GPS-less member now shows as an off-duty row). Map pin =
+  a data question (did points upload?).
+- **B2** — confirmed already built + honest (`team/[id].tsx` Live button → `/last-location`); no code.
+  Real off-duty data needs consent + bg tracker + the new native APK (platform/ops).
+- **B3** — a backend ask: `/live-locations` returns only the clock-**in** point; the stored `clockOutLoc`
+  isn't surfaced, so the red "Clock-out" live-map layer has no data. App already draws red pins → tiny
+  follow-up once served. Relayed to the owner; INBOX not touched (corruption risk).
+
 **✅ 2026-08-22 — OWNER BACKLOG D3 / B1 / D4 / C2 / D6: "implement everything, perfectly."**
 Owner directive to build the whole open backlog. All five items built, gated (`tsc` 0 · `npm test`
 **797** · eslint 0 errors), one commit per phase, pushed `aaziko/Shivam`, then localized in all 5
@@ -1890,14 +1905,18 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-22 — after the D3/B1/D4/C2/D6 owner-backlog batch shipped + localized):**
+**CURRENT next 3 (2026-08-22 — after B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
 
-1. **Cut a fresh APK and device-verify the batch.** D3/B1/D4/C2/D6a-c are all shipped + localized but
-   **device-unverified** and not in an APK. Owner to decide: build one EAS `preview` APK so all of them
-   (plus the earlier audit fixes) reach the phone together, then walk C2 (clock out < 8h30m), the new
-   Tasks time views, and the team-member leaner Home + guide. _(B1/D4/C2/D3/D6 are DONE — commits
-   `be207a6`/`2cda2d3`/`bf9575a`/`aee594c`/`d4b0471`/`2531484`.)_
-2. **Owner/OPS relays owed** (filed to `contracts/INBOX.md`): **the D1/D2 sales↔ops split** — in the admin
+1. **Cut a fresh APK and device-verify.** B5 (`0e2a77b`) + D3/B1/D4/C2/D6a-c + Phases 77/78 are all
+   shipped but **device-unverified** and not in an APK. Owner to decide: build one EAS `preview` APK so
+   all reach the phone together, then walk B5 (master Agent-locations lists the whole team), C2 (clock
+   out < 8h30m), the new Tasks time views, and the team-member leaner Home + guide.
+   _(B5/B1/D4/C2/D3/D6 are DONE — commits `0e2a77b`/`be207a6`/`2cda2d3`/`bf9575a`/`aee594c`/`d4b0471`.)_
+2. **Owner/OPS relays owed** (handed as plain-language relays, NOT INBOX): **B3 clock-out map layer** —
+   ask cgpe-api to surface the stored `DayLog.clockOutLoc` on `GET /live-locations` (or a companion) so
+   the master live map can draw its red "Clock-out" layer (app already renders red pins); **B4 data
+   check** — confirm Pavitra's track points uploaded (accuracy > 100 m are dropped server-side).
+   Plus the standing relays: **the D1/D2 sales↔ops split** — in the admin
    panel's UI-RBAC screen, hide `leads`+`prospects` for Operations and `claims`+`tickets` for Sales (the
    app already enforces `nav.hidden`); **dual-stack `cgpe.in`** (AAAA + IPv6) — the
    permanent fix for the IPv6-only-mobile network path (an MSS clamp is the live stopgap); the backend
