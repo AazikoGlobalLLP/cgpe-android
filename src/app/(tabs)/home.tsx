@@ -649,7 +649,14 @@ export default function Home() {
     const storeKeys = new Set(fromStore.map((x) => x.key));
     const lostMandatory = fromConfig.some((x) => x.mandatory && !storeKeys.has(x.key));
     const live = fromStore.length === 0 || lostMandatory ? fromConfig : fromStore;
-    return live.length > 0 ? live : fallbackWidgets;
+    const ordered = live.length > 0 ? live : fallbackWidgets;
+    // D3 (owner, 2026-08-22): the day-figures strip — Overdue / In progress / Due today /
+    // Follow-ups / Open claims / Open tickets — must LEAD the dashboard (it used to sit below
+    // the task list). Hoist `kpi_strip` to the front while preserving every other widget's
+    // configured relative order. A stable partition: nothing else is reordered, and if the
+    // role's config carries no `kpi_strip` the list is returned untouched.
+    const kpi = ordered.filter((w) => w.key === 'kpi_strip');
+    return kpi.length ? [...kpi, ...ordered.filter((w) => w.key !== 'kpi_strip')] : ordered;
   }, [configWidgets, config, fallbackWidgets]);
 
   const hero: HeroMode = readHero(config);
