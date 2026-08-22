@@ -14,6 +14,22 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-22 — PHASE 78: client Idempotency-Key wiring (closes audit #7, duplicate-create).**
+A create whose ack was lost after the server committed was re-POSTed by the offline write-queue on
+reconnect, inserting a second identical row (a duplicate lead double-counts the pipeline). cgpe-api
+shipped the `(creator, key)` dedupe (Backend Phase 81); this wires the client half. `[m]`-only, no
+contract change; gates green (`tsc` 0 · `npm test` **787** (+9) · lint 0 new); pushed `aaziko/Shivam`
+(`0b93985`).
+- `addLead`/`addTask`/`addNote` send a per-create `Idempotency-Key` header (`idem-<ts36>-<rand>-<rand>`,
+  8–200 chars) on `POST /leads`, `/team/tasks`, `/notice-board`.
+- The key is generated ONCE and stored on the `QueuedWrite` draft, so the reconnect replay re-sends the
+  SAME key → the server replays its stored 2xx instead of duplicating. Load-bearing property; pinned in
+  NEW `src/data/__tests__/api-idempotency.test.ts` (9 tests).
+- Opt-in/additive → **live-safe before the backend redeploy** (an un-deployed server ignores the header);
+  an old key-less draft replays as before. INBOX reply filed under the cgpe-api ask (grepped back).
+- **Still owed:** the backend droplet redeploy + `:3001` restart for the dedupe to fire on prod (owner/OPS);
+  device-verify; OTA-eligible (no native dep) but not yet in an APK.
+
 **✅ 2026-08-22 — PHASE 77: sign-in tells the truth about a TIMEOUT vs an unreachable server.**
 Small honesty fix promised at the end of Phase 76 (offered, not built). A stalled request — server
 reached (real TCP+TLS socket open), reply never arrived in time (the IPv6/NAT64-MTU symptom) — used to
@@ -1860,17 +1876,18 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-22 — after Phase 77: sign-in timeout-honesty fix shipped):**
+**CURRENT next 3 (2026-08-22 — after Phase 78: client idempotency wiring shipped, closes audit #7):**
 
 1. **Resume the remaining owner-backlog mobile phases (owner confirmed the app works and wants to continue).**
    Highest-value open items: **B1** master detail · **D4** tasks calendar view · **C2** clock-out reason
    (needs the hour-threshold spec-lock) · **D3** team-screen reorder · **D6** UX simplification (undefined
-   adjective → spec-lock first). _(The "timeout vs unreachable" honesty fix is now DONE on the sign-in
-   screen — Phase 77, `5960677`; the in-app HealthBanner already split the kinds since Phase 55.)_
+   adjective → spec-lock first). _(Audit #7 duplicate-create is now DONE client-side — Phase 78, `0b93985`;
+   the sign-in timeout-honesty fix landed Phase 77, `5960677`.)_
 2. **Owner/OPS relays owed** (filed to `contracts/INBOX.md`): **dual-stack `cgpe.in`** (AAAA + IPv6) — the
-   permanent fix for the IPv6-only-mobile network path (an MSS clamp is the live stopgap); the two audit
-   [api] asks (`/track/points` ownership check, create-endpoint idempotency key for #7); and the **FCM V1
-   service-account key** upload to EAS (Phase 74) before push delivers.
+   permanent fix for the IPv6-only-mobile network path (an MSS clamp is the live stopgap); the backend
+   **droplet redeploy + `:3001` restart** so the shipped idempotency dedupe (Backend Phase 81) and the
+   `/track/points` ownership check actually run on prod; and the **FCM V1 service-account key** upload to
+   EAS (Phase 74) before push delivers.
 3. **Device-verify the 8 shipped audit fixes** on the fresh APK (EAS `a03e64cb`) — native GPS timeout on a
    dead-GPS spot (#1), shared-handset sign-out/handover (#4/#5), SyncChip/banner render (#9). Backend/data
    backlog (A3, B2/B4/B5, D5, E1, E2, D1 enforcement) via the owner-relay INBOX; **D1** is mostly an

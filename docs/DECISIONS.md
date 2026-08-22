@@ -3706,3 +3706,23 @@ F2 loophole hunt ran as a multi-agent workflow (24 agents → 12 confirmed → 9
 lint 0 new). **#7 (duplicate creates on a lost-ack retry)** needs a client idempotency key — a *contract*
 addition — so it was filed to INBOX (2026-08-22 → cgpe-api), not built with an invented field. Paired [api]
 ask: `/track/points` session-ownership check (audit #5 defense-in-depth).
+
+## 2026-08-22 — Phase 78: client Idempotency-Key wiring (closes audit #7)
+
+**Decision: wire the `Idempotency-Key` header cgpe-api shipped (Backend Phase 81), generating the key
+BEFORE the first online attempt and storing it on the offline draft.** Audit #7 (duplicate-create) was
+backend-blocked because the client cannot dedupe a committed-but-unacked create on its own; the owner
+picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cgpe-api built the
+`(creator, key)` dedupe. Mobile now stamps `addLead`/`addTask`/`addNote` with a per-create key
+(`idem-<ts36>-<rand>-<rand>`, 8–200 chars).
+- **The key is generated once, before the online POST, and threaded into `enqueueWrite`** so the
+  reconnect replay re-sends the SAME key. Generating it at enqueue time would have given the replay a
+  key the server never saw on the first (committed) attempt — the duplicate would survive. This is the
+  load-bearing property, pinned in `api-idempotency.test.ts`.
+- **`flushDecision` left untouched.** The idempotency 4xx codes (409 in-progress / 422 conflict / 400
+  invalid) are unreachable in correct sequential client operation, so the existing "4xx → drop" is safe;
+  documented in `replayWrite` rather than adding a branch that can never fire.
+- **Opt-in/additive, `[m]`-only** — live-safe before the backend redeploy (an un-deployed server ignores
+  the header); an old draft with no key replays as before. No contract change (pure consumer).
+- Gates: `tsc` 0 · `npm test` 787 (+9) · eslint 0 new errors. Commit `0b93985`, pushed `aaziko/Shivam`.
+  INBOX reply filed under the cgpe-api ask (2026-08-22), grepped back to survive concurrent writes.
