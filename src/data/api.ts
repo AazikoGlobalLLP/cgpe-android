@@ -678,14 +678,17 @@ export async function addTask(data: Partial<Task> & { assigneeName?: string }): 
   };
   if (FORCE_DEMO) { state.tasks.unshift(local); await wait(200); return { status: 'saved', task: clone(local) }; }
   if (!sessionReal) return { status: 'failed' };
+  // One key for this logical create, reused if the online attempt throws and the draft is replayed
+  // (Phase 78) — so a committed-but-unacked create dedupes instead of making a second task.
+  const idemKey = newIdempotencyKey();
   try {
-    const { ok, status, json } = await req('/team/tasks', { method: 'POST', body: JSON.stringify(taskCreateBody(payload)) });
+    const { ok, status, json } = await req('/team/tasks', { method: 'POST', headers: { 'Idempotency-Key': idemKey }, body: JSON.stringify(taskCreateBody(payload)) });
     if (status === 403) return { status: 'forbidden' };
     if (ok && json?.data?.id) return { status: 'saved', task: { ...local, id: String(json.data.id) } };
     return { status: 'failed' };   // server answered but refused — NOT queued
   } catch {
     // Network failure (dead network / timeout abort) → queue the additive draft to sync later.
-    const draft = await enqueueWrite('task', payload);
+    const draft = await enqueueWrite('task', payload, idemKey);
     return draft ? { status: 'queued', task: taskDraftToTask(draft) } : { status: 'failed' };
   }
 }
@@ -1204,11 +1207,15 @@ export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
   if (data.potential) body.expected_premium = data.potential;
   if (data.source) body.source = data.source;
 
+  // One key for this logical create, reused on an offline replay (Phase 78) so a committed-but-unacked
+  // lead dedupes instead of double-counting the pipeline. Generated even when the first attempt
+  // succeeds (then unused) — cheaper than branching, and always in scope for the `if (threw)` enqueue.
+  const idemKey = newIdempotencyKey();
   let reason: Exclude<WriteFailure, 'invalid'> = 'network';
   let threw = false;   // PHASE 57: only a genuine network THROW (not a server refusal) may be queued
   if (sessionReal && !FORCE_DEMO) {
     try {
-      const { ok, status, json } = await req('/leads', { method: 'POST', body: JSON.stringify(body) });
+      const { ok, status, json } = await req('/leads', { method: 'POST', headers: { 'Idempotency-Key': idemKey }, body: JSON.stringify(body) });
       if (ok && isObj(json?.data?.lead)) return { ok: true, lead: adaptLead(json.data.lead) };
       if (status === 400) {
         // express-validator puts the human sentence in `details[].msg`. The two envelopes in
@@ -1239,7 +1246,7 @@ export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
   // the global outage banner on its own (a concurrent failed read still will, honestly); the "saved
   // on this device" toast is the per-write signal.
   if (threw) {
-    const draft = await enqueueWrite('lead', body);
+    const draft = await enqueueWrite('lead', body, idemKey);
     if (draft) { await wait(250); return { ok: false, reason: 'network', lead: leadDraftToLead(draft) }; }
     // No signed-in user id to queue under (shouldn't happen with a real session): this outage was
     // never reported, so report it now, then fall through to hold the typed record for this session.
@@ -3476,21 +3483,43 @@ export type AddNoteResult =
 export async function addNote(text: string, category = 'note', tags: string[] = []): Promise<AddNoteResult> {
   if (!sessionReal || FORCE_DEMO) return { status: 'failed' };
   const payload = { text, category, tags };
+  // One key for this logical create, reused on an offline replay (Phase 78) so a committed-but-unacked
+  // note dedupes instead of posting twice to the board.
+  const idemKey = newIdempotencyKey();
   try {
-    const { ok, json } = await req('/notice-board', { method: 'POST', body: JSON.stringify(payload) });
+    const { ok, json } = await req('/notice-board', { method: 'POST', headers: { 'Idempotency-Key': idemKey }, body: JSON.stringify(payload) });
     if (ok && json?.success) return { status: 'saved', note: json.data as BoardNote };
     return { status: 'failed' };   // server answered but refused — NOT queued
   } catch {
     // Network failure (dead network / timeout abort) → queue the additive draft.
-    const draft = await enqueueWrite('note', payload);
+    const draft = await enqueueWrite('note', payload, idemKey);
     return draft ? { status: 'queued', note: noteDraftToBoardNote(draft) } : { status: 'failed' };
   }
 }
 
 /* ------------------------------------------------ Offline write queue (57b) */
 
+/**
+ * PHASE 78 — a client idempotency key for the additive create endpoints (`POST /leads`,
+ * `/team/tasks`, `/notice-board`). Generated ONCE per logical create and reused on every retry — the
+ * online attempt AND any offline-queue replay — so a create the server COMMITTED before its ack was
+ * lost (weak network / our timeout firing post-receipt) dedupes instead of inserting a second row:
+ * the server keys on `(creator, key)` and replays its stored 2xx (Backend Phase 81,
+ * `contracts/api.md` §Idempotency-Key; the header must be 8–200 chars). Uniqueness is best-effort
+ * time+entropy — a collision could only suppress a genuinely-distinct create by the same user within
+ * the 24 h key TTL, which two independent random segments make effectively impossible. Always ≥8 and
+ * ≤~35 chars, so it never trips the server's length guard.
+ */
+function newIdempotencyKey(): string {
+  return `idem-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
 /** Append one create to the signed-in user's persisted queue + reactive bus. Null if no session. */
-async function enqueueWrite(kind: QueueKind, payload: Record<string, unknown>): Promise<QueuedWrite | null> {
+async function enqueueWrite(
+  kind: QueueKind,
+  payload: Record<string, unknown>,
+  idempotencyKey?: string,
+): Promise<QueuedWrite | null> {
   const uid = currentUserId;
   if (!uid) return null;
   const draft: QueuedWrite = {
@@ -3501,6 +3530,8 @@ async function enqueueWrite(kind: QueueKind, payload: Record<string, unknown>): 
     payload,
     createdAt: new Date().toISOString(),
     attempts: 0,
+    // Carried so a replay reuses the FIRST attempt's key and the server dedupes (Phase 78).
+    idempotencyKey,
   };
   const next = addToQueue(await offlineStore.loadQueue(uid), draft);
   await offlineStore.saveQueue(uid, next);
@@ -3531,9 +3562,19 @@ export function noteDraftToBoardNote(d: QueuedWrite): BoardNote {
 
 /** Replay one queued create against its real endpoint. Returns the HTTP outcome for `flushDecision`. */
 async function replayWrite(draft: QueuedWrite): Promise<{ ok: boolean; status: number }> {
+  // PHASE 78 — reuse the SAME idempotency key the first attempt sent (stored on the draft at enqueue
+  // time), so a create the server COMMITTED before its ack was lost now REPLAYS on the server (its
+  // stored 2xx) instead of inserting a duplicate row. A draft persisted BEFORE this field existed has
+  // no key and simply replays without the header — exactly the old behaviour, no worse. The key is
+  // metadata, not body, so the byte-identical-body guarantee below is untouched. (Note: this can only
+  // ever be the FIRST retry of a committed create — the online attempt threw before enqueue, and
+  // `flushWriteQueue` is re-entrancy-guarded — so the server's 409 `idempotency_in_progress` is
+  // unreachable from here; a genuine replay always gets the stored success back.)
+  const headers = draft.idempotencyKey ? { 'Idempotency-Key': draft.idempotencyKey } : undefined;
   if (draft.kind === 'note') {
     const { ok, status, json } = await req('/notice-board', {
       method: 'POST',
+      headers,
       body: JSON.stringify(draft.payload),
     });
     // A 200 with `success:false` is a refusal, not a success — map it to a drop-worthy status.
@@ -3543,6 +3584,7 @@ async function replayWrite(draft: QueuedWrite): Promise<{ ok: boolean; status: n
   if (draft.kind === 'task') {
     const { ok, status, json } = await req('/team/tasks', {
       method: 'POST',
+      headers,
       body: JSON.stringify(taskCreateBody(draft.payload)),
     });
     // Success needs the server id; a 200 without one is an odd refusal, not a success → drop.
@@ -3554,6 +3596,7 @@ async function replayWrite(draft: QueuedWrite): Promise<{ ok: boolean; status: n
     // so this replay is byte-identical to the first attempt. PHASE 57 (Leads-create).
     const { ok, status, json } = await req('/leads', {
       method: 'POST',
+      headers,
       body: JSON.stringify(draft.payload),
     });
     // Success needs the created lead document; a 2xx without one is a refusal, not a success → drop.

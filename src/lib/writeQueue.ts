@@ -37,6 +37,14 @@ export type QueuedWrite = {
   createdAt: string;
   /** Failed-flush counter; a draft is dropped once it exceeds MAX_ATTEMPTS. */
   attempts: number;
+  /**
+   * PHASE 78 — the `Idempotency-Key` generated ONCE when this create was first attempted and reused
+   * on every replay, so a create the server COMMITTED before its ack was lost dedupes on retry
+   * instead of inserting a second row (server keys on `(creator, key)`; `contracts/api.md`
+   * §Idempotency-Key). Optional so a draft persisted BEFORE this field existed still parses — it just
+   * replays without the header, exactly as it did before (no worse than the old behaviour).
+   */
+  idempotencyKey?: string;
 };
 
 export function queueKey(userId: string): string {
@@ -56,7 +64,8 @@ function isQueuedWrite(o: any): o is QueuedWrite {
     KINDS.includes(o.kind) &&
     o.payload && typeof o.payload === 'object' && !Array.isArray(o.payload) &&
     typeof o.createdAt === 'string' &&
-    typeof o.attempts === 'number'
+    typeof o.attempts === 'number' &&
+    (o.idempotencyKey === undefined || typeof o.idempotencyKey === 'string')
   );
 }
 
