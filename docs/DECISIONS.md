@@ -6,6 +6,31 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-22 — Phase 77: sign-in distinguishes a TIMEOUT from an unreachable server
+
+**Context.** The Phase 76 network diagnosis proved the "can't reach server" complaint was an
+IPv6/NAT64-MTU stall: the app opens a real TCP+TLS socket to `cgpe.in` and sends its request, but the
+reply is dropped on the reduced-MTU path, so OUR `AbortController` fires at `LOGIN_TIMEOUT`. The app
+then showed *"Could not reach the CGPE server. Check your connection"* — the wrong instruction, since
+the connection is up. Handoff flagged this honesty fix as "offered, not built."
+
+**Decision.**
+- **A timeout is not "unreachable," and the two are worded oppositely.** `api.ts`'s `NetworkError`
+  now carries `readonly kind: 'timeout' | 'network'`. A fired abort (or an error message naming a
+  timeout) → `'timeout'` (*"The CGPE server is taking too long to respond…"*, clock icon, Try again);
+  anything else `fetch` throws → `'network'` (the existing reach-copy). Classified via a new
+  `unreachableKind(e)` at the three auth throw sites (`login`/`sendOtp`/`verifyOtp`). The login screen
+  (`Failure` kind widened to include `'timeout'`) renders the offline-toned banner for both but with a
+  distinct timeout title/icon and NEVER "check your connection" on a timeout.
+- **Scope limited to the auth screen on purpose.** `<HealthBanner/>` already split the three
+  `FailureKind`s since Phase 55; the only place still lying was the LOGIN screen, which is where the
+  owner actually saw the misleading copy. Data-read paths untouched. `[m]` only, no contract change.
+
+**Consequence.** A slow/stalled sign-in reads honestly; the user is not sent to fix a working
+connection. +6 tests (`api-login-failure.test.ts`), suite 772→778. Commit `5960677`, pushed
+`aaziko/Shivam`. OTA-eligible (JS only) — rides the next APK/OTA, not yet in a build; device-unverified
+(needs a real degraded-path sign-in to see the banner).
+
 ## 2026-08-21 — Phase 74: Android push enablement + launcher-icon fit + owner-backlog triage
 
 **Context.** Owner created a Firebase project for `com.cgpe.connect` and added `google-services.json`, wanting real

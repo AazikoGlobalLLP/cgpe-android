@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-22 — PHASE 77: sign-in tells the truth about a TIMEOUT vs an unreachable server.**
+Small honesty fix promised at the end of Phase 76 (offered, not built). A stalled request — server
+reached (real TCP+TLS socket open), reply never arrived in time (the IPv6/NAT64-MTU symptom) — used to
+show *"Could not reach the CGPE server. Check your connection"*, the wrong instruction. `[m]` only, no
+contract change; gates green (`tsc` 0 · `npm test` **778** (+6) · lint 0 new); pushed `aaziko/Shivam`
+(`5960677`).
+- `api.ts` `NetworkError` now carries `readonly kind: 'timeout' | 'network'` (default message per kind);
+  new `unreachableKind(e)` classifies at the three auth throw sites (`login`/`sendOtp`/`verifyOtp`) — a
+  fired abort or a timeout-named message → `'timeout'`, anything else `fetch` throws → `'network'`.
+- `login.tsx` `Failure` kind widened to `'network' | 'timeout' | 'refused'`; the offline-toned banner
+  renders a timeout with a clock icon + *"The server is taking too long"* and NEVER the
+  "check your connection" copy. A server refusal (401/etc.) is unchanged (never a `NetworkError`).
+- NEW `src/data/__tests__/api-login-failure.test.ts` — 6 tests pinning the timeout/network/refusal split.
+- **Still owed:** device-verify (needs a real degraded-path sign-in); OTA-eligible but not yet in an APK.
+
 **✅ 2026-08-22 — PHASE 76: §F network diagnosis (RESOLVED) + F2 loophole audit (8/9 fixed) + fresh APK.**
 - **RESOLVED — "app won't open / can't reach server" was a NETWORK-MTU issue, not the app.** Diagnosed on
   the owner's real device via ADB: the phones are on **IPv6-only mobile (MTU 1300)** but **`cgpe.in` is
@@ -1845,14 +1860,13 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-22 — after Phase 76: network issue RESOLVED, app works, F2 audit shipped):**
+**CURRENT next 3 (2026-08-22 — after Phase 77: sign-in timeout-honesty fix shipped):**
 
 1. **Resume the remaining owner-backlog mobile phases (owner confirmed the app works and wants to continue).**
    Highest-value open items: **B1** master detail · **D4** tasks calendar view · **C2** clock-out reason
    (needs the hour-threshold spec-lock) · **D3** team-screen reorder · **D6** UX simplification (undefined
-   adjective → spec-lock first). Plus the tiny **app-side "timeout vs unreachable" message honesty fix**
-   (offered this session, not built): a stalled/slow response should read "the server is taking too long,"
-   not "could not reach the server."
+   adjective → spec-lock first). _(The "timeout vs unreachable" honesty fix is now DONE on the sign-in
+   screen — Phase 77, `5960677`; the in-app HealthBanner already split the kinds since Phase 55.)_
 2. **Owner/OPS relays owed** (filed to `contracts/INBOX.md`): **dual-stack `cgpe.in`** (AAAA + IPv6) — the
    permanent fix for the IPv6-only-mobile network path (an MSS clamp is the live stopgap); the two audit
    [api] asks (`/track/points` ownership check, create-endpoint idempotency key for #7); and the **FCM V1
