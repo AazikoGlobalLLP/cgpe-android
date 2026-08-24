@@ -3788,3 +3788,33 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - **OPS unblock handed to the owner (relay):** set `CGPE_REPORT_WEBHOOK_URL` (or `N8N_REPORT_WEBHOOK_URL`) +
   `CGPE_REPORT_SECRET`, wire the n8n `cgpe-report-render` template, restart `:3001`. INBOX left untouched (no
   contract change; concurrent-write-corruption risk, per prior batches).
+
+## 2026-08-24 — E2 report: verified backend "fix" ≠ the fix (Phase 87 is cache, not deployed)
+- Owner said backend reported the report task done. Verified against DEPLOYED code, not the claim.
+- Backend's 2026-08-24 update = **Phase 87** (`services/reportCache.js`): app+panel share one report cache,
+  TTL 24h→7d. It is **only a cache**, and it is on `origin/Shivam` + local, **NOT `origin/main`** (tip still
+  `10e1f76`/Phase 79) → **not live on prod**. Prod deploys only `origin/main`.
+- The real blocker is unchanged: deployed `routes/clients.js:223` returns `503 not_configured` when the
+  render webhook URL is empty; `config/webhooks.js:37` sources `report` from **env only**
+  (`N8N_REPORT_WEBHOOK_URL`, no committed URL). Cache never generates a first report → empty cache + unset
+  webhook = still no report.
+- Decision: app owes nothing (backend confirmed "cgpe-mobile: nothing owed"); did NOT touch app report code.
+  Optional `data.cached` hint deferred until Phase 87 is actually deployed. Ticked the INBOX FYI with both
+  prod-truth flags for the owner; grep-verified the write survived. No source changed this session.
+
+## 2026-08-24 — A3 attendance present/absent (app-side shape mismatch)
+- Symptom: "My attendance" showed every day as "No clock-in recorded", Days-logged/Closed-days 0, on a
+  healthy server. Owner: "present/absent not working well."
+- Root cause: `getAttendanceHistory` (`src/data/api.ts`) reads `/time-tracker/history` FIRST, which returns
+  RAW DayLog documents (`{date, sessions:[{clockIn,clockOut}]}` — times nested in sessions[]). But
+  `attendance.tsx` maps `h.clock_in?.time || h.clockIn` — the flat "attendance record" shape that ONLY the
+  `/attendance/history` fallback leg emits (backend `dayLogToAttendanceRecords`). Every DayLog row read
+  `clock_in === undefined`. The fallback never rescued it because the primary *succeeds* (with the wrong
+  shape); the fallback only fires on a network throw. Verified vs deployed `origin/main` `49482e9`.
+- Decision: normalise at the api boundary, not the screen. New pure `adaptAttendanceHistory()` in `adapt.ts`
+  flattens a DayLog → one record per session (mirrors the backend mapper), passes canonical rows through;
+  both legs of `getAttendanceHistory` run through it. `attendance.tsx` untouched.
+- Decision: keep `/time-tracker/history` as the primary leg (stable/deployed raw-daylog read) and adapt it
+  in-app, rather than swapping to `/attendance/history`, so the fix has zero dependency on backend deploy state.
+- Result: app-side only, no backend/INBOX action. Commit `316cd81`, pushed aaziko Shivam. tsc 0 / test 812
+  (+6) / eslint 0. Device-unverified (OTA-eligible).

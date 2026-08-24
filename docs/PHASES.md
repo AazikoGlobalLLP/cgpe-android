@@ -14,6 +14,27 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — A3 attendance present/absent FIXED (app-side, `316cd81`, pushed aaziko Shivam).**
+Owner: "present/absent not working well." Cause was app-side, not backend: `getAttendanceHistory`
+(`src/data/api.ts`) fetches `/time-tracker/history` FIRST, which returns **raw DayLog docs** with clock
+times nested in `sessions[]`, but `attendance.tsx` mapped the flat `clock_in.time` "attendance record"
+shape that ONLY the `/attendance/history` fallback emits — so every day read `clock_in === undefined`
+and rendered "No clock-in recorded", Days-logged/Closed-days both 0. The fallback never rescued it (the
+primary *succeeds* with the wrong shape). Fix: new pure `adaptAttendanceHistory()` in `adapt.ts` flattens
+a DayLog → one canonical record per session (mirrors backend `dayLogToAttendanceRecords`); both legs run
+through it. Verified vs DEPLOYED `origin/main` (tip `49482e9`, Phase 87 now merged) — no backend change.
+Gates tsc 0 / npm test 812 (+6) / eslint 0. Device-unverified (OTA-eligible). Spec/root-cause in HANDOFF.
+
+**✅ 2026-08-24 — E2 FOLLOW-UP: verified backend's "report done" claim — it does NOT unblock reports.**
+Owner said backend reported the report task done. Verified vs DEPLOYED code (not the claim): the update is
+**Phase 87** (`services/reportCache.js`) — app+panel share one report cache, TTL 24h→7d. It is **only a
+cache** (never generates a first report) and is **NOT on `origin/main`** (tip `10e1f76`/Phase 79; only on
+`origin/Shivam` + local) → **not live on prod**. Deployed `routes/clients.js:223` still returns `503
+not_configured` when the webhook is empty; `config/webhooks.js:37` `report` is **env-ONLY**. So reports
+will NOT generate until the droplet env + n8n template are set — cache doesn't change that. App owes nothing
+(backend confirmed). No source changed; ticked INBOX `cgpe-mobile FYI` + note (grep-verified). Optional
+`data.cached` hint deferred until Phase 87 deploys.
+
 **✅ 2026-08-24 — OWNER BACKLOG E2 (Generate report): app already correct; shipped cause-naming, relayed OPS.**
 Owner picked E2. Verified vs real backend (`routes/clients.js:310`, `reports.js`, `services/pdfReport.js`):
 the mobile report feature was already complete + honest (opens the rendered `viewUrl`/`pdfUrl`; null on
@@ -1920,9 +1941,12 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-24 — after E2 report cause-naming, B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
+**CURRENT next 3 (2026-08-24 — after A3 attendance fix, E2 report cause-naming, B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
 
-1. **Cut a fresh APK and device-verify.** B5 (`0e2a77b`) + D3/B1/D4/C2/D6a-c + Phases 77/78 are all
+0. **D5** (typo-tolerant client/ticket search — mixed `[m]+[api]`; `search.tsx` already has a client-side
+   fuzzy scorer for leads/claims/tasks, clients/tickets are server-searched → server fuzzy needed) OR just
+   **cut the APK** below. (A3 attendance is DONE — `316cd81`; rides the next APK.)
+1. **Cut a fresh APK and device-verify.** A3 (`316cd81`) + B5 (`0e2a77b`) + D3/B1/D4/C2/D6a-c + Phases 77/78 are all
    shipped but **device-unverified** and not in an APK. Owner to decide: build one EAS `preview` APK so
    all reach the phone together, then walk B5 (master Agent-locations lists the whole team), C2 (clock
    out < 8h30m), the new Tasks time views, and the team-member leaner Home + guide.
@@ -1940,7 +1964,9 @@ exercise.
    EAS (Phase 74) before push delivers; and the **report render webhook (E2)** — on the droplet set
    `CGPE_REPORT_WEBHOOK_URL` (or `N8N_REPORT_WEBHOOK_URL`) + `CGPE_REPORT_SECRET`, wire the n8n
    `cgpe-report-render` template, restart `:3001`. Then the app generates + opens reports with zero change
-   (the app now names this exact gap on-device as of `d9656bf`).
+   (the app now names this exact gap on-device as of `d9656bf`). **NOTE (2026-08-24):** the backend's
+   Phase 87 "report cache" is NOT this fix and is NOT on `origin/main` yet — merging it only adds cross-person
+   cache reuse (7-day TTL); it does nothing until the render-webhook env above is set.
 3. **Device-verify the 8 shipped audit fixes** on the fresh APK (EAS `a03e64cb`) — native GPS timeout on a
    dead-GPS spot (#1), shared-handset sign-out/handover (#4/#5), SyncChip/banner render (#9). Backend/data
    backlog (A3, B2/B4/B5, D5, E1, E2, D1 enforcement) via the owner-relay INBOX; **D1** is mostly an
