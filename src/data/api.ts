@@ -3189,9 +3189,72 @@ export async function getLastLocation(userId?: string): Promise<LastLocationResu
   }
 }
 
-/** Generate a family/client report -> POST /api/clients/generate-report. Null on any failure. */
-export async function generateReport(clientName: string): Promise<any | null> {
-  return await tryReal<any>('/clients/generate-report', { method: 'POST', body: JSON.stringify({ clientName }) }, isObj);
+/** The report the server built for a client/family — the shape `client/[id].tsx` renders. */
+export type ReportDoc = {
+  ok: true;
+  reportId: string | null;
+  viewUrl: string | null;
+  pdfUrl: string | null;
+  familyHead: string | null;
+  summary: Record<string, any>;
+};
+
+/**
+ * Why a report could NOT be generated, kept distinct so the screen can name the fix:
+ *   - `not_configured` — the server has no n8n render webhook wired (503 not_configured). This is a
+ *     permanent OPS gap, not a transient outage: retrying can never help, and it must NOT raise the
+ *     global health banner (nothing is "down" — the feature was never switched on). The owner's
+ *     "no report generates anywhere" is almost always THIS (docs/OWNER-BACKLOG §E2).
+ *   - `no_data`       — the server answered, but no report could be built for this seed (422/400, or a
+ *     200 with no url/id). A considered answer, so also quiet.
+ *   - `unavailable`   — n8n unreachable / a 5xx / a dead network / our timeout. THIS is an outage and
+ *     is reported to health like every other read fault.
+ */
+export type ReportFailure = { ok: false; reason: 'not_configured' | 'no_data' | 'unavailable' };
+export type GenerateReportResult = ReportDoc | ReportFailure;
+
+/**
+ * Generate a family/client report -> POST /api/clients/generate-report.
+ *
+ * Unlike a plain `tryReal` (which collapses every non-2xx to `null`), this reads the server's own
+ * status so the UI can distinguish "reports aren't set up on this server yet" from "the service is
+ * momentarily unavailable" — see `routes/clients.js:310` (503 not_configured · 422 no report · 502
+ * n8n down) and the `ReportFailure` doc above. A POST is never retried by `req`, so a single attempt.
+ */
+export async function generateReport(clientName: string): Promise<GenerateReportResult> {
+  const key = healthKey('/clients/generate-report');
+  if (FORCE_DEMO || !sessionReal) return { ok: false, reason: 'unavailable' };
+  try {
+    const { ok, status, json } = await req(
+      '/clients/generate-report',
+      { method: 'POST', body: JSON.stringify({ clientName }) },
+      REQUEST_TIMEOUT,
+      key,
+    );
+    if (ok) {
+      const d = json?.data ?? json;
+      if (isObj(d) && (d.viewUrl || d.pdfUrl || d.reportId)) {
+        return {
+          ok: true,
+          reportId: d.reportId ?? null,
+          viewUrl: d.viewUrl ?? null,
+          pdfUrl: d.pdfUrl ?? null,
+          familyHead: d.familyHead ?? null,
+          summary: isObj(d.summary) ? d.summary : {},
+        };
+      }
+      reportFailure(key, 'server');   // 200 but nothing usable — the server answered wrong
+      return { ok: false, reason: 'no_data' };
+    }
+    // Considered answers stay quiet (no banner); everything else is a real outage.
+    if (status === 503 && json?.not_configured) return { ok: false, reason: 'not_configured' };
+    if (status === 422 || status === 400) return { ok: false, reason: 'no_data' };
+    reportIfOutage(status, key);
+    return { ok: false, reason: 'unavailable' };
+  } catch (e) {
+    reportFailure(key, kindForThrown(e));   // dead network / our timeout abort
+    return { ok: false, reason: 'unavailable' };
+  }
 }
 
 /** Upload a captured/selected file -> POST /api/upload (multipart). Returns {url,key} or null. */

@@ -74,7 +74,7 @@ type ReportSummary = {
 };
 type ReportPayload = {
   ok?: boolean;
-  familyHead?: string;
+  familyHead?: string | null;
   summary?: ReportSummary;
   viewUrl?: string | null;
   pdfUrl?: string | null;
@@ -107,16 +107,24 @@ export default function ClientDetail() {
     haptics.tap();
     setFailure(null);
     setReporting(true);
-    const r: ReportPayload | null = await api.generateReport(client.name);
+    const r = await api.generateReport(client.name);
     setReporting(false);
-    if (r?.ok) {
+    if (r.ok) {
       setReport(r);
       setReportOpen(true);
       haptics.success();
       return;
     }
     haptics.error();
-    setFailure('The report service did not answer, so nothing was generated. No figures are shown.');
+    // Name the actual cause: a server that has reports switched off is a different sentence — and a
+    // different fix (an admin sets it up) — from a service that is momentarily unavailable.
+    setFailure(
+      r.reason === 'not_configured'
+        ? 'Report generation is not set up on the server yet. Ask your admin to enable it, then try again.'
+        : r.reason === 'no_data'
+          ? 'No report could be built for this client. Check the name and try again.'
+          : 'The report service did not answer, so nothing was generated. No figures are shown.',
+    );
   }, [client, reporting]);
 
   const sendReminder = useCallback(() => {
@@ -373,7 +381,7 @@ function ReportSheet({ visible, report, onClose }: {
       visible={visible}
       onClose={onClose}
       title="Client report"
-      subtitle={report?.familyHead}
+      subtitle={report?.familyHead ?? undefined}
       footer={<Button label="Share report" icon="share-social" full onPress={share} />}
     >
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
