@@ -23,6 +23,7 @@ import type { Task } from '@/data/tasks';
 import { TASK_STATUS } from '@/data/tasks';
 import { CLAIM_STATUS, STAGE_META } from '@/data/labels';
 import { inrShort } from '@/lib/format';
+import { tokenFuzzyHit, FUZZY_MIN } from '@/lib/fuzzyMatch';
 
 /* ------------------------------------------------------------------ *
  * Global search — one box over five record types.
@@ -74,6 +75,13 @@ const BULK_TTL_MS = 90_000;
 const T_EXACT = 3;
 const T_PREFIX = 2;
 const T_CONTAINS = 1;
+/**
+ * Typo tolerance, a fractional tier BELOW "contains". A mistyped or transposed character
+ * ("rajseh"→"Rajesh") still reaches the record, but the resulting score (5 + weight) always
+ * ranks under a genuine substring hit (10 + weight), so a real match is never buried by a
+ * lucky near-miss. Edit-distance logic lives, and is tested, in `@/lib/fuzzyMatch`.
+ */
+const T_FUZZY = 0.5;
 
 /** Field weights. Ties inside a tier break towards the identifying fields. */
 const W_ID = 3;
@@ -119,7 +127,23 @@ function buildQuery(raw: string): Q {
   };
 }
 
-/** 3 exact, 2 prefix, 1 contains, 0 miss. */
+/**
+ * Last-resort typo match. Every query token must find a home in the value: a short token
+ * (below the fuzzy minimum) must appear as a substring — it is never fuzzed, because a
+ * two-letter edit budget is meaningless — while a longer token may sit within its edit
+ * budget of any word. So "rajseh ptael" reaches "Rajesh Patel", but "in" still has to be
+ * really present. Splitting on whitespace (not a Latin class) keeps Gujarati words intact.
+ */
+function fuzzyMatches(q: Q, valueLower: string): boolean {
+  if (q.tokens.length === 0) return false;
+  const words = valueLower.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return false;
+  return q.tokens.every((tk) =>
+    tk.length < FUZZY_MIN ? words.some((w) => w.includes(tk)) : tokenFuzzyHit(tk, words),
+  );
+}
+
+/** 3 exact, 2 prefix, 1 contains, 0.5 fuzzy (typo), 0 miss. */
 function tierFor(q: Q, value: string): number {
   const lower = value.trim().toLowerCase();
   if (!lower) return 0;
@@ -151,6 +175,11 @@ function tierFor(q: Q, value: string): number {
   if (q.compact && compact.includes(q.compact)) return T_CONTAINS;
   // Out-of-order multi word: "patel rajesh" finds "Rajesh Patel".
   if (q.tokens.length > 1 && q.tokens.every((t) => lower.includes(t))) return T_CONTAINS;
+
+  // Typo tolerance, last of all. Skipped for numeric queries: a wrong digit must never pull
+  // back a DIFFERENT person's phone or policy number — a near-miss there is a wrong answer,
+  // not a helpful one. The digit path above already owns numeric lookups.
+  if (!q.numeric && fuzzyMatches(q, lower)) return T_FUZZY;
 
   return 0;
 }
