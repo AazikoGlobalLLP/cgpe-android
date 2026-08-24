@@ -1,71 +1,86 @@
-# HANDOFF — CGPE Connect (Android) — Band 2 #2: Tasks-tab local search — 2026-08-24
+# HANDOFF — CGPE Connect (Android) — Band 2 #3: task-flow mitigations — 2026-08-24
 
 ## Done
-- **The Tasks tab now has a search box.** Typing filters the already-loaded task list in memory,
-  instantly (no network). It forgives typos (`rajseh` → Rajesh), swapped word order (`patel rajesh`
-  → "Rajesh Patel"), and matches a client's mobile by its last four digits. It searches the **whole**
-  loaded list, so a task in a future month — which the Today/Week/Month/Calendar views cannot reach —
-  is now findable. Offline drafts are searchable too and render inert.
-- **The search scorer is now shared, not duplicated.** `search.tsx`'s hand-rolled scorer was extracted
-  verbatim into a pure, unit-tested `src/lib/searchScore.ts`; the global Search screen and the Tasks tab
-  now score a record identically and can't drift. Global search behaviour is unchanged.
-- Gates green: `tsc` 0 · `npm test` **863** (+34) · `eslint` 0 new. Commit `c47be1b`, pushed
-  `aaziko/Shivam`. OTA-eligible; device-unverified.
+- **Team-tier advisors are no longer invited to create tasks they can't.** The backend 403s a
+  team-tier advisor on *every* task create (verified in `team.js:384` — create is allow-listed to
+  admin/leader/super_admin). The app now hides every "Add task" affordance from them — the Tasks-tab
+  FAB and empty-state buttons, Home's quick-action and empty-states, and the Admin/Master dashboard
+  tiles — and the create form refuses at the entry (for a deep-link) instead of only at submit. All of
+  them share ONE predicate (`capabilitiesOf().assignTasks && can('can_create_task')`), so they can't
+  drift. Entitled tiers are unaffected.
+- **You can now edit a task after creating it.** A pencil in the task-detail header opens a new
+  Edit-task screen (title / details / client / priority / due). Due defaults to "Keep" so fixing a
+  typo never moves the due date. The pencil is hidden on a *done* task (editing it would have
+  re-credited it to today's completed count).
+- **The always-empty "Workflow" checklist card is gone.** Real team tasks carry no steps, so the card
+  only ever showed a "No checklist" message that read as broken. It's now hidden when a task has no
+  steps (kept for the legacy path that can have them).
+- **The assign / transfer people-picker is fixed.** It now pulls the real staff directory (so an admin
+  sees colleagues who have no task yet, not just people already in the task list), and each picker has
+  a search box + name sort + a "showing N of M" hint so nobody past the render cap is silently hidden.
+  Transfer is limited to entitled tiers (a team advisor has no one to hand a task to).
+- Gates green: `tsc` 0 · `npm test` **877** (+14: `api-task-edit`, `team`) · `eslint` 0 new. Two
+  adversarial review workflows run (15-agent full + 3-agent fix-delta); the full pass found 8 real
+  issues, all fixed; the delta pass came back clean. Commit `af7e492`, pushed `aaziko/Shivam`.
+  OTA-eligible; **device-unverified**.
 
 ## Files changed
-- `src/lib/searchScore.ts` — **NEW**. The pure scorer (`buildQuery`/`tierFor`/`bestHit`/`matchesFields`/
-  `rank` + tier/weight consts + `Q`/`Field`/`Hit`/`Ranked` types), extracted verbatim from `search.tsx`.
-  Imports **only** `@/lib/fuzzyMatch`, so it stays a leaf and is safe in the Vitest graph (no stub).
-- `src/data/tasks.ts` — added `taskSearchFields(t)` (the one shared definition of a task's searchable
-  columns, with load-bearing weights) and `searchTasks(list, raw)` (pure: blank query returns the list
-  unchanged by reference; else filters by `matchesFields`; **preserves input order; no cap**).
-- `src/app/search.tsx` — deleted the inline scorer, now imports it from `searchScore`; its local
-  `taskFields` was replaced by the shared `taskSearchFields`. **No behaviour change** (parity confirmed).
-- `src/app/(tabs)/tasks.tsx` — fixed `SearchBar` below the header (only after first load); when a query is
-  present, a flat results list (or an honest no-match/outage `EmptyState`) replaces the hero/time-toggle;
-  results reuse `TaskCard` (swipe-complete/reopen work); pending drafts render inert. The write-failure
-  banner was hoisted so it shows in both search and normal modes. **`keyboardShouldPersistTaps="handled"`
-  + `keyboardDismissMode="on-drag"`** on the ScrollView (see the review bug below).
-- `src/lib/__tests__/searchScore.test.ts` — **NEW**, ~30 cases pinning the five tiers, phone-tail path,
-  out-of-order matching, the weight tie-break, and `rank`'s cap.
-- `src/data/__tests__/tasks.test.ts` — added `searchTasks`/`taskSearchFields` cases: typo/word-order/
-  phone-tail, short-token literal requirement, blank-query same-reference, field weights, and the
-  **multi-match input-order + `>GROUP_CAP` no-cap contract** (guards a future `rank()`-based regression).
+- `src/data/api.ts` — **NEW** `updateTask(id, patch)` (PATCH `/team/tasks/:id`, partial body; `dueAt`
+  sent only when the due date changes; three-outcome `{ok, reason?}`, no 403 gate — edit is open on the
+  backend). **NEW** `getAssignableTeam()` — prefers the `/profiles` directory (admin/super get every
+  colleague), falls back to the scoped `getTeam()` (leader gets their team; team-tier gets self/empty
+  and never reaches a picker), sorted by name.
+- `src/data/team.ts` — **NEW** pure `filterMembers(list, q)` (multi-token AND over name/branch/role;
+  blank query = same reference). Shared by both pickers.
+- `src/app/(tabs)/tasks.tsx` — `canCreateTask` gate on the FAB + all empty-state Add actions;
+  book-empty copy differs for non-creators. Search branch (Band 2 #2) untouched.
+- `src/app/(tabs)/home.tsx` — the create gate at `:688` now ANDs `caps.assignTasks` (was flag-only,
+  which fails open); passes `canCreateTask` to the two dashboards.
+- `src/screens/dashboards.tsx` — Admin/Master "Assign task" QuickRow gated on a new `canCreateTask`
+  prop (fail-open default).
+- `src/app/task/[id].tsx` — Workflow section hidden when `steps.length===0`; Edit pencil in the Header
+  (hidden when done); transfer gated on `assignTasks`, uses `getAssignableTeam()`, and the transfer
+  sheet gained search + cap + hint.
+- `src/app/task-new.tsx` — entry guard for non-creators; roster from `getAssignableTeam()`; assignee
+  sheet gained search + cap + hint.
+- `src/app/task-edit.tsx` — **NEW** Edit screen.
+- `src/data/__tests__/api-task-edit.test.ts` (**NEW**, 8) · `src/data/__tests__/team.test.ts`
+  (**NEW**, 6) · `docs/spec/BAND2-3-task-flow.md` (**NEW** spec, kept in sync with the review fixes).
 
 ## Decisions made
-- **The scorer lives in `lib/searchScore.ts` (pure), the field lists stay with their owners.** `searchScore`
-  knows nothing about a Client/Task/Ticket — it scores weighted `Field`s. `taskSearchFields` sits in
-  `data/tasks` (next to `Task`) and is imported by BOTH search surfaces, so there's one definition of
-  "how a task is searched". This keeps `searchScore` a native-free leaf reachable from the Vitest graph.
-- **The Tasks local filter is uncapped and preserves input order** (the tab re-sorts with `sortTasks`),
-  unlike the global search's `rank()` which sorts by score and slices to `GROUP_CAP=20`. Capping would
-  *hide* matching tasks — wrong for "find a task". The adversarial review agreed (uncapped flag refuted).
-- **New UI sentences are hardcoded English; the placeholder reuses `t('common.search')`.** Matches the
-  all-English `search.tsx` and the report-fix precedent, so **no 5-language copy is owed**. A brand-new
-  i18n key would have owed copy — deliberately avoided.
-- **Ran a 10-agent adversarial review workflow after implementing.** Its `parity` pass came back clean;
-  it caught one real major bug (below) and three test-hardening items, all fixed before commit.
+- **Gate on `capabilitiesOf().assignTasks`, not the RBAC flag alone.** The RBAC `can_create_task` flag
+  fails OPEN when unseeded (Point 6), so it can't hide create from the team-tier users we're protecting.
+  `assignTasks` is the reliable role-derived mirror of the backend's allow-list (leader folds into the
+  admin tier and IS allowed, so the tier is correct here — unlike payroll). The flag is ANDed on so a
+  future seeded restriction still bites.
+- **Edit is NOT gated; transfer IS.** The backend PATCH has no ownership gate (any staff may edit any
+  team task), so a member may edit their own task — but transfer is assign-to-others, which the RBAC
+  config forbids team-tier and which they have no roster for. This mirrors the backend exactly.
+- **The pickers got real search, not just a bigger cap.** Enlarging the roster to the full directory
+  made the pre-existing 24/40 caps bite; a name search + sort + overflow hint is the app's convention
+  and removes the "can't reach that colleague" block. `filterMembers` is pure + tested.
 
-## Known broken / deliberately skipped
-- **This only searches the ALREADY-LOADED list.** The real "word order" fix for tickets/clients is the
-  **`[api]` tokenize relay** (the backend `?search=` is a single whole-phrase regex — "patel rajesh" ≠
-  "Rajesh Patel"; same owed ask as D5's whole-book fuzzy). Do **not** over-promise the local filter as
-  fixing server search. INBOX untouched (no contract change — additive client behaviour).
-- **The keyboard-swallows-first-tap bug the review caught** was real: the results ScrollView had no
-  `keyboardShouldPersistTaps`, so the SearchBar (which keeps the keyboard up) ate the first tap on every
-  result. Fixed to `"handled"` + `keyboardDismissMode="on-drag"`, matching `search.tsx`. **Any new screen
-  with a text input above a scrollable tappable list needs this** — now noted in `CLAUDE.md`.
-- Device-unverified (OTA) — walk the Tasks-tab search on a device: type a partial name, a typo, a
-  4-digit phone tail; confirm the first tap opens a result (no double-tap).
+## Known broken / deliberately skipped (owner-owned)
+- **Create policy** — whether a team advisor should be able to create their *own* tasks is an owner
+  `[decision]` + backend `[api]` relay (the backend 403s them today; the RBAC config's
+  `can_create_task:true` default suggests the intent is "yes, self-only", which contradicts the
+  backend). The app only moves the refusal to the entry; it does NOT enable what the backend forbids.
+- **Edit ownership** — the backend lets any staff edit/reassign any team task (no scope). Flagged, not
+  fixed — `[api]`/`[decision]`.
+- **Real task checklists** — no backend step endpoint exists (`[api]`). The card is hidden, not filled.
+- **Known nit (not fixed):** for a *leader with zero team-tasks*, `getAssignableTeam()` requests
+  `/profiles` twice (its own attempt 403s, then `getTeam()`'s fallback retries it) — correct result,
+  quiet, rare. Not worth the refactor.
+- INBOX untouched (additive client behaviour, no contract change).
 
 ## Next session starts here
-- Phase: **Band 2 #3 — task-flow mitigations** (Point 5, P1, OTA). In `(tabs)/tasks.tsx` + `task/[id].tsx`
-  + `task-new.tsx`: hide the always-empty "Workflow" checklist card, gate the "Add task" affordances on
-  `can_create_task` (so team-tier users aren't invited into a backend 403), add an **Edit-task** screen
-  reusing the live PATCH fields, and fix the empty assign/transfer roster. Authoritative worklist:
-  `docs/OWNER-BACKLOG-2026-08-24.md` (Point 5, then Point 4 calendar grid).
+- Phase: **Band 2 #4 — Calendar grid + create gating** (owner backlog Point 4, P2/one-P1-bit, OTA).
+  The Tasks tab already has 4 time views + a horizontal month day-strip (D4); Point 4 wants a real
+  **7-column month grid with ‹prev/next› + month header**, the per-day **count** shown (not a binary
+  dot), all-completed days marked, and the create-gating already done here reused. Then Point 10
+  (Client Search in More — scope the existing search to clients-only). Authoritative worklist:
+  `docs/OWNER-BACKLOG-2026-08-24.md`.
 - First command: `/boot`
-- Watch out for: the create-policy half is a **decision + `[api]`** (should team-tier create their own
-  tasks at all? the backend 403s them today) — the app can only move the refusal to the *entry* and fix
-  the roster; do not silently "enable" creation the backend forbids. And the empty roster is derived from
-  a self-scoped source — verify what `getTeam()` returns for a team-tier token before wiring the picker.
+- Watch out for: the calendar work overlaps `(tabs)/tasks.tsx` (which now has the search branch AND the
+  create-gating) — don't perturb either. Pure date-grid maths should go in `data/tasks.ts` (tested)
+  like `weekRange`/`monthRange`/`tasksInRange` already are.
