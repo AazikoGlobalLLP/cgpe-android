@@ -222,9 +222,12 @@ function MemberDetailRow({ member, onPress }: { member: TeamMember; onPress: () 
 
 /* --------------------------------------------------------------- ADMIN */
 
-export function AdminDashboard({ team, tasks, snapshot }: {
+export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: {
   team: TeamMember[]; tasks: Task[];
   snapshot: OrgSnapshot | null;
+  /** Band 2 #3: hide the "Assign task" quick action when the role/RBAC forbids create (Home passes
+   *  the resolved flag). Fail-open by default so an omitted prop never removes an entitled action. */
+  canCreateTask?: boolean;
 }) {
   const c = useTheme();
   const router = useRouter();
@@ -284,7 +287,7 @@ export function AdminDashboard({ team, tasks, snapshot }: {
         {/* No "Agent map" here: live agent locations are Master-only (Phase 40). The Admin tier
             (which folds in leaders) monitors duty status via the team roster, not the map. */}
         <QuickRow actions={[
-          { icon: 'person-add', label: 'Assign task', tint: c.primary, onPress: () => router.push('/task-new') },
+          ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: 'Assign task', tint: c.primary, onPress: () => router.push('/task-new') }] : []),
           { icon: 'paper-plane', label: 'Send renewals', tint: c.warning, onPress: () => router.push('/premium') },
           { icon: 'people-circle', label: 'Team', tint: th.accent, onPress: () => router.push('/team') },
           { icon: 'shield-half', label: 'Claims', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
@@ -314,10 +317,12 @@ export function AdminDashboard({ team, tasks, snapshot }: {
 
 /* --------------------------------------------------------------- MASTER */
 
-export function MasterDashboard({ team, tasks, snapshot, notifications }: {
+export function MasterDashboard({ team, tasks, snapshot, notifications, canCreateTask = true }: {
   team: TeamMember[]; tasks: Task[];
   snapshot: OrgSnapshot | null;
   notifications: any[];
+  /** Band 2 #3: hide the "Assign task" quick action when the role/RBAC forbids create (fail-open). */
+  canCreateTask?: boolean;
 }) {
   const c = useTheme();
   const router = useRouter();
@@ -380,7 +385,7 @@ export function MasterDashboard({ team, tasks, snapshot, notifications }: {
           { icon: 'navigate', label: 'Movement', tint: c.accent, onPress: () => router.push('/agent-track') },
           { icon: 'stats-chart', label: 'Analytics', tint: c.primary, onPress: () => router.push('/analytics') },
           { icon: 'paper-plane', label: 'Campaigns', tint: c.warning, onPress: () => router.push('/campaigns') },
-          { icon: 'person-add', label: 'Assign task', tint: c.success, onPress: () => router.push('/task-new') },
+          ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: 'Assign task', tint: c.success, onPress: () => router.push('/task-new') }] : []),
         ]} />
       </View>
 

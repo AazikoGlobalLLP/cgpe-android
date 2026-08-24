@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { font, radius, spacing, useTheme } from '@/theme/theme';
 import { Header, KeyboardScroll, Row, Screen, Txt } from '@/ui/base';
-import { Button, Chips, Field, Segmented } from '@/ui/controls';
+import { Button, Chips, Field, Segmented, SearchBar } from '@/ui/controls';
 import { Banner, EmptyState, Skeleton, useToast } from '@/ui/feedback';
 import type { FeedbackTone } from '@/ui/feedback';
 import { Avatar, PersonRow } from '@/ui/identity';
@@ -17,8 +17,12 @@ import { haptics } from '@/lib/haptics';
 
 import * as api from '@/data/api';
 import type { TaskPriority } from '@/data/tasks';
+import { filterMembers } from '@/data/team';
 import type { TeamMember } from '@/data/team';
 import { fmtDate, fmtTime } from '@/lib/format';
+import { useAuth } from '@/store/auth';
+import { useAppUi } from '@/store/appUi';
+import { capabilitiesOf } from '@/store/roles';
 
 /* ------------------------------------------------------------------ *
  * New task — the app's main data-entry screen.
@@ -89,6 +93,13 @@ export default function TaskNew() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const health = useDataHealth();
+  const { user, viewAs } = useAuth();
+  const { ready: uiReady, can } = useAppUi();
+  // Band 2 #3 (Point 5): the backend 403s a team-tier advisor on ANY create (team.js:384). This
+  // screen is now reached only by an entitled tier (the Tasks tab / Home hide the create affordances
+  // for team), but a deep-link or older entry could still land here — so we ALSO guard at the entry
+  // (below) and show an honest "can't create" state instead of a form that only fails at submit.
+  const canCreateTask = capabilitiesOf(user, viewAs).assignTasks && (uiReady ? can('can_create_task') !== false : true);
 
   const [title, setTitle] = useState('');
   const [titleError, setTitleError] = useState('');
@@ -100,6 +111,7 @@ export default function TaskNew() {
   const [assignee, setAssignee] = useState(UNASSIGNED);
   const [members, setMembers] = useState<TeamMember[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
 
@@ -111,14 +123,17 @@ export default function TaskNew() {
   }, []);
 
   useEffect(() => {
+    if (!canCreateTask) return;   // a non-creator gets the entry guard below — no roster needed
     let alive = true;
     (async () => {
-      const roster = await api.getTeam().catch(() => [] as TeamMember[]);
+      // Band 2 #3: assign from the staff DIRECTORY, not the task-derived roster, so a colleague
+      // with no task yet is still assignable (getTeam missed them for a plain admin).
+      const roster = await api.getAssignableTeam().catch(() => [] as TeamMember[]);
       if (!alive) return;
       setMembers(roster.filter((m) => !!m.name));
     })();
     return () => { alive = false; };
-  }, []);
+  }, [canCreateTask]);
 
   const due = dueDateFor(when);
 
@@ -128,6 +143,7 @@ export default function TaskNew() {
     haptics.select();
     setAssignee(name);
     setPickerOpen(false);
+    setPickerQuery('');
   };
 
   const save = async () => {
@@ -192,6 +208,30 @@ export default function TaskNew() {
   };
 
   const roster = members ?? [];
+  // Band 2 #3 review fix: the assignable roster is now the FULL staff directory, so filter it by the
+  // picker's search box and cap the render — an entitled user can reach any colleague, and the list is
+  // never silently truncated (a hint names the overflow). Blank query returns the roster by reference.
+  const ROSTER_CAP = 40;
+  const filteredRoster = filterMembers(roster, pickerQuery);
+  const shownRoster = filteredRoster.slice(0, ROSTER_CAP);
+  const rosterSearchable = !!members && roster.length > 8;
+
+  // Band 2 #3 — the entry guard. A team-tier advisor who reaches this screen (deep link / stale
+  // entry) sees an honest refusal immediately, not a full form that only 403s at submit.
+  if (!canCreateTask) {
+    return (
+      <Screen>
+        <Header title="New task" back />
+        <View style={{ flex: 1, justifyContent: 'center', padding: spacing.lg }}>
+          <EmptyState
+            icon="lock-closed-outline"
+            title="Only admins can create tasks"
+            subtitle="Creating work for the team needs an admin, leader, or super admin role. Ask your branch admin to add the task, or to raise your access."
+          />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen keyboard>
@@ -326,38 +366,54 @@ export default function TaskNew() {
       {/* ---------- assignee picker ---------- */}
       <Sheet
         visible={pickerOpen}
-        onClose={() => setPickerOpen(false)}
+        onClose={() => { setPickerOpen(false); setPickerQuery(''); }}
         title="Assign to"
         subtitle={assignee === UNASSIGNED ? 'Leave it unassigned to keep it on your own list' : `Currently ${assignee}`}
       >
         <View style={{ paddingTop: spacing.xs }}>
-          <Pressable
-            onPress={() => choose(UNASSIGNED)}
-            accessibilityRole="button"
-            accessibilityLabel="Leave unassigned"
-            accessibilityState={{ selected: assignee === UNASSIGNED }}
-            style={({ pressed }) => [{
-              flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-              minHeight: 56, paddingVertical: spacing.sm + 2,
-              paddingHorizontal: spacing.sm, marginHorizontal: -spacing.sm,
-              borderRadius: radius.md,
-              backgroundColor: pressed ? c.cardAlt : 'transparent',
-            }]}
-          >
-            <View style={{
-              width: 44, height: 44, borderRadius: 44 / 2.6, backgroundColor: c.cardAlt,
-              alignItems: 'center', justifyContent: 'center',
-            }}>
-              <Ionicons name="person-outline" size={20} color={c.faint} />
+          {/* Search — shown only when the roster is large enough to need narrowing. The sheet's own
+              ScrollView carries keyboardShouldPersistTaps, so the first tap on a result still lands. */}
+          {rosterSearchable ? (
+            <View style={{ marginBottom: spacing.md }}>
+              <SearchBar
+                value={pickerQuery}
+                onChange={setPickerQuery}
+                onSubmit={() => {}}
+                placeholder="Search colleagues"
+              />
             </View>
-            <View style={{ flex: 1 }}>
-              <Txt size={font.body} weight="700" numberOfLines={1}>Leave unassigned</Txt>
-              <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>
-                Stays on your own list
-              </Txt>
-            </View>
-            {assignee === UNASSIGNED ? <Ionicons name="checkmark" size={19} color={c.primary} /> : null}
-          </Pressable>
+          ) : null}
+
+          {/* Unassigned — hidden while searching for a specific person. */}
+          {!pickerQuery.trim() ? (
+            <Pressable
+              onPress={() => choose(UNASSIGNED)}
+              accessibilityRole="button"
+              accessibilityLabel="Leave unassigned"
+              accessibilityState={{ selected: assignee === UNASSIGNED }}
+              style={({ pressed }) => [{
+                flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                minHeight: 56, paddingVertical: spacing.sm + 2,
+                paddingHorizontal: spacing.sm, marginHorizontal: -spacing.sm,
+                borderRadius: radius.md,
+                backgroundColor: pressed ? c.cardAlt : 'transparent',
+              }]}
+            >
+              <View style={{
+                width: 44, height: 44, borderRadius: 44 / 2.6, backgroundColor: c.cardAlt,
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Ionicons name="person-outline" size={20} color={c.faint} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Txt size={font.body} weight="700" numberOfLines={1}>Leave unassigned</Txt>
+                <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>
+                  Stays on your own list
+                </Txt>
+              </View>
+              {assignee === UNASSIGNED ? <Ionicons name="checkmark" size={19} color={c.primary} /> : null}
+            </Pressable>
+          ) : null}
 
           {members === null ? (
             <View style={{ gap: spacing.lg, marginTop: spacing.lg }}>
@@ -379,20 +435,33 @@ export default function TaskNew() {
                 ? 'The server could not be reached, so this list is not confirmed. The task can still be created unassigned.'
                 : 'There is nobody else on your roster, so this task can only stay on your own list.'}
             />
+          ) : shownRoster.length === 0 ? (
+            <EmptyState
+              icon="search-outline"
+              title={`No colleague matches "${pickerQuery.trim()}"`}
+              subtitle="Try a shorter piece of the name, or clear the search to see everyone."
+            />
           ) : (
-            roster.slice(0, 40).map((m) => (
-              <PersonRow
-                key={m.id}
-                name={m.name}
-                subtitle={m.branch || m.role}
-                onPress={() => choose(m.name)}
-                right={m.name === assignee
-                  ? <Ionicons name="checkmark" size={19} color={c.primary} />
-                  : undefined}
-                chevron={m.name !== assignee}
-                style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline }}
-              />
-            ))
+            <>
+              {shownRoster.map((m) => (
+                <PersonRow
+                  key={m.id}
+                  name={m.name}
+                  subtitle={m.branch || m.role}
+                  onPress={() => choose(m.name)}
+                  right={m.name === assignee
+                    ? <Ionicons name="checkmark" size={19} color={c.primary} />
+                    : undefined}
+                  chevron={m.name !== assignee}
+                  style={{ borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline }}
+                />
+              ))}
+              {filteredRoster.length > ROSTER_CAP ? (
+                <Txt size={font.sub} color={c.faint} style={{ paddingVertical: spacing.md, textAlign: 'center' }}>
+                  {`Showing ${ROSTER_CAP} of ${filteredRoster.length} — search by name to find more`}
+                </Txt>
+              ) : null}
+            </>
           )}
         </View>
       </Sheet>

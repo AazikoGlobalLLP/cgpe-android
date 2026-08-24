@@ -685,7 +685,11 @@ export default function Home() {
    * away from someone standing in the office.
    */
   const canClockIn = storeReady ? can('can_clock_in') !== false : true;
-  const canCreateTask = storeReady ? can('can_create_task') !== false : true;
+  // Band 2 #3 (Point 5): the backend 403s a team-tier advisor on ANY create (team.js:384), so gate
+  // on the role-derived `caps.assignTasks` (false for team) AS WELL AS the RBAC flag — matching the
+  // Tasks tab and task-new. The flag alone fails OPEN when unseeded, so without the caps term a team
+  // advisor would still be shown "Add task" here and dead-end at the create screen's entry guard.
+  const canCreateTask = caps.assignTasks && (storeReady ? can('can_create_task') !== false : true);
   const canRoster = storeReady ? can('can_view_team_roster') !== false : true;
   const canOrgAnalytics = storeReady ? can('can_view_org_analytics') !== false : true;
 
@@ -2314,8 +2318,8 @@ export default function Home() {
                 />
                 {orgReady ? (
                   caps.tier === 'master'
-                    ? <MasterDashboard team={team} tasks={tasks} snapshot={snapshot} notifications={notifs} />
-                    : <AdminDashboard team={team} tasks={tasks} snapshot={snapshot} />
+                    ? <MasterDashboard team={team} tasks={tasks} snapshot={snapshot} notifications={notifs} canCreateTask={canCreateTask} />
+                    : <AdminDashboard team={team} tasks={tasks} snapshot={snapshot} canCreateTask={canCreateTask} />
                 ) : (
                   <Card>
                     {health.degraded ? (

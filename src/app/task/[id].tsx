@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { font, radius, spacing, useTheme } from '@/theme/theme';
 import { Card, Header, Row, Screen, SectionHeader, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
-import { Button } from '@/ui/controls';
+import { Button, IconBtn, SearchBar } from '@/ui/controls';
 import { Banner, EmptyState, Meter, Skeleton, SkeletonText, useToast } from '@/ui/feedback';
 import type { FeedbackTone } from '@/ui/feedback';
 import { DataRow, ListSection, Pill } from '@/ui/data';
@@ -19,11 +19,14 @@ import { haptics } from '@/lib/haptics';
 
 import * as api from '@/data/api';
 import { CATEGORY_ICON, Task, TaskStatus, TASK_PRIORITY, TASK_STATUS, taskProgress } from '@/data/tasks';
+import { filterMembers } from '@/data/team';
 import type { TeamMember } from '@/data/team';
 import type { Client } from '@/data/types';
 import { fmtDate, fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
+import { useAuth } from '@/store/auth';
+import { capabilitiesOf } from '@/store/roles';
 
 /* ------------------------------------------------------------------ *
  * Task detail — the workflow screen.
@@ -131,6 +134,13 @@ export default function TaskDetail() {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const health = useDataHealth();
+  const { user, viewAs } = useAuth();
+  // Band 2 #3 (Point 5): reassignment is an assign-to-others action. A team-tier advisor has no
+  // roster to transfer to (the directory endpoints 403 them) and the RBAC config sets
+  // can_assign_task_to_others:false for team, so the transfer affordance is shown only to entitled
+  // tiers (admin/leader/master). EDIT is NOT gated — the backend PATCH has no ownership gate, so a
+  // member may edit the task assigned to them.
+  const canAssign = capabilitiesOf(user, viewAs).assignTasks;
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [task, setTask] = useState<Task | null>(null);
@@ -140,6 +150,7 @@ export default function TaskDetail() {
 
   const [statusOpen, setStatusOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [transferQuery, setTransferQuery] = useState('');
   const [team, setTeam] = useState<TeamMember[] | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
   const [contact, setContact] = useState<{ name: string; phone: string; clientId: string } | null>(null);
@@ -222,7 +233,9 @@ export default function TaskDetail() {
   const openTransfer = async () => {
     setTransferOpen(true);
     if (team) return;
-    const list = await api.getTeam().catch(() => [] as TeamMember[]);
+    // Band 2 #3: the assignable roster is the staff DIRECTORY (/profiles) for an entitled user, not
+    // the task-derived getTeam() roster — so a colleague with no task yet is still a transfer target.
+    const list = await api.getAssignableTeam().catch(() => [] as TeamMember[]);
     if (!live.current) return;
     setTeam(list);
   };
@@ -230,6 +243,7 @@ export default function TaskDetail() {
   const confirmTransfer = async (to: string) => {
     if (!task) return;
     setTransferOpen(false);
+    setTransferQuery('');
     setBusy(true);
 
     const ok = await api.reassignTask(task.id, to);
@@ -324,10 +338,41 @@ export default function TaskDetail() {
   const isDone = task.status === 'done';
   const assignee = assigneeOf(task);
   const transferTargets = (team ?? []).filter((m) => m.name && m.name !== assignee);
+  // Band 2 #3 review fix: filter + cap the (now full-directory) transfer roster with the sheet's
+  // search, so an entitled user can reach any colleague and the list is never silently truncated.
+  const TRANSFER_CAP = 24;
+  const filteredTargets = filterMembers(transferTargets, transferQuery);
+  const shownTargets = filteredTargets.slice(0, TRANSFER_CAP);
+  const targetsSearchable = transferTargets.length > 8;
 
   return (
     <Screen>
-      <Header title={task.category} back />
+      <Header
+        title={task.category}
+        back
+        right={
+          /* Band 2 #3: no Edit on a DONE task. A field-edit PATCH bumps the backend's updatedAt,
+             which adaptTeamTask reads as a done task's completedAt — editing a task finished days ago
+             would re-credit it to TODAY's completed count. Correct a done task via Reopen first. */
+          isDone ? undefined : (
+            <IconBtn
+              icon="create-outline"
+              accessibilityLabel="Edit task"
+              onPress={() => router.push({
+                pathname: '/task-edit',
+                params: {
+                  id: task.id,
+                  title: task.title,
+                  description: task.description ?? '',
+                  client: task.client ?? '',
+                  priority: task.priority,
+                  dueDate: task.dueDate,
+                },
+              })}
+            />
+          )
+        }
+      />
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: spacing.xxl, gap: spacing.lg }}
@@ -396,19 +441,26 @@ export default function TaskDetail() {
             />
             <DataRow icon="person-outline" label="Assigned by" value={task.assignedBy || 'Not recorded'} />
             {assignee ? (
+              /* Band 2 #3: only an entitled tier may reassign; a team-tier sees it read-only. */
               <DataRow
                 icon="swap-horizontal-outline"
                 label="Assigned to"
                 value={assignee}
-                onPress={openTransfer}
+                onPress={canAssign ? openTransfer : undefined}
               />
-            ) : (
+            ) : canAssign ? (
               <DataRow
                 icon="swap-horizontal-outline"
                 label="Assigned to"
                 value="Transfer this task"
                 tone="primary"
                 onPress={openTransfer}
+              />
+            ) : (
+              <DataRow
+                icon="swap-horizontal-outline"
+                label="Assigned to"
+                value="Unassigned"
               />
             )}
             {task.client ? <DataRow icon="people-outline" label="Client" value={task.client} /> : null}
@@ -425,66 +477,63 @@ export default function TaskDetail() {
           </ListSection>
         </Appear>
 
-        {/* THE WORK. */}
-        <Appear index={2}>
-          <View>
-            <SectionHeader title="Workflow" />
-            <Card padded={false}>
-              {/* Clip on an INNER view: `overflow: hidden` alongside `elevation` kills the
-                  Android shadow, and the card would lose its depth. */}
-              <View style={{ borderRadius: radius.lg, overflow: 'hidden' }}>
-                {task.steps.length > 0 ? (
-                  <>
-                    <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md }}>
-                      <Meter
-                        value={prog}
-                        label="Steps completed"
-                        valueLabel={`${doneSteps}/${task.steps.length}`}
-                        tone={prog >= 1 ? 'success' : 'primary'}
-                      />
-                    </View>
-                    {task.steps.map((s, i) => (
-                      <Appear key={s.id} index={i} distance={6}>
-                        <View style={{
-                          height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: spacing.lg,
-                        }} />
-                        <View
-                          accessibilityRole="text"
-                          accessibilityLabel={`${s.label}. ${s.done ? 'Completed' : 'Not completed'}.`}
-                          style={{
-                            flexDirection: 'row', alignItems: 'center', gap: spacing.md,
-                            minHeight: 52, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-                          }}
+        {/* THE WORK — a checklist, shown ONLY when the task carries steps (Band 2 #3, Point 5).
+            Real team tasks never carry steps (the backend team_tasks have no step field, and
+            adaptTeamTask returns steps:[]), so an always-empty "Workflow" card with a "No checklist"
+            message read as broken. It is now hidden entirely when empty. A legacy /tasks record CAN
+            carry steps, so the card still renders for the (currently dead) path that has them — this
+            is "hide when empty", not "deleted". The old empty-state's "Change status" shortcut is
+            redundant: the Status row above and the footer button both open the status control. */}
+        {task.steps.length > 0 ? (
+          <Appear index={2}>
+            <View>
+              <SectionHeader title="Workflow" />
+              <Card padded={false}>
+                {/* Clip on an INNER view: `overflow: hidden` alongside `elevation` kills the
+                    Android shadow, and the card would lose its depth. */}
+                <View style={{ borderRadius: radius.lg, overflow: 'hidden' }}>
+                  <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md }}>
+                    <Meter
+                      value={prog}
+                      label="Steps completed"
+                      valueLabel={`${doneSteps}/${task.steps.length}`}
+                      tone={prog >= 1 ? 'success' : 'primary'}
+                    />
+                  </View>
+                  {task.steps.map((s, i) => (
+                    <Appear key={s.id} index={i} distance={6}>
+                      <View style={{
+                        height: StyleSheet.hairlineWidth, backgroundColor: c.hairline, marginLeft: spacing.lg,
+                      }} />
+                      <View
+                        accessibilityRole="text"
+                        accessibilityLabel={`${s.label}. ${s.done ? 'Completed' : 'Not completed'}.`}
+                        style={{
+                          flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                          minHeight: 52, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+                        }}
+                      >
+                        <Ionicons
+                          name={s.done ? 'checkmark-circle' : 'ellipse-outline'}
+                          size={24}
+                          color={s.done ? c.success : c.faint}
+                        />
+                        <Txt
+                          size={14.5}
+                          weight={s.done ? '400' : '600'}
+                          color={s.done ? c.muted : c.text}
+                          style={{ flex: 1, textDecorationLine: s.done ? 'line-through' : 'none' }}
                         >
-                          <Ionicons
-                            name={s.done ? 'checkmark-circle' : 'ellipse-outline'}
-                            size={24}
-                            color={s.done ? c.success : c.faint}
-                          />
-                          <Txt
-                            size={14.5}
-                            weight={s.done ? '400' : '600'}
-                            color={s.done ? c.muted : c.text}
-                            style={{ flex: 1, textDecorationLine: s.done ? 'line-through' : 'none' }}
-                          >
-                            {s.label}
-                          </Txt>
-                        </View>
-                      </Appear>
-                    ))}
-                  </>
-                ) : (
-                  <EmptyState
-                    icon="list-outline"
-                    title="No checklist on this task"
-                    subtitle="This one is tracked by status alone. Move it along with the status control above."
-                    action={{ label: 'Change status', onPress: () => setStatusOpen(true) }}
-                  />
-                )}
-              </View>
-            </Card>
-          </View>
-        </Appear>
+                          {s.label}
+                        </Txt>
+                      </View>
+                    </Appear>
+                  ))}
+                </View>
+              </Card>
+            </View>
+          </Appear>
+        ) : null}
       </ScrollView>
 
       {/* The commit, permanently in thumb reach. */}
@@ -551,7 +600,7 @@ export default function TaskDetail() {
       {/* ---------- transfer ---------- */}
       <Sheet
         visible={transferOpen}
-        onClose={() => setTransferOpen(false)}
+        onClose={() => { setTransferOpen(false); setTransferQuery(''); }}
         title="Transfer task"
         subtitle={assignee ? `Currently with ${assignee}` : 'Hand this task to another team member'}
       >
@@ -577,16 +626,43 @@ export default function TaskDetail() {
           />
         ) : (
           <View style={{ paddingTop: spacing.xs }}>
-            {transferTargets.slice(0, 24).map((m, i) => (
-              <PersonRow
-                key={m.id}
-                name={m.name}
-                subtitle={m.branch || m.role}
-                chevron
-                onPress={() => confirmTransfer(m.name)}
-                style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline } : undefined}
+            {/* Search — shown only when the roster is large enough to need narrowing. The sheet's
+                own ScrollView carries keyboardShouldPersistTaps, so the first tap still lands. */}
+            {targetsSearchable ? (
+              <View style={{ marginBottom: spacing.md }}>
+                <SearchBar
+                  value={transferQuery}
+                  onChange={setTransferQuery}
+                  onSubmit={() => {}}
+                  placeholder="Search colleagues"
+                />
+              </View>
+            ) : null}
+            {shownTargets.length === 0 ? (
+              <EmptyState
+                icon="search-outline"
+                title={`No colleague matches "${transferQuery.trim()}"`}
+                subtitle="Try a shorter piece of the name, or clear the search to see everyone."
               />
-            ))}
+            ) : (
+              <>
+                {shownTargets.map((m, i) => (
+                  <PersonRow
+                    key={m.id}
+                    name={m.name}
+                    subtitle={m.branch || m.role}
+                    chevron
+                    onPress={() => confirmTransfer(m.name)}
+                    style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline } : undefined}
+                  />
+                ))}
+                {filteredTargets.length > TRANSFER_CAP ? (
+                  <Txt size={font.sub} color={c.faint} style={{ paddingVertical: spacing.md, textAlign: 'center' }}>
+                    {`Showing ${TRANSFER_CAP} of ${filteredTargets.length} — search by name to find more`}
+                  </Txt>
+                ) : null}
+              </>
+            )}
           </View>
         )}
       </Sheet>

@@ -22,6 +22,7 @@ import { haptics } from '@/lib/haptics';
 
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
+import { useAppUi } from '@/store/appUi';
 import { capabilitiesOf } from '@/store/roles';
 import * as api from '@/data/api';
 import {
@@ -170,9 +171,19 @@ export default function Tasks() {
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const { user, viewAs } = useAuth();
-  const ownOnly = capabilitiesOf(user, viewAs).tier === 'team';
+  const { ready: uiReady, can } = useAppUi();
+  const caps = capabilitiesOf(user, viewAs);
+  const ownOnly = caps.tier === 'team';
   // Phase 57a: the offline read-cache key MUST match `getTasks`'s (`own` vs `all` cache apart).
   const tasksKey = `tasks:${ownOnly ? 'own' : 'all'}`;
+  // Band 2 #3 (owner backlog Point 5): move the create refusal to the ENTRY. The backend 403s a
+  // team-tier advisor on ANY `POST /team/tasks` (team.js:384 — real role must be admin/leader/
+  // super_admin), so inviting them to "Add task" only to fail at submit is the bug. `caps.assignTasks`
+  // is the reliable, role-derived mirror of that gate (true ⟺ tier admin/master; respects "view as");
+  // it is what actually protects team-tier, because the RBAC `can_create_task` flag fails OPEN when
+  // unseeded. ANDing the flag (fail-open until the store is ready) subsumes Home's gate and lets the
+  // panel turn create off for an entitled department later.
+  const canCreateTask = caps.assignTasks && (uiReady ? can('can_create_task') !== false : true);
 
   const [list, setList] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -604,8 +615,10 @@ export default function Tasks() {
                 <EmptyState
                   icon="clipboard-outline"
                   title="No tasks yet"
-                  subtitle="Nothing has been assigned to you, and you have not created anything. Add the first task to start your day."
-                  action={{ label: t('tasks.add'), onPress: () => router.push('/task-new') }}
+                  subtitle={canCreateTask
+                    ? 'Nothing has been assigned to you, and you have not created anything. Add the first task to start your day.'
+                    : 'Nothing has been assigned to you yet. New tasks will appear here as soon as someone assigns you work.'}
+                  action={canCreateTask ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                 />
               </Card>
             ) : view === 'week' || view === 'month' ? (
@@ -616,7 +629,7 @@ export default function Tasks() {
                     icon={empty.icon}
                     title={emptyTitle}
                     subtitle={emptyBody}
-                    action={empty.add ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
+                    action={empty.add && canCreateTask ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                   />
                 </Card>
               ) : (
@@ -649,7 +662,7 @@ export default function Tasks() {
                     icon={empty.icon}
                     title={emptyTitle}
                     subtitle={emptyBody}
-                    action={empty.add ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
+                    action={empty.add && canCreateTask ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                   />
                 </Card>
               ) : (
@@ -673,12 +686,16 @@ export default function Tasks() {
         )}
       </ScrollView>
 
-      <Fab
-        icon="add"
-        label={t('tasks.add')}
-        onPress={() => router.push('/task-new')}
-        style={{ bottom: insets.bottom + 76 }}
-      />
+      {/* Band 2 #3: hidden for a team-tier advisor — the backend 403s their create, so the FAB
+          would only lead to a refusal. Entitled tiers (admin/leader/master) keep it. */}
+      {canCreateTask ? (
+        <Fab
+          icon="add"
+          label={t('tasks.add')}
+          onPress={() => router.push('/task-new')}
+          style={{ bottom: insets.bottom + 76 }}
+        />
+      ) : null}
     </Screen>
   );
 }

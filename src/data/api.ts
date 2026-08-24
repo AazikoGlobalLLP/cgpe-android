@@ -693,6 +693,42 @@ export async function addTask(data: Partial<Task> & { assigneeName?: string }): 
   }
 }
 
+/**
+ * Edit an existing team task's fields (Band 2 #3 — owner backlog Point 5).
+ *
+ * PATCH /team/tasks/:id — the SAME endpoint `updateTaskStatus` and `reassignTask` already use. The
+ * backend applies a PARTIAL update, overwriting only the keys it is sent (verified against real
+ * `cgpe-backend-main/routes/team.js:420-458` + `contracts/api.md`). That handler has NO ownership or
+ * role gate — any authenticated staff may edit any team task — so the Edit affordance needs no client
+ * role gate (a member may edit the task assigned to them), and there is no 403 branch here.
+ *
+ * Only fields the caller actually supplies are sent, so an untouched due date keeps its exact
+ * original timestamp: the edit form leaves `dueDate` out of `patch` unless the user changes it. Empty
+ * `description`/`client` are sent as '' (the backend clears on ''). Priority is mapped to the server
+ * P-code the create body uses. Result mirrors `updateTaskStatus`'s three outcomes; a dead session or a
+ * refused body (400 "Nothing to update." / blank title) both resolve `server`, a thrown call `network`.
+ */
+export async function updateTask(
+  id: string,
+  patch: { title?: string; description?: string; client?: string; priority?: TaskPriority; category?: string; dueDate?: string },
+): Promise<{ ok: boolean; reason?: WriteFailure }> {
+  if (FORCE_DEMO) { await wait(150); return { ok: true }; }
+  if (!sessionReal) return { ok: false, reason: 'network' };
+  const body: Record<string, unknown> = {};
+  if (patch.title !== undefined) body.title = patch.title;
+  if (patch.description !== undefined) body.details = patch.description || '';
+  if (patch.client !== undefined) body.clientName = patch.client || '';
+  if (patch.priority !== undefined) body.priority = PRIORITY2P[patch.priority] || 'P2';
+  if (patch.category !== undefined) body.type = String(patch.category).toLowerCase();
+  if (patch.dueDate !== undefined) body.dueAt = patch.dueDate;
+  try {
+    const { ok } = await req(`/team/tasks/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+    return ok ? { ok: true } : { ok: false, reason: 'server' };
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
+}
+
 /** Render a queued task draft as a `Task` so the Tasks screen shows it in a list, flagged pending. */
 export function taskDraftToTask(d: QueuedWrite): Task {
   const p = d.payload as {
@@ -2182,6 +2218,28 @@ export async function getTeam(): Promise<TeamMember[]> {
   const real = await tryReal<any[]>('/profiles?limit=500', {}, isArr);
   return real ? real.map(adaptMember) : unavailable('/profiles', [] as TeamMember[]);
 }
+
+/**
+ * The roster for the assignee / transfer pickers — real colleagues an ENTITLED user can assign to
+ * (Band 2 #3 — owner backlog Point 5, deliverable 4).
+ *
+ * `getTeam()` derives its roster from `/team/task-overview`, which only lists people who already
+ * appear in `team_tasks` — so an ADMIN's picker was missing any colleague with no task yet, and a
+ * plain member (own-scoped) saw only themselves. Assignment needs the staff DIRECTORY, not the
+ * task-derived roster: `/profiles` returns every staff row for an admin/super_admin (a leader and a
+ * team member 403 → `tryReal` returns null quietly, no outage banner). When the directory is
+ * available we use it; otherwise we fall back to the scoped `getTeam()` roster — a leader keeps their
+ * own team, and a team member gets self/empty and never reaches a picker (create and assign-to-others
+ * are gated to entitled tiers). No new endpoint, no contract change.
+ */
+export async function getAssignableTeam(): Promise<TeamMember[]> {
+  const real = await tryReal<any[]>('/profiles?limit=500', {}, isArr);
+  const list = real ? real.map(adaptMember) : await getTeam();
+  // Sorted by name so the picker order is predictable and its search/scroll is navigable — the
+  // directory can be large and /profiles returns it in raw backend order (Band 2 #3 review fix).
+  return list.slice().sort((a, b) => a.name.localeCompare(b.name));
+}
+
 /**
  * Roster with REAL user_ids (from /profiles) — for the master track viewer's picker.
  *
