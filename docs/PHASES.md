@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — BAND 2 #3 SHIPPED: task-flow mitigations (`af7e492`, pushed aaziko Shivam).**
+Owner backlog Point 5. Verified first against real backend code: `POST /team/tasks` (`team.js:384`) allow-lists
+create to admin/leader/super_admin (team-tier 403); `PATCH /team/tasks/:id` has NO ownership gate (any staff edits
+any task); `getTeam()`'s roster is self-scoped (`/team/task-overview`) — the real directory is `/profiles`
+(admin/super only); `team_tasks` carry no steps. Fixes: (1) **create gating** — every "Add task" affordance (Tasks
+FAB + empty states, **Home** quick-action + empty states, **Admin/Master dashboard** tiles, task-new entry guard)
+now gates on ONE predicate `capabilitiesOf().assignTasks && can('can_create_task')`; the RBAC flag ALONE fails open
+when unseeded, so `assignTasks` (role-derived) is what actually protects team-tier. (2) **Edit-task** — new
+`updateTask()` PATCH (title/details/priority/due; `dueAt` sent only when changed) + new `task-edit.tsx` via a header
+pencil, HIDDEN on a done task (a field-PATCH bumps `updatedAt` → `adaptTeamTask` reads it as today's `completedAt`).
+(3) **hide the always-empty "Workflow" checklist** when `steps===0`. (4) **roster** — new `getAssignableTeam()`
+(directory-first, sorted) + a name search/cap/hint in both pickers via new pure tested `filterMembers`; transfer
+gated to entitled tiers. Two adversarial reviews (15-agent full → **8 real findings all fixed**, incl. the Home-gate
+miss; 3-agent delta → clean). tsc 0 / npm test **877** (+14) / eslint 0. OTA-eligible, device-unverified.
+**⚠️ Owner-owned, NOT done:** create policy (may team self-create? `[dec]`+`[api]`), edit-ownership (`[api]`), real
+checklists (`[api]`). INBOX untouched (additive, no contract change).
+
 **✅ 2026-08-24 — BAND 2 #2 SHIPPED: Tasks-tab local search + shared scorer extraction (`c47be1b`, pushed aaziko Shivam).**
 Owner backlog Point 2. The Tasks tab had no search box; typing now filters the already-loaded list in memory —
 typo- (`rajseh`→Rajesh), word-order- (`patel rajesh`→"Rajesh Patel") and phone-tail-tolerant — over the WHOLE list,
@@ -56,7 +73,7 @@ Ranked rows (P = priority; owner tags `[m]`=I build, `[api]`/`[ops]`/`[admin]`=o
 | **11** | Doc **upload** missing; capture fails/loses link (Claims) | P1 | m+ops+api+dec | No file picker (gallery only if camera denied); Spaces OFF on prod → ephemeral disk; upload not linked to claim |
 | **1** | **Report** generation | P1 | ~~m~~+ops+dec | ✅ **[m] SHIPPED `4516dd9`** (12s→65s `REPORT_TIMEOUT`, timeout-≠-outage split) — still needs OPS webhook env to work on-device |
 | **6** | **Role-based** "not working" | P1 | dec+admin/ops+m | Mechanism built+deployed but UNSEEDED (no per-role docs); 10/14 feature toggles inert; fail-open + no-module-deletion |
-| **5** | **Task/member** flow | P1 | dec+api+m | Team-tier CANNOT create tasks (backend 403) yet UI invites it; empty roster; no edit; always-empty checklist |
+| **5** | **Task/member** flow | P1 | dec+api+~~m~~ | ✅ **[m] mitigations SHIPPED `af7e492`** (create gated on caps.assignTasks across ALL surfaces, Edit-task screen, hide empty checklist, directory roster + searchable pickers) — still owner: create-policy `[dec]`+`[api]`, edit-ownership `[api]` |
 | **2** | **Search** "word-by-word" | P1 | ~~m~~+api | ✅ **[m] Tasks-tab local search SHIPPED `c47be1b`** (+ shared `lib/searchScore.ts`) — still needs the `[api]` tokenize relay for tickets/clients SERVER search (single whole-phrase regex) |
 | **4** | My-Tasks + **Calendar** + member-create | P2(1×P1) | m+dec | Member-create WORKS; calendar = minimal current-month rail (no grid/nav, binary dot); create not permission-gated |
 | **10** | **Client Search** in More | P2 | m+dec | A prominent Search tile ALREADY exists; delta = scope it client-only (1 request vs 3) |
@@ -67,8 +84,8 @@ Ranked rows (P = priority; owner tags `[m]`=I build, `[api]`/`[ops]`/`[admin]`=o
 
 **Band 1 (needs YOU, do in parallel):** 3 OPS switches (report webhook / Spaces env / WhatsApp live-mode), the
 client-access privacy decision (P9), the role matrix (P6), the task-create policy (P5), the search tokenize relay
-(P2). **Band 2 (I build now, OTA unless noted):** report 12s timeout fix → Tasks local search → task-flow
-mitigations (hide empty checklist / gate create / edit screen / roster) → calendar grid → scoped client search →
+(P2). **Band 2 (I build now, OTA unless noted):** ✅report 12s fix `4516dd9` → ✅Tasks local search `c47be1b`
+→ ✅task-flow mitigations `af7e492` → **NEXT = calendar grid** → scoped client search →
 premium 403-fix+dead-code → search-scope leak fix → wire 10 role toggles → Contest mapper; then the doc picker
 (P11, NON-OTA new APK). INBOX untouched (corruption risk) — relay texts are in the backlog doc. **Nothing built
 yet — this is the triaged plan.**
@@ -2016,15 +2033,15 @@ exercise.
 **CURRENT next 3 (2026-08-24 — after the owner 12-point backlog was triaged into `docs/OWNER-BACKLOG-2026-08-24.md`
 and APK `7a384ee3` was cut). The backlog doc is the authoritative worklist; these three are the immediate lane:**
 
-1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`) and **✅ Tasks-tab local search SHIPPED** (`c47be1b`,
-   2026-08-24 — in-memory filter over the loaded list + shared pure `lib/searchScore.ts` extracted from
-   `search.tsx`; the keyboard-swallows-first-tap bug found+fixed by an adversarial review; 863 tests).
-   **Next Band-2 lane: task-flow mitigations** (P5, OTA) in `(tabs)/tasks.tsx` + `task/[id].tsx` +
-   `task-new.tsx`: hide the always-empty "Workflow" checklist card, gate "Add task" on `can_create_task`
-   (team-tier is 403'd by the backend today), add an **Edit-task** screen reusing the live PATCH fields,
-   fix the empty assign/transfer roster. Then the **calendar grid** (P4). NOTE: the true word-order search
-   fix is still the `[api]` tokenize relay (server = single whole-phrase regex) — the local filter only
-   narrows the loaded list; don't over-promise it for tickets/clients server search.
+1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`), **✅ Tasks-tab local search SHIPPED** (`c47be1b`), and
+   **✅ task-flow mitigations SHIPPED** (`af7e492`, 2026-08-24 — create gated on `caps.assignTasks` across ALL
+   surfaces incl. Home + dashboards, new Edit-task screen + `updateTask()`, hide empty checklist, directory roster
+   + searchable pickers; 8 review findings fixed; 877 tests). **Next Band-2 lane: the calendar grid** (P4, OTA) in
+   `(tabs)/tasks.tsx`: replace the current-month day-RAIL with a real **7-column month grid + ‹prev/next› + month
+   header**, show the per-day **count** (not a binary dot), mark all-completed days, and reuse the create-gating
+   already built. Put the date-grid maths in `data/tasks.ts` (tested), like `weekRange`/`monthRange`. Then scoped
+   client search (P10). NOTE: the true word-order search fix is still the `[api]` tokenize relay (server = single
+   whole-phrase regex) — the local filter only narrows the loaded list; don't over-promise it for server search.
 2. **Owner Band-1 actions (in parallel, plain-language relays in the backlog doc — INBOX untouched):**
    3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode), the client-access
    privacy decision (P9), the per-role/department access matrix (P6), the task-create policy (P5), and the

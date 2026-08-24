@@ -3908,3 +3908,47 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   n8n live + nginx read-timeout ≥ 60 s + `:3001` restart) — do not report "reports fixed" from code.
 - Result: commit `4516dd9`, pushed aaziko Shivam. tsc 0 / npm test 829 (+2) / eslint 0 new errors.
   Device-unverified (OTA-eligible). INBOX untouched (no contract change — additive client behavior).
+
+## 2026-08-24 — Band 2 #3: task-flow mitigations (owner backlog Point 5, [m])
+- Decision: **gate every create affordance on the role-derived `capabilitiesOf().assignTasks`, ANDed
+  with `can('can_create_task')` — NOT the RBAC flag alone.** Verified: the backend
+  (`team.js:384`) allow-lists create to `['admin','leader','super_admin']` by REAL role, and the RBAC
+  `can_create_task` flag FAILS OPEN (`SCHEMA_FEATURE_DEFAULTS`=true) when a role config is unseeded
+  (Point 6). So a flag-only gate leaves team-tier still invited into the 403. `assignTasks` (true ⟺
+  tier admin/master ⟺ that role set; leader folds into admin and IS allowed by the endpoint) is the
+  reliable mirror; the flag is ANDed so a future seeded restriction still bites. Applied to the Tasks
+  FAB + empty states, **Home** (`:688`, was flag-only — the adversarial review caught it), the
+  **Admin/Master dashboard** "Assign task" tiles (prop-drilled from Home), and the task-new **entry
+  guard**. One predicate, no drift.
+- Decision: **Edit is NOT gated; transfer IS.** The backend `PATCH /team/tasks/:id` has NO ownership
+  gate (any staff may edit/reassign any team task), so a member may edit the task assigned to them —
+  no client role gate on Edit. Transfer is assign-to-others (RBAC `can_assign_task_to_others:false`
+  for team, and they have no roster), so it is gated on `assignTasks`.
+- Decision: **new `updateTask()` sends `dueAt` ONLY when the user changes the due date** (edit form
+  Due defaults to "Keep"), so an unrelated edit never moves the timestamp; and the **Edit pencil is
+  hidden on a DONE task** — a field-PATCH bumps the backend `updatedAt`, which `adaptTeamTask` reads
+  as a done task's `completedAt`, so editing a task finished days ago would re-credit it to *today's*
+  completed count (`todayWorkload`/`todayProgress`). Correct a done task via Reopen first.
+- Decision: **hide the "Workflow" checklist card when `steps.length===0`** rather than showing a "No
+  checklist" empty state — real `team_tasks` carry no steps anywhere (backend model + `adaptTeamTask`
+  hardcodes `steps:[]`), so the card was *always* empty and read as broken. Kept for the legacy
+  `/tasks` path that can carry steps ("hide when empty", not deleted).
+- Decision: **the assignee/transfer roster sources the staff DIRECTORY (`/profiles`), not the
+  task-derived `getTeam()`** — new `getAssignableTeam()` (directory-first, scoped fallback, sorted by
+  name) so a plain admin sees colleagues who have no task yet. Because that enlarges the roster, both
+  pickers gained a name **search + render cap + "showing N of M" hint** (shared pure tested
+  `filterMembers` in `data/team.ts`) so no colleague past the cap is silently hidden; the sheet's own
+  ScrollView already carries `keyboardShouldPersistTaps` so the first tap still lands.
+- Decision: **dropped `category` from the Edit screen** (the review found the passed param was dead) —
+  a task's server `type` is often not one of the create form's category chips, so a Chips control
+  would read as "nothing selected"; edit stays on title/details/client/priority/due. Removed the param
+  too, so no dead code.
+- Process: two adversarial `Workflow` reviews — a 15-agent full pass found **8 real findings, ALL
+  fixed** (incl. the Home-gate miss, the silent picker truncation, the done-task re-credit); a 3-agent
+  delta pass on the fixes came back clean (234 k tokens of real investigation, 0 findings).
+- Scope owner-owned, NOT built: the create **policy** (may team-tier create their OWN tasks? the
+  backend 403s them today, `[decision]`+`[api]`), edit **ownership** scoping (`[api]`), real task
+  **checklists** (no backend step endpoint, `[api]`). The app only moves the refusal to the entry.
+- Result: commit `af7e492` (+ handoff `af99b82`), pushed aaziko Shivam. tsc 0 / npm test **877** (+14:
+  `api-task-edit`, `team`) / eslint 0 new. Device-unverified (OTA-eligible). INBOX untouched (additive,
+  no contract change). Spec: `docs/spec/BAND2-3-task-flow.md`.

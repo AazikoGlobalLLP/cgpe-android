@@ -318,6 +318,14 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   `PHASE-32.md` / `PHASE-29.md` D-2 (a file may need none of the three — `home.tsx` was a straight strip +
   destructure). Do **not** describe `density` as "deferred" again.
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
+  **⚠️ RBAC FLAGS FAIL OPEN — `can('feature')` ALONE cannot restrict an unseeded role (Band 2 #3, 2026-08-24).**
+  `canIn()` returns the `SCHEMA_FEATURE_DEFAULTS` value (mostly `true`) when a role config omits a key, and the
+  per-role docs are **unseeded** in prod (owner backlog Point 6), so `can('can_create_task')` etc. read **true for
+  every tier today**. To actually gate a create/assign/admin affordance FROM a lower tier, AND the flag with the
+  role-derived predicate — `capabilitiesOf(user, viewAs).<cap> && (ready ? can('feature') !== false : true)` — the
+  caps term is what protects the tier, the flag term lets a future seeded config tighten it. Gating on the flag alone
+  is the bug the Home create-affordance had (`home.tsx:688`) and the trap Point 6's "wire the 10 inert toggles" will
+  hit. `caps.assignTasks` was verified to equal the backend's own create allow-list `['admin','leader','super_admin']`.
 - `store/roles.ts` `tierOf()` grants Master by `user.role === 'super_admin'` (Phase 11,
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
   `Profile.role` field. If Master unexpectedly reads as Admin/Team, that is a database row on the
