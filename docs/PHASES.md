@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — OWNER BACKLOG E2 (Generate report): app already correct; shipped cause-naming, relayed OPS.**
+Owner picked E2. Verified vs real backend (`routes/clients.js:310`, `reports.js`, `services/pdfReport.js`):
+the mobile report feature was already complete + honest (opens the rendered `viewUrl`/`pdfUrl`; null on
+failure). "No report generates anywhere" is a **server OPS gap** — the prod n8n render webhook is unset →
+`503 not_configured`. Not fixable from here (no droplet; backend push 403). Shipped the one buildable mobile
+win, gated (`tsc` 0 · `npm test` **806** · eslint 0 new), pushed `aaziko/Shivam` (`d9656bf`). JS-only /
+OTA-eligible; device-unverified.
+- `generateReport` now reads the server's status → discriminated `GenerateReportResult` (`ReportDoc` |
+  reason `not_configured` | `no_data` | `unavailable`), so `client/[id].tsx` **names the cause**: "Report
+  generation is not set up on the server yet — ask your admin" vs a transient message. Config-gap/no-data =
+  quiet (no banner); 5xx/network still raise it. New `api-report.test.ts` (9).
+- **OPS unblock relayed to owner:** set `CGPE_REPORT_WEBHOOK_URL` (or `N8N_REPORT_WEBHOOK_URL`) +
+  `CGPE_REPORT_SECRET`, wire n8n `cgpe-report-render`, restart `:3001`. Then the app works with zero change.
+- **Still owed:** the droplet config above; device pass + a fresh APK; new English strings owe 5-lang copy.
+
 **✅ 2026-08-22 — OWNER BACKLOG B2–B5 (live location): the hardest cluster, verified-first.**
 Owner picked B2–B5. All four checked against real backend code before any edit; one buildable app bug
 (B5) shipped, gated (`tsc` 0 · `npm test` **797** · eslint 0), pushed `aaziko/Shivam` (`0e2a77b`).
@@ -1905,7 +1920,7 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-22 — after B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
+**CURRENT next 3 (2026-08-24 — after E2 report cause-naming, B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
 
 1. **Cut a fresh APK and device-verify.** B5 (`0e2a77b`) + D3/B1/D4/C2/D6a-c + Phases 77/78 are all
    shipped but **device-unverified** and not in an APK. Owner to decide: build one EAS `preview` APK so
@@ -1922,7 +1937,10 @@ exercise.
    permanent fix for the IPv6-only-mobile network path (an MSS clamp is the live stopgap); the backend
    **droplet redeploy + `:3001` restart** so the shipped idempotency dedupe (Backend Phase 81) and the
    `/track/points` ownership check actually run on prod; and the **FCM V1 service-account key** upload to
-   EAS (Phase 74) before push delivers.
+   EAS (Phase 74) before push delivers; and the **report render webhook (E2)** — on the droplet set
+   `CGPE_REPORT_WEBHOOK_URL` (or `N8N_REPORT_WEBHOOK_URL`) + `CGPE_REPORT_SECRET`, wire the n8n
+   `cgpe-report-render` template, restart `:3001`. Then the app generates + opens reports with zero change
+   (the app now names this exact gap on-device as of `d9656bf`).
 3. **Device-verify the 8 shipped audit fixes** on the fresh APK (EAS `a03e64cb`) — native GPS timeout on a
    dead-GPS spot (#1), shared-handset sign-out/handover (#4/#5), SyncChip/banner render (#9). Backend/data
    backlog (A3, B2/B4/B5, D5, E1, E2, D1 enforcement) via the owner-relay INBOX; **D1** is mostly an

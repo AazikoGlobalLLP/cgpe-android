@@ -1,54 +1,53 @@
-# HANDOFF — CGPE Connect (Android) — Owner backlog B2–B5 (live location) — 2026-08-22
+# HANDOFF — CGPE Connect (Android) — Owner backlog E2 (Generate report) — 2026-08-24
 
-Owner picked the B2–B5 live-location cluster (`docs/OWNER-BACKLOG-2026-08-21.md` §B — "the hardest
-cluster"). All four items were verified against the **real** backend code
-(`cgpe-backend-main/routes/timeTracker.js`, `models/DayLog.js`) before any edit. Exactly one was a
-buildable app bug (B5); it shipped and cascaded to fix B4's list symptom. B2 was already done and
-honest; B3 needs a backend field first. Gates green (`tsc` 0 · `npm test` 797 · eslint 0), committed,
-pushed `aaziko/Shivam`. JS-only / OTA-eligible; **device-unverified**.
+Owner picked **E2** ("Generate report — no report generates anywhere"). Verified first against the
+**real** backend (`cgpe-backend-main/routes/clients.js:310`, `routes/reports.js`, `services/pdfReport.js`):
+the mobile report feature was **already complete and honest** — the real blocker is a **server OPS gap**
+(the n8n render webhook is unset on prod), not app code. The one genuine mobile win — naming that cause
+on-device — shipped. Gates green (`tsc` 0 · `npm test` **806** · eslint 0 new), committed, pushed
+`aaziko/Shivam` (`d9656bf`). JS-only / OTA-eligible; **device-unverified**.
 
 ## Done
-- **B5** (`0e2a77b`) — the Agent-locations screen now lists the **whole staff directory**, not just
-  GPS-located pins. Before, one member clocked-in-with-GPS hid everyone else ("1 on duty, 1 tracked").
-  Now the roster LIST always comes from `getTeam()`/`mergeRoster` (the full super_admin live-locations
-  universe); the MAP still plots only real `pins` (a location nobody shared is never fabricated). Header
-  reads "N on duty · M in team · K on map"; the Off-duty section no longer truncates at 12.
-- **B4 (list half)** — a member with no assigned task and/or no GPS point now appears as an off-duty
-  roster row (side-effect of the B5 fix). Their **map pin** remains a data question (did points upload?).
-- **B2 — confirmed already built + honest** (no code): `team/[id].tsx` `openLive` → `getLastLocation` →
-  `/last-location` serves a member's newest point on OR off duty with a freshness label. Off-duty data
-  only exists with 24/7 consent + bg tracker + the new native APK — a platform reality, not a bug.
+- The client report screen now **names why a report failed** instead of one vague sentence. A server with
+  reports switched off (503 `not_configured`) shows "Report generation is not set up on the server yet —
+  ask your admin to enable it, then try again"; a bad name/seed shows "No report could be built…"; a real
+  outage keeps the transient message. Success is unchanged (opens `viewUrl`/`pdfUrl`).
+- A config-gap / no-data answer no longer raises the global health banner (nothing is "down"); a 5xx /
+  dead network still does.
+- New wire-contract test `api-report.test.ts` (9 tests) pins the handler's statuses.
 
 ## Files changed
-- `src/app/agent-map.tsx` — B5: roster list built from the full `team` universe (fallback to `pins` only
-  on an outage); map still plots `pins`; honest header counts; Off-duty cap of 12 removed.
+- `src/data/api.ts` — `generateReport` rewritten: reads the server's own status and returns a
+  discriminated `GenerateReportResult` (`ReportDoc` | reason `not_configured` | `no_data` | `unavailable`)
+  instead of collapsing every non-2xx to `null`. New exported types `ReportDoc` / `ReportFailure`.
+- `src/app/client/[id].tsx` — `doReport` branches the failure message on the reason; `ReportPayload.familyHead`
+  widened to `string | null`; `subtitle` coerces `null → undefined`.
+- `src/data/__tests__/api-report.test.ts` — NEW. Asserts 200 / 503-not_configured / 502 / 422 / 400 and
+  that not_configured/no_data are NOT outages.
 
 ## Decisions made
-- **B5 roster = `team` always; map = `pins` always.** The two answer different questions: "who is on
-  staff / on duty" (list) vs "whose live location can we plot" (map). Conflating them was the bug.
-- **Header shows three honest counts** ("on duty · in team · on map") rather than the old ambiguous
-  "N tracked", which implied N people had a GPS fix when only pins do.
-- **B3 is a backend ask, not app code.** The red "Clock-out" map layer the legend promises has no live
-  data source: `/live-locations` returns only the clock-**in** point. The clock-**out** coord is already
-  stored (`DayLog.clockOutLoc`, set on clock-out) — it just isn't surfaced. The app already draws red
-  `outLat/outLng` pins, so once the field ships the app follow-up is tiny.
-- **INBOX not edited** (same call as the prior batch): concurrent-write corruption risk; the owner-relay
-  courier is the proven path. The B3 ask + B4 data check were handed to the owner in plain language.
+- **App is already right; E2 is OPS.** The success path (opens the rendered report URL) and the honest
+  null-on-failure were already built. The only buildable mobile improvement was distinguishing the (very
+  likely) permanent config gap from a transient outage, so the owner's own on-device test names the fix.
+- **`not_configured` is a considered answer, not an outage** — like a 404/501. It stays quiet (no banner),
+  because retrying can never help and nothing is actually down. Only 5xx / network faults raise the banner.
+- **INBOX left untouched.** No contract changed; the OPS unblock was handed to the owner in plain language
+  (the proven relay path), consistent with the prior batches' concurrent-write-corruption rationale.
 
 ## Known broken / deliberately skipped
-- **Device-unverified** — B5 is a master-only screen needing a real super_admin session + members with
-  live locations. OTA-eligible (JS-only); no new APK cut yet.
-- **B3 red clock-out layer** — not built; blocked on the backend surfacing `clockOutLoc` on
-  `/live-locations`. Relay filed with the owner, not INBOX.
-- **B4 map pin for Pavitra** — a data question (points with accuracy > 100 m are dropped server-side;
-  a session-less batch is discarded). Owner/backend to verify her points uploaded.
-- **B2 off-duty real data** — requires each person's 24/7 consent + the bg tracker + the new native APK;
-  platform/ops, unchanged.
+- **Reports still do not generate on prod** — because the droplet env is unset. NOT an app bug and NOT
+  fixable from here (no droplet access; backend `git push` is 403). Owner/OPS must: set
+  `CGPE_REPORT_WEBHOOK_URL` (or `N8N_REPORT_WEBHOOK_URL`) + `CGPE_REPORT_SECRET`, wire the n8n
+  `cgpe-report-render` template, restart `:3001`. Then the existing app works with zero further change.
+- **New English strings owe 5-language copy** — the screen is already all-English, so this is consistent,
+  not a regression; wire gu/hi/hi-en/gu-en when the owner supplies copy.
+- **Device-unverified** — OTA-eligible (JS-only); no new APK cut. Accumulated OTA work (B5 + D3/B1/D4/C2/D6
+  + Phases 77/78 + this) still needs one APK to reach a phone.
 
 ## Next session starts here
-- Owner to decide: **cut a fresh APK** (bundles B5 + the D3/B1/D4/C2/D6 batch + Phases 77/78 for a
-  device test), and/or start the next backlog cluster (A3 attendance · D5 fuzzy search · E2 report).
+- Next backlog cluster (owner's pick): **A3** (attendance) · **D5** (fuzzy search) — or **cut one APK** to
+  land all accumulated OTA work on a device for a real test.
 - First command: `/boot`
-- Watch out for: **B5 is master-only** — a non-master still sees "Master access only" by design
-  (`canSeeLiveLocation`). And the map deliberately plots fewer people than the list (only shared GPS) —
-  that gap is correct, not a regression. Don't "fix" it by fabricating pins.
+- Watch out for: **E2's fix is server-side.** Do not "fix reports" in the app again — verify the droplet
+  env + n8n template are set (a live `/clients/generate-report` should stop returning 503) before touching
+  any mobile report code.

@@ -3772,3 +3772,19 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   per the prior batch's rationale).
 - **B4:** map pin is a data question (Pavitra's points may have been dropped: accuracy > 100 m, or a
   session-less batch). List half is fixed by B5. Owner/backend to verify.
+
+## 2026-08-24 — E2 (Generate report): app already correct; ship cause-naming, relay OPS
+- **E2 is OPS, not app code.** Verified vs real backend (`routes/clients.js:310`, `reports.js`,
+  `services/pdfReport.js`): the mobile report feature already (a) opens the rendered report `viewUrl`/`pdfUrl`
+  on success and (b) returns null honestly on failure. "No report generates anywhere" is a prod droplet with
+  the n8n render webhook unset → the handler returns `503 not_configured`. Not fixable from here (no droplet
+  access; backend push 403).
+- **Shipped the one buildable mobile win (`d9656bf`):** `generateReport` reads the server's own status and
+  returns a discriminated result (`ReportDoc` | `not_configured` | `no_data` | `unavailable`) rather than
+  collapsing every non-2xx to null, so `client/[id].tsx` names the actual cause ("reports not set up on the
+  server yet" vs a transient message). `not_configured`/`no_data` are considered answers → no health banner;
+  5xx/network still raise it. New `api-report.test.ts` (9) pins the statuses. Gates `tsc` 0 · `npm test` 806
+  · eslint 0 new. Pushed `aaziko/Shivam`.
+- **OPS unblock handed to the owner (relay):** set `CGPE_REPORT_WEBHOOK_URL` (or `N8N_REPORT_WEBHOOK_URL`) +
+  `CGPE_REPORT_SECRET`, wire the n8n `cgpe-report-render` template, restart `:3001`. INBOX left untouched (no
+  contract change; concurrent-write-corruption risk, per prior batches).
