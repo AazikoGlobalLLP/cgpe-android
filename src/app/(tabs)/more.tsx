@@ -103,7 +103,7 @@ const MORE_CATALOGUE: Record<string, { icon: IconName; label: string; value: str
   clients:        { icon: 'people',           label: 'Clients',                  value: 'Directory',         href: '/(tabs)/clients' },
   segments:       { icon: 'pie-chart',        label: 'Segments',                 value: 'Smart lists',       href: '/segments' },
   families:       { icon: 'home',             label: 'Families',                 value: 'Households',         href: '/families' },
-  premium:        { icon: 'gift',             label: 'Premium and greetings',    value: 'Renewals',          href: '/premium' },
+  premium:        { icon: 'gift',             label: 'Premium and greetings',    value: 'Renewals',          href: '/campaigns' },
   prospects:      { icon: 'person-add',       label: 'Prospects',                value: 'Recruitment',       href: '/prospects' },
   'lic-plans':    { icon: 'calculator',       label: 'LIC plans',                value: 'Products',          href: '/lic-plans' },
   claims:         { icon: 'document-text',    label: 'Claims',                   value: 'Register',          href: '/(tabs)/claims' },

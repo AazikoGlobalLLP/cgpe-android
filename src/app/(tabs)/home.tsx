@@ -1387,7 +1387,7 @@ export default function Home() {
       list.push({ key: 'task-new', icon: 'add-circle', label: t('tasks.add'), onPress: () => router.push('/task-new') });
     }
     list.push(
-      { key: 'premium', icon: 'gift', label: t('act.premiumDue'), onPress: () => router.push('/premium') },
+      { key: 'premium', icon: 'gift', label: t('act.premiumDue'), onPress: () => router.push('/campaigns') },
       { key: 'whatsapp', icon: 'logo-whatsapp', label: t('act.whatsapp'), tint: c.whatsapp, onPress: () => router.push('/whatsapp') },
       { key: 'claims', icon: 'shield-half', label: t('tab.claims'), onPress: () => router.push('/(tabs)/claims') },
       { key: 'lic-plans', icon: 'calculator', label: t('act.licPlans'), onPress: () => router.push('/lic-plans') },

@@ -288,7 +288,7 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
             (which folds in leaders) monitors duty status via the team roster, not the map. */}
         <QuickRow actions={[
           ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: 'Assign task', tint: c.primary, onPress: () => router.push('/task-new') }] : []),
-          { icon: 'paper-plane', label: 'Send renewals', tint: c.warning, onPress: () => router.push('/premium') },
+          { icon: 'paper-plane', label: 'Send renewals', tint: c.warning, onPress: () => router.push('/campaigns') },
           { icon: 'people-circle', label: 'Team', tint: th.accent, onPress: () => router.push('/team') },
           { icon: 'shield-half', label: 'Claims', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
         ]} />
