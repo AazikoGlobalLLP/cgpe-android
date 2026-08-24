@@ -14,6 +14,22 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — BAND 2 #4 SHIPPED: Calendar month grid (`c3c3537`, pushed aaziko Shivam).**
+Owner backlog Point 4. Replaced D4's single-month horizontal day-RAIL (binary dot, no month nav) with a real
+**7-column month grid** in `(tabs)/tasks.tsx`: ‹prev/next› month paging + a month/year header + a one-tap **Today**
+jump; each day shows a **per-day task COUNT** (not a binary dot), tinted so state reads at a glance — green =
+all-done (the distinct all-completed marking), danger = overdue-open, accent = open; tap a day → its tasks list
+below under a day heading. The date-grid maths is pure + tested in `data/tasks.ts` (**NEW** `monthMatrix` = fixed
+6×7=42-cell grid, `inMonth` compares year+month for the rollover; **NEW** `taskCountsByDay`, overdue = open-past-only)
+with **+14 tests**. The Band 2 #3 **create-gating was reused untouched**. **ZERO new i18n keys** (reused
+`tasks.today`; month/weekday names are English by design, like `fmtDate`/`fmtDay`). A 4-dimension adversarial review
+(`band2-4-calendar-review`) came back **clean on maths + regressions**; 2 low findings fixed — `todayMs` is now
+**focus-refreshed state** (a `[]`-memo froze "today" across midnight while the header advanced), and the English
+`emptyCalendarBody` copy was de-staled ("strip" → "calendar"). tsc 0 / npm test **891** (+14) / eslint 0 new.
+OTA-eligible, device-unverified. **⚠️ Owner copy-debt:** `emptyCalendarBody` in gu/hi/hi-en/gu-en still says "strip"
+— owes one human line each (machine translation forbidden). INBOX untouched (additive, no contract change).
+Spec: `docs/spec/BAND2-4-calendar.md`.
+
 **✅ 2026-08-24 — BAND 2 #3 SHIPPED: task-flow mitigations (`af7e492`, pushed aaziko Shivam).**
 Owner backlog Point 5. Verified first against real backend code: `POST /team/tasks` (`team.js:384`) allow-lists
 create to admin/leader/super_admin (team-tier 403); `PATCH /team/tasks/:id` has NO ownership gate (any staff edits
@@ -2033,15 +2049,17 @@ exercise.
 **CURRENT next 3 (2026-08-24 — after the owner 12-point backlog was triaged into `docs/OWNER-BACKLOG-2026-08-24.md`
 and APK `7a384ee3` was cut). The backlog doc is the authoritative worklist; these three are the immediate lane:**
 
-1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`), **✅ Tasks-tab local search SHIPPED** (`c47be1b`), and
-   **✅ task-flow mitigations SHIPPED** (`af7e492`, 2026-08-24 — create gated on `caps.assignTasks` across ALL
-   surfaces incl. Home + dashboards, new Edit-task screen + `updateTask()`, hide empty checklist, directory roster
-   + searchable pickers; 8 review findings fixed; 877 tests). **Next Band-2 lane: the calendar grid** (P4, OTA) in
-   `(tabs)/tasks.tsx`: replace the current-month day-RAIL with a real **7-column month grid + ‹prev/next› + month
-   header**, show the per-day **count** (not a binary dot), mark all-completed days, and reuse the create-gating
-   already built. Put the date-grid maths in `data/tasks.ts` (tested), like `weekRange`/`monthRange`. Then scoped
-   client search (P10). NOTE: the true word-order search fix is still the `[api]` tokenize relay (server = single
-   whole-phrase regex) — the local filter only narrows the loaded list; don't over-promise it for server search.
+1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`), **✅ Tasks-tab local search SHIPPED** (`c47be1b`),
+   **✅ task-flow mitigations SHIPPED** (`af7e492`), and **✅ calendar grid SHIPPED** (`c3c3537`, 2026-08-24 —
+   7-col month grid + ‹prev/next› + Today jump, per-day count not a dot, all-done days green; pure
+   `monthMatrix`/`taskCountsByDay` in `data/tasks.ts` +14 tests; create-gating reused; zero new i18n keys;
+   4-dim review clean on maths+regressions, 2 low fixes; 891 tests). **Next Band-2 lane: scoped Client Search in
+   More** (P10, OTA) in `search.tsx`: add an optional `scope=clients` mode — when set, fire ONLY the clients request
+   (one round-trip, the concrete speed win) and relabel the chrome "Find a client"; point the More tile at it.
+   Inherits P9's scope automatically. Keep the global "Everything" search path intact — add a mode ALONGSIDE it,
+   don't replace it (`search.tsx` also hosts the shared `lib/searchScore`). `[decision]` for the owner: client-only
+   vs clients-first-global, and keep both More entries? NOTE: the true word-order search fix is still the `[api]`
+   tokenize relay (server = single whole-phrase regex) — local filters only narrow the loaded list.
 2. **Owner Band-1 actions (in parallel, plain-language relays in the backlog doc — INBOX untouched):**
    3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode), the client-access
    privacy decision (P9), the per-role/department access matrix (P6), the task-create policy (P5), and the

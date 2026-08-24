@@ -3952,3 +3952,49 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - Result: commit `af7e492` (+ handoff `af99b82`), pushed aaziko Shivam. tsc 0 / npm test **877** (+14:
   `api-task-edit`, `team`) / eslint 0 new. Device-unverified (OTA-eligible). INBOX untouched (additive,
   no contract change). Spec: `docs/spec/BAND2-3-task-flow.md`.
+
+## 2026-08-24 — Band 2 #4: Calendar month grid (owner backlog Point 4, P2/one-P1-bit, OTA)
+
+- Context: D4's Tasks-tab "Calendar" was a single-month horizontal day RAIL — one month only (no way
+  to reach another), a binary "has open work" dot (a 1-task and a 6-task day looked identical), no
+  all-done marking. Point 4 asked for a real 7-column month grid with prev/next, a per-day count, and
+  all-completed days marked. Backend needs no change (every task endpoint is deployed).
+- Decision: **the date-grid maths lives PURE in `data/tasks.ts`, tested** (like `weekRange`/`monthRange`),
+  not in the screen. New `monthMatrix(anchor, weekStartsOn=0)` builds a **FIXED 6×7 = 42-cell** grid so
+  the grid never changes height between a 5-week and a 6-week month (max leading 6 + 31 days = 37 ≤ 42);
+  leading/trailing days from adjacent months fill the rectangle flagged `inMonth:false`. `inMonth`
+  compares **year AND month** so a January grid's December leading cells (prior *year*) are correctly
+  out-of-month. `MonthCell.ms` is local midnight — the same key `taskCountsByDay`/`tasksInRange` bucket
+  on, so a cell's tally is `counts.get(cell.ms)` with no re-derivation.
+- Decision: **Sunday-first grid by default** (`weekStartsOn=0`) to match the app's existing Sun-first
+  `WD` weekday header on the Tasks/Calendar screens; the param is exposed + tested for a Monday-first
+  grid. (Note `weekRange` is Monday-first ISO — different view, different purpose; the grid owns its own
+  week-start to match its own header.)
+- Decision: **new `taskCountsByDay(list, now)` → `Map<ms, {total,open,done,overdue}>`.** `overdue`
+  counts OPEN tasks on a day strictly before today only, so a past day that is fully done is NOT overdue.
+  The grid reads `.total` for the count, `total>0 && open===0` as an all-completed (green) day, `.overdue`
+  for the danger tint. Undated/invalid excluded, same rule as the other time-view helpers.
+- Decision: **ZERO new i18n keys.** The "Today" jump reuses `tasks.today`; the month/year header and
+  weekday letters are English by design — consistent with `fmtDate`/`fmtDay`, which render dates in
+  English in every language across the whole app (dates are not localised anywhere). Prev/next a11y is
+  built from the same English month names (announces the destination month), so no dictionary or
+  parity-count change and no owed 5-language copy for the grid itself.
+- Decision: **paging preserves the selected day; it does not auto-select.** Browse the grid with the
+  arrows, tap a day to change the list below. A compact day heading (`dayHeading(selDay) · count`) names
+  the selected day, so a "grid shows September, list shows 24 Aug" state is never ambiguous. Tapping a
+  spill-over cell from an adjacent month follows the grid to that month (`pickCell`).
+- Decision: **create-gating reused, not re-authored.** `canCreateTask` (Band 2 #3) still gates the
+  `<Fab>` and every empty-state "Add task"; this phase did not touch it. The separate
+  `can_assign_task_to_others` flag wiring is deferred to Band 2 #8 (role toggles), after the owner's
+  role matrix — out of scope here.
+- Process: a 4-dimension adversarial `Workflow` (`band2-4-calendar-review`, 6 agents) — the **maths and
+  regression dimensions returned 0 findings**; 2 low-severity findings were confirmed and FIXED:
+  (1) `todayMs` was a `[]`-memo that froze "today" at first mount while the hero's `todayWorkload(list)`
+  re-read the clock on each focus refetch — an internal inconsistency across a midnight crossing; now
+  `todayMs` is **state re-stamped on every tab focus** (same value → React bails, no-op on the same day).
+  (2) `emptyCalendarBody` said "strip above" — de-staled in **English** ("calendar above"); the four
+  translations (gu/hi/hi-en/gu-en) still say "strip" and OWE one human line each — flagged, not
+  machine-translated.
+- Result: commit `c3c3537` (+ docs `44cd71b`), pushed aaziko Shivam. tsc 0 / npm test **891** (+14) /
+  eslint 0 new (the lone i18n `:647` warning is a pre-existing ref-cleanup one). Device-unverified
+  (OTA-eligible). INBOX untouched (additive, no contract change). Spec: `docs/spec/BAND2-4-calendar.md`.
