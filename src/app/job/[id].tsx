@@ -59,14 +59,21 @@ export default function JobMonitor() {
   const status = job?.status;
   const prevStatus = useRef<Job['status'] | undefined>(status);
 
+  // A role refusal is terminal-but-not-a-success. Mirrored into a ref so the transition haptic
+  // below can read it without widening its dependency list (which is keyed on `status` alone).
+  const needsRole = !!job?.needsRole;
+  const needsRoleRef = useRef(needsRole);
+  needsRoleRef.current = needsRole;
+
   /**
    * The one haptic on this screen, and it fires on a real outcome rather than on arrival:
-   * the send either landed or it did not. No timers, no subscriptions, so there is
-   * nothing to tear down.
+   * the send landed, was refused for this role, or failed. No timers, no subscriptions, so
+   * there is nothing to tear down.
    */
   useEffect(() => {
     if (status && prevStatus.current === 'running' && status !== 'running') {
-      if (status === 'done') haptics.success();
+      if (needsRoleRef.current) haptics.warn();
+      else if (status === 'done') haptics.success();
       else haptics.error();
     }
     prevStatus.current = status;
@@ -74,7 +81,9 @@ export default function JobMonitor() {
 
   const log = useMemo(() => (job ? job.log.slice().reverse() : []), [job]);
 
-  const processed = job ? (job.status === 'done' ? job.sent || job.processed : job.processed) : 0;
+  // A refusal delivered nothing, so its progress is 0 — never `job.sent || job.processed`,
+  // which (sent 0, processed = total) would otherwise read as the whole audience.
+  const processed = job ? (job.needsRole ? 0 : (job.status === 'done' ? job.sent || job.processed : job.processed)) : 0;
   const shown = useCountUp(processed);
 
   if (!job) {
@@ -91,8 +100,13 @@ export default function JobMonitor() {
     );
   }
 
-  const spec = STATUS[job.status];
-  const pct = job.total > 0 ? Math.min(1, processed / job.total) : job.status === 'done' ? 1 : 0;
+  // A role refusal is `status:'done'` (a real terminal answer) but must NOT wear the green
+  // "Completed / 100%" success dress — it delivered nothing. It gets its own warning spec.
+  const refused = !!job.needsRole;
+  const spec: StatusSpec = refused
+    ? { label: 'Not sent', icon: 'lock-closed', pill: 'warning', meter: 'warning' }
+    : STATUS[job.status];
+  const pct = refused ? 0 : (job.total > 0 ? Math.min(1, processed / job.total) : job.status === 'done' ? 1 : 0);
   const running = job.status === 'running';
 
   return (
@@ -107,7 +121,7 @@ export default function JobMonitor() {
         <Appear index={0}>
           <Card>
             <Row>
-              <Ionicons name={spec.icon} size={20} color={running ? c.primary : job.status === 'done' ? c.success : c.danger} />
+              <Ionicons name={spec.icon} size={20} color={running ? c.primary : refused ? c.warning : job.status === 'done' ? c.success : c.danger} />
               <Eyebrow style={{ flex: 1 }}>{spec.label}</Eyebrow>
               <Pill label={running ? 'Live' : 'Finished'} tone={spec.pill} small dot />
             </Row>
@@ -140,8 +154,8 @@ export default function JobMonitor() {
         {job.message ? (
           <Appear index={1}>
             <Banner
-              tone={job.status === 'failed' ? 'danger' : 'success'}
-              title={job.status === 'failed' ? 'The send did not complete' : 'Send finished'}
+              tone={refused ? 'warning' : job.status === 'failed' ? 'danger' : 'success'}
+              title={refused ? 'Bulk send not allowed for your role' : job.status === 'failed' ? 'The send did not complete' : 'Send finished'}
               message={job.message}
             />
           </Appear>

@@ -244,6 +244,21 @@ export default function Premium() {
     if (reported.current.has(j.id)) return;
     reported.current.add(j.id);
 
+    // Checked FIRST, before 'failed': a 403 role refusal is a completed job that delivered
+    // nothing, and the advisor's next move (message individually, or ask an admin) is entirely
+    // different from a server failure. Reading `j.needsRole` — the typed flag the runner now
+    // sets on both send paths — rather than the red "Dispatch failed" this screen used to show.
+    if (j.needsRole) {
+      if (focused.current) haptics.warn();
+      setNotice({
+        tone: 'warning',
+        title: 'Your role cannot send bulk campaigns',
+        message: 'The server refused the bulk send for this account, so nothing was dispatched. Message clients one at a time from the list below, or ask an admin or team leader to run this campaign.',
+        jobId: j.id,
+      });
+      return;
+    }
+
     if (j.status === 'failed') {
       if (focused.current) haptics.error();
       setNotice({
@@ -278,7 +293,8 @@ export default function Premium() {
       return;
     }
 
-    // Finished, but not one delivery was confirmed. A 403 role refusal lands here.
+    // Finished, but not one delivery was confirmed — and NOT a role refusal (that is caught
+    // above). The server found recipients but acknowledged no delivery.
     if (focused.current) haptics.warn();
     setNotice({
       tone: 'warning',

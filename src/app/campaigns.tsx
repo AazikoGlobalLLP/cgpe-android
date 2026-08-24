@@ -359,14 +359,16 @@ export default function Campaigns() {
     if (reported.current.has(j.id)) return;
     reported.current.add(j.id);
 
-    // Checked FIRST: a role refusal arrives as both a failed job and as a finished job that
-    // delivered nothing, depending on the occasion. Neither reading is useful to the advisor,
-    // and both have the same fix.
+    // Checked FIRST: a role refusal is a completed job that delivered nothing, and the
+    // advisor's next move (message individually, or ask an admin) is entirely different from a
+    // server failure. The runner now sets a typed `j.needsRole` flag on both send paths, so
+    // that is the primary signal; the `ROLE_REFUSED` phrase match is kept as a defensive
+    // fallback for any message that arrives without the flag.
     //
-    // `j.sent === 0` is part of the test, not decoration. The phrase match alone would
-    // misread a genuine success whose server message happened to say "bulk send", and
-    // telling someone their campaign was refused after it went out is the worse error.
-    if (j.sent === 0 && ROLE_REFUSED.test(j.message ?? '')) {
+    // `j.sent === 0` guards the fallback only: the phrase match alone would misread a genuine
+    // success whose server message happened to say "bulk send", and telling someone their
+    // campaign was refused after it went out is the worse error. The flag needs no such guard.
+    if (j.needsRole || (j.sent === 0 && ROLE_REFUSED.test(j.message ?? ''))) {
       if (focused.current) haptics.warn();
       setNotice({
         tone: 'warning',

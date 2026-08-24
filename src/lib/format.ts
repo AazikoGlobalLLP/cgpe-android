@@ -145,13 +145,6 @@ export function initials(name: string | null | undefined): string {
   return out || '?';
 }
 
-export function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return 'Good morning';
-  if (h < 17) return 'Good afternoon';
-  return 'Good evening';
-}
-
 /** Deterministic pastel-ish color from a string (for avatars). */
 export function colorFromString(s: string, palette: string[]): string {
   let hash = 0;

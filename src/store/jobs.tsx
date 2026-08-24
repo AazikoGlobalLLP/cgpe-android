@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useRef, useState } from 'react';
 import * as api from '@/data/api';
+import { campaignOutcome } from '@/lib/campaignOutcome';
 
 /**
  * Background job runner. A campaign send keeps running even if the user navigates
@@ -22,6 +23,10 @@ export type Job = {
   startedAt: number;
   finishedAt?: number;
   message?: string;
+  /** The server refused the bulk send for this role. A terminal-but-not-failed outcome that
+   *  every consumer (both campaign screens + the job monitor) must render as a warning, not
+   *  as a failure and not as a 100% success. */
+  needsRole?: boolean;
   log: JobLogLine[];
 };
 
@@ -67,12 +72,13 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
       patch(id, (j) => ({ ...j, total, processed: total, log: [...j.log, { at: Date.now(), text: `${total} clients have a premium due in the next 30 days.`, state: 'info' }] }));
       if (total === 0) { patch(id, (j) => ({ ...j, status: 'done', finishedAt: Date.now(), message: 'No renewals due in the next 30 days.' })); return id; }
       const res = await api.sendCampaign('renewal');
+      const out = campaignOutcome(res, total);
       patch(id, (j) => ({
-        ...j, status: res.ok ? 'done' : (res.needsRole ? 'done' : 'failed'), sent: res.count || 0, finishedAt: Date.now(),
-        message: res.needsRole
+        ...j, status: out.status, needsRole: out.needsRole, sent: out.sent, finishedAt: Date.now(),
+        message: out.needsRole
           ? `${total} renewals found. This account can't bulk-send (needs an admin role). Open the list to send individually.`
           : (res.message || `Dispatched to ${total} client(s).`),
-        log: [...j.log, { at: Date.now(), text: res.needsRole ? 'Bulk send blocked for this role.' : (res.message || 'Dispatched.'), state: res.ok ? 'info' : 'error' }],
+        log: [...j.log, { at: Date.now(), text: out.needsRole ? out.logText : (res.message || 'Dispatched.'), state: out.logState }],
       }));
       return id;
     }
@@ -104,17 +110,21 @@ export function JobsProvider({ children }: { children: React.ReactNode }) {
       if (i >= total) { clearInterval(timers.current[id]); delete timers.current[id]; }
     }, 220);
 
-    // 4) Reconcile with the backend's real result
+    // 4) Reconcile with the backend's real result. A 403 role refusal is honoured here
+    //    exactly as on the renewal path above: a completed job that delivered nothing, not a
+    //    failure — `campaignOutcome` is the single rule both paths share.
     sendPromise.then((res) => {
       clearInterval(timers.current[id]); delete timers.current[id];
+      const out = campaignOutcome(res, total);
       patch(id, (j) => ({
         ...j,
-        status: res.ok ? 'done' : 'failed',
+        status: out.status,
+        needsRole: out.needsRole,
         processed: total,
-        sent: res.count || (res.ok ? total : 0),
+        sent: out.sent,
         finishedAt: Date.now(),
         message: res.message,
-        log: [...j.log, { at: Date.now(), text: res.message || (res.ok ? 'Campaign dispatched.' : 'Send failed.'), state: res.ok ? 'info' : 'error' }],
+        log: [...j.log, { at: Date.now(), text: out.logText, state: out.logState }],
       }));
     }).catch((e) => {
       clearInterval(timers.current[id]); delete timers.current[id];
