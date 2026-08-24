@@ -20,6 +20,9 @@ import type { SegmentRow } from '@/data/api';
 import { fmtDay, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
+import { useAuth } from '@/store/auth';
+import { canViewClients } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
  * Smart segments — the advisor's working list.
@@ -255,7 +258,26 @@ function inDays(n: number | null): string | null {
  * Screen
  * ================================================================== */
 
+/**
+ * Point 9 (owner decision, 2026-08-24): Segments slices the client book by need, so it is part
+ * of the master/admin-only client surface — a team user gets the restricted panel. Thin wrapper
+ * so the real screen's hooks are untouched.
+ */
 export default function Segments() {
+  const { user, viewAs, ready } = useAuth();
+  if (ready && !canViewClients(user, viewAs)) {
+    return (
+      <RestrictedNotice
+        title="Segments"
+        heading="Segments are master and admin only"
+        subtitle="Client segments are built from the client book, which is available to administrators and the master account."
+      />
+    );
+  }
+  return <SegmentsScreen />;
+}
+
+function SegmentsScreen() {
   const c = useTheme();
   const health = useDataHealth();
 

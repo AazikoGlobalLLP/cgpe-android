@@ -34,7 +34,7 @@ import { CATEGORY_ICON, Task, dueBucket as bucket, taskProgress, todayWorkload }
 import { CLAIM_STATUS, REMINDER_ICON, STAGE_META } from '@/data/labels';
 import { fmtDay, fmtTime, inrShort, timeAgo } from '@/lib/format';
 import { whatsapp } from '@/lib/actions';
-import { capabilitiesOf } from '@/store/roles';
+import { canViewClients, capabilitiesOf } from '@/store/roles';
 import { AdminDashboard, MasterDashboard } from '@/screens/dashboards';
 import { ensureBackgroundPermission, startTracking, stopTracking } from '@/lib/tracker';
 import type { TeamMember } from '@/data/team';
@@ -563,6 +563,9 @@ export default function Home() {
 
   const caps = capabilitiesOf(user, viewAs);
   const isTeam = caps.tier === 'team';
+  // Point 9 (owner decision, 2026-08-24): the client book is master/admin-only, so its home
+  // sub-view tiles (segments, families) are dropped for a user without book access.
+  const bookHidden = !canViewClients(user, viewAs);
   /**
    * Leadership data follows the REAL tier, not the "view as" preview, so previewing the
    * team surface does not tear down and refetch the org snapshot.
@@ -664,6 +667,13 @@ export default function Home() {
     // role's config carries no `kpi_strip` the list is returned untouched.
     const kpi = ordered.filter((w) => w.key === 'kpi_strip');
     let body = ordered.filter((w) => w.key !== 'kpi_strip');
+    // Point 9 (2026-08-24): the client book is master/admin-only, so its home sub-view tiles
+    // (segments, families) AND the campaigns tile (its audience preview shows client names +
+    // phones from the whole book) are removed for a user without book access — matching the
+    // tab / menu / search gating. Done before the D6a reorder so the removed tiles never reappear.
+    if (bookHidden) {
+      body = body.filter((w) => w.key !== 'segments' && w.key !== 'families' && w.key !== 'campaigns');
+    }
     // D6a (owner, 2026-08-22): a LEANER Home for non-tech TEAM members. The secondary "reference"
     // tiles (notice board, campaigns, segments, families, knowledge base, commissions, attendance —
     // the LINK_WIDGETS) sink below the day's actionable widgets (my tasks, leads, prospects, claims,
@@ -675,7 +685,7 @@ export default function Home() {
       body = [...body.filter((w) => !isSecondary(w.key)), ...body.filter((w) => isSecondary(w.key))];
     }
     return kpi.length ? [...kpi, ...body] : body;
-  }, [configWidgets, config, fallbackWidgets, isTeam]);
+  }, [configWidgets, config, fallbackWidgets, isTeam, bookHidden]);
 
   const hero: HeroMode = readHero(config);
 
@@ -1393,8 +1403,11 @@ export default function Home() {
       { key: 'lic-plans', icon: 'calculator', label: t('act.licPlans'), onPress: () => router.push('/lic-plans') },
       { key: 'calendar', icon: 'calendar', label: t('act.calendar'), onPress: () => router.push('/calendar') },
     );
-    return list;
-  }, [t, router, c.whatsapp, heroClockRow, canClockIn, canCreateTask]);
+    // Point 9 (2026-08-24): '/campaigns' previews the client book's audience (names + phones), so
+    // its 'Premium due' quick-action is dropped for a user without book access — matching the
+    // Clients / Segments / Families gating and the campaigns screen's own guard.
+    return bookHidden ? list.filter((a) => a.key !== 'premium') : list;
+  }, [t, router, c.whatsapp, heroClockRow, canClockIn, canCreateTask, bookHidden]);
   /** The attendance safety net rides on top of the configured cap, never inside it. */
   const quickActionBonus = !heroClockRow && canClockIn ? 1 : 0;
 

@@ -6,7 +6,9 @@
  *  ADMIN   (role: admin | leader) — runs a branch/team: assigns work, monitors their
  *                           team, runs campaigns, sees the whole client book.
  *  TEAM    (advisor | learn_advisor | payroll_staff) — does the work: only their own
- *                           assigned tasks, their own attendance, client lookup, claims.
+ *                           assigned tasks, their own attendance, claims. Since the owner's
+ *                           Point-9 decision (2026-08-24) the TEAM tier no longer sees the
+ *                           client book at all — see `canViewClients` below.
  */
 import type { User } from '@/data/types';
 
@@ -121,6 +123,29 @@ export function capabilitiesOf(user: User | null, viewAs?: Tier | null): Capabil
     return { tier, label: 'Admin', seeEverything: true, manageTeam: true, assignTasks: true, runCampaigns: true, seeAgentMap: true, orgAnalytics: true, overseeAdmins: false };
   }
   return { tier, label: 'Team', seeEverything: false, manageTeam: false, assignTasks: false, runCampaigns: false, seeAgentMap: false, orgAnalytics: false, overseeAdmins: false };
+}
+
+/**
+ * Client-book gate (owner decision, Point 9, 2026-08-24) — who may reach the Clients section
+ * at all: the Clients tab, the Clients / Segments / Families menu entries, client rows in
+ * global search, and the client / segment / family detail screens by deep link.
+ *
+ * Owner-locked: the imported ~9,000-client book is visible to MASTER and ADMIN only; an ordinary
+ * TEAM member gets none of it. Unlike the location / performance / monitor gates above — which read
+ * the REAL role because they must fold `leader` OUT of the admin tier — this rule INCLUDES the
+ * whole admin tier: admin AND leader run a branch and own the book (roles.ts module doc). So it
+ * reads the (view-as-aware) tier via `capabilitiesOf`: `tier !== 'team'` is exactly "admin or
+ * master". Reading the preview-aware tier is deliberate — a Master previewing the Team side SHOULD
+ * lose the client book, because seeing what a team member sees is the whole point of that preview;
+ * they hold the real role and can switch back.
+ *
+ * This is the APP-SIDE half (defence-in-depth + honest UX). The SECURITY AUTHORITY is the
+ * server-enforced gate on `GET /clients` + `/clients/:id`, which today has no role gate and leaks
+ * the unowned book to every token — filed to INBOX for the owner to relay. The two must stay in
+ * step: this predicate is what the app hides; the server is what actually refuses.
+ */
+export function canViewClients(user: User | null, viewAs?: Tier | null): boolean {
+  return capabilitiesOf(user, viewAs).tier !== 'team';
 }
 
 /**

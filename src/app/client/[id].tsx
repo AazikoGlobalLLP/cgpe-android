@@ -19,6 +19,9 @@ import { SEG_META } from '@/data/labels';
 import { daysUntil, fmtDate, inr, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { renewalMessage } from '@/lib/messages';
+import { useAuth } from '@/store/auth';
+import { canViewClients } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
  * Client 360 — everything the book knows about one person.
@@ -80,7 +83,26 @@ type ReportPayload = {
   pdfUrl?: string | null;
 };
 
+/**
+ * Point 9 (owner decision, 2026-08-24): the client book is master/admin-only — this closes the
+ * deep-link vector (a team user opening a client by id, e.g. from a task or a saved link). Thin
+ * wrapper so the real screen's hooks are untouched (no conditional-hooks hazard).
+ */
 export default function ClientDetail() {
+  const { user, viewAs, ready } = useAuth();
+  if (ready && !canViewClients(user, viewAs)) {
+    return (
+      <RestrictedNotice
+        title="Client"
+        heading="Client details are master and admin only"
+        subtitle="Individual client records are available to administrators and the master account. Ask an administrator if you need this client's details."
+      />
+    );
+  }
+  return <ClientDetailScreen />;
+}
+
+function ClientDetailScreen() {
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();

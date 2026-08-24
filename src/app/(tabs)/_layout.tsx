@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useAuth } from '@/store/auth';
+import { canViewClients } from '@/store/roles';
 import { useAppUi } from '@/store/appUi';
 import { motion, radius, spacing, useTheme } from '@/theme/theme';
 import { Grad, Txt } from '@/ui/base';
@@ -52,7 +53,16 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const t = useT();
   const reduced = useReducedMotion();
-  const { tabs: order } = useAppUi();
+  const { tabs: rawOrder } = useAppUi();
+  const { user, viewAs } = useAuth();
+
+  // Point 9 (owner decision, 2026-08-24): the client book is master/admin-only, so the Clients
+  // tab is dropped from the bar for a team-tier user (the screen itself also guards — this just
+  // stops offering the tab). Master/admin keep it.
+  const order = useMemo(
+    () => (canViewClients(user, viewAs) ? rawOrder : rawOrder.filter((n) => n !== 'clients')),
+    [rawOrder, user, viewAs],
+  );
 
   // Routes are registered in file order and can include ones the resolved server config
   // leaves out of the bar entirely (still reachable from More), so the bar builds its own

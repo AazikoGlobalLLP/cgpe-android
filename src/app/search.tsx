@@ -15,6 +15,7 @@ import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import { storage } from '@/lib/storage';
 import { useAuth } from '@/store/auth';
+import { canViewClients } from '@/store/roles';
 
 import * as api from '@/data/api';
 import { getHealth } from '@/data/health';
@@ -211,7 +212,11 @@ export default function Search() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
-  const { user } = useAuth();
+  const { user, viewAs } = useAuth();
+  // Point 9 (owner decision, 2026-08-24): the client book is master/admin-only, so a team-tier
+  // user's search never queries or shows clients (search fetches clients independently of the
+  // hidden Clients tab — this closes that leak). Other collections are their own scope.
+  const canClients = canViewClients(user, viewAs);
 
   const [q, setQ] = useState('');
   const [res, setRes] = useState<Results>(NOTHING);
@@ -360,7 +365,11 @@ export default function Search() {
       const healthMark = getHealth().at;
 
       const [clientItems, ticketItems, bulk] = await Promise.all([
-        api.getClientsPage(1, serverTerm).then((p) => p.items).catch(() => [] as Client[]),
+        // Point 9: a user without client-book access never fetches clients (the search box is
+        // otherwise an open door to the whole book, independent of the hidden Clients tab).
+        canClients
+          ? api.getClientsPage(1, serverTerm).then((p) => p.items).catch(() => [] as Client[])
+          : Promise.resolve([] as Client[]),
         api.getTickets({ search: serverTerm, limit: TICKET_FETCH }).then((p) => p.data).catch(() => [] as api.Ticket[]),
         loadBulk(fresh),
       ]);
@@ -385,7 +394,7 @@ export default function Search() {
       // turns the resting screen into a list of the user's mistakes.
       if (found > 0) rememberSearch(term);
     })();
-  }, [loadBulk, rememberSearch]);
+  }, [loadBulk, rememberSearch, canClients]);
 
   const term = q.trim();
 
@@ -557,7 +566,7 @@ export default function Search() {
   const outage = ran ? runFailed : health.degraded;
 
   const subtitle = !term
-    ? 'Clients, leads, claims, tickets and tasks'
+    ? (canClients ? 'Clients, leads, claims, tickets and tasks' : 'Leads, claims, tickets and tasks')
     : searching
       ? 'Looking through your book'
       : `${total} result${total === 1 ? '' : 's'} for "${ran || term}"`;
@@ -590,7 +599,7 @@ export default function Search() {
           /* (a) Nothing typed yet. A teaching layout, left aligned, with the user's own
                  history first. Deliberately not an EmptyState, so it can never be mistaken
                  for the two panels below. */
-          <Resting recent={recent} onPick={submitNow} onClearRecent={clearRecent} />
+          <Resting recent={recent} onPick={submitNow} onClearRecent={clearRecent} canClients={canClients} />
         ) : searching && blank ? (
           <SearchSkeleton />
         ) : blank && outage ? (
@@ -614,7 +623,7 @@ export default function Search() {
           <EmptyState
             icon="file-tray-outline"
             title={`No match for "${ran || term}"`}
-            subtitle="Nothing in your clients, leads, claims, tickets or tasks carries that. Try a shorter piece of the name, or the last four digits of a mobile number."
+            subtitle={`Nothing in your ${canClients ? 'clients, ' : ''}leads, claims, tickets or tasks carries that. Try a shorter piece of the name, or the last four digits of a mobile number.`}
             action={{ label: 'Clear search', onPress: () => submitNow('') }}
           />
         ) : (
@@ -665,10 +674,11 @@ export default function Search() {
  * (a) Resting state — a composition, not an EmptyState
  * ================================================================== */
 
-function Resting({ recent, onPick, onClearRecent }: {
+function Resting({ recent, onPick, onClearRecent, canClients }: {
   recent: string[];
   onPick: (term: string) => void;
   onClearRecent: () => void;
+  canClients: boolean;
 }) {
   const c = useTheme();
   return (
@@ -699,9 +709,11 @@ function Resting({ recent, onPick, onClearRecent }: {
       <Appear index={recent.length > 0 ? 2 : 1}>
         <ListSection
           title="Where it looks"
-          footer="Clients and tickets are matched on the server, so the whole book is searched, not only what this device has loaded. Four digits or more will match a mobile number by its last digits."
+          footer={canClients
+            ? 'Clients and tickets are matched on the server, so the whole book is searched, not only what this device has loaded. Four digits or more will match a mobile number by its last digits.'
+            : 'Tickets are matched on the server. Four digits or more will match a mobile number by its last digits.'}
         >
-          <DataRow icon="person-outline" label="Clients" value="Name, mobile, policy, email" />
+          {canClients ? <DataRow icon="person-outline" label="Clients" value="Name, mobile, policy, email" /> : null}
           <DataRow icon="person-add-outline" label="Leads" value="Name, mobile, interest" />
           <DataRow icon="shield-half-outline" label="Claims" value="Reference, name, policy" />
           <DataRow icon="ticket-outline" label="Tickets" value="Reference, name, request" />

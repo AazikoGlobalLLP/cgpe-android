@@ -23,6 +23,9 @@ import { useJobs } from '@/store/jobs';
 import * as api from '@/data/api';
 import type { CampaignSummary } from '@/data/api';
 import { whatsapp } from '@/lib/actions';
+import { useAuth } from '@/store/auth';
+import { canViewClients } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
  * Campaigns console — the buckets, the audience, and the one commitment.
@@ -250,7 +253,28 @@ function SampleRow({ rec, index, onSend }: { rec: Rec; index: number; onSend: (r
  * Screen
  * ================================================================== */
 
+/**
+ * Point 9 (owner decision, 2026-08-24): the campaigns AUDIENCE preview renders real client names,
+ * phones and personalised premium/policy messages drawn from the whole book (scope=all), so this
+ * screen is part of the master/admin-only client surface — a team user gets the restricted panel.
+ * (The bulk SEND was already 403'd server-side for team, but the audience preview was not.) Thin
+ * wrapper so the real screen's hooks are untouched.
+ */
 export default function Campaigns() {
+  const { user, viewAs, ready } = useAuth();
+  if (ready && !canViewClients(user, viewAs)) {
+    return (
+      <RestrictedNotice
+        title="Campaigns"
+        heading="Campaigns are master and admin only"
+        subtitle="Bulk WhatsApp campaigns run over the client book, which is available to administrators and the master account."
+      />
+    );
+  }
+  return <CampaignsScreen />;
+}
+
+function CampaignsScreen() {
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();

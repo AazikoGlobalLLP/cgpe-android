@@ -18,7 +18,7 @@ import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { arrangeMoreSections, useAppUi } from '@/store/appUi';
-import { capabilitiesOf, canViewAs, TIER_THEME } from '@/store/roles';
+import { canViewClients, capabilitiesOf, canViewAs, TIER_THEME } from '@/store/roles';
 import type { Tier } from '@/store/roles';
 import { APP } from '@/constants/config';
 import * as api from '@/data/api';
@@ -137,6 +137,9 @@ export default function More() {
 
   const caps = capabilitiesOf(user, viewAs);
   const realCaps = capabilitiesOf(user);
+  // Point 9 (owner decision, 2026-08-24): the client book is master/admin-only, so a team-tier
+  // user loses the Clients / Segments / Families menu entries (their screens also guard).
+  const canClients = canViewClients(user, viewAs);
   const isAdmin = caps.manageTeam;
   const liveSession = api.isRealSession();
   const { isHidden, config } = useAppUi();
@@ -262,6 +265,9 @@ export default function More() {
   ).map((g) => ({
     title: g.title,
     items: g.keys.flatMap((key): Entry[] => {
+      // Point 9: drop the client-book modules for a team-tier user. 'premium' routes to
+      // /campaigns, whose audience preview shows client names + phones from the whole book.
+      if (!canClients && (key === 'clients' || key === 'segments' || key === 'families' || key === 'premium')) return [];
       const cat = MORE_CATALOGUE[key];
       if (!cat) return [];   // key came from MORE_KEYS, so always defined; guarded for safety
       if (key === 'profile') return [{ ...cat, value: user.name, navKey: key }];

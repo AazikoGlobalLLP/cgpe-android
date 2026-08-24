@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, canViewAs, tierOf } from '@/store/roles';
+import { canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, canViewAs, canViewClients, tierOf } from '@/store/roles';
 import type { Role, User } from '@/data/types';
 
 /* ------------------------------------------------------------------ *
@@ -146,5 +146,47 @@ describe('canViewAs — Master (super_admin) only (Phase 47)', () => {
       expect(canViewAs(u)).toBe(tierOf(u) === 'master');
     }
     expect(canViewAs(null)).toBe(tierOf(null) === 'master');
+  });
+});
+
+describe('canViewClients — Master + Admin only, Team excluded (Point 9, 2026-08-24)', () => {
+  // Owner decision: the client book is master/admin-only; ordinary team members get no Clients
+  // section. UNLIKE the four gates above, this INCLUDES the whole admin tier (admin AND leader
+  // run a branch and own the book), so it reads the view-as-aware tier, NOT the real role.
+  it('admits master (super_admin) and the whole admin tier (admin AND leader)', () => {
+    expect(canViewClients(withRole('super_admin'))).toBe(true);
+    expect(canViewClients(withRole('admin'))).toBe(true);
+    expect(canViewClients(withRole('leader'))).toBe(true);
+  });
+
+  it('refuses every team-tier role (advisor, learn_advisor, payroll_staff)', () => {
+    expect(canViewClients(withRole('advisor'))).toBe(false);
+    expect(canViewClients(withRole('learn_advisor'))).toBe(false);
+    expect(canViewClients(withRole('payroll_staff'))).toBe(false);
+  });
+
+  it('refuses a null/unauthenticated user', () => {
+    expect(canViewClients(null)).toBe(false);
+  });
+
+  it('agrees exactly with "tier is not team" for every role (folds leader IN, unlike the master gates)', () => {
+    for (const role of ALL_ROLES) {
+      const u = withRole(role);
+      expect(canViewClients(u)).toBe(tierOf(u) !== 'team');
+    }
+    expect(canViewClients(null)).toBe(tierOf(null) !== 'team');
+  });
+
+  it('view-as is honoured: a master previewing the team side loses the client book', () => {
+    // Preview fidelity — seeing what a team member sees is the whole point of the preview.
+    expect(canViewClients(withRole('super_admin'), 'team')).toBe(false);
+    expect(canViewClients(withRole('super_admin'), 'admin')).toBe(true);
+    expect(canViewClients(withRole('admin'), 'team')).toBe(false);
+  });
+
+  it('a team member cannot preview UP into client access', () => {
+    // capabilitiesOf only lets you preview a LOWER tier, so a stray viewAs='admin' is ignored.
+    expect(canViewClients(withRole('advisor'), 'admin')).toBe(false);
+    expect(canViewClients(withRole('advisor'), 'master')).toBe(false);
   });
 });

@@ -20,6 +20,9 @@ import { SEG_META } from '@/data/labels';
 import { daysUntil, fmtDay, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
+import { useAuth } from '@/store/auth';
+import { canViewClients } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
  * The client book — thousands of rows, one page of 100 at a time.
@@ -54,7 +57,28 @@ function renewalBucket(cl: Client): RenewalBucket {
 
 const countBy = (items: Client[], pred: (cl: Client) => boolean) => items.reduce((n, cl) => (pred(cl) ? n + 1 : n), 0);
 
+/**
+ * Point 9 (owner decision, 2026-08-24): the client book is master/admin-only. A team-tier user
+ * gets a restricted panel instead of the directory — the app-side half of the gate (the server
+ * `GET /clients` role gate is the real authority, filed for the owner to relay). Kept as a thin
+ * wrapper so the real screen's hooks are untouched (no conditional-hooks hazard).
+ */
 export default function Clients() {
+  const { user, viewAs, ready } = useAuth();
+  if (ready && !canViewClients(user, viewAs)) {
+    return (
+      <RestrictedNotice
+        title="Clients"
+        back={false}
+        heading="Clients are master and admin only"
+        subtitle="The client directory is available to administrators and the master account. Ask an administrator if you need a client's details."
+      />
+    );
+  }
+  return <ClientsScreen />;
+}
+
+function ClientsScreen() {
   const c = useTheme();
   // Phase 29: layout scale comes off the theme so `theme.density` can tighten it per department.
   const { spacing, radius, font } = c;

@@ -18,6 +18,9 @@ import type { Family } from '@/data/api';
 import { inrShort } from '@/lib/format';
 import { call } from '@/lib/actions';
 import { useT } from '@/i18n';
+import { useAuth } from '@/store/auth';
+import { canViewClients } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
  * Families — the book, read as households.
@@ -165,7 +168,26 @@ function toFamilyView(raw: Family, i: number): FamilyView {
  * Screen
  * ================================================================== */
 
+/**
+ * Point 9 (owner decision, 2026-08-24): Families groups the client book into households, so it is
+ * part of the master/admin-only client surface — a team user gets the restricted panel. Thin
+ * wrapper so the real screen's hooks are untouched.
+ */
 export default function Families() {
+  const { user, viewAs, ready } = useAuth();
+  if (ready && !canViewClients(user, viewAs)) {
+    return (
+      <RestrictedNotice
+        title="Families"
+        heading="Families are master and admin only"
+        subtitle="Household groupings are built from the client book, which is available to administrators and the master account."
+      />
+    );
+  }
+  return <FamiliesScreen />;
+}
+
+function FamiliesScreen() {
   const c = useTheme();
   const health = useDataHealth();
 
