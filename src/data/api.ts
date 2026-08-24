@@ -27,7 +27,7 @@
 import { Platform } from 'react-native';
 import {
   API_BASE_URL, FORCE_DEMO, MOCK_LATENCY, REQUEST_TIMEOUT,
-  LOGIN_TIMEOUT, UPLOAD_TIMEOUT, RETRY_ATTEMPTS, RETRY_BACKOFF_MS, HEALTH_PATH,
+  LOGIN_TIMEOUT, UPLOAD_TIMEOUT, REPORT_TIMEOUT, RETRY_ATTEMPTS, RETRY_BACKOFF_MS, HEALTH_PATH,
 } from '@/constants/config';
 import {
   isIdempotentMethod, isRetryableStatus, kindForThrown, backoffMs, type FailureKind,
@@ -3213,10 +3213,14 @@ export type ReportDoc = {
  *     "no report generates anywhere" is almost always THIS (docs/OWNER-BACKLOG §E2).
  *   - `no_data`       — the server answered, but no report could be built for this seed (422/400, or a
  *     200 with no url/id). A considered answer, so also quiet.
- *   - `unavailable`   — n8n unreachable / a 5xx / a dead network / our timeout. THIS is an outage and
- *     is reported to health like every other read fault.
+ *   - `unavailable`   — n8n unreachable / a 5xx / a genuinely dead network. THIS is an outage and is
+ *     reported to health like every other read fault.
+ *   - `timeout`       — the report outran REPORT_TIMEOUT (65 s). The report endpoint is slow, but the
+ *     REST of the app is fine, so this is deliberately NOT a whole-app outage: it does NOT raise the
+ *     global health banner. The screen names it report-specifically ("taking longer than usual — try
+ *     again"). A fresh render legitimately takes ~15–40 s; only crossing 65 s lands here.
  */
-export type ReportFailure = { ok: false; reason: 'not_configured' | 'no_data' | 'unavailable' };
+export type ReportFailure = { ok: false; reason: 'not_configured' | 'no_data' | 'unavailable' | 'timeout' };
 export type GenerateReportResult = ReportDoc | ReportFailure;
 
 /**
@@ -3234,7 +3238,7 @@ export async function generateReport(clientName: string): Promise<GenerateReport
     const { ok, status, json } = await req(
       '/clients/generate-report',
       { method: 'POST', body: JSON.stringify({ clientName }) },
-      REQUEST_TIMEOUT,
+      REPORT_TIMEOUT,   // a fresh render takes ~15–40 s (backend waits ~60 s) — the 12 s read timeout killed it
       key,
     );
     if (ok) {
@@ -3258,7 +3262,12 @@ export async function generateReport(clientName: string): Promise<GenerateReport
     reportIfOutage(status, key);
     return { ok: false, reason: 'unavailable' };
   } catch (e) {
-    reportFailure(key, kindForThrown(e));   // dead network / our timeout abort
+    const kind = kindForThrown(e);   // our 65 s abort → 'timeout'; a genuinely dead network → 'network'
+    // A report that outran the 65 s ceiling means the report endpoint is slow, NOT that the whole server
+    // is down — so don't flip the global outage banner for it. The screen shows a report-specific
+    // "taking longer than usual" instead. A real transport failure still reports as an outage below.
+    if (kind === 'timeout') return { ok: false, reason: 'timeout' };
+    reportFailure(key, kind);
     return { ok: false, reason: 'unavailable' };
   }
 }

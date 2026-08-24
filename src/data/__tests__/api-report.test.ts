@@ -31,6 +31,8 @@ let fetchSpy: ReturnType<typeof vi.fn>;
 
 const reply = (status: number, body: unknown) => ({ ok: status >= 200 && status < 300, status, json: async () => body });
 const ok = (body: unknown) => reply(200, body);
+/** An error shaped like our AbortController's abort — what OUR request timeout surfaces as. */
+const abortErr = () => { const e = new Error('The operation was aborted'); e.name = 'AbortError'; return e; };
 
 /** The 200 envelope as the handler builds it (`routes/clients.js:348-358`). */
 const okReport = (extra: Record<string, unknown> = {}) =>
@@ -131,5 +133,37 @@ describe('generateReport — why it could not be built', () => {
     expect(r).toEqual({ ok: false, reason: 'unavailable' });
     expect(health.getHealth().degraded).toBe(true);
     expect(fetchSpy).toHaveBeenCalledTimes(1);   // no retry on a write
+  });
+});
+
+describe('generateReport — a slow report is report-specific, not a whole-app outage', () => {
+  // Point 1 (docs/OWNER-BACKLOG-2026-08-24): a FRESH report needs ~15–40 s (backend waits ~60 s), so it
+  // gets REPORT_TIMEOUT (65 s), not the 12 s read timeout that was silently killing every fresh report.
+  // Crossing even that ceiling means the report is slow — NOT that the server is down — so no banner.
+
+  it('gives a report the long REPORT_TIMEOUT, not the 12 s read timeout, and stays quiet', async () => {
+    // Drive the REAL AbortController: fetch stays pending until OUR timeout aborts its signal.
+    let aborted = false;
+    fetchSpy.mockImplementation((_url: string, init: any) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => { aborted = true; reject(abortErr()); });
+      }),
+    );
+    const p = api.generateReport('Asha Patel');
+    await vi.advanceTimersByTimeAsync(12000);   // the OLD read timeout — a fresh report used to die HERE
+    expect(aborted).toBe(false);                //   …now it is still waiting for the render
+    await vi.advanceTimersByTimeAsync(53001);   // cross the 65 s report ceiling
+    expect(aborted).toBe(true);
+    const r = await p;
+    expect(r).toEqual({ ok: false, reason: 'timeout' });
+    expect(health.getHealth().degraded).toBe(false);   // one slow report ≠ the whole app is down
+  });
+
+  it('classifies our abort as a report timeout, raises no banner, and does not retry a POST', async () => {
+    fetchSpy.mockRejectedValue(abortErr());   // the codebase convention: an abort surfaces as AbortError
+    const r = await api.generateReport('Asha Patel');
+    expect(r).toEqual({ ok: false, reason: 'timeout' });
+    expect(health.getHealth().degraded).toBe(false);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 });

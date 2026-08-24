@@ -123,7 +123,9 @@ export default function ClientDetail() {
         ? 'Report generation is not set up on the server yet. Ask your admin to enable it, then try again.'
         : r.reason === 'no_data'
           ? 'No report could be built for this client. Check the name and try again.'
-          : 'The report service did not answer, so nothing was generated. No figures are shown.',
+          : r.reason === 'timeout'
+            ? 'The report is taking longer than usual to build. Please try again in a moment.'
+            : 'The report service did not answer, so nothing was generated. No figures are shown.',
     );
   }, [client, reporting]);
 

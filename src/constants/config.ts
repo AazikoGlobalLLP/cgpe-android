@@ -78,6 +78,14 @@ export const LOGIN_TIMEOUT = 15000;
 /** File-upload timeout (ms). Uploads are large and slow; this replaces "no AbortController at all"
  *  (which hung forever on a stalled socket). A multipart POST — never auto-retried (no double-upload). */
 export const UPLOAD_TIMEOUT = 30000;
+/**
+ * Report-generation timeout (ms). A POST to `/clients/generate-report` fires an n8n render that takes
+ * ~15–40 s, and the backend itself waits up to ~60 s for it (`cgpe-backend-main/routes/clients.js`).
+ * Reusing the ordinary 12 s read timeout aborted every FRESH report before the server could answer —
+ * so the owner saw "reports never generate" (docs/OWNER-BACKLOG-2026-08-24 Point 1). This ceiling covers
+ * the full server wait plus a small TLS/round-trip cushion. A CACHED report returns fast and never
+ * approaches it. It is a POST, so `req()` never auto-retries it (no duplicate render). */
+export const REPORT_TIMEOUT = 65000;
 
 /**
  * Auto-retry for IDEMPOTENT reads only (a bare `req()` is a GET). A single dropped SYN / stalled
