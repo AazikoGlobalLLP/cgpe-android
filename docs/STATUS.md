@@ -1,14 +1,11 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-24
-**Working on right now:** Making the tasks part of the app simpler and correct for the field team.
+**Working on right now:** Making the app's task calendar work like a normal phone calendar — a full month you can flip through.
 
 **Done this week:**
-- Staff who aren't managers no longer see an "Add task" button that only fails the moment they tap it. The app now offers task creation only to the people the system actually allows to create tasks — everywhere it used to appear (the tasks screen, the home screen, and the manager dashboards).
-- You can now edit a task after you've created it — fix its title, its priority, or its due date. (Editing was simply not possible before.)
-- When you assign a task to someone, or hand one over, you can now search for a colleague by name, and the list now includes everyone — not just people who already happen to have a task. Long lists are searchable instead of cut off.
-- A confusing, always-empty "Workflow" checklist that showed on every task has been removed.
-- Every change was double-checked by an automated review that found several real problems, all of which were fixed before this went out. It updates over-the-air (no new app install needed).
+- The Tasks screen's calendar is now a proper month view. You can move forward and back between months (before, you were stuck on the current month, so a task set for next month was impossible to see), jump straight back to today, and each day shows how many tasks it has — a busy day and a quiet day finally look different. Days where everything is finished show in green.
+- Earlier this week: team members are no longer shown an "Add task" button they aren't allowed to use, tasks can now be edited after creating, the assign/transfer people-list was fixed, and the Tasks screen got its own fast search.
 
-**Blocked on:** A few things only you can switch on or decide — turning on the reports service on the server, turning on document storage on the server, and deciding whether ordinary team members should be allowed to create their own tasks (right now the server refuses them, so the app simply doesn't offer it).
+**Blocked on:** nothing (this was app-only work; it will reach phones on the next update).
 
-**Next:** Give the tasks calendar a proper month view you can flip between months on, with a real count of how many tasks fall on each day.
+**Next:** Add a fast, client-only "Search" in the More menu so staff can look up a customer in one step.
