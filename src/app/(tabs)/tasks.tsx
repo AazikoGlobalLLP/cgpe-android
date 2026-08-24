@@ -28,8 +28,9 @@ import * as api from '@/data/api';
 import {
   CATEGORY_ICON, Task, TaskStatus, TaskView, TASK_PRIORITY, TASK_STATUS,
   dueBucket, taskProgress, todayWorkload, todayWorkloadTasks, tasksInRange, groupTasksByDay,
-  weekRange, monthRange, searchTasks,
+  weekRange, monthRange, searchTasks, monthMatrix, taskCountsByDay,
 } from '@/data/tasks';
+import type { MonthCell, DayTally } from '@/data/tasks';
 import { fmtDay, fmtTime } from '@/lib/format';
 import { call } from '@/lib/actions';
 
@@ -78,8 +79,11 @@ import { call } from '@/lib/actions';
 
 const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const DAY_MS = 24 * 60 * 60 * 1000;
-const CELL_W = 54;
-const CELL_H = 70;
+// Band 2 #4: the calendar header names the month in full. English month names match the rest of
+// the app's date rendering (`fmtDate`/`fmtDay` show "24 Aug" in every language), so this adds no
+// i18n copy debt — dates are not localised anywhere in the app.
+const MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'];
 
 /** Local midnight of a date, in ms. India has no DST, so a day window is exactly DAY_MS wide. */
 function startOfDayMs(d: Date): number {
@@ -188,10 +192,19 @@ export default function Tasks() {
   const [list, setList] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  // D4: the active time view (default Calendar) and, for the calendar, the selected day. The
-  // lazy initialiser makes the strip open on today without a Date.now() call in render.
+  // D4: the active time view (default Calendar). Band 2 #4 (owner Point 4): the calendar is now a
+  // month GRID — `cursor` is the {year, month} the grid displays (paged with ‹prev/next›) and
+  // `selDay` is the tapped day whose tasks list below it. The lazy initialisers open on the current
+  // month/today with no Date.now() in render (the react-hooks/purity rule forbids that in the render
+  // body; a useState initialiser is exempt, the same pattern the old strip used).
   const [view, setView] = useState<TaskView>('calendar');
   const [selDay, setSelDay] = useState(() => startOfDayMs(new Date()));
+  const [cursor, setCursor] = useState(() => { const n = new Date(); return { y: n.getFullYear(), m: n.getMonth() }; });
+  // `todayMs` marks the current day on the grid (the "today" ring, `isCurrentMonth`, the "Today" jump).
+  // It is STATE refreshed on every focus, not a []-memo: a tab screen stays mounted, so a []-memo would
+  // freeze "today" at first mount and — since the hero's `todayWorkload(list)` re-reads the clock on each
+  // focus refetch — the calendar ring would disagree with the header after the app crosses midnight.
+  const [todayMs, setTodayMs] = useState(() => startOfDayMs(new Date()));
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
   // Band 2 #2 (owner backlog Point 2, 2026-08-24): a local, in-memory search over the already-
   // loaded list. Typing here searches the WHOLE list (not just the active time view), so a task
@@ -224,6 +237,9 @@ export default function Tasks() {
 
   useFocusEffect(useCallback(() => {
     let focused = true;
+    // Re-stamp "today" on each focus so the calendar ring/header stay in step across a midnight
+    // crossing. Identical value → React bails, so this is a no-op on the same day.
+    setTodayMs(startOfDayMs(new Date()));
     void load(false, () => focused);
     return () => { focused = false; };
   }, [load]));
@@ -253,30 +269,13 @@ export default function Tasks() {
     return groupTasksByDay(tasksInRange(list, r.start, r.end)).map((g) => ({ day: g.day, tasks: sortTasks(g.tasks) }));
   }, [list]);
 
-  // Calendar strip: every day of the current month, dotted where there is OPEN work.
-  const monthDays = useMemo(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const mo = now.getMonth();
-    const lastDate = new Date(y, mo + 1, 0).getDate();
-    return Array.from({ length: lastDate }, (_, i) => {
-      const dt = new Date(y, mo, i + 1);
-      return { ms: startOfDayMs(dt), date: i + 1, wd: WD[dt.getDay()] };
-    });
-  }, []);
-  const openByDay = useMemo(() => {
-    const m = new Map<number, number>();
-    for (const x of list) {
-      if (x.status === 'done') continue;
-      const d = startOfDayMs(new Date(x.dueDate));
-      if (Number.isNaN(d)) continue;
-      m.set(d, (m.get(d) ?? 0) + 1);
-    }
-    return m;
-  }, [list]);
+  // Band 2 #4 — the calendar month GRID. `grid` is the 6×7 rectangle for the paged month;
+  // `countsByDay` is the per-day tally (total/open/done/overdue) the cells read for their count +
+  // all-done marker. `new Date(...)` here lives inside a memo/initialiser, never the render body, so
+  // it does not trip react-hooks/purity.
+  const grid = useMemo(() => monthMatrix(new Date(cursor.y, cursor.m, 1)), [cursor]);
+  const countsByDay = useMemo(() => taskCountsByDay(list), [list]);
   const selDayTasks = useMemo(() => sortTasks(tasksInRange(list, selDay, selDay + DAY_MS)), [list, selDay]);
-  // Open the strip a few days before today so the current day is visible without scrolling.
-  const stripOffset = useMemo(() => Math.max(0, new Date().getDate() - 3) * (CELL_W + spacing.sm), [spacing.sm]);
 
   // PHASE 75 (A2/A1): the headline counts "today's ACTIONABLE work" = due-today ∪ OPEN-overdue, so an
   // overdue item (e.g. a ticket claimed today but dated by its own older open date) shows here
@@ -324,6 +323,30 @@ export default function Tasks() {
     if (ms === selDay) return;
     haptics.select();
     setSelDay(ms);
+  };
+  // Band 2 #4 — month paging. `shiftMonth` steps the grid a month either way (JS `Date` normalises a
+  // month of -1 or 12 across the year boundary); `goToday` snaps back to the current month AND
+  // selects today; `pickCell` selects a day and, if the tap landed on a spill-over cell from an
+  // adjacent month, follows the grid there so the selection stays visible.
+  const shiftMonth = (delta: number) => {
+    haptics.select();
+    setCursor((cur) => {
+      const d = new Date(cur.y, cur.m + delta, 1);
+      return { y: d.getFullYear(), m: d.getMonth() };
+    });
+  };
+  const goToday = () => {
+    haptics.select();
+    const n = new Date();
+    setCursor({ y: n.getFullYear(), m: n.getMonth() });
+    setSelDay(startOfDayMs(n));
+  };
+  const pickCell = (cell: MonthCell) => {
+    pickDay(cell.ms);
+    if (!cell.inMonth) {
+      const d = new Date(cell.ms);
+      setCursor({ y: d.getFullYear(), m: d.getMonth() });
+    }
   };
 
   /**
@@ -566,28 +589,34 @@ export default function Tasks() {
               </ScrollView>
             </Appear>
 
-            {/* Calendar view only: the month day-strip. Tap a day to see its tasks below. */}
+            {/* Band 2 #4: the Calendar view is a real month GRID — ‹prev/next› paging, a per-day
+                count, all-completed days marked. Tap a day to list its tasks below. */}
             {view === 'calendar' ? (
-              <Appear index={2}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentOffset={{ x: stripOffset, y: 0 }}
-                  contentContainerStyle={{ gap: spacing.sm, paddingVertical: 2 }}
-                >
-                  {monthDays.map((d) => (
-                    <TaskDayCell
-                      key={d.ms}
-                      wd={d.wd}
-                      date={d.date}
-                      count={openByDay.get(d.ms) ?? 0}
-                      active={d.ms === selDay}
-                      label={`${d.wd} ${d.date}, ${openByDay.get(d.ms) ?? 0} open`}
-                      onPress={() => pickDay(d.ms)}
-                    />
-                  ))}
-                </ScrollView>
-              </Appear>
+              <>
+                <Appear index={2}>
+                  <MonthGrid
+                    grid={grid}
+                    counts={countsByDay}
+                    selDay={selDay}
+                    todayMs={todayMs}
+                    onPrev={() => shiftMonth(-1)}
+                    onNext={() => shiftMonth(1)}
+                    onToday={goToday}
+                    onPick={pickCell}
+                    t={t}
+                  />
+                </Appear>
+                {/* Orientation for the day list below — which day these tasks belong to, and how
+                    many. Only when the day has tasks; an empty day is named by its empty state. */}
+                {selDayTasks.length > 0 ? (
+                  <Row style={{ alignItems: 'center', gap: spacing.sm }}>
+                    <Txt size={font.sub} weight="800" numberOfLines={1} style={{ flex: 1 }}>
+                      {dayHeading(selDay, t)}
+                    </Txt>
+                    <Pill label={String(selDayTasks.length)} tone="neutral" small numeric />
+                  </Row>
+                ) : null}
+              </>
             ) : null}
 
             {/* Phase 57b: offline task drafts, pinned above the (server-confirmed) list so they stay
@@ -720,34 +749,145 @@ function HeroStat({ label, value, tint }: { label: string; value: number; tint: 
   );
 }
 
-/* ---------- TaskDayCell ----------
- * D4: one day in the Calendar view's month strip. Mirrors the Calendar screen's day cell —
- * weekday, date, and a dot when the day carries OPEN work — so the two read as one system. */
-function TaskDayCell({ wd, date, count, active, label, onPress }: {
-  wd: string; date: number; count: number; active: boolean; label: string; onPress: () => void;
+/* ---------- MonthGrid ----------
+ * Band 2 #4 (owner Point 4): the Calendar view's real 7-column month grid. Replaces D4's
+ * single-month horizontal rail. A header pages ‹prev / month year / next› (and offers a "Today"
+ * jump when paged away from the current month); a weekday row labels the columns; six week-rows of
+ * GridDay cells show each day's task COUNT (not a binary dot) with all-completed days in success
+ * tone. Layout maths is pure in `@/data/tasks`; this component only paints and wires taps. */
+function MonthGrid({ grid, counts, selDay, todayMs, onPrev, onNext, onToday, onPick, t }: {
+  grid: { year: number; month: number; weeks: MonthCell[][] };
+  counts: Map<number, DayTally>;
+  selDay: number;
+  todayMs: number;
+  onPrev: () => void;
+  onNext: () => void;
+  onToday: () => void;
+  onPick: (cell: MonthCell) => void;
+  t: ReturnType<typeof useT>;
+}) {
+  const c = useTheme();
+  const { spacing, font } = c;
+  const td = new Date(todayMs); // `new Date(ms)` is deterministic — not a purity-rule now-read.
+  const isCurrentMonth = td.getFullYear() === grid.year && td.getMonth() === grid.month;
+  // Prev/next a11y names the DESTINATION month (better than a generic "previous month" and it needs
+  // no i18n key — the label is built from the same English month names the header shows).
+  const prev = new Date(grid.year, grid.month - 1, 1);
+  const next = new Date(grid.year, grid.month + 1, 1);
+
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <Row style={{ alignItems: 'center', gap: spacing.sm }}>
+        <IconBtn
+          icon="chevron-back"
+          size={38}
+          bg={c.primarySoft}
+          color={c.primary}
+          accessibilityLabel={`${MONTHS_FULL[prev.getMonth()]} ${prev.getFullYear()}`}
+          onPress={onPrev}
+        />
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Txt size={font.h3} weight="800" numberOfLines={1}>
+            {`${MONTHS_FULL[grid.month]} ${grid.year}`}
+          </Txt>
+        </View>
+        <IconBtn
+          icon="chevron-forward"
+          size={38}
+          bg={c.primarySoft}
+          color={c.primary}
+          accessibilityLabel={`${MONTHS_FULL[next.getMonth()]} ${next.getFullYear()}`}
+          onPress={onNext}
+        />
+      </Row>
+
+      {/* A one-tap jump home, only when paged away — the current month opens by default. */}
+      {!isCurrentMonth ? (
+        <Pressable
+          onPress={onToday}
+          accessibilityRole="button"
+          accessibilityLabel={t('tasks.today')}
+          style={({ pressed }) => [{ alignSelf: 'center', opacity: pressed ? 0.6 : 1 }]}
+        >
+          <Pill label={t('tasks.today')} tone="primary" small />
+        </Pressable>
+      ) : null}
+
+      {/* Column headers. English weekday letters match the app's existing WD usage (no i18n copy). */}
+      <Row>
+        {WD.map((w, i) => (
+          <Txt key={i} size={11} weight="700" color={c.muted} style={{ flex: 1, textAlign: 'center' }}>
+            {w}
+          </Txt>
+        ))}
+      </Row>
+
+      {grid.weeks.map((week, wi) => (
+        <Row key={wi} style={{ gap: 4 }}>
+          {week.map((cell) => (
+            <GridDay
+              key={cell.ms}
+              cell={cell}
+              tally={counts.get(cell.ms)}
+              selected={cell.ms === selDay}
+              isToday={cell.ms === todayMs}
+              onPress={() => onPick(cell)}
+            />
+          ))}
+        </Row>
+      ))}
+    </View>
+  );
+}
+
+/* ---------- GridDay ----------
+ * One day cell in the month grid. Shows the date and, when the day carries tasks, the COUNT —
+ * tinted so the day's state reads at a glance: success = every task done, danger = open work now
+ * overdue, accent = open work not yet due. A selected day fills with the primary; today wears a
+ * thin primary ring. Spill-over days from the neighbouring months are dimmed but still tappable. */
+function GridDay({ cell, tally, selected, isToday, onPress }: {
+  cell: MonthCell;
+  tally: DayTally | undefined;
+  selected: boolean;
+  isToday: boolean;
+  onPress: () => void;
 }) {
   const c = useTheme();
   const { radius } = c;
+  const total = tally?.total ?? 0;
+  const allDone = total > 0 && (tally?.open ?? 0) === 0;
+  const overdue = (tally?.overdue ?? 0) > 0;
+  const countColor = selected ? c.onPrimary : allDone ? c.success : overdue ? c.danger : c.accent;
+  const state = total === 0 ? 'no tasks'
+    : `${total} ${total === 1 ? 'task' : 'tasks'}${allDone ? ', all done' : overdue ? ', overdue' : ''}`;
+
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
+      accessibilityLabel={`${cell.date} ${MONTHS_FULL[new Date(cell.ms).getMonth()]}, ${state}`}
+      accessibilityState={{ selected }}
       style={({ pressed }) => [{
-        width: CELL_W, height: CELL_H, borderRadius: radius.md,
+        flex: 1, height: 46, borderRadius: radius.md,
         alignItems: 'center', justifyContent: 'center',
-        backgroundColor: active ? c.primary : c.card,
-        borderWidth: StyleSheet.hairlineWidth, borderColor: active ? c.primary : c.border,
-        opacity: pressed ? 0.75 : 1,
+        backgroundColor: selected ? c.primary : 'transparent',
+        // Constant hairline border so the "today" ring never shifts the cell's box.
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: isToday && !selected ? c.primary : 'transparent',
+        opacity: pressed ? 0.6 : cell.inMonth ? 1 : 0.35,
       }]}
     >
-      <Txt size={11} weight="600" color={active ? c.onPrimary : c.muted}>{wd}</Txt>
-      <Metric value={String(date)} size={18} color={active ? c.onPrimary : c.text} style={{ marginTop: 2 }} />
-      <View style={{
-        width: 5, height: 5, borderRadius: 3, marginTop: 4,
-        backgroundColor: count > 0 ? (active ? c.onPrimary : c.accent) : 'transparent',
-      }} />
+      <Metric
+        value={String(cell.date)}
+        size={15}
+        color={selected ? c.onPrimary : cell.inMonth ? c.text : c.muted}
+      />
+      {/* Reserve the count row's height whether or not a number shows, so dates stay aligned. */}
+      <View style={{ height: 13, justifyContent: 'center' }}>
+        {total > 0 ? (
+          <Txt size={10.5} weight="800" numeric color={countColor}>{String(total)}</Txt>
+        ) : null}
+      </View>
     </Pressable>
   );
 }

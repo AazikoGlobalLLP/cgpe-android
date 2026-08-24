@@ -11,6 +11,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dueBucket, taskProgress, todayProgress, todayWorkload, todayWorkloadTasks,
   weekRange, monthRange, tasksInRange, groupTasksByDay,
+  monthMatrix, taskCountsByDay,
   searchTasks, taskSearchFields,
   type Task, type TaskStatus, type TaskStep,
 } from '@/data/tasks';
@@ -406,5 +407,141 @@ describe('searchTasks — local, typo-/word-order-/phone-tail-tolerant', () => {
   it('does NOT cap the result at GROUP_CAP — a broad query returns every match', () => {
     const big: Task[] = Array.from({ length: 25 }, (_, i) => mk({ id: `r${i}`, category: 'Renewal' }));
     expect(searchTasks(big, 'renewal')).toHaveLength(25); // rank()-based code would truncate to 20
+  });
+});
+
+/* -------------------------------------------------------------------------------------------
+ * Band 2 #4 (owner backlog Point 4, 2026-08-24) — the Tasks-tab CALENDAR month grid.
+ *
+ * `monthMatrix` lays out a fixed 6×7 rectangle of days for one month (leading/trailing cells
+ * borrowed from the neighbours), and `taskCountsByDay` tallies tasks per day so the grid can show
+ * a real per-day COUNT (not a binary dot) and mark all-completed days. Both are pure and
+ * injectable, so the grid's correctness is proven here, off-device. NOW stays Tue 18 Aug 2026.
+ * ------------------------------------------------------------------------------------------- */
+const DAY = 24 * 60 * 60 * 1000;
+/** Local midnight, `offset` days from 18 Aug 2026 — the ms key `taskCountsByDay` buckets on. */
+const midnight = (offset: number) => new Date(2026, 7, 18 + offset, 0, 0, 0, 0).getTime();
+
+describe('monthMatrix — a fixed 6×7 month grid', () => {
+  it('always returns 6 weeks of 7 days (42 cells), so the grid height never changes between months', () => {
+    for (const anchor of [new Date(2026, 1, 10), new Date(2026, 7, 18), new Date(2026, 4, 1), new Date(2028, 1, 29)]) {
+      const g = monthMatrix(anchor);
+      expect(g.weeks).toHaveLength(6);
+      g.weeks.forEach((w) => expect(w).toHaveLength(7));
+      expect(g.weeks.flat()).toHaveLength(42);
+    }
+  });
+
+  it('names the anchored month (0-based) and is anchor-agnostic within that month', () => {
+    const g = monthMatrix(new Date(2026, 7, 18, 12, 0, 0));
+    expect(g.year).toBe(2026);
+    expect(g.month).toBe(7); // August
+    // The 1st, mid-month and the last instant of the month all produce the identical grid.
+    expect(monthMatrix(new Date(2026, 7, 1))).toEqual(monthMatrix(new Date(2026, 7, 18, 23, 59, 59)));
+  });
+
+  it('starts each row on Sunday by default (weekStartsOn 0)', () => {
+    const flat = monthMatrix(new Date(2026, 7, 18)).weeks.flat();
+    expect(new Date(flat[0].ms).getDay()).toBe(0); // Sunday
+    // Every row begins on a Sunday.
+    monthMatrix(new Date(2026, 7, 18)).weeks.forEach((w) => expect(new Date(w[0].ms).getDay()).toBe(0));
+  });
+
+  it('can start each row on Monday (weekStartsOn 1) without changing the in-month days', () => {
+    const g = monthMatrix(new Date(2026, 7, 18), 1);
+    expect(new Date(g.weeks[0][0].ms).getDay()).toBe(1); // Monday
+    expect(g.weeks.flat().filter((c) => c.inMonth).map((c) => c.date)).toEqual(
+      Array.from({ length: 31 }, (_, i) => i + 1),
+    );
+  });
+
+  it('cells are exactly one day apart, strictly increasing — no gaps, no duplicates (no DST in IN)', () => {
+    const flat = monthMatrix(new Date(2026, 7, 18)).weeks.flat();
+    for (let i = 1; i < flat.length; i++) expect(flat[i].ms - flat[i - 1].ms).toBe(DAY);
+  });
+
+  it('flags exactly the anchored month\'s days inMonth, in order 1..lastDate', () => {
+    const flat = monthMatrix(new Date(2026, 7, 18)).weeks.flat();
+    const inMonth = flat.filter((c) => c.inMonth);
+    expect(inMonth.map((c) => c.date)).toEqual(Array.from({ length: 31 }, (_, i) => i + 1)); // Aug = 31 days
+    inMonth.forEach((c) => {
+      expect(new Date(c.ms).getMonth()).toBe(7);
+      expect(new Date(c.ms).getFullYear()).toBe(2026);
+    });
+    // A known cell keys to that date's local midnight — the exact key taskCountsByDay uses.
+    expect(flat.find((c) => c.inMonth && c.date === 18)!.ms).toBe(midnight(0));
+  });
+
+  it('borrows leading cells from the previous month and trailing from the next, all inMonth:false', () => {
+    const flat = monthMatrix(new Date(2026, 7, 18)).weeks.flat();
+    const firstIn = flat.findIndex((c) => c.inMonth);
+    const lastIn = flat.length - 1 - [...flat].reverse().findIndex((c) => c.inMonth);
+    flat.slice(0, firstIn).forEach((c) => {
+      expect(c.inMonth).toBe(false);
+      expect(new Date(c.ms).getMonth()).toBe(6); // July
+    });
+    flat.slice(lastIn + 1).forEach((c) => {
+      expect(c.inMonth).toBe(false);
+      expect(new Date(c.ms).getMonth()).toBe(8); // September
+    });
+  });
+
+  it('rolls the YEAR over: a January grid\'s leading cells are December of the PRIOR year', () => {
+    const g = monthMatrix(new Date(2026, 0, 15)); // January 2026
+    const jan1 = new Date(2026, 0, 1, 0, 0, 0, 0).getTime();
+    const leading = g.weeks.flat().filter((c) => !c.inMonth && c.ms < jan1);
+    // Jan 1 2026 is a Thursday, so with a Sunday start there ARE leading cells — assert they exist
+    // and are all Dec 2025 (this is the rollover the year-and-month inMonth check guards).
+    expect(leading.length).toBeGreaterThan(0);
+    leading.forEach((c) => {
+      expect(new Date(c.ms).getFullYear()).toBe(2025);
+      expect(new Date(c.ms).getMonth()).toBe(11); // December
+    });
+  });
+
+  it('counts a leap February as 29 in-month days and a common one as 28', () => {
+    expect(monthMatrix(new Date(2028, 1, 10)).weeks.flat().filter((c) => c.inMonth)).toHaveLength(29); // 2028 leap
+    expect(monthMatrix(new Date(2026, 1, 10)).weeks.flat().filter((c) => c.inMonth)).toHaveLength(28); // 2026 common
+  });
+});
+
+describe('taskCountsByDay — per-day tallies for the grid (undated excluded)', () => {
+  it('is an empty map for an empty list', () => {
+    expect(taskCountsByDay([], NOW).size).toBe(0);
+  });
+
+  it('tallies total/open/done/overdue per day and drops undated/invalid tasks', () => {
+    const list = [
+      mk({ dueDate: dayAt(0), status: 'todo' }),                        // today, open
+      mk({ dueDate: dayAt(0), status: 'in_progress' }),                // today, open
+      mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) }),// today, done
+      mk({ dueDate: dayAt(-1), status: 'todo' }),                      // yesterday, OPEN → overdue
+      mk({ dueDate: dayAt(1), status: 'todo' }),                       // tomorrow, open (not overdue)
+      mk({ dueDate: '', status: 'todo' }),                            // undated → excluded
+    ];
+    const m = taskCountsByDay(list, NOW);
+    expect(m.size).toBe(3); // three distinct dated days; the undated task adds no key
+    expect(m.get(midnight(0))).toEqual({ total: 3, open: 2, done: 1, overdue: 0 });
+    expect(m.get(midnight(-1))).toEqual({ total: 1, open: 1, done: 0, overdue: 1 });
+    expect(m.get(midnight(1))).toEqual({ total: 1, open: 1, done: 0, overdue: 0 });
+  });
+
+  it('marks an all-completed day with open 0 (the grid\'s "all done" signal)', () => {
+    const m = taskCountsByDay([
+      mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) }),
+      mk({ dueDate: dayAt(0), status: 'done', completedAt: dayAt(0) }),
+    ], NOW);
+    expect(m.get(midnight(0))).toEqual({ total: 2, open: 0, done: 2, overdue: 0 });
+  });
+
+  it('a PAST day that is fully done is not overdue (overdue counts OPEN work only)', () => {
+    const m = taskCountsByDay([mk({ dueDate: dayAt(-1), status: 'done', completedAt: dayAt(-1) })], NOW);
+    expect(m.get(midnight(-1))).toEqual({ total: 1, open: 0, done: 1, overdue: 0 });
+  });
+
+  it('keys on local midnight — the same key monthMatrix cells carry', () => {
+    const m = taskCountsByDay([mk({ dueDate: dayAt(0) })], NOW);
+    const cell = monthMatrix(NOW).weeks.flat().find((c) => c.inMonth && c.date === 18)!;
+    expect(m.get(cell.ms)!.total).toBe(1); // grid cell ms and tally key are interchangeable
   });
 });

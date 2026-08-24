@@ -199,6 +199,92 @@ export function groupTasksByDay(list: Task[]): { day: number; tasks: Task[] }[] 
 }
 
 /* ------------------------------------------------------------------ *
+ * Band 2 #4 (owner backlog Point 4, 2026-08-24) — the Tasks-tab CALENDAR as a real month grid.
+ *
+ * D4 shipped a single-month horizontal day RAIL: one month only (no way to reach another), and a
+ * binary "has open work" dot (a 1-task day and a 6-task day looked identical). Point 4 asks for a
+ * proper 7-column month grid with ‹prev/next› navigation, a per-day COUNT, and all-completed days
+ * marked distinctly. These two pure helpers are the grid's maths — injectable anchor/`now`, no
+ * React — so they are unit-tested exactly like weekRange/monthRange/tasksInRange above.
+ * ------------------------------------------------------------------ */
+
+/** One cell of a month grid. `ms` is local midnight (so it keys identically to `taskCountsByDay`
+ *  and `tasksInRange`); `inMonth` is false for the leading/trailing cells borrowed from the
+ *  adjacent months to fill the rectangle. */
+export type MonthCell = { ms: number; date: number; inMonth: boolean };
+
+/**
+ * A fixed 6-row × 7-column grid for the calendar month containing `anchor`.
+ *
+ * - Weeks start on `weekStartsOn` (0 = Sunday, the default — it matches the Sun-first `WD` weekday
+ *   header the Tasks/Calendar screens already render; pass 1 for a Monday-first grid).
+ * - Always 42 cells so the grid never changes height as you page between a 5-week and a 6-week
+ *   month (worst case: 6 leading + 31 days = 37 ≤ 42). Leading days from the previous month and
+ *   trailing days from the next fill the rectangle and are flagged `inMonth:false`.
+ * - India has no DST, so consecutive cells are exactly one day apart; `ms` is the same local
+ *   midnight the rest of tasks.ts buckets on, so `taskCountsByDay(list).get(cell.ms)` lines up with
+ *   no re-derivation.
+ *
+ * `year`/`month` (0-based, JS convention) name the anchored month so the caller can render the
+ * header and step forward/back a month.
+ */
+export function monthMatrix(
+  anchor: Date = new Date(),
+  weekStartsOn: 0 | 1 = 0,
+): { year: number; month: number; weeks: MonthCell[][] } {
+  const year = anchor.getFullYear();
+  const month = anchor.getMonth();
+  const firstWeekday = new Date(year, month, 1).getDay(); // 0=Sun … 6=Sat
+  const lead = (firstWeekday - weekStartsOn + 7) % 7;     // cells before the 1st
+  const cells: MonthCell[] = [];
+  for (let i = 0; i < 42; i++) {
+    // `new Date(year, month, N)` normalises N<1 into the previous month and N>lastDate into the
+    // next, so this walks one continuous 42-day window with no month-length special-casing.
+    const d = new Date(year, month, 1 - lead + i);
+    cells.push({
+      ms: startOfDay(d),
+      date: d.getDate(),
+      // Compare year AND month: a leading Dec cell of a January grid has month 11 ≠ 0, and the
+      // window is only ~42 days wide so an adjacent cell is never a different YEAR of the same month.
+      inMonth: d.getFullYear() === year && d.getMonth() === month,
+    });
+  }
+  const weeks: MonthCell[][] = [];
+  for (let w = 0; w < 6; w++) weeks.push(cells.slice(w * 7, w * 7 + 7));
+  return { year, month, weeks };
+}
+
+/** Per-day task tallies for the calendar grid. `overdue` is the count of OPEN tasks on a day that
+ *  is strictly before today, so the grid can tint a past day still carrying work in danger. */
+export type DayTally = { total: number; open: number; done: number; overdue: number };
+
+/**
+ * Tally tasks by their due CALENDAR DAY (local-midnight ms). Undated/invalid dates are excluded
+ * (they have no place on a calendar), the same rule `tasksInRange`/`groupTasksByDay` use. For each
+ * day: `total` (any status), `open` (not done), `done`, and `overdue` (open AND due before `now`).
+ * The grid reads `.total` for the count, `total > 0 && open === 0` as an all-completed day, and
+ * `.overdue > 0` for the danger tint. `now` is injectable so the tally is deterministic in tests.
+ */
+export function taskCountsByDay(list: Task[], now: Date = new Date()): Map<number, DayTally> {
+  const today = startOfDay(now);
+  const m = new Map<number, DayTally>();
+  for (const t of list) {
+    const d = startOfDay(new Date(t.dueDate));
+    if (Number.isNaN(d)) continue;
+    const cur = m.get(d) ?? { total: 0, open: 0, done: 0, overdue: 0 };
+    cur.total += 1;
+    if (t.status === 'done') {
+      cur.done += 1;
+    } else {
+      cur.open += 1;
+      if (d < today) cur.overdue += 1;
+    }
+    m.set(d, cur);
+  }
+  return m;
+}
+
+/* ------------------------------------------------------------------ *
  * Band 2 #2 (owner backlog Point 2, 2026-08-24) — local Tasks-tab search.
  *
  * The Tasks tab had no search box, so finding a task meant a trip to the global Search screen

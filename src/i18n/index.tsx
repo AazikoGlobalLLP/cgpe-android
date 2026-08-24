@@ -127,7 +127,10 @@ const en = {
   'tasks.emptyWeekBody': 'No task falls in this week. Try This month or the Calendar to look further ahead.',
   'tasks.emptyMonthTitle': 'Nothing this month',
   'tasks.emptyMonthBody': 'No task is scheduled in this calendar month.',
-  'tasks.emptyCalendarBody': 'No task is due on the selected day. Pick another day from the strip above.',
+  // Band 2 #4: reworded "strip above" → "calendar above" now that the Calendar view is a month grid,
+  // not the removed day rail. English only (the source); gu/hi/hi-en/gu-en still say "strip" and OWE a
+  // human copy pass — machine translation is forbidden (see docs/spec/BAND2-4-calendar.md).
+  'tasks.emptyCalendarBody': 'No task is due on the selected day. Pick another day from the calendar above.',
   'guide.welcome': 'Welcome', 'guide.title': 'Your day in 3 steps',
   'guide.step1Title': 'Clock in', 'guide.step1Body': 'Tap Clock in when you reach the office to start your day.',
   'guide.step2Title': "See today's tasks", 'guide.step2Body': 'Your work for today is listed right here on this screen.',
