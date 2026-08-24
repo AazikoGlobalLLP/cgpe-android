@@ -14,6 +14,19 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — D5 typo-tolerant search ([m] half) SHIPPED (`c1c5489`, pushed aaziko Shivam).**
+Owner: search should still find a record when the query is mistyped. The `search.tsx` scorer was
+tiered SUBSTRING matching with no edit-distance, so "rajseh" never reached Rajesh. Fix: new pure
+`src/lib/fuzzyMatch.ts` (Optimal String Alignment = Levenshtein + adjacent transposition, bounded
+early-exit; `osaWithin`/`fuzzyBudget`/`tokenFuzzyHit`, +15 tests), wired as a last-resort
+`T_FUZZY = 0.5` tier in `tierFor` (score `5+weight`, below "contains" `10+weight`, above server-only
+`1`) guarded by `!q.numeric` — a wrong digit must never fuzzy-match a different person's phone/policy.
+Thresholds locked in `docs/spec/PHASE-D5.md` (token <4 ineligible, 4-6→1 edit, 7+→2). Gates tsc 0 /
+npm test **827** (+15) / eslint 0. Device-unverified (OTA-eligible). **⚠️ [m] half only:**
+clients/tickets are SERVER-searched against the ~9k book (exact/substring) → a typed typo returns no
+candidates for the local scorer; only leads/claims/tasks + already-returned rows are covered. Whole-book
+typo tolerance = the `[api]` half (server-side `?search=` fuzzy) — owner relay, INBOX untouched.
+
 **✅ 2026-08-24 — A3 attendance present/absent FIXED (app-side, `316cd81`, pushed aaziko Shivam).**
 Owner: "present/absent not working well." Cause was app-side, not backend: `getAttendanceHistory`
 (`src/data/api.ts`) fetches `/time-tracker/history` FIRST, which returns **raw DayLog docs** with clock
@@ -1941,12 +1954,14 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-24 — after A3 attendance fix, E2 report cause-naming, B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
+**CURRENT next 3 (2026-08-24 — after D5 [m] typo-tolerant search, A3 attendance fix, E2 report cause-naming, B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
 
-0. **D5** (typo-tolerant client/ticket search — mixed `[m]+[api]`; `search.tsx` already has a client-side
-   fuzzy scorer for leads/claims/tasks, clients/tickets are server-searched → server fuzzy needed) OR just
-   **cut the APK** below. (A3 attendance is DONE — `316cd81`; rides the next APK.)
-1. **Cut a fresh APK and device-verify.** A3 (`316cd81`) + B5 (`0e2a77b`) + D3/B1/D4/C2/D6a-c + Phases 77/78 are all
+0. **D5 `[api]` half + relay** — the buildable `[m]` fuzzy scorer is DONE (`c1c5489`: edit-distance tier
+   in `search.tsx` now forgives typos on leads/claims/tasks + already-returned rows). REMAINING is the
+   `[api]` half: clients/tickets are server-searched against the ~9k book (exact/substring) so a typed
+   typo returns no candidates. Relay to the owner (plain-language text in HANDOFF): make server `?search=`
+   on clients + tickets typo-tolerant. INBOX untouched (corruption risk). Then pick the next owner backlog item.
+1. **Cut a fresh APK and device-verify.** D5 (`c1c5489`) + A3 (`316cd81`) + B5 (`0e2a77b`) + D3/B1/D4/C2/D6a-c + Phases 77/78 are all
    shipped but **device-unverified** and not in an APK. Owner to decide: build one EAS `preview` APK so
    all reach the phone together, then walk B5 (master Agent-locations lists the whole team), C2 (clock
    out < 8h30m), the new Tasks time views, and the team-member leaner Home + guide.

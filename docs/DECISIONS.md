@@ -3818,3 +3818,21 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   in-app, rather than swapping to `/attendance/history`, so the fix has zero dependency on backend deploy state.
 - Result: app-side only, no backend/INBOX action. Commit `316cd81`, pushed aaziko Shivam. tsc 0 / test 812
   (+6) / eslint 0. Device-unverified (OTA-eligible).
+
+## 2026-08-24 — D5 typo-tolerant search ([m] half)
+- Ask: search should still find a record when the query is mistyped ("rajseh"→Rajesh, "jeevn"→Jeevan).
+  The existing `search.tsx` scorer was tiered SUBSTRING matching (exact/prefix/contains/compact/token)
+  with no edit-distance, so a single wrong or transposed character missed entirely.
+- Decision: add a last-resort fuzzy tier, NOT rebuild the scorer. New pure `src/lib/fuzzyMatch.ts`
+  (Optimal String Alignment = Levenshtein + adjacent transposition, bounded early-exit) exports
+  `osaWithin`/`fuzzyBudget`/`tokenFuzzyHit`; unit-tested (+15). `tierFor` gains one `T_FUZZY = 0.5` tier
+  (score 5+weight) below "contains" (10+weight) and above server-only (1), so a typo never outranks a
+  real substring hit. Wiring helper `fuzzyMatches(q,value)` splits value on whitespace (keeps Gujarati).
+- Decision: EXCLUDE numeric queries from fuzzy — a wrong digit fuzzy-matching a different person's
+  phone/policy number is a wrong answer, not a helpful one; the digit path already owns numeric lookups.
+- Decision: thresholds locked in `docs/spec/PHASE-D5.md` (query token <4 ineligible, 4-6→1 edit, 7+→2;
+  value words <4 not fuzzy targets) — pure + tested so re-tuning is a deliberate edit, not eyeballing.
+- Scope: this is the [m] half only. Clients/tickets are SERVER-searched against the ~9k book (exact/
+  substring), so a typed typo returns no candidates for the local scorer — whole-book typo tolerance
+  needs server-side fuzzy on `?search=` (the [api] half). INBOX untouched (corruption risk); owner relay.
+- Result: commit `c1c5489`, pushed aaziko Shivam. tsc 0 / test 827 (+15) / eslint 0. Device-unverified (OTA).

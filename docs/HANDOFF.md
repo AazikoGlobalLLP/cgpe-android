@@ -1,44 +1,52 @@
-# HANDOFF — CGPE Connect (Android) — A3 attendance present/absent fix — 2026-08-24
+# HANDOFF — CGPE Connect (Android) — Phase D5 (typo-tolerant search, [m] half) — 2026-08-24
 
 ## Done
-- **My attendance** history now renders present/absent correctly. On a healthy server the primary
-  `/time-tracker/history` leg returns raw DayLog documents (clock times nested in `sessions[]`); the
-  screen mapped the flat `clock_in.time` "attendance record" shape that only the `/attendance/history`
-  fallback emits, so every day read `clock_in === undefined` and rendered "No clock-in recorded" with
-  Days-logged / Closed-days both 0. A new pure adapter flattens DayLog → per-session canonical records,
-  so real clock-in/out times, worked hours, and the closed/open/no-entry state now show per day.
-- Verified against **deployed `origin/main`** (tip `49482e9`, Phase 87 now merged) that both endpoints
-  return the shapes assumed — fix is 100% app-side, no backend change or deploy needed.
+- **Search now forgives typos.** A mistyped or transposed character reaches the record: "rajseh"
+  finds **Rajesh**, "jeevn" finds **Jeevan**, "ptael" finds **Patel**. This works on the fully-local
+  collections (leads / claims / tasks) and on any client/ticket rows the server already returned.
+- Typo hits are ranked as a new lowest tier, so a real substring match is never buried by a
+  lucky near-miss, and numeric lookups (phone / policy) are deliberately NOT fuzzed.
 
 ## Files changed
-- `src/data/adapt.ts` — new pure `adaptAttendanceHistory()` (+ `AttendanceRecord` type): flattens a
-  DayLog into one record per session (mirrors backend `dayLogToAttendanceRecords`), passes an
-  already-canonical row through; defensive on non-arrays/junk. Nothing invented — a missing time stays missing.
-- `src/data/api.ts` — `getAttendanceHistory` now runs BOTH legs through `adaptAttendanceHistory`; imported it.
-- `src/data/__tests__/adapt.test.ts` — +6 cases pinning the flatten, open-session omit, drop-no-clockIn,
-  canonical pass-through, legacy-flat tolerance, and non-array defence.
+- `src/lib/fuzzyMatch.ts` — NEW pure leaf. Optimal String Alignment distance (Levenshtein +
+  adjacent transposition, so a two-letter swap costs 1 not 2), bounded with early-exit so it stays
+  cheap over hundreds of rows per keystroke. Exports `osaWithin` / `fuzzyBudget` / `tokenFuzzyHit`.
+- `src/lib/__tests__/fuzzyMatch.test.ts` — NEW, +15 cases pinning the metric, the length thresholds,
+  the transposition-costs-1 rule, and the "too short to be safe" refusals.
+- `src/app/search.tsx` — one new `T_FUZZY = 0.5` tier in `tierFor` (guarded by `!q.numeric`) plus a
+  small `fuzzyMatches(q, valueLower)` wiring helper. Score `5 + weight`: below "contains"
+  (`10 + weight`), above a server-only row (`1`).
+- `docs/spec/PHASE-D5.md` — NEW. Locks the thresholds and scopes the `[api]` half out.
 
 ## Decisions made
-- **Normalise in the api boundary, not the screen.** `attendance.tsx` was left untouched; the shape
-  translation lives in `adapt.ts` (project convention: adapters are pure + tested) so api.ts always hands
-  the screen one canonical shape regardless of which leg answered.
-- **Keep `/time-tracker/history` as the primary leg** (don't swap to `/attendance/history`). The primary
-  is the stable/deployed raw-daylog read; adapting it in-app avoids any dependency on backend deploy state.
-- **One record per session** (multi-session days expand), matching the backend's authoritative
-  `/attendance/history` behaviour; a daylog with zero clocked-in sessions yields nothing (same as backend).
+- **Fuzzy is a fractional tier (0.5), not a new integer tier.** Keeps the existing `tier*10+weight`
+  scoring untouched and guarantees a typo never outranks a genuine substring hit.
+- **Numeric queries are excluded from fuzzy.** A wrong digit fuzzy-matching a *different* person's
+  phone/policy number is a wrong answer, not a helpful one; the digit path already owns numeric lookups.
+- **Thresholds locked, not eyeballed:** query token <4 chars ineligible · 4–6 → 1 edit · 7+ → 2 edits;
+  value words <4 chars are never fuzzy targets. Pure + unit-tested so re-tuning is a deliberate edit.
+- **Pure logic in its own tested lib**, wiring in the screen — matches the project's seam convention
+  (`netResilience`, `pushRouting`, …); `tierFor` itself stays inline/untested as it already was.
 
 ## Known broken / deliberately skipped
-- **Location string still blank per day** — neither real leg stores a human place name (DayLog sessions
-  carry only lat/lng); the screen's `location` line was already empty and stays empty. Not invented.
-- **Device-unverified.** JS-only ⇒ OTA-eligible, but no phone has run it. Needs the next APK (or an OTA
-  push) with real daylog data to confirm on-device.
-- Accumulated OTA work (B5, D3/B1/D4/C2/D6, Phases 77/78, E2 cause-naming, **A3**) still needs one APK to reach a phone.
-- Reports remain OPS-blocked (prod render webhook env unset + n8n template) — not code, unchanged this session.
+- **The `[api]` half is NOT done — owner relay owed.** Clients and tickets are searched SERVER-side
+  against the ~9k-row book (never pulled to the handset), and that search is exact/substring — so a
+  *typed* typo returns **no candidates** for the local scorer to rescue. True whole-book typo tolerance
+  needs server-side fuzzy on `GET /api/clients?search=` and `GET /api/tickets?search=`. INBOX left
+  untouched on purpose (corruption risk); relay to the owner in plain language (text below).
+- **Device-unverified.** JS-only ⇒ OTA-eligible, but no phone has run it. Joins the accumulated OTA
+  backlog (A3, B5, D3/B1/D4/C2/D6, E2) all waiting on ONE APK to reach a phone.
+- Reports remain OPS-blocked (prod render webhook env unset + n8n template) — unchanged, not code.
 
 ## Next session starts here
-- Next backlog (owner's pick): **D5** (typo-tolerant client/ticket search — mixed `[m]+[api]`) — or **cut
-  ONE APK** to land all accumulated OTA work (now including A3) on a device.
+- Phase D5+: either **relay the `[api]` server-fuzzy ask** and pick the next owner backlog item, OR
+  **cut ONE EAS `preview` APK** so all accumulated OTA work (now including D5) reaches the phone.
 - First command: `/boot`
-- Watch out for: **shape drift between the two attendance legs.** Any future change to `/time-tracker/history`
-  (still raw DayLogs) or `/attendance/history` (canonical records via `dayLogToAttendanceRecords`) must keep
-  `adaptAttendanceHistory` covering both — it's the only thing making the screen shape-agnostic.
+- Watch out for: the `[api]` half — do NOT tell the owner "search typos are fully fixed". Client/ticket
+  typos across the whole book still miss until the backend `?search=` goes fuzzy. Only local
+  collections + already-returned rows are covered by what shipped.
+
+### Plain-language `[api]` relay for the owner
+"Make the client and ticket search on the server typo-tolerant. Right now, if you misspell a name,
+the app finds nothing from the main client book. The phone app already ranks fuzzy matches — it just
+needs the server to return near-miss candidates for `?search=` on clients and tickets."
