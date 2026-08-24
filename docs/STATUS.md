@@ -1,18 +1,17 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-24
-**Working on right now:** Went through all 12 issues you listed, checked each one against how the app actually works, and turned them into a clear, prioritized plan — and built a new app version that carries the recent fixes to your phone.
+**Working on right now:** Fixed the first item from your 12-point list that I can do on my own — the reports problem — and started working down the rest.
 
 **Done this week:**
-- Built a new installable app version that bundles all the recent improvements (attendance fix, the whole-team map, the new task views, typo-tolerant search, and more) so they finally reach real phones. It comes with a step-by-step testing guide.
-- Studied every one of your 12 points properly instead of guessing, and wrote each up in plain terms with a priority. A few turned out to be more serious than they first looked:
-  - "Reports don't work" is partly a real app bug (the app gives up after 12 seconds, but a report takes 15–40 seconds to build) — fixable — and partly a server switch that still needs turning on.
-  - Right now **any team member can see your entire client list**. Hiding the menu doesn't stop it — the server itself hands the whole book to everyone. Fixing it needs a decision from you plus a server change.
-  - The role/permission system is fully built but was **never set up**, so most people still see everything.
-  - Ordinary team members currently **can't create their own tasks** even though the app invites them to.
-  - Document upload in Claims has no "choose a file" option, and photos fail to save because file storage isn't switched on on the server.
+- Fixed the reports bug on the app's side. The app used to give up after 12 seconds, but a report genuinely takes up to a minute to build, so it was quitting too early every time and it looked like reports never worked. It now waits long enough. If a report is ever still slow, the app says "this is taking longer than usual, try again" instead of wrongly flashing a "whole app is offline" warning.
+- Built a new installable app version earlier this week that bundles all the recent improvements (attendance fix, the whole-team map, the new task views, typo-tolerant search, and more) so they finally reach real phones, with a step-by-step testing guide.
+- Studied every one of your 12 points properly and wrote each up in plain terms with a priority.
+
+**Important — reports are only half done:**
+- The app side is now fixed, but reports still will not actually generate on a phone until **your side turns on the report service on the server**. Both halves are needed. Please don't treat reports as working until that server switch is on.
 
 **Blocked on (needs you):**
 - Three server switches only your side can flip: the report service, file storage for uploads, and WhatsApp live-sending.
 - A few decisions: what a normal team member should be allowed to see in Clients, the exact access list per role, and whether team members may create their own tasks.
 
-**Next:** I start building the app-side fixes I can do without waiting (beginning with the report timeout bug), while you work through the short list of decisions and server switches above — the full plan is written down and prioritized.
+**Next:** I keep building the app-side fixes I can do without waiting — next is adding a search box to the Tasks screen and smoothing the task-creation flow — while you work through the short list of decisions and server switches above.

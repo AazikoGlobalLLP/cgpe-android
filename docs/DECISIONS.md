@@ -3852,3 +3852,25 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   in `docs/OWNER-BACKLOG-2026-08-24.md` for the owner to send.
 - Result: `docs/OWNER-BACKLOG-2026-08-24.md` + `docs/DEVICE-TESTING-GUIDE-2026-08-24.md` + PHASES rows,
   commits `82548c7`/`e256be0`, pushed aaziko Shivam. No feature code changed — triaged plan only.
+
+## 2026-08-24 — Band 2 #1: report 12 s → 65 s timeout (owner backlog Point 1, [m] half)
+- Ask: owner "reports don't generate". Verified root cause was CLIENT-side, not the backend:
+  `generateReport` reused the 12 s `REQUEST_TIMEOUT` on a POST the backend holds ~60 s open for a
+  15–40 s n8n render → every FRESH report aborted before the server answered (a cached report
+  returned fast, masking the bug).
+- Decision: add a dedicated `REPORT_TIMEOUT = 65000` in `config.ts` (covers the ~60 s server wait +
+  a small TLS/round-trip cushion) and pass it in `generateReport`. Single source of truth alongside
+  LOGIN/UPLOAD timeouts. POST → never auto-retried by `req()` (no duplicate render).
+- Decision: a report that outruns 65 s is NOT a whole-app outage — it must not flip the global
+  `<HealthBanner/>`. The catch splits on `kindForThrown`: our own abort (`'timeout'`) returns a new
+  `ReportFailure.reason:'timeout'` and does NOT call `reportFailure`; a genuine network throw
+  (`'network'`) still reports → banner, preserving the existing "a dead network is an outage" test.
+  Rationale: a 65 s hang (TCP up, no body) is far more likely a slow render than a dead link, and a
+  real outage is still caught by the app's other reads via their 12 s timeouts. The screen names the
+  timeout cause report-specifically. **Do not collapse the split catch back to one reportFailure.**
+- Decision: kept the failure messages hardcoded English (matching the three existing report strings);
+  did NOT introduce i18n keys that would owe 5-language copy — out of scope for a timeout fix.
+- Scope: [m] half only. Reports still need the OPS half to work on-device (report webhook env +
+  n8n live + nginx read-timeout ≥ 60 s + `:3001` restart) — do not report "reports fixed" from code.
+- Result: commit `4516dd9`, pushed aaziko Shivam. tsc 0 / npm test 829 (+2) / eslint 0 new errors.
+  Device-unverified (OTA-eligible). INBOX untouched (no contract change — additive client behavior).

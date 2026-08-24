@@ -14,6 +14,17 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — BAND 2 #1 SHIPPED: report 12 s → 65 s timeout ([m] half, `4516dd9`, pushed aaziko Shivam).**
+Owner backlog Point 1. Root cause was CLIENT-side: `generateReport` reused the 12 s `REQUEST_TIMEOUT` on a POST
+the backend holds ~60 s open for a 15–40 s n8n render → every FRESH report aborted before the server answered
+(cached ones returned fast, masking it). Fix: new `REPORT_TIMEOUT = 65000` (`config.ts`) passed in `generateReport`;
+the catch now splits `kindForThrown` — our own 65 s abort → new `ReportFailure.reason:'timeout'` that does NOT flip
+the global outage banner (one slow report ≠ whole-app outage) and the screen names it "taking longer than usual";
+a genuine network throw still classifies `'network'` → banner as before. **Do NOT collapse that split catch back to
+one `reportFailure`.** +2 tests (829). tsc 0 / eslint 0 new errors. OTA-eligible, device-unverified. **⚠️ [m] half
+only — reports still won't generate on-device until the OPS half lands** (report webhook env + n8n live + nginx
+read-timeout ≥ 60 s + `:3001` restart); do not tell the team "reports fixed" from code alone.
+
 **📋 2026-08-24 — OWNER BACKLOG (12 points) TRIAGED + deeply described → `docs/OWNER-BACKLOG-2026-08-24.md`.**
 Owner listed 12 points after analysing the app and asked for each to be described deeply, added as prioritized
 rows, and handed off — with **highest priority to items that need a human (owner) to unblock**. All 12 were
@@ -29,7 +40,7 @@ Ranked rows (P = priority; owner tags `[m]`=I build, `[api]`/`[ops]`/`[admin]`=o
 |---|---|---|---|---|
 | **9** | Client book visible to EVERY team member | P1→P0 | dec+api+ops-data+m | Backend serves the unowned ~9k book to any token; hiding the tab is cosmetic; search+deep-link leak too |
 | **11** | Doc **upload** missing; capture fails/loses link (Claims) | P1 | m+ops+api+dec | No file picker (gallery only if camera denied); Spaces OFF on prod → ephemeral disk; upload not linked to claim |
-| **1** | **Report** generation | P1 | m+ops+dec | Real 12s client-timeout bug (backend waits 60s for a 15-40s render) → every FRESH report aborts; + OPS webhook unset |
+| **1** | **Report** generation | P1 | ~~m~~+ops+dec | ✅ **[m] SHIPPED `4516dd9`** (12s→65s `REPORT_TIMEOUT`, timeout-≠-outage split) — still needs OPS webhook env to work on-device |
 | **6** | **Role-based** "not working" | P1 | dec+admin/ops+m | Mechanism built+deployed but UNSEEDED (no per-role docs); 10/14 feature toggles inert; fail-open + no-module-deletion |
 | **5** | **Task/member** flow | P1 | dec+api+m | Team-tier CANNOT create tasks (backend 403) yet UI invites it; empty roster; no edit; always-empty checklist |
 | **2** | **Search** "word-by-word" | P1 | m+api | Backend = single whole-phrase regex ("patel rajesh"≠"Rajesh Patel"); Tasks tab has NO search box |
@@ -1991,12 +2002,13 @@ exercise.
 **CURRENT next 3 (2026-08-24 — after the owner 12-point backlog was triaged into `docs/OWNER-BACKLOG-2026-08-24.md`
 and APK `7a384ee3` was cut). The backlog doc is the authoritative worklist; these three are the immediate lane:**
 
-1. **Build Band 2, starting with the report 12 s timeout fix (P1, OTA, real bug).** `generateReport` reuses the
-   12 s `REQUEST_TIMEOUT` on a POST the backend holds 60 s for a 15–40 s render → every FRESH report aborts
-   client-side. Add `REPORT_TIMEOUT ≈ 65000` in `src/constants/config.ts`, pass it at `src/data/api.ts:3237`, and
-   stop a slow report from flipping the global outage banner; +tests. Then **Tasks-tab local search** (P2→ helps
-   the "word-by-word" complaint, OTA) and the **task-flow mitigations** (hide the always-empty checklist, gate
-   "Add task" on `can_create_task`, add an Edit-task screen, fix the empty assign roster).
+1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`, 2026-08-24 — `REPORT_TIMEOUT = 65000`, timeout-≠-outage
+   split; +2 tests, 829). **Next Band-2 lane: Tasks-tab local search** (P2, OTA) — the Tasks tab has NO search
+   box; add an in-memory filter over the already-loaded list (instant, typo-forgiving; reuse `search.tsx` matcher /
+   `lib/fuzzyMatch.ts`). Then the **task-flow mitigations** (P5, OTA): hide the always-empty checklist card, gate
+   "Add task" on `can_create_task`, add an Edit-task screen, fix the empty assign roster. NOTE: the true
+   word-order search fix is the `[api]` tokenize relay (server = single whole-phrase regex) — local search only
+   narrows the loaded list; don't over-promise it for tickets/clients server search.
 2. **Owner Band-1 actions (in parallel, plain-language relays in the backlog doc — INBOX untouched):**
    3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode), the client-access
    privacy decision (P9), the per-role/department access matrix (P6), the task-create policy (P5), and the
