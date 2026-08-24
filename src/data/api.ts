@@ -49,7 +49,7 @@ import {
   type QueuedWrite, type QueueKind, type FlushOutcome,
 } from '@/lib/writeQueue';
 import * as pendingBus from './pendingWrites';
-import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification, adaptLicPlan } from './adapt';
+import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification, adaptLicPlan, adaptAttendanceHistory } from './adapt';
 // Types only. The seed arrays these modules once exported (`teamMembers`, `teamActivityFeed`,
 // `tasks`) were deleted — importing them is what kept sample records inside the shipped bundle,
 // one `??` away from reaching a screen. Task data comes from getTasks; team data from /profiles.
@@ -2563,9 +2563,15 @@ export async function getAttendanceHistory(): Promise<any[]> {
   // second. Letting it report under its own key would raise an outage banner on a screen that
   // then loaded its data perfectly from the fallback. Only the pair failing is an outage, and
   // the shared key means exactly that: the second leg's success clears the first leg's entry.
+  //
+  // A3: BOTH legs are normalised through `adaptAttendanceHistory`. The primary leg returns raw
+  // DayLog documents (times nested in `sessions[]`), NOT the `clock_in.time` record shape the
+  // screen parses — so without this the whole history read as "no clock-in". The adapter flattens
+  // a DayLog to per-session records; the fallback leg is already canonical and passes through.
   const real = await tryReal<any[]>('/time-tracker/history?limit=30', {}, isArr, '/attendance/history');
-  if (real) return real;
-  return (await tryReal<any[]>('/attendance/history?limit=30', {}, isArr, '/attendance/history')) ?? [];
+  if (real) return adaptAttendanceHistory(real);
+  const fallback = await tryReal<any[]>('/attendance/history?limit=30', {}, isArr, '/attendance/history');
+  return fallback ? adaptAttendanceHistory(fallback) : [];
 }
 
 /* ----------------------------------------------------- Payroll (admin-only) */

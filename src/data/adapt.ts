@@ -410,3 +410,57 @@ export function adaptNotification(raw: any): AppNotification {
     kind,
   };
 }
+
+/* ------------------------------------------------------------------ *
+ * Attendance history normaliser (A3).
+ *
+ * The attendance screen consumes ONE shape — the "attendance record" that
+ * `/api/attendance/history` returns: `{ date, clock_in: { time }, clock_out?: { time } }`.
+ * But `getAttendanceHistory` reads `/api/time-tracker/history` FIRST, and that endpoint
+ * returns raw DayLog documents — `{ date, sessions: [{ clockIn, clockOut, clockInLoc }] }`,
+ * where the clock times live INSIDE `sessions`, not at the top level. Read with the
+ * record-shape mapping, every DayLog row saw `clock_in === undefined`, so the whole history
+ * rendered as "No clock-in recorded" and Days-logged / Closed-days both read 0 — the
+ * present/absent bug the owner reported.
+ *
+ * This flattens EITHER shape to the canonical record: a DayLog with N sessions becomes N
+ * records (one per clock-in, exactly as the backend's own `dayLogToAttendanceRecords` does),
+ * and an already-canonical row passes straight through (tolerating both `clock_in.time` and a
+ * flat `clockIn`). Nothing is invented — a missing time stays missing, and a day whose
+ * sessions never had a clock-in produces no record (matching `/attendance/history`).
+ * ------------------------------------------------------------------ */
+export type AttendanceRecord = {
+  date: string;
+  clock_in?: { time: string };
+  clock_out?: { time: string };
+};
+
+export function adaptAttendanceHistory(raw: any): AttendanceRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const out: AttendanceRecord[] = [];
+  for (const row of raw) {
+    if (!row || typeof row !== 'object') continue;
+    const date: string = String(row.date || row.day || '');
+
+    // DayLog document (`/time-tracker/history`) → one record per session.
+    if (Array.isArray(row.sessions)) {
+      for (const s of row.sessions) {
+        if (!s || !s.clockIn) continue;
+        const rec: AttendanceRecord = { date, clock_in: { time: String(s.clockIn) } };
+        if (s.clockOut) rec.clock_out = { time: String(s.clockOut) };
+        out.push(rec);
+      }
+      continue;
+    }
+
+    // Already the canonical attendance-record shape (`/attendance/history`) or a legacy flat
+    // row — pass through, tolerating `{ clock_in: { time } }` and `{ clockIn }` alike.
+    const inTime = row.clock_in?.time ?? row.clockIn;
+    const outTime = row.clock_out?.time ?? row.clockOut;
+    const rec: AttendanceRecord = { date };
+    if (inTime) rec.clock_in = { time: String(inTime) };
+    if (outTime) rec.clock_out = { time: String(outTime) };
+    out.push(rec);
+  }
+  return out;
+}

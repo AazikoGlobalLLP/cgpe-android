@@ -13,6 +13,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  adaptAttendanceHistory,
   adaptClaim, adaptClient, adaptLead, adaptLicPlan, adaptNotification, adaptReminder,
   adaptUser, adaptWaMessage, adaptWaThread,
   dayMatches, isBirthdayThisMonth, isBirthdayToday, isPremiumDueThisMonth, monthMatches,
@@ -598,6 +599,63 @@ describe('adaptNotification', () => {
     });
     expect(adaptNotification({ _id: 'n5', type: 'event' }).kind).toBe('system');
     expect(adaptNotification({ _id: 'n6', type: 'claim' }).icon).toBe('shield-half');
+  });
+});
+
+/* ------------------------------------------------------------ attendance history (A3) */
+
+describe('adaptAttendanceHistory', () => {
+  it('flattens a raw DayLog (/time-tracker/history) into per-session records', () => {
+    // This is the A3 fix: the primary leg returns DayLog docs with times nested in sessions[],
+    // NOT the clock_in.time record shape. Before the adapter these rendered as "no clock-in".
+    const out = adaptAttendanceHistory([
+      {
+        date: '2026-08-24',
+        sessions: [
+          { clockIn: '2026-08-24T09:00:00.000Z', clockOut: '2026-08-24T17:30:00.000Z' },
+          { clockIn: '2026-08-24T18:00:00.000Z' }, // re-clock-in, still open
+        ],
+      },
+    ]);
+    expect(out).toEqual([
+      { date: '2026-08-24', clock_in: { time: '2026-08-24T09:00:00.000Z' }, clock_out: { time: '2026-08-24T17:30:00.000Z' } },
+      { date: '2026-08-24', clock_in: { time: '2026-08-24T18:00:00.000Z' } },
+    ]);
+  });
+
+  it('omits an open session\'s clock_out entirely rather than emitting null', () => {
+    const out = adaptAttendanceHistory([{ date: '2026-08-24', sessions: [{ clockIn: 'X', clockOut: null }] }]);
+    expect(out[0]).toEqual({ date: '2026-08-24', clock_in: { time: 'X' } });
+    expect('clock_out' in out[0]).toBe(false);
+  });
+
+  it('drops sessions with no clockIn, and a daylog with zero clocked-in sessions yields nothing', () => {
+    expect(adaptAttendanceHistory([{ date: '2026-08-24', sessions: [] }])).toEqual([]);
+    expect(adaptAttendanceHistory([{ date: '2026-08-24', sessions: [{ clockOut: 'Y' }] }])).toEqual([]);
+  });
+
+  it('passes an already-canonical /attendance/history record straight through', () => {
+    const out = adaptAttendanceHistory([
+      { date: '2026-08-23', clock_in: { time: '09:01', lat: 21.2 }, clock_out: { time: '17:00' } },
+    ]);
+    expect(out).toEqual([
+      { date: '2026-08-23', clock_in: { time: '09:01' }, clock_out: { time: '17:00' } },
+    ]);
+  });
+
+  it('tolerates a flat legacy row (clockIn/clockOut) and a bare absent day', () => {
+    expect(adaptAttendanceHistory([{ day: '2026-08-22', clockIn: '10:00' }]))
+      .toEqual([{ date: '2026-08-22', clock_in: { time: '10:00' } }]);
+    // A legacy row with neither time still surfaces the date (renders as "No entry").
+    expect(adaptAttendanceHistory([{ date: '2026-08-21' }]))
+      .toEqual([{ date: '2026-08-21' }]);
+  });
+
+  it('is defensive about non-arrays and junk rows', () => {
+    expect(adaptAttendanceHistory(null)).toEqual([]);
+    expect(adaptAttendanceHistory(undefined)).toEqual([]);
+    expect(adaptAttendanceHistory({} as any)).toEqual([]);
+    expect(adaptAttendanceHistory([null, 3, 'x', { date: '2026-08-20' }])).toEqual([{ date: '2026-08-20' }]);
   });
 });
 
