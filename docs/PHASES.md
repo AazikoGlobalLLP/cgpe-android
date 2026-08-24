@@ -14,6 +14,40 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**📋 2026-08-24 — OWNER BACKLOG (12 points) TRIAGED + deeply described → `docs/OWNER-BACKLOG-2026-08-24.md`.**
+Owner listed 12 points after analysing the app and asked for each to be described deeply, added as prioritized
+rows, and handed off — with **highest priority to items that need a human (owner) to unblock**. All 12 were
+verified against REAL code (this app + backend deployed `origin/main` `49482e9` + `contracts/`) by a 12-agent
+workflow; nothing guessed, every claim cites a file. **APK also cut this session** (EAS `7a384ee3`, git `04c36d6`,
+`.apk` https://expo.dev/artifacts/eas/TDTciayd0aC7sfbxzd_yEn8uvxjgtRYrsSvzO8Fk-zA.apk, SHA-256
+`f17227222fe0b63aaba8535751ce1da47f3c6762a1dc8143eb7f07222e5ebf65`) to carry the accumulated OTA backlog
+(A3/B5/D3/B1/D4/C2/D6/E2/D5) to a phone — testing guide `docs/DEVICE-TESTING-GUIDE-2026-08-24.md`.
+
+Ranked rows (P = priority; owner tags `[m]`=I build, `[api]`/`[ops]`/`[admin]`=owner, `[dec]`=product decision):
+
+| # | Point | P | Owner | Verified truth (1-line) |
+|---|---|---|---|---|
+| **9** | Client book visible to EVERY team member | P1→P0 | dec+api+ops-data+m | Backend serves the unowned ~9k book to any token; hiding the tab is cosmetic; search+deep-link leak too |
+| **11** | Doc **upload** missing; capture fails/loses link (Claims) | P1 | m+ops+api+dec | No file picker (gallery only if camera denied); Spaces OFF on prod → ephemeral disk; upload not linked to claim |
+| **1** | **Report** generation | P1 | m+ops+dec | Real 12s client-timeout bug (backend waits 60s for a 15-40s render) → every FRESH report aborts; + OPS webhook unset |
+| **6** | **Role-based** "not working" | P1 | dec+admin/ops+m | Mechanism built+deployed but UNSEEDED (no per-role docs); 10/14 feature toggles inert; fail-open + no-module-deletion |
+| **5** | **Task/member** flow | P1 | dec+api+m | Team-tier CANNOT create tasks (backend 403) yet UI invites it; empty roster; no edit; always-empty checklist |
+| **2** | **Search** "word-by-word" | P1 | m+api | Backend = single whole-phrase regex ("patel rajesh"≠"Rajesh Patel"); Tasks tab has NO search box |
+| **4** | My-Tasks + **Calendar** + member-create | P2(1×P1) | m+dec | Member-create WORKS; calendar = minimal current-month rail (no grid/nav, binary dot); create not permission-gated |
+| **10** | **Client Search** in More | P2 | m+dec | A prominent Search tile ALREADY exists; delta = scope it client-only (1 request vs 3) |
+| **3** | **Premium & Greeting** | P2 | dec+m | Greeting healthy; /premium & /campaigns are duplicate screens; premium mislabels a 403 as "failed"; dead greeting() |
+| **7** | **Goal-based** system | P2 | dec+api+admin+m | No assignable goal exists; Contest is nearest but app-mapping BROKEN + no admin UI + manual progress |
+| **8** | **WhatsApp** automation + multi-number | P2 | dec+api+ops+m | Personalization DONE; no unattended cron; multiple sender numbers not modelled anywhere |
+| **12** | **Voice Assistant** (LAST) | P2 | dec+m+ops | Feasible; needs NEW native APK (STT/TTS/mic absent); backend NL/LLM already deployed; Gujarati speech = the risk |
+
+**Band 1 (needs YOU, do in parallel):** 3 OPS switches (report webhook / Spaces env / WhatsApp live-mode), the
+client-access privacy decision (P9), the role matrix (P6), the task-create policy (P5), the search tokenize relay
+(P2). **Band 2 (I build now, OTA unless noted):** report 12s timeout fix → Tasks local search → task-flow
+mitigations (hide empty checklist / gate create / edit screen / roster) → calendar grid → scoped client search →
+premium 403-fix+dead-code → search-scope leak fix → wire 10 role toggles → Contest mapper; then the doc picker
+(P11, NON-OTA new APK). INBOX untouched (corruption risk) — relay texts are in the backlog doc. **Nothing built
+yet — this is the triaged plan.**
+
 **✅ 2026-08-24 — D5 typo-tolerant search ([m] half) SHIPPED (`c1c5489`, pushed aaziko Shivam).**
 Owner: search should still find a record when the query is mistyped. The `search.tsx` scorer was
 tiered SUBSTRING matching with no edit-distance, so "rajseh" never reached Rajesh. Fix: new pure
