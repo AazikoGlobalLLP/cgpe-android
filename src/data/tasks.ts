@@ -1,5 +1,7 @@
 /** Tasks — the app's primary domain for team members. Types and label maps only; the
  *  fabricated seed array was removed (see the note below) and no sample data remains. */
+import { buildQuery, matchesFields, W_ID, W_SECOND, W_TEXT, type Field } from '@/lib/searchScore';
+
 export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
 export type TaskPriority = 'high' | 'medium' | 'low';
 export type TaskStep = { id: string; label: string; done: boolean };
@@ -194,6 +196,44 @@ export function groupTasksByDay(list: Task[]): { day: number; tasks: Task[] }[] 
   return Array.from(m.entries())
     .sort((a, b) => a[0] - b[0])
     .map(([day, tasks]) => ({ day, tasks }));
+}
+
+/* ------------------------------------------------------------------ *
+ * Band 2 #2 (owner backlog Point 2, 2026-08-24) — local Tasks-tab search.
+ *
+ * The Tasks tab had no search box, so finding a task meant a trip to the global Search screen
+ * even though the whole list is already on the handset. These two pure helpers filter that
+ * loaded list in memory with the SAME scorer the global search uses (`@/lib/searchScore`), so
+ * a typo ("rajseh"), a swapped word order ("patel rajesh") and the last digits of a mobile all
+ * still find the task. This is the SINGLE definition of "how a task is searched": the global
+ * Search screen imports `taskSearchFields` from here too, so the two can never drift.
+ * ------------------------------------------------------------------ */
+
+/** The identifying fields of a task, weighted for the scorer. Shared by the Tasks tab's local
+ *  search and the global Search screen. Title and client phone are the identifiers a person
+ *  actually types; the rest are secondary/free-text. */
+export function taskSearchFields(t: Task): Field[] {
+  return [
+    { key: 'name', value: t.title, weight: W_ID },
+    { key: 'mobile', value: t.clientPhone || '', weight: W_ID },
+    { key: 'client', value: t.client || '', weight: W_SECOND },
+    { key: 'category', value: t.category, weight: W_TEXT },
+    { key: 'details', value: t.description, weight: W_TEXT },
+    { key: 'assigned by', value: t.assignedBy, weight: W_TEXT },
+  ];
+}
+
+/**
+ * Filter an already-loaded task list by a free-text query. A blank query returns the list
+ * unchanged (the caller shows its normal views). Matching is typo-/word-order-/phone-tail-
+ * tolerant via the shared scorer; input order is PRESERVED (the caller applies its own sort),
+ * so this stays a pure membership filter with no opinion on ranking.
+ */
+export function searchTasks(list: Task[], raw: string): Task[] {
+  const term = raw.trim();
+  if (!term) return list;
+  const q = buildQuery(term);
+  return list.filter((t) => matchesFields(q, taskSearchFields(t)));
 }
 
 /**

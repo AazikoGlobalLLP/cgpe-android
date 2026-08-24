@@ -20,10 +20,13 @@ import * as api from '@/data/api';
 import { getHealth } from '@/data/health';
 import type { Claim, Client, Lead } from '@/data/types';
 import type { Task } from '@/data/tasks';
-import { TASK_STATUS } from '@/data/tasks';
+import { TASK_STATUS, taskSearchFields } from '@/data/tasks';
 import { CLAIM_STATUS, STAGE_META } from '@/data/labels';
 import { inrShort } from '@/lib/format';
-import { tokenFuzzyHit, FUZZY_MIN } from '@/lib/fuzzyMatch';
+import {
+  buildQuery, rank, GROUP_CAP, W_ID, W_SECOND, W_TEXT,
+  type Field, type Hit, type Ranked,
+} from '@/lib/searchScore';
 
 /* ------------------------------------------------------------------ *
  * Global search — one box over five record types.
@@ -58,171 +61,16 @@ import { tokenFuzzyHit, FUZZY_MIN } from '@/lib/fuzzyMatch';
 
 /** Long enough that a fast typist fires one request, short enough to feel live. */
 const DEBOUNCE_MS = 300;
-/** Rows kept per group. A search that returns 200 clients has not answered the question. */
-const GROUP_CAP = 20;
 const TICKET_FETCH = 40;
 const RECENT_MAX = 6;
 /** How long a pulled copy of leads/claims/tasks may back a search before it is re-pulled. */
 const BULK_TTL_MS = 90_000;
 
 /* ================================================================== *
- * Fuzzy matching
- *
- * Three tiers, in the order a person means them: an exact hit, then something that STARTS
- * with what was typed, then something that merely contains it. Everything else is a miss.
+ * The scorer is now shared with the Tasks tab — `@/lib/searchScore` (pure, unit-tested).
+ * `buildQuery`/`tierFor`/`bestHit`/`rank` and the tier/weight constants live there; only the
+ * per-domain field lists stay here (they know the shape of a Client/Lead/Claim/Ticket).
  * ================================================================== */
-
-const T_EXACT = 3;
-const T_PREFIX = 2;
-const T_CONTAINS = 1;
-/**
- * Typo tolerance, a fractional tier BELOW "contains". A mistyped or transposed character
- * ("rajseh"→"Rajesh") still reaches the record, but the resulting score (5 + weight) always
- * ranks under a genuine substring hit (10 + weight), so a real match is never buried by a
- * lucky near-miss. Edit-distance logic lives, and is tested, in `@/lib/fuzzyMatch`.
- */
-const T_FUZZY = 0.5;
-
-/** Field weights. Ties inside a tier break towards the identifying fields. */
-const W_ID = 3;
-const W_SECOND = 2;
-const W_TEXT = 1;
-
-/**
- * Shortest digit run that may match a phone number by its TAIL. Agents remember the last
- * four digits of a mobile and almost never the first four, so a suffix hit is scored as
- * strongly as a prefix one. Below four digits a suffix match is noise: "12" would pull back
- * a third of the book.
- */
-const MIN_SUFFIX_DIGITS = 4;
-
-/** Kept for a row the SERVER matched but the local scorer could not explain. */
-const SERVER_ONLY_SCORE = 1;
-
-type Q = {
-  lower: string;
-  /** Lowercase, punctuation and spacing removed, so "CLM-2024/8891" answers "clm20248891". */
-  compact: string;
-  digits: string;
-  tokens: string[];
-  /** True when the query is nothing but digits: a phone, policy or reference lookup. */
-  numeric: boolean;
-};
-
-const compactOf = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
-const digitsOf = (s: string) => s.replace(/\D+/g, '');
-
-function buildQuery(raw: string): Q {
-  const lower = raw.trim().toLowerCase();
-  const compact = compactOf(lower);
-  const digits = digitsOf(lower);
-  return {
-    lower,
-    compact,
-    digits,
-    // Split on whitespace rather than on a Latin character class: names and dictated notes
-    // in this book are frequently Gujarati, and a-z tokenising would erase them entirely.
-    tokens: lower.split(/\s+/).filter(Boolean),
-    numeric: compact.length > 0 && compact === digits,
-  };
-}
-
-/**
- * Last-resort typo match. Every query token must find a home in the value: a short token
- * (below the fuzzy minimum) must appear as a substring — it is never fuzzed, because a
- * two-letter edit budget is meaningless — while a longer token may sit within its edit
- * budget of any word. So "rajseh ptael" reaches "Rajesh Patel", but "in" still has to be
- * really present. Splitting on whitespace (not a Latin class) keeps Gujarati words intact.
- */
-function fuzzyMatches(q: Q, valueLower: string): boolean {
-  if (q.tokens.length === 0) return false;
-  const words = valueLower.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return false;
-  return q.tokens.every((tk) =>
-    tk.length < FUZZY_MIN ? words.some((w) => w.includes(tk)) : tokenFuzzyHit(tk, words),
-  );
-}
-
-/** 3 exact, 2 prefix, 1 contains, 0.5 fuzzy (typo), 0 miss. */
-function tierFor(q: Q, value: string): number {
-  const lower = value.trim().toLowerCase();
-  if (!lower) return 0;
-
-  // Numeric queries take the digit path first, so "+91 98765 43210", "9876543210" and
-  // "43210" all reach the same record.
-  if (q.numeric && q.digits) {
-    const fd = digitsOf(lower);
-    if (fd) {
-      if (fd === q.digits) return T_EXACT;
-      if (q.digits.length >= MIN_SUFFIX_DIGITS && fd.endsWith(q.digits)) return T_PREFIX;
-      if (fd.startsWith(q.digits)) return T_PREFIX;
-      if (fd.includes(q.digits)) return T_CONTAINS;
-    }
-    // Deliberately falls through: "2024" is also a substring of a reference like CLM-2024-8891.
-  }
-
-  if (lower === q.lower) return T_EXACT;
-  const compact = compactOf(lower);
-  if (q.compact && compact === q.compact) return T_EXACT;
-
-  if (lower.startsWith(q.lower)) return T_PREFIX;
-  if (q.compact && compact.startsWith(q.compact)) return T_PREFIX;
-  // A word start anywhere in the value counts as a prefix: "anand" should reach
-  // "Jeevan Anand" as strongly as it reaches "Anand Patel".
-  if (lower.split(/\s+/).some((w) => w.startsWith(q.lower))) return T_PREFIX;
-
-  if (lower.includes(q.lower)) return T_CONTAINS;
-  if (q.compact && compact.includes(q.compact)) return T_CONTAINS;
-  // Out-of-order multi word: "patel rajesh" finds "Rajesh Patel".
-  if (q.tokens.length > 1 && q.tokens.every((t) => lower.includes(t))) return T_CONTAINS;
-
-  // Typo tolerance, last of all. Skipped for numeric queries: a wrong digit must never pull
-  // back a DIFFERENT person's phone or policy number — a near-miss there is a wrong answer,
-  // not a helpful one. The digit path above already owns numeric lookups.
-  if (!q.numeric && fuzzyMatches(q, lower)) return T_FUZZY;
-
-  return 0;
-}
-
-type Field = { key: string; value: string; weight: number };
-type Hit = { score: number; field: Field };
-
-/** The strongest field hit on one record, or null when nothing matched. */
-function bestHit(q: Q, fields: Field[]): Hit | null {
-  let best: Hit | null = null;
-  for (const f of fields) {
-    if (!f.value) continue;
-    const tier = tierFor(q, f.value);
-    if (tier === 0) continue;
-    // Tier dominates the weight by an order of magnitude, so an exact hit on a weak field
-    // still outranks a contains hit on a name. That is the ordering the brief asks for.
-    const score = tier * 10 + f.weight;
-    if (!best || score > best.score) best = { score, field: f };
-  }
-  return best;
-}
-
-type Ranked<T> = { item: T; hit: Hit | null; score: number };
-
-/**
- * Score, filter and sort one collection.
- *
- * `keepServerMatched` is passed for the collections the BACKEND filtered (clients, tickets).
- * Those rows are matches by definition, even when the local scorer cannot say which field
- * did it, because the server searches columns this app never maps. Dropping them would make
- * the screen quietly less capable than the endpoint behind it, so they are kept and ranked
- * last instead.
- */
-function rank<T>(items: T[], q: Q, fieldsOf: (x: T) => Field[], keepServerMatched = false): Ranked<T>[] {
-  const out: Ranked<T>[] = [];
-  for (const item of items) {
-    const hit = bestHit(q, fieldsOf(item));
-    if (hit) out.push({ item, hit, score: hit.score });
-    else if (keepServerMatched) out.push({ item, hit: null, score: SERVER_ONLY_SCORE });
-  }
-  out.sort((a, b) => b.score - a.score);
-  return out.slice(0, GROUP_CAP);
-}
 
 /* ---------- the identifying fields of each record type ---------- */
 
@@ -260,14 +108,8 @@ const claimFields = (cl: Claim): Field[] => [
   { key: 'note', value: cl.aiSummary || '', weight: W_TEXT },
 ];
 
-const taskFields = (t: Task): Field[] => [
-  { key: 'name', value: t.title, weight: W_ID },
-  { key: 'mobile', value: t.clientPhone || '', weight: W_ID },
-  { key: 'client', value: t.client || '', weight: W_SECOND },
-  { key: 'category', value: t.category, weight: W_TEXT },
-  { key: 'details', value: t.description, weight: W_TEXT },
-  { key: 'assigned by', value: t.assignedBy, weight: W_TEXT },
-];
+// `taskSearchFields` is imported from `@/data/tasks` — the single definition the Tasks-tab
+// local search shares, so the two search surfaces score a task identically.
 
 const ticketFields = (t: api.Ticket): Field[] => [
   { key: 'reference', value: t.ticket_ref || '', weight: W_ID },
@@ -530,7 +372,7 @@ export default function Search() {
         leads: rank(bulk.leads, query, leadFields),
         claims: rank(bulk.claims, query, claimFields),
         tickets: rank(ticketItems, query, ticketFields, true),
-        tasks: rank(bulk.tasks, query, taskFields),
+        tasks: rank(bulk.tasks, query, taskSearchFields),
       };
       setRes(next);
       setRan(term);

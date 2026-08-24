@@ -11,8 +11,10 @@ import { describe, expect, it } from 'vitest';
 import {
   dueBucket, taskProgress, todayProgress, todayWorkload, todayWorkloadTasks,
   weekRange, monthRange, tasksInRange, groupTasksByDay,
+  searchTasks, taskSearchFields,
   type Task, type TaskStatus, type TaskStep,
 } from '@/data/tasks';
+import { W_ID, W_SECOND, W_TEXT } from '@/lib/searchScore';
 
 /** Minimal Task. Only `status` and `steps` are read by taskProgress. */
 function task(status: TaskStatus, steps: TaskStep[]): Task {
@@ -315,5 +317,94 @@ describe('todayWorkloadTasks — the SET behind the todayWorkload counts', () =>
     const set = todayWorkloadTasks(list, NOW);
     expect(set.map((t) => t.id).sort()).toEqual(['doneToday', 'openOverdue', 'today']);
     expect(set.length).toBe(todayWorkload(list, NOW).total);
+  });
+});
+
+/**
+ * Band 2 #2 (owner backlog Point 2, 2026-08-24) — the Tasks-tab local search. `searchTasks`
+ * filters an already-loaded list with the shared scorer, so it must forgive typos and word
+ * order, match a client mobile by its tail, and never invent matches. `taskSearchFields` is the
+ * one definition of "which columns of a task are searchable", shared with the global Search screen.
+ */
+describe('taskSearchFields — the searchable columns of a task', () => {
+  it('exposes title/mobile/client/category/details/assigned-by with load-bearing weights', () => {
+    // The weights are NOT cosmetic: search.tsx feeds this straight into rank(), where weight is
+    // the intra-tier tie-break that orders task results. Pin the full shape, weights included, so
+    // a weight edit that silently re-ranks global search fails here.
+    const t = mk({
+      title: 'Renew policy', clientPhone: '9876588891', client: 'Rajesh Patel',
+      category: 'Renewal', description: 'call before 5pm', assignedBy: 'Sunita',
+    });
+    expect(taskSearchFields(t)).toEqual([
+      { key: 'name', value: 'Renew policy', weight: W_ID },
+      { key: 'mobile', value: '9876588891', weight: W_ID },
+      { key: 'client', value: 'Rajesh Patel', weight: W_SECOND },
+      { key: 'category', value: 'Renewal', weight: W_TEXT },
+      { key: 'details', value: 'call before 5pm', weight: W_TEXT },
+      { key: 'assigned by', value: 'Sunita', weight: W_TEXT },
+    ]);
+  });
+});
+
+describe('searchTasks — local, typo-/word-order-/phone-tail-tolerant', () => {
+  const list: Task[] = [
+    mk({ id: 'a', title: 'Call Rajesh Patel', client: 'Rajesh Patel', clientPhone: '9876588891' }),
+    mk({ id: 'b', title: 'Collect KYC documents', category: 'Documentation' }),
+    mk({ id: 'c', title: 'Renew Jeevan Anand', description: 'maturity due', client: 'Sunita Mehta' }),
+  ];
+  const ids = (raw: string) => searchTasks(list, raw).map((t) => t.id);
+
+  it('a blank query returns the list unchanged (same reference)', () => {
+    expect(searchTasks(list, '')).toBe(list);
+    expect(searchTasks(list, '   ')).toBe(list);
+  });
+
+  it('matches by a piece of the title', () => {
+    expect(ids('rajesh')).toEqual(['a']);
+  });
+
+  it('forgives a transposition — "rajseh" still finds "Rajesh"', () => {
+    expect(ids('rajseh')).toEqual(['a']);
+  });
+
+  it('matches out-of-order words — "patel rajesh" finds "Rajesh Patel"', () => {
+    expect(ids('patel rajesh')).toEqual(['a']);
+  });
+
+  it('matches the client mobile by its last four digits', () => {
+    expect(ids('8891')).toEqual(['a']);
+  });
+
+  it('searches secondary/free-text columns (category, details, client)', () => {
+    expect(ids('documentation')).toEqual(['b']); // category
+    expect(ids('maturity')).toEqual(['c']);       // description
+    expect(ids('mehta')).toEqual(['c']);          // client name
+  });
+
+  it('a short token must be really present — no fuzzing 3-letter noise', () => {
+    // "kyc" is a genuine substring of task b, but "kyd" (a typo) is too short to fuzzy-match.
+    expect(ids('kyc')).toEqual(['b']);
+    expect(ids('kyd')).toEqual([]);
+  });
+
+  it('returns [] when nothing carries the query', () => {
+    expect(ids('nonexistent')).toEqual([]);
+  });
+
+  it('returns ALL matches in INPUT order — a plain filter, not a ranked/sliced result', () => {
+    // Distinct from the global search's rank(), which sorts by score and caps at GROUP_CAP.
+    // searchTasks preserves input order (the Tasks tab re-sorts itself) and keeps every match.
+    const many: Task[] = [
+      mk({ id: 'x1', title: 'Renewal call' }),        // prefix on title
+      mk({ id: 'x2', title: 'KYC upload' }),          // no match
+      mk({ id: 'x3', title: 'Policy', category: 'Renewal' }), // exact on category
+      mk({ id: 'x4', title: 'Visit', description: 'renewal reminder' }), // prefix in details
+    ];
+    expect(searchTasks(many, 'renewal').map((t) => t.id)).toEqual(['x1', 'x3', 'x4']);
+  });
+
+  it('does NOT cap the result at GROUP_CAP — a broad query returns every match', () => {
+    const big: Task[] = Array.from({ length: 25 }, (_, i) => mk({ id: `r${i}`, category: 'Renewal' }));
+    expect(searchTasks(big, 'renewal')).toHaveLength(25); // rank()-based code would truncate to 20
   });
 });

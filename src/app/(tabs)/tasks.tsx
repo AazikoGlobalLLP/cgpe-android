@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@/theme/theme';
 import { Card, Eyebrow, Header, Metric, Row, Screen, Txt } from '@/ui/base';
 import type { IconName } from '@/ui/base';
-import { Fab, IconBtn, Segmented } from '@/ui/controls';
+import { Fab, IconBtn, SearchBar, Segmented } from '@/ui/controls';
 import { Banner, EmptyState, ProgressBar, Skeleton, SkeletonCard } from '@/ui/feedback';
 import type { FeedbackTone } from '@/ui/feedback';
 import { Pill } from '@/ui/data';
@@ -27,7 +27,7 @@ import * as api from '@/data/api';
 import {
   CATEGORY_ICON, Task, TaskStatus, TaskView, TASK_PRIORITY, TASK_STATUS,
   dueBucket, taskProgress, todayWorkload, todayWorkloadTasks, tasksInRange, groupTasksByDay,
-  weekRange, monthRange,
+  weekRange, monthRange, searchTasks,
 } from '@/data/tasks';
 import { fmtDay, fmtTime } from '@/lib/format';
 import { call } from '@/lib/actions';
@@ -182,6 +182,12 @@ export default function Tasks() {
   const [view, setView] = useState<TaskView>('calendar');
   const [selDay, setSelDay] = useState(() => startOfDayMs(new Date()));
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  // Band 2 #2 (owner backlog Point 2, 2026-08-24): a local, in-memory search over the already-
+  // loaded list. Typing here searches the WHOLE list (not just the active time view), so a task
+  // in a future month — unreachable from Today/Week/Month — is still findable. The scorer is the
+  // one the global Search screen uses (`searchTasks` → `@/lib/searchScore`): typo-, word-order-
+  // and phone-tail-tolerant. No network: instant on every keystroke.
+  const [query, setQuery] = useState('');
 
   /** Latest read wins. Anything older is discarded rather than written over fresher rows. */
   const reqId = useRef(0);
@@ -287,6 +293,16 @@ export default function Tasks() {
     prevPending.current = pendingTasks.length;
   }, [pendingTasks.length, loading, load]);
 
+  // Search runs over the pending drafts AND the server-confirmed list, so a task just created
+  // offline is findable too. `sortTasks` gives the results the tab's usual order (open first,
+  // earliest due), and the scorer preserves input order so that sort is the only ranking.
+  const searchTerm = query.trim();
+  const searching = searchTerm.length > 0;
+  const searchResults = useMemo(
+    () => (searching ? sortTasks(searchTasks([...pendingCards, ...list], searchTerm)) : []),
+    [searching, searchTerm, pendingCards, list],
+  );
+
   const pickView = (next: TaskView) => {
     if (next === view) return;
     haptics.select();
@@ -369,6 +385,20 @@ export default function Tasks() {
         subtitle={`${counts.today + counts.overdue} ${t('tasks.dueNow')} · ${counts.done} ${t('tasks.doneLabel')}`}
       />
 
+      {/* Band 2 #2: local search over the loaded list. Fixed below the header so it stays put
+          while the results scroll. Shown once the first load has landed (a box over a skeleton
+          is useless). */}
+      {!loading ? (
+        <View style={{ paddingHorizontal: spacing.lg, paddingTop: 4, paddingBottom: spacing.sm }}>
+          <SearchBar
+            value={query}
+            onChange={setQuery}
+            onSubmit={() => {}}
+            placeholder={t('common.search')}
+          />
+        </View>
+      ) : null}
+
       <ScrollView
         contentContainerStyle={{
           padding: spacing.lg, paddingTop: 4,
@@ -376,6 +406,11 @@ export default function Tasks() {
         }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor={c.primary} />}
         showsVerticalScrollIndicator={false}
+        // Band 2 #2: the SearchBar above keeps the keyboard up, so without this the first tap on a
+        // result (open / complete / Clear search) is eaten to dismiss it — the two-tap "feels
+        // broken" bug the global Search screen guards against the same way (search.tsx).
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         {/* Phase 57a: shown only when these rows came from the offline cache after a failed refetch. */}
         <SyncChip endpointKey={tasksKey} />
@@ -391,6 +426,51 @@ export default function Tasks() {
         ) : null}
         {loading ? <TasksSkeleton /> : (
           <>
+            {/* A failed complete/reopen surfaces here in BOTH search and normal modes. */}
+            {notice ? (
+              <Banner
+                tone={notice.tone}
+                title={notice.title}
+                message={notice.message}
+                onDismiss={() => setNotice(null)}
+              />
+            ) : null}
+
+            {searching ? (
+              /* Band 2 #2 — a flat list of every loaded task that matches, in the tab's usual
+                 order (open first, earliest due). No hero, no time toggle: search is one job. */
+              searchResults.length === 0 ? (
+                <Card>
+                  <EmptyState
+                    icon="file-tray-outline"
+                    title={`No task matches "${searchTerm}"`}
+                    subtitle={
+                      outage
+                        ? 'Some tasks could not be loaded, so this may be incomplete. Pull down to refresh, then search again.'
+                        : 'Nothing in your tasks carries that. Try a shorter piece of the title, the client name, or the last four digits of a mobile.'
+                    }
+                    action={{ label: 'Clear search', onPress: () => setQuery('') }}
+                  />
+                </Card>
+              ) : (
+                <View style={{ gap: 10 }}>
+                  <Txt size={font.sub} color={c.muted} numberOfLines={1}>
+                    {`${searchResults.length} ${searchResults.length === 1 ? 'result' : 'results'} for "${searchTerm}"`}
+                  </Txt>
+                  {searchResults.map((task, i) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      index={i}
+                      onPress={task.pending ? () => {} : () => router.push(`/task/${task.id}`)}
+                      onDone={task.pending ? undefined : () => quickDone(task)}
+                      onReopen={task.pending ? undefined : () => reopen(task)}
+                    />
+                  ))}
+                </View>
+              )
+            ) : (
+            <>
             {/* HERO — how much of today is left. */}
             <Appear>
               <Card>
@@ -510,15 +590,6 @@ export default function Tasks() {
               </View>
             ) : null}
 
-            {notice ? (
-              <Banner
-                tone={notice.tone}
-                title={notice.title}
-                message={notice.message}
-                onDismiss={() => setNotice(null)}
-              />
-            ) : null}
-
             {outage ? (
               <Card>
                 <EmptyState
@@ -595,6 +666,8 @@ export default function Tasks() {
                   ))}
                 </View>
               )
+            )}
+            </>
             )}
           </>
         )}
