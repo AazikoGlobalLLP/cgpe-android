@@ -274,6 +274,15 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
    --port 8083` (port 8081 is usually taken by a running dev server → non-interactive mode SKIPS
    rather than prompts, so pass a free `--port`; CI-mode Metro writes the types in ~30 s then you can
    let it exit). Then the clean `router.push({ pathname: '/new-route', params })` typechecks with no cast.
+6. **KEYBOARD-SWALLOWS-FIRST-TAP TRAP (Band 2 #2, 2026-08-24).** Any screen with a `SearchBar`/`Field`
+   (a `TextInput`) above a **`ScrollView` of tappable rows/buttons** MUST set
+   `keyboardShouldPersistTaps="handled"` (and usually `keyboardDismissMode="on-drag"`) on that ScrollView.
+   RN's default is `"never"`: while the keyboard is up, the first tap on any child is consumed to dismiss
+   the keyboard and **never reaches the child** — the two-tap "feels broken" bug, documented in the code at
+   `ui/base.tsx:80-82` and guarded on ~15 screens (`search.tsx:585`, `clients.tsx`, `leads.tsx`,
+   `notes.tsx`, login…). `tsc`/`npm test`/`eslint` CANNOT see this — it needs a device or an eye on the
+   ScrollView props. The Tasks-tab search shipped missing it and an adversarial review caught it; don't
+   repeat the miss.
 
 ## Danger zones
 - `src/data/api.ts` (1744 lines, 56 importers) — `state` is a write buffer, not seed data.

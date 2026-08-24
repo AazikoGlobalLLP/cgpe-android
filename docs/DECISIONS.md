@@ -6,6 +6,40 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-24 — Band 2 #2: Tasks-tab local search + the search scorer extracted to `lib/searchScore.ts`
+
+**Context.** Owner backlog Point 2: the Tasks tab had no search box, forcing a trip to the global
+Search screen to find a task even though the whole list is already on the handset. The global search's
+typo-/word-order-/phone-tail-tolerant scorer lived inline in `src/app/search.tsx` (a screen component),
+untested except via the `fuzzyMatch` leaf.
+
+**Decision.**
+- Extracted the scorer VERBATIM into a new pure `src/lib/searchScore.ts` (`buildQuery`/`tierFor`/
+  `bestHit`/`matchesFields`/`rank` + tier/weight consts + `Q`/`Field`/`Hit`/`Ranked` types). It imports
+  ONLY `@/lib/fuzzyMatch`, so it stays a native-free leaf reachable from the Vitest graph without a stub.
+  The per-domain field lists (`clientFields`/`taskSearchFields`/…) stay with their owners — `searchScore`
+  scores weighted `Field`s and knows no domain types.
+- `taskSearchFields` (a task's searchable columns, weighted) lives in `data/tasks.ts` and is imported by
+  BOTH `search.tsx` and the Tasks tab — one definition of "how a task is searched", so the two can't drift.
+- The Tasks local filter (`searchTasks`) is a pure `list.filter(matchesFields)`: blank query returns the
+  list unchanged by reference, it PRESERVES input order (the tab re-sorts with `sortTasks`), and it is
+  UNCAPPED — unlike the global search's `rank()` which sorts by score and slices to `GROUP_CAP=20`. Capping
+  would hide matching tasks, which is wrong for "find a task".
+- New UI sentences are hardcoded English; the placeholder reuses the already-translated `t('common.search')`.
+  No new i18n key was added, so no 5-language copy is owed (matches all-English `search.tsx` + the report fix).
+- After implementing, ran a 10-agent adversarial review workflow (`band2-2-search-review`). Its parity pass
+  was clean; it CAUGHT a real major bug and it was fixed before commit: the results ScrollView had no
+  `keyboardShouldPersistTaps`, so with the SearchBar keeping the keyboard up, the first tap on every result
+  was swallowed to dismiss the keyboard (the two-tap "feels broken" bug). Fixed to `"handled"` +
+  `keyboardDismissMode="on-drag"`, matching `search.tsx`. Also hardened three test gaps the review confirmed.
+
+**Consequence.** Commit `c47be1b`, pushed `aaziko/Shivam`. tsc 0 / npm test 863 (+34) / eslint 0 new.
+OTA-eligible, device-unverified. INBOX untouched — additive client behaviour, no contract change. The TRUE
+word-order fix for tickets/clients server search is still the `[api]` tokenize relay (owner-owned, same owed
+ask as D5); this local filter only narrows the already-loaded list — do not over-promise it.
+
+---
+
 ## 2026-08-22 — Phase 77: sign-in distinguishes a TIMEOUT from an unreachable server
 
 **Context.** The Phase 76 network diagnosis proved the "can't reach server" complaint was an

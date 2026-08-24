@@ -1,61 +1,71 @@
-# HANDOFF — CGPE Connect (Android) — Band 2 #1: report timeout fix — 2026-08-24
+# HANDOFF — CGPE Connect (Android) — Band 2 #2: Tasks-tab local search — 2026-08-24
 
 ## Done
-- **Fresh reports no longer die at 12 s.** `generateReport` was aborting a POST that the backend holds
-  ~60 s open for a 15–40 s n8n render, using the ordinary 12 s read timeout — so every *first-time*
-  report was killed client-side before the server could answer (a cached one returned fast, which
-  masked it). It now gets a dedicated **65 s** ceiling. Observable: tapping "Generate report" on a
-  fresh client now waits for the render instead of failing after 12 s.
-- **A slow report no longer lies about the whole app.** If a report still outruns 65 s it is named
-  report-specifically ("taking longer than usual — try again") and does **NOT** raise the global
-  outage banner — one slow heavy endpoint is not a whole-app outage. A genuinely dead network still
-  raises the banner exactly as before.
-- Gates green: `tsc` 0 · `npm test` **829** (+2) · `eslint` 0 new errors. Commit `4516dd9`, pushed
+- **The Tasks tab now has a search box.** Typing filters the already-loaded task list in memory,
+  instantly (no network). It forgives typos (`rajseh` → Rajesh), swapped word order (`patel rajesh`
+  → "Rajesh Patel"), and matches a client's mobile by its last four digits. It searches the **whole**
+  loaded list, so a task in a future month — which the Today/Week/Month/Calendar views cannot reach —
+  is now findable. Offline drafts are searchable too and render inert.
+- **The search scorer is now shared, not duplicated.** `search.tsx`'s hand-rolled scorer was extracted
+  verbatim into a pure, unit-tested `src/lib/searchScore.ts`; the global Search screen and the Tasks tab
+  now score a record identically and can't drift. Global search behaviour is unchanged.
+- Gates green: `tsc` 0 · `npm test` **863** (+34) · `eslint` 0 new. Commit `c47be1b`, pushed
   `aaziko/Shivam`. OTA-eligible; device-unverified.
 
 ## Files changed
-- `src/constants/config.ts` — new `REPORT_TIMEOUT = 65000` (server wait + a small TLS/round-trip
-  cushion). POST, so `req()` never auto-retries it (no duplicate render).
-- `src/data/api.ts` — `generateReport` passes `REPORT_TIMEOUT`; its catch splits on `kindForThrown`:
-  our own 65 s abort → new `reason: 'timeout'` (no health-banner report); a real network throw →
-  `'network'` → `reportFailure` → banner, as before. `ReportFailure` union + docs gained `'timeout'`.
-- `src/app/client/[id].tsx` — added the `timeout` branch to the failure message so the cause reads
-  "taking longer than usual" instead of "the service did not answer".
-- `src/data/__tests__/api-report.test.ts` — +2 tests: one drives the real `AbortController` to pin it
-  does NOT abort at 12 s but does by 65 s and stays quiet; one pins abort→`timeout` + no banner + no
-  POST retry.
+- `src/lib/searchScore.ts` — **NEW**. The pure scorer (`buildQuery`/`tierFor`/`bestHit`/`matchesFields`/
+  `rank` + tier/weight consts + `Q`/`Field`/`Hit`/`Ranked` types), extracted verbatim from `search.tsx`.
+  Imports **only** `@/lib/fuzzyMatch`, so it stays a leaf and is safe in the Vitest graph (no stub).
+- `src/data/tasks.ts` — added `taskSearchFields(t)` (the one shared definition of a task's searchable
+  columns, with load-bearing weights) and `searchTasks(list, raw)` (pure: blank query returns the list
+  unchanged by reference; else filters by `matchesFields`; **preserves input order; no cap**).
+- `src/app/search.tsx` — deleted the inline scorer, now imports it from `searchScore`; its local
+  `taskFields` was replaced by the shared `taskSearchFields`. **No behaviour change** (parity confirmed).
+- `src/app/(tabs)/tasks.tsx` — fixed `SearchBar` below the header (only after first load); when a query is
+  present, a flat results list (or an honest no-match/outage `EmptyState`) replaces the hero/time-toggle;
+  results reuse `TaskCard` (swipe-complete/reopen work); pending drafts render inert. The write-failure
+  banner was hoisted so it shows in both search and normal modes. **`keyboardShouldPersistTaps="handled"`
+  + `keyboardDismissMode="on-drag"`** on the ScrollView (see the review bug below).
+- `src/lib/__tests__/searchScore.test.ts` — **NEW**, ~30 cases pinning the five tiers, phone-tail path,
+  out-of-order matching, the weight tie-break, and `rank`'s cap.
+- `src/data/__tests__/tasks.test.ts` — added `searchTasks`/`taskSearchFields` cases: typo/word-order/
+  phone-tail, short-token literal requirement, blank-query same-reference, field weights, and the
+  **multi-match input-order + `>GROUP_CAP` no-cap contract** (guards a future `rank()`-based regression).
 
 ## Decisions made
-- **65 s ceiling** (covers the backend's ~60 s wait + cushion). Constant lives in `config.ts` as the
-  single source of truth, matching `LOGIN_TIMEOUT`/`UPLOAD_TIMEOUT`.
-- **A report timeout is NOT a whole-app outage** — it must not flip the global `<HealthBanner/>`. This
-  is deliberate: the timeout-vs-network split in the catch is load-bearing. Do NOT collapse it back to
-  one `reportFailure(key, kindForThrown(e))`. A genuinely dead network is still an outage (a 65 s hang
-  where TCP connected but no body arrived is far more likely a slow render than a dead link; and if the
-  network really is down, the app's other reads flip the banner independently via their 12 s timeouts).
-- **Kept the report messages hardcoded English**, consistent with the three existing report-failure
-  strings — did NOT add i18n keys (they would owe 5-language copy; out of scope for a timeout fix).
+- **The scorer lives in `lib/searchScore.ts` (pure), the field lists stay with their owners.** `searchScore`
+  knows nothing about a Client/Task/Ticket — it scores weighted `Field`s. `taskSearchFields` sits in
+  `data/tasks` (next to `Task`) and is imported by BOTH search surfaces, so there's one definition of
+  "how a task is searched". This keeps `searchScore` a native-free leaf reachable from the Vitest graph.
+- **The Tasks local filter is uncapped and preserves input order** (the tab re-sorts with `sortTasks`),
+  unlike the global search's `rank()` which sorts by score and slices to `GROUP_CAP=20`. Capping would
+  *hide* matching tasks — wrong for "find a task". The adversarial review agreed (uncapped flag refuted).
+- **New UI sentences are hardcoded English; the placeholder reuses `t('common.search')`.** Matches the
+  all-English `search.tsx` and the report-fix precedent, so **no 5-language copy is owed**. A brand-new
+  i18n key would have owed copy — deliberately avoided.
+- **Ran a 10-agent adversarial review workflow after implementing.** Its `parity` pass came back clean;
+  it caught one real major bug (below) and three test-hardening items, all fixed before commit.
 
 ## Known broken / deliberately skipped
-- **Reports still won't generate on a phone until the OPS half lands** — this commit is the `[m]`
-  half only. The owner must set the report webhook env on the server (`CGPE_REPORT_WEBHOOK_URL` +
-  `CGPE_REPORT_SECRET`), confirm the n8n `cgpe-report-render` workflow is live, ensure nginx
-  read-timeout ≥ 60 s, and restart `:3001`. **Do NOT tell the team "reports are fixed" from code
-  alone** — both halves are required.
-- The 2026-08-24 `cgpe-api` INBOX note (report path now shares the panel's 7-day cache) means a
-  subject the panel already rendered returns instantly, but a truly-fresh first render still needs
-  both this timeout fix AND the OPS env. That cache is not on `origin/main` yet regardless.
-- Device-unverified (OTA) — walk the report row on a device once the OPS env is set.
+- **This only searches the ALREADY-LOADED list.** The real "word order" fix for tickets/clients is the
+  **`[api]` tokenize relay** (the backend `?search=` is a single whole-phrase regex — "patel rajesh" ≠
+  "Rajesh Patel"; same owed ask as D5's whole-book fuzzy). Do **not** over-promise the local filter as
+  fixing server search. INBOX untouched (no contract change — additive client behaviour).
+- **The keyboard-swallows-first-tap bug the review caught** was real: the results ScrollView had no
+  `keyboardShouldPersistTaps`, so the SearchBar (which keeps the keyboard up) ate the first tap on every
+  result. Fixed to `"handled"` + `keyboardDismissMode="on-drag"`, matching `search.tsx`. **Any new screen
+  with a text input above a scrollable tappable list needs this** — now noted in `CLAUDE.md`.
+- Device-unverified (OTA) — walk the Tasks-tab search on a device: type a partial name, a typo, a
+  4-digit phone tail; confirm the first tap opens a result (no double-tap).
 
 ## Next session starts here
-- Phase: **Band 2 #2 — Tasks-tab local search** (P2, OTA). The Tasks tab has no search box; add an
-  in-memory filter over the already-loaded list (instant, typo-forgiving) — reuse the `search.tsx`
-  matcher / `lib/fuzzyMatch.ts`. Then Band 2 #3 = task-flow mitigations (hide the always-empty
-  checklist card, gate "Add task" on `can_create_task`, add an Edit-task screen, fix the empty assign
-  roster). Authoritative worklist: `docs/OWNER-BACKLOG-2026-08-24.md` (Point 2, then Point 5).
+- Phase: **Band 2 #3 — task-flow mitigations** (Point 5, P1, OTA). In `(tabs)/tasks.tsx` + `task/[id].tsx`
+  + `task-new.tsx`: hide the always-empty "Workflow" checklist card, gate the "Add task" affordances on
+  `can_create_task` (so team-tier users aren't invited into a backend 403), add an **Edit-task** screen
+  reusing the live PATCH fields, and fix the empty assign/transfer roster. Authoritative worklist:
+  `docs/OWNER-BACKLOG-2026-08-24.md` (Point 5, then Point 4 calendar grid).
 - First command: `/boot`
-- Watch out for: the backend search is a single whole-phrase regex ("patel rajesh" ≠ "Rajesh Patel"),
-  so the *true* word-order fix is the `[api]` tokenize relay (owner-relayed, same as the owed D5
-  whole-book ask) — the Tasks local search only helps the already-loaded list. Don't over-promise it
-  as fixing tickets/clients server search. And extracting `search.tsx`'s matcher into a shared
-  `lib/searchScore.ts` must keep all existing search tests green.
+- Watch out for: the create-policy half is a **decision + `[api]`** (should team-tier create their own
+  tasks at all? the backend 403s them today) — the app can only move the refusal to the *entry* and fix
+  the roster; do not silently "enable" creation the backend forbids. And the empty roster is derived from
+  a self-scoped source — verify what `getTeam()` returns for a team-tier token before wiring the picker.

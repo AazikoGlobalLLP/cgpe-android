@@ -14,6 +14,20 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — BAND 2 #2 SHIPPED: Tasks-tab local search + shared scorer extraction (`c47be1b`, pushed aaziko Shivam).**
+Owner backlog Point 2. The Tasks tab had no search box; typing now filters the already-loaded list in memory —
+typo- (`rajseh`→Rajesh), word-order- (`patel rajesh`→"Rajesh Patel") and phone-tail-tolerant — over the WHOLE list,
+so a future-month task the time views can't reach is findable. Offline drafts are searchable+inert. The scorer was
+extracted VERBATIM from `search.tsx` into a NEW pure `src/lib/searchScore.ts` (leaf; imports only `lib/fuzzyMatch`);
+`data/tasks.ts` gained `taskSearchFields` (ONE shared def of a task's searchable columns — search.tsx imports it too)
++ pure `searchTasks` (blank→list unchanged; preserves input order; **NO cap**, unlike `rank()`'s GROUP_CAP=20).
+Global search behaviour unchanged (parity confirmed by review). New sentences hardcoded English, placeholder reuses
+`t('common.search')` → **no owed 5-lang copy**. A 10-agent adversarial review CAUGHT+FIXED a real major bug: the
+results ScrollView lacked `keyboardShouldPersistTaps` → first tap on a result was swallowed to dismiss the keyboard
+(now `"handled"`+`keyboardDismissMode="on-drag"`, like search.tsx). tsc 0 / npm test **863** (+34) / eslint 0.
+OTA-eligible, device-unverified. **⚠️ Only searches the LOADED list** — the true word-order fix for tickets/clients
+server search is the `[api]` tokenize relay (owner-owned, = D5's owed whole-book ask); don't over-promise it.
+
 **✅ 2026-08-24 — BAND 2 #1 SHIPPED: report 12 s → 65 s timeout ([m] half, `4516dd9`, pushed aaziko Shivam).**
 Owner backlog Point 1. Root cause was CLIENT-side: `generateReport` reused the 12 s `REQUEST_TIMEOUT` on a POST
 the backend holds ~60 s open for a 15–40 s n8n render → every FRESH report aborted before the server answered
@@ -43,7 +57,7 @@ Ranked rows (P = priority; owner tags `[m]`=I build, `[api]`/`[ops]`/`[admin]`=o
 | **1** | **Report** generation | P1 | ~~m~~+ops+dec | ✅ **[m] SHIPPED `4516dd9`** (12s→65s `REPORT_TIMEOUT`, timeout-≠-outage split) — still needs OPS webhook env to work on-device |
 | **6** | **Role-based** "not working" | P1 | dec+admin/ops+m | Mechanism built+deployed but UNSEEDED (no per-role docs); 10/14 feature toggles inert; fail-open + no-module-deletion |
 | **5** | **Task/member** flow | P1 | dec+api+m | Team-tier CANNOT create tasks (backend 403) yet UI invites it; empty roster; no edit; always-empty checklist |
-| **2** | **Search** "word-by-word" | P1 | m+api | Backend = single whole-phrase regex ("patel rajesh"≠"Rajesh Patel"); Tasks tab has NO search box |
+| **2** | **Search** "word-by-word" | P1 | ~~m~~+api | ✅ **[m] Tasks-tab local search SHIPPED `c47be1b`** (+ shared `lib/searchScore.ts`) — still needs the `[api]` tokenize relay for tickets/clients SERVER search (single whole-phrase regex) |
 | **4** | My-Tasks + **Calendar** + member-create | P2(1×P1) | m+dec | Member-create WORKS; calendar = minimal current-month rail (no grid/nav, binary dot); create not permission-gated |
 | **10** | **Client Search** in More | P2 | m+dec | A prominent Search tile ALREADY exists; delta = scope it client-only (1 request vs 3) |
 | **3** | **Premium & Greeting** | P2 | dec+m | Greeting healthy; /premium & /campaigns are duplicate screens; premium mislabels a 403 as "failed"; dead greeting() |
@@ -2002,12 +2016,14 @@ exercise.
 **CURRENT next 3 (2026-08-24 — after the owner 12-point backlog was triaged into `docs/OWNER-BACKLOG-2026-08-24.md`
 and APK `7a384ee3` was cut). The backlog doc is the authoritative worklist; these three are the immediate lane:**
 
-1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`, 2026-08-24 — `REPORT_TIMEOUT = 65000`, timeout-≠-outage
-   split; +2 tests, 829). **Next Band-2 lane: Tasks-tab local search** (P2, OTA) — the Tasks tab has NO search
-   box; add an in-memory filter over the already-loaded list (instant, typo-forgiving; reuse `search.tsx` matcher /
-   `lib/fuzzyMatch.ts`). Then the **task-flow mitigations** (P5, OTA): hide the always-empty checklist card, gate
-   "Add task" on `can_create_task`, add an Edit-task screen, fix the empty assign roster. NOTE: the true
-   word-order search fix is the `[api]` tokenize relay (server = single whole-phrase regex) — local search only
+1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`) and **✅ Tasks-tab local search SHIPPED** (`c47be1b`,
+   2026-08-24 — in-memory filter over the loaded list + shared pure `lib/searchScore.ts` extracted from
+   `search.tsx`; the keyboard-swallows-first-tap bug found+fixed by an adversarial review; 863 tests).
+   **Next Band-2 lane: task-flow mitigations** (P5, OTA) in `(tabs)/tasks.tsx` + `task/[id].tsx` +
+   `task-new.tsx`: hide the always-empty "Workflow" checklist card, gate "Add task" on `can_create_task`
+   (team-tier is 403'd by the backend today), add an **Edit-task** screen reusing the live PATCH fields,
+   fix the empty assign/transfer roster. Then the **calendar grid** (P4). NOTE: the true word-order search
+   fix is still the `[api]` tokenize relay (server = single whole-phrase regex) — the local filter only
    narrows the loaded list; don't over-promise it for tickets/clients server search.
 2. **Owner Band-1 actions (in parallel, plain-language relays in the backlog doc — INBOX untouched):**
    3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode), the client-access
