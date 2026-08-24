@@ -3998,3 +3998,59 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - Result: commit `c3c3537` (+ docs `44cd71b`), pushed aaziko Shivam. tsc 0 / npm test **891** (+14) /
   eslint 0 new (the lone i18n `:647` warning is a pre-existing ref-cleanup one). Device-unverified
   (OTA-eligible). INBOX untouched (additive, no contract change). Spec: `docs/spec/BAND2-4-calendar.md`.
+
+---
+
+## 2026-08-24 — Band 2 #5–#7 (Search / Premium-403 / Client access)
+
+- Decision: **Band 2 #5 (Client Search in More) closed as NO-BUILD** (`9121020`). Owner chose "keep global
+  search, just rank clients first" via AskUserQuestion — DECLINED the client-only `scope=clients` mode.
+  Verified the global search already ranks Clients first for client-shaped queries (`W_ID` fields at the
+  strongest tiers; `search.tsx:546` group sort ties-break to Clients `order:0`). Force-pinning Clients above
+  a stronger claim/ticket-reference match would REGRESS reference lookups. Recorded in
+  `docs/spec/BAND2-5-client-search.md` so it is not rebuilt.
+
+- Decision: **a campaign role-refusal (403) is a COMPLETED job that delivered nothing, never a `failed` one**
+  (`fb64734`). Root cause: the background runner honored `needsRole` on the renewal path but DROPPED it on the
+  audience path (`store/jobs.tsx`), so birthday/anniversary/maturity refusals were flattened to
+  `status:'failed'` → red "Dispatch failed" on `premium.tsx`. Marking it `'done'` alone would have made the job
+  monitor show green "100% Send finished". Fix: NEW pure `src/lib/campaignOutcome.ts` (+5 tests) is the single
+  rule both send paths share; a typed `Job.needsRole` flag every surface reads; `premium.tsx`/`campaigns.tsx`/
+  `job/[id].tsx` all render a refusal as an amber warning, not red/green. Chosen over per-screen message-regex
+  matching (fragile) — `campaigns.tsx` kept its `ROLE_REFUSED` regex only as a defensive fallback. Deleted the
+  dead `format.ts greeting()` (zero callers). 4-lens adversarial review: 0 findings.
+
+- Decision: **retire the duplicate `/premium` screen** (`9967db3`), owner-chosen. `/campaigns` is a strict
+  superset (KPI summary, message preview, live progress, correct 403 handling). Repointed the 3 `/premium`
+  entries (Home quick-action, More module, dashboard tile) to `/campaigns`; deleted `app/premium.tsx`. Left the
+  `premium.*` i18n keys as harmless orphans (removing them would perturb the `EN_KEYS.length===75` parity test).
+
+- Decision: **client book is MASTER/ADMIN only** (`4575106`), owner-chosen (over own-only / team / whole-book).
+  Team-tier sees no clients; this option needs no client-ownership data job. Predicate
+  `canViewClients(user,viewAs) = capabilitiesOf(user,viewAs).tier !== 'team'` (+6 tests) — INCLUDES the whole
+  admin tier (admin + leader run a branch and own the book, per `roles.ts` module doc) and reads the
+  **view-as-aware** tier (a master previewing "team" loses the book, regains it on switch-back). This is
+  distinct from the master-only location/perf/monitor gates, which read the REAL role to fold `leader` OUT.
+
+- Decision: **gate `/campaigns` as part of Point 9**, even though the owner said "the Clients section." Its
+  audience preview renders whole-book client names/phones/premiums (`scope=all`) — a 4-lens adversarial review
+  confirmed it as a HIGH leak (send was already 403'd for team; the preview was not). Closing it *implements*
+  the owner's stated decision (team must not reach client PII) rather than being a new one. Reversible.
+
+- Decision: **screen guards use a thin WRAPPER component, not a mid-body early return.** `export default
+  function X()` calls `useAuth()` unconditionally then renders `<XScreen/>` or the shared `<RestrictedNotice/>`
+  — so the real screen's interleaved hooks are untouched (no conditional-hooks hazard). New shared UI
+  `src/ui/RestrictedNotice.tsx` (the payroll early-return pattern, factored out).
+
+- Decision: **left three adjacent client-PII surfaces UNGATED** (flagged for owner): the WhatsApp hub, search's
+  Tickets group, and the task-contact sheet (a member contacting the client on their OWN assigned task — a LOW
+  review finding). These are the member's own work / a separate collection, not book-browsing.
+
+- Process: filed the **[api] backend-403 relay** to `../contracts/INBOX.md` (top), verified line-by-line against
+  the deployed backend (`routes/clients.js:203,604,617`, `utils/scope.js:93,121,161`) before filing, and
+  grep-confirmed it persisted. The app gate is defence-in-depth; the server refusal is the real authority
+  (owner-owned).
+
+- Result: 4 commits (`9121020`, `fb64734`, `9967db3`, `4575106`), all pushed aaziko Shivam. Final gates:
+  tsc 0 / npm test **902** / eslint 0 new errors. Device-unverified (OTA-eligible). Specs:
+  `docs/spec/BAND2-5-client-search.md`, `docs/spec/BAND2-7-client-access.md`.

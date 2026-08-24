@@ -14,6 +14,31 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-24 — BAND 2 #7 SHIPPED: client book is MASTER/ADMIN ONLY (`4575106`, pushed aaziko Shivam).**
+Owner backlog Point 9, owner-decided "master/admin only". Team-tier now sees NO client surface: the Clients tab
+(`_layout`), the Clients/Segments/Families/premium More modules, the Home segments/families/campaigns widgets +
+premium quick-action, and the global-search client fetch are all gated, with **screen guards** (thin wrapper →
+new `ui/RestrictedNotice`) on `clients`/`client-[id]`/`segments`/`families`/**`campaigns`** as the backstop. New
+pure `canViewClients(user,viewAs)=tier!=='team'` in `store/roles.ts` (+6 tests; includes the whole admin tier,
+view-as-aware). A 4-lens adversarial review caught a **HIGH** leak — the Campaigns audience preview rendered
+whole-book names/phones/premiums (`scope=all`) to team even though send was already 403'd — now gated. **[api]
+backend-403 relay FILED to INBOX top** (the real authority; `GET /clients`+`/:id` are protect-only and a team
+advisor's non-strict scope treats the ~9k UNOWNED book as firm-visible; owner relays + confirms deploy). Left
+UNGATED (owner call): WhatsApp hub, search Tickets group, task-contact sheet. Spec `docs/spec/BAND2-7-client-access.md`.
+tsc 0 / npm test **902** / eslint 0 new. OTA-eligible, device-unverified.
+
+**✅ 2026-08-24 — BAND 2 #6 + #6b SHIPPED: campaign role-refusal fix + retire /premium (`fb64734`, `9967db3`).**
+Point 3. (#6) A 403 role-refusal was mislabeled "Dispatch failed" (audience path dropped `needsRole`; renewal
+path handled it). Fix: new pure `lib/campaignOutcome.ts` (+5 tests) — "a refusal is a completed job that
+delivered nothing, never a failure" — on both send paths + typed `Job.needsRole`; `premium.tsx`/`campaigns.tsx`/
+`job/[id].tsx` all render a refusal as amber, not red (or a green 100% in the monitor). Deleted dead
+`format.ts greeting()`. Review: 0 findings. (#6b) Retired the duplicate `/premium` screen (owner) → its 3 entries
+now open `/campaigns`; deleted `app/premium.tsx`.
+
+**✅ 2026-08-24 — BAND 2 #5 CLOSED as NO-BUILD (`9121020`).** Owner chose "keep global search, just rank clients
+first" — declined the client-only scope mode (global already ranks clients first; force-pinning would regress
+reference lookups). Recorded in `docs/spec/BAND2-5-client-search.md`.
+
 **✅ 2026-08-24 — BAND 2 #4 SHIPPED: Calendar month grid (`c3c3537`, pushed aaziko Shivam).**
 Owner backlog Point 4. Replaced D4's single-month horizontal day-RAIL (binary dot, no month nav) with a real
 **7-column month grid** in `(tabs)/tasks.tsx`: ‹prev/next› month paging + a month/year header + a one-tap **Today**
@@ -2049,21 +2074,22 @@ exercise.
 **CURRENT next 3 (2026-08-24 — after the owner 12-point backlog was triaged into `docs/OWNER-BACKLOG-2026-08-24.md`
 and APK `7a384ee3` was cut). The backlog doc is the authoritative worklist; these three are the immediate lane:**
 
-1. **✅ Report 12 s timeout fix SHIPPED** (`4516dd9`), **✅ Tasks-tab local search SHIPPED** (`c47be1b`),
-   **✅ task-flow mitigations SHIPPED** (`af7e492`), and **✅ calendar grid SHIPPED** (`c3c3537`, 2026-08-24 —
-   7-col month grid + ‹prev/next› + Today jump, per-day count not a dot, all-done days green; pure
-   `monthMatrix`/`taskCountsByDay` in `data/tasks.ts` +14 tests; create-gating reused; zero new i18n keys;
-   4-dim review clean on maths+regressions, 2 low fixes; 891 tests). **Next Band-2 lane: scoped Client Search in
-   More** (P10, OTA) in `search.tsx`: add an optional `scope=clients` mode — when set, fire ONLY the clients request
-   (one round-trip, the concrete speed win) and relabel the chrome "Find a client"; point the More tile at it.
-   Inherits P9's scope automatically. Keep the global "Everything" search path intact — add a mode ALONGSIDE it,
-   don't replace it (`search.tsx` also hosts the shared `lib/searchScore`). `[decision]` for the owner: client-only
-   vs clients-first-global, and keep both More entries? NOTE: the true word-order search fix is still the `[api]`
-   tokenize relay (server = single whole-phrase regex) — local filters only narrow the loaded list.
-2. **Owner Band-1 actions (in parallel, plain-language relays in the backlog doc — INBOX untouched):**
-   3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode), the client-access
-   privacy decision (P9), the per-role/department access matrix (P6), the task-create policy (P5), and the
-   backend `[api]` tokenized-search relay (P2). None can be done from this session (push 403).
+1. **Band-2 shipped so far:** ✅ report 12 s fix (`4516dd9`), ✅ Tasks local search (`c47be1b`), ✅ task-flow
+   mitigations (`af7e492`), ✅ calendar grid (`c3c3537`), ✅ #5 Client Search **CLOSED no-build** (`9121020`,
+   owner declined the scoped mode), ✅ #6 premium-403 fix + dead-code (`fb64734`), ✅ #6b retire /premium
+   (`9967db3`), ✅ #7 client-access master/admin-only (`4575106`). **Next Band-2 lane: #9 Contest mapper fix**
+   (P2, OTA, self-contained — every field of the app's Contest type mismatches the backend, so any real contest
+   renders blank; no owner dependency) **OR #8 wire the 10 inert role toggles** (P1, but needs the owner's Point 6
+   role matrix FIRST). Recommend #9 as the safe standalone next; #8 blocks on the matrix. **Also open (owner
+   call):** gate the WhatsApp hub / search-Tickets group / task-contact sheet for team too, or leave them
+   (separate surfaces, not "the client book")?
+2. **Owner Band-1 actions (in parallel — mostly plain-language relays in the backlog doc):**
+   3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode); **P9 client-access
+   DECIDED (master/admin only) and the backend-403 `[api]` relay is now FILED at the top of `../contracts/INBOX.md`
+   — owner relays it + confirms the `:3001` deploy** (the app gate is defence-in-depth, not the authority); the
+   per-role/department access matrix (P6, blocks #8); the task-create policy (P5); and the backend `[api]`
+   tokenized-search relay (P2). None can be pushed from this session (push 403 to origin; `aaziko` works for our
+   branch, but backend deploy is owner-owned).
 3. **Document upload (P11) needs its own APK** — adding `expo-document-picker` is a native module (not OTA), so
    the picker + honest-error work ships in a fresh build, paired with the owner's Spaces-env OPS switch.
 

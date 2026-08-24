@@ -339,6 +339,19 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   consumes an admin-only endpoint must gate on the **real** `user.role === 'admin'|'super_admin'`, never
   on `caps`/the tier, or a leader reaches the fetch and gets a 403 blank. Phase 20 (`app/payroll.tsx`)
   does exactly this; copy it. See `docs/spec/PHASE-20.md` D-3.
+  **⚠️ CLIENT-BOOK GATE — `canViewClients(user, viewAs)` is a SECURITY INVARIANT (Point 9, 2026-08-24, `4575106`).**
+  Owner decision: the client book is MASTER/ADMIN only; TEAM tier sees NO clients. `canViewClients = tier !== 'team'`
+  (`store/roles.ts`) — unlike the master-only `canSeeLiveLocation`/`canSeeTeamPerformance`/`canMonitorTeam`/`canViewAs`
+  gates (which read the REAL role to fold `leader` OUT), this INCLUDES the whole admin tier (admin + leader own the
+  book) and reads the **view-as-aware** tier. It gates the Clients tab (`_layout`), the More clients/segments/families/
+  premium modules, the Home segments/families/campaigns widgets + premium quick-action, the global-search client
+  fetch, AND screen guards (thin wrapper → `ui/RestrictedNotice`) on `clients`/`client-[id]`/`segments`/`families`/
+  **`campaigns`** (campaigns' audience preview leaks whole-book PII — it's gated for that reason, not just as a
+  send tool). **Do NOT weaken it or drop a guard — that re-opens client-book PII to team.** The app gate is
+  DEFENCE-IN-DEPTH; the real authority is the backend 403 on `GET /clients`+`/:id` (`protect`-only today; team's
+  non-strict scope treats the ~9k UNOWNED book as firm-visible) — relay FILED at INBOX top 2026-08-24, owner-owned.
+  Spec `docs/spec/BAND2-7-client-access.md`. Left ungated (owner call, flagged): WhatsApp hub, search Tickets group,
+  task-contact sheet.
 - Dead, do not maintain: `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`,
   `hooks/use-color-scheme*.ts`, `constants/theme.ts`, `src/global.css`, `data/mock.ts`.
 - `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no
