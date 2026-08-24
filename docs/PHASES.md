@@ -1988,19 +1988,23 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-24 — after D5 [m] typo-tolerant search, A3 attendance fix, E2 report cause-naming, B2–B5 live-location + the D3/B1/D4/C2/D6 batch shipped):**
+**CURRENT next 3 (2026-08-24 — after the owner 12-point backlog was triaged into `docs/OWNER-BACKLOG-2026-08-24.md`
+and APK `7a384ee3` was cut). The backlog doc is the authoritative worklist; these three are the immediate lane:**
 
-0. **D5 `[api]` half + relay** — the buildable `[m]` fuzzy scorer is DONE (`c1c5489`: edit-distance tier
-   in `search.tsx` now forgives typos on leads/claims/tasks + already-returned rows). REMAINING is the
-   `[api]` half: clients/tickets are server-searched against the ~9k book (exact/substring) so a typed
-   typo returns no candidates. Relay to the owner (plain-language text in HANDOFF): make server `?search=`
-   on clients + tickets typo-tolerant. INBOX untouched (corruption risk). Then pick the next owner backlog item.
-1. **Cut a fresh APK and device-verify.** D5 (`c1c5489`) + A3 (`316cd81`) + B5 (`0e2a77b`) + D3/B1/D4/C2/D6a-c + Phases 77/78 are all
-   shipped but **device-unverified** and not in an APK. Owner to decide: build one EAS `preview` APK so
-   all reach the phone together, then walk B5 (master Agent-locations lists the whole team), C2 (clock
-   out < 8h30m), the new Tasks time views, and the team-member leaner Home + guide.
-   _(B5/B1/D4/C2/D3/D6 are DONE — commits `0e2a77b`/`be207a6`/`2cda2d3`/`bf9575a`/`aee594c`/`d4b0471`.)_
-2. **Owner/OPS relays owed** (handed as plain-language relays, NOT INBOX): **B3 clock-out map layer** —
+1. **Build Band 2, starting with the report 12 s timeout fix (P1, OTA, real bug).** `generateReport` reuses the
+   12 s `REQUEST_TIMEOUT` on a POST the backend holds 60 s for a 15–40 s render → every FRESH report aborts
+   client-side. Add `REPORT_TIMEOUT ≈ 65000` in `src/constants/config.ts`, pass it at `src/data/api.ts:3237`, and
+   stop a slow report from flipping the global outage banner; +tests. Then **Tasks-tab local search** (P2→ helps
+   the "word-by-word" complaint, OTA) and the **task-flow mitigations** (hide the always-empty checklist, gate
+   "Add task" on `can_create_task`, add an Edit-task screen, fix the empty assign roster).
+2. **Owner Band-1 actions (in parallel, plain-language relays in the backlog doc — INBOX untouched):**
+   3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode), the client-access
+   privacy decision (P9), the per-role/department access matrix (P6), the task-create policy (P5), and the
+   backend `[api]` tokenized-search relay (P2). None can be done from this session (push 403).
+3. **Document upload (P11) needs its own APK** — adding `expo-document-picker` is a native module (not OTA), so
+   the picker + honest-error work ships in a fresh build, paired with the owner's Spaces-env OPS switch.
+
+**Earlier standing relays still owed** (handed as plain-language relays, NOT INBOX): **B3 clock-out map layer** —
    ask cgpe-api to surface the stored `DayLog.clockOutLoc` on `GET /live-locations` (or a companion) so
    the master live map can draw its red "Clock-out" layer (app already renders red pins); **B4 data
    check** — confirm Pavitra's track points uploaded (accuracy > 100 m are dropped server-side).

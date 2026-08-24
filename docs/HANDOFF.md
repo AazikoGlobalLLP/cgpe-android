@@ -1,52 +1,63 @@
-# HANDOFF — CGPE Connect (Android) — Phase D5 (typo-tolerant search, [m] half) — 2026-08-24
+# HANDOFF — CGPE Connect (Android) — Owner 12-point backlog triaged + APK cut — 2026-08-24
 
 ## Done
-- **Search now forgives typos.** A mistyped or transposed character reaches the record: "rajseh"
-  finds **Rajesh**, "jeevn" finds **Jeevan**, "ptael" finds **Patel**. This works on the fully-local
-  collections (leads / claims / tasks) and on any client/ticket rows the server already returned.
-- Typo hits are ranked as a new lowest tier, so a real substring match is never buried by a
-  lucky near-miss, and numeric lookups (phone / policy) are deliberately NOT fuzzed.
+- **Cut ONE `preview` APK** (`7a384ee3`, git `04c36d6`) that carries the whole accumulated OTA backlog
+  (A3, B5, D3/B1/D4/C2/D6, E2, D5) to a phone for the first time. Gates green before build: `tsc` 0,
+  `npm test` **827/827**. Direct `.apk`:
+  https://expo.dev/artifacts/eas/TDTciayd0aC7sfbxzd_yEn8uvxjgtRYrsSvzO8Fk-zA.apk ·
+  SHA-256 `f17227222fe0b63aaba8535751ce1da47f3c6762a1dc8143eb7f07222e5ebf65`.
+- **Triaged + deeply described the owner's 12-point backlog**, verified against REAL code (this app +
+  backend deployed `origin/main` `49482e9` + `contracts/`) by a 12-agent workflow — nothing guessed,
+  every claim cites a file. Prioritized with **highest priority to items only the owner can unblock**.
+- Surfaced findings the surface description hid: **report "not working" is a real 12 s client-timeout
+  bug** (the backend waits 60 s for a 15–40 s render; the app aborts at 12 s → every FRESH report dies);
+  **the client book is readable by every team token** (backend/data, hiding the tab is cosmetic);
+  **role RBAC is built + deployed but never seeded**; **team-tier members cannot create tasks** yet the
+  UI invites them; **document upload has no file picker** and cloud storage is off on prod.
 
 ## Files changed
-- `src/lib/fuzzyMatch.ts` — NEW pure leaf. Optimal String Alignment distance (Levenshtein +
-  adjacent transposition, so a two-letter swap costs 1 not 2), bounded with early-exit so it stays
-  cheap over hundreds of rows per keystroke. Exports `osaWithin` / `fuzzyBudget` / `tokenFuzzyHit`.
-- `src/lib/__tests__/fuzzyMatch.test.ts` — NEW, +15 cases pinning the metric, the length thresholds,
-  the transposition-costs-1 rule, and the "too short to be safe" refusals.
-- `src/app/search.tsx` — one new `T_FUZZY = 0.5` tier in `tierFor` (guarded by `!q.numeric`) plus a
-  small `fuzzyMatches(q, valueLower)` wiring helper. Score `5 + weight`: below "contains"
-  (`10 + weight`), above a server-only row (`1`).
-- `docs/spec/PHASE-D5.md` — NEW. Locks the thresholds and scopes the `[api]` half out.
+- `docs/OWNER-BACKLOG-2026-08-24.md` — NEW. The deliverable: master priority table, Band-1 owner asks,
+  a deep section per point (verified current state + root cause + who owns it + what changes + effort +
+  decisions needed), and copy-paste relay texts. This is the driving worklist now.
+- `docs/DEVICE-TESTING-GUIDE-2026-08-24.md` — NEW. Delta testing guide for the `7a384ee3` APK (A3/B5/
+  D3/B1/D4/C2/D6/E2/D5) + corrected connectivity facts (12 s timeout + retry; IPv6/NAT64 note).
+- `docs/PHASES.md` — `## Now` gained the 12-point triage rows + the APK; `## Next 3` re-pointed below.
+- `docs/DECISIONS.md` — appended the triage decisions (below).
+- `docs/STATUS.md` — rewritten (manager-plain).
+- Memory `owner-backlog-12points-2026-08-24` added (+ MEMORY.md index line).
 
 ## Decisions made
-- **Fuzzy is a fractional tier (0.5), not a new integer tier.** Keeps the existing `tier*10+weight`
-  scoring untouched and guarantees a typo never outranks a genuine substring hit.
-- **Numeric queries are excluded from fuzzy.** A wrong digit fuzzy-matching a *different* person's
-  phone/policy number is a wrong answer, not a helpful one; the digit path already owns numeric lookups.
-- **Thresholds locked, not eyeballed:** query token <4 chars ineligible · 4–6 → 1 edit · 7+ → 2 edits;
-  value words <4 chars are never fuzzy targets. Pure + unit-tested so re-tuning is a deliberate edit.
-- **Pure logic in its own tested lib**, wiring in the screen — matches the project's seam convention
-  (`netResilience`, `pushRouting`, …); `tierFor` itself stays inline/untested as it already was.
+- **APK first (owner option b).** A large OTA backlog was stranded behind one build; cut it before more
+  code so nothing else blocks the team seeing A3/B5/D3/B1/D4/C2/D6/E2/D5.
+- **Investigate before describing.** Ultracode-on + "describe each deeply" → a 12-agent workflow verified
+  every point against real code rather than paraphrasing the owner's words. This caught the report timeout
+  bug and the client-book exposure, neither of which is visible from the surface complaint.
+- **Prioritization = human-need-first, served both ways.** Band 1 = items only the owner can unblock
+  (decisions / OPS / relays), surfaced at top to run in parallel; P0/P1/P2 = severity to the team.
+- **INBOX untouched (corruption risk).** All backend/OPS asks are provided as plain-language relay texts
+  in the backlog doc for the owner to send, consistent with prior sessions.
+- **Nothing built yet.** This session produced the triaged plan + the APK; no feature code changed.
 
 ## Known broken / deliberately skipped
-- **The `[api]` half is NOT done — owner relay owed.** Clients and tickets are searched SERVER-side
-  against the ~9k-row book (never pulled to the handset), and that search is exact/substring — so a
-  *typed* typo returns **no candidates** for the local scorer to rescue. True whole-book typo tolerance
-  needs server-side fuzzy on `GET /api/clients?search=` and `GET /api/tickets?search=`. INBOX left
-  untouched on purpose (corruption risk); relay to the owner in plain language (text below).
-- **Device-unverified.** JS-only ⇒ OTA-eligible, but no phone has run it. Joins the accumulated OTA
-  backlog (A3, B5, D3/B1/D4/C2/D6, E2) all waiting on ONE APK to reach a phone.
-- Reports remain OPS-blocked (prod render webhook env unset + n8n template) — unchanged, not code.
+- **Reports still won't generate on-device** — needs the OPS webhook env set (owner), *and* the app-side
+  12 s timeout fix (Band 2, not yet built). Both are required.
+- **Client-book privacy exposure (P9)** — real, but the fix is a backend + contract + data change plus an
+  owner decision; not fixable from this session.
+- **Everything in the backlog is device-unverified and unbuilt** — it's a plan, not shipped code.
+- Backend `[api]`/`[ops]` items can't be actioned here (push 403; prod runs `origin/main` only) — relayed.
 
 ## Next session starts here
-- Phase D5+: either **relay the `[api]` server-fuzzy ask** and pick the next owner backlog item, OR
-  **cut ONE EAS `preview` APK** so all accumulated OTA work (now including D5) reaches the phone.
+- Phase: **Build Band 2, starting with the report 12 s timeout fix** (real bug, ~3 lines + tests, OTA):
+  add `REPORT_TIMEOUT ≈ 65000` in `src/constants/config.ts`, pass it in `generateReport`
+  (`src/data/api.ts:3237`), and stop a slow report from flipping the global outage banner. Then Tasks-tab
+  local search, then the task-flow mitigations.
 - First command: `/boot`
-- Watch out for: the `[api]` half — do NOT tell the owner "search typos are fully fixed". Client/ticket
-  typos across the whole book still miss until the backend `?search=` goes fuzzy. Only local
-  collections + already-returned rows are covered by what shipped.
+- Watch out for: **don't tell the owner a Band-1 item is "fixed" from code alone** — reports, uploads,
+  client-access, and the role matrix all need the owner's OPS/decision half. And read
+  `docs/OWNER-BACKLOG-2026-08-24.md` before starting — it has the verified file citations for each fix.
 
-### Plain-language `[api]` relay for the owner
-"Make the client and ticket search on the server typo-tolerant. Right now, if you misspell a name,
-the app finds nothing from the main client book. The phone app already ranks fuzzy matches — it just
-needs the server to return near-miss candidates for `?search=` on clients and tickets."
+### Plain-language relays owed to the owner (also in the backlog doc)
+- **OPS (3 switches):** report webhook env; DigitalOcean Spaces env for uploads; confirm WhatsApp n8n
+  webhooks are in live-send mode. **Decisions:** what team members should see in Clients (privacy); the
+  per-role/department access matrix; whether team members may create their own tasks. **Backend relay:**
+  make server search tokenized (so "patel rajesh" finds "Rajesh Patel").

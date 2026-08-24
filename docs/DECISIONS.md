@@ -3836,3 +3836,19 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   substring), so a typed typo returns no candidates for the local scorer — whole-book typo tolerance
   needs server-side fuzzy on `?search=` (the [api] half). INBOX untouched (corruption risk); owner relay.
 - Result: commit `c1c5489`, pushed aaziko Shivam. tsc 0 / test 827 (+15) / eslint 0. Device-unverified (OTA).
+
+## 2026-08-24 — Owner 12-point backlog: triage-before-build + APK cut
+- Ask: owner listed 12 points after analysing the app; wanted each described DEEPLY, added as prioritized
+  rows, with highest priority to items needing a human (owner) to unblock, then /handoff.
+- Decision: cut ONE preview APK first (`7a384ee3`, git `04c36d6`) so the stranded OTA backlog
+  (A3/B5/D3/B1/D4/C2/D6/E2/D5) reaches a phone before any new code. Gates green (tsc 0 / test 827).
+- Decision: verify each point against REAL code (app + backend origin/main `49482e9` + contracts) via a
+  12-agent Workflow rather than paraphrase — this caught two findings the surface complaint hid: the
+  report feature has a real 12s client-timeout bug (backend waits 60s for a 15-40s render), and the
+  client book is readable by every team token (backend/data model, not tab visibility).
+- Decision: prioritize "human-need-first" both ways — Band 1 = items only the owner can unblock
+  (decisions/OPS/relays), Band 2 = client code I can build (OTA unless noted). P0/P1/P2 = team severity.
+- Decision: INBOX left untouched (corruption risk); backend/OPS asks given as plain-language relay texts
+  in `docs/OWNER-BACKLOG-2026-08-24.md` for the owner to send.
+- Result: `docs/OWNER-BACKLOG-2026-08-24.md` + `docs/DEVICE-TESTING-GUIDE-2026-08-24.md` + PHASES rows,
+  commits `82548c7`/`e256be0`, pushed aaziko Shivam. No feature code changed — triaged plan only.
