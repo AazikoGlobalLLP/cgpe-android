@@ -269,6 +269,25 @@ describe('adaptUser', () => {
     expect(adaptUser({ user_id: 'a', _id: 'b', id: 'c' }).id).toBe('a');
     expect(adaptUser({ _id: 'b', id: 'c' }).id).toBe('b');
   });
+
+  it('carries department and the pre-merge _origRole when the login row has them', () => {
+    // The backend sends the whole staff_unified row in `user` (toPublicJSON), so these ride along.
+    const out = adaptUser({ user_id: 'tm_1', role: 'advisor', department: 'Operations', _origRole: 'ops' });
+    expect(out.department).toBe('Operations');
+    expect(out.origRole).toBe('ops');
+  });
+
+  it('trims department/_origRole and OMITS the keys entirely when empty or absent', () => {
+    // The IT/admins master rows carry department:'' — an empty department must read as ABSENT, not
+    // as a present empty string, so `identityOf` never mistakes '' for a real department.
+    const empty = adaptUser({ user_id: 'a', role: 'super_admin', department: '', _origRole: '  ' });
+    expect('department' in empty).toBe(false);
+    expect('origRole' in empty).toBe(false);
+    const absent = adaptUser({ user_id: 'b', role: 'admin' });
+    expect('department' in absent).toBe(false);
+    expect('origRole' in absent).toBe(false);
+    expect(adaptUser({ department: '  TATA AIA  ' }).department).toBe('TATA AIA');
+  });
 });
 
 /* ------------------------------------------------------------------- adaptLead */

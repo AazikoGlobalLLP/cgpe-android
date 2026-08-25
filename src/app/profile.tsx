@@ -154,12 +154,17 @@ export default function Profile() {
               value={user.role.replace(/_/g, ' ')}
             />
           </Appear>
-          {user.agentCode ? (
+          {user.department ? (
             <Appear index={1}>
+              <DataRow icon="briefcase-outline" label="Department" value={user.department} />
+            </Appear>
+          ) : null}
+          {user.agentCode ? (
+            <Appear index={2}>
               <DataRow icon="id-card-outline" label="Agent code" value={user.agentCode} copyable numeric />
             </Appear>
           ) : null}
-          <Appear index={2}>
+          <Appear index={3}>
             <DataRow icon="ribbon-outline" label="Club tier" value={user.tier} />
           </Appear>
         </ListSection>

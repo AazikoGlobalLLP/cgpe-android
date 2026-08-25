@@ -13,6 +13,19 @@ export interface User {
   agentCode: string;
   photo?: string;
   tier: 'Star' | 'MDRT' | 'COT' | 'TOT' | 'Growth';
+  /**
+   * The staff member's department (`staff_unified.department`), verbatim as stored — free text,
+   * e.g. `Operations`, `TATA AIA`, `SALES - RENEWALS & LIC`, or `''`/absent for the IT/master rows.
+   * The backend already sends it in the login `user` object (`toPublicJSON()`); it is canonicalised
+   * at read time by `identityOf()` in `store/roles.ts`. Absent when the record carries no department.
+   */
+  department?: string;
+  /**
+   * The pre-merge original role from a legacy `admins`/`team_members` source
+   * (`staff_unified._origRole`). PROVENANCE ONLY — never a grant. `identityOf()` reads it solely to
+   * flag a role↔origin drift (e.g. a `super_admin` demoted to `admin`). Absent on `profiles` rows.
+   */
+  origRole?: string;
 }
 
 /**

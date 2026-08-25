@@ -10,7 +10,7 @@
  *                           Point-9 decision (2026-08-24) the TEAM tier no longer sees the
  *                           client book at all — see `canViewClients` below.
  */
-import type { User } from '@/data/types';
+import type { Role, User } from '@/data/types';
 
 export type Tier = 'master' | 'admin' | 'team';
 
@@ -39,11 +39,21 @@ export type Capabilities = {
  * is Master, not a client-side guess. Whoever holds that account, this survives it changing
  * hands or changing address; the previous version compiled one person's email into every APK.
  */
-export function tierOf(user: User | null): Tier {
-  if (!user) return 'team';
-  if (user.role === 'super_admin') return 'master';
-  if (user.role === 'admin' || user.role === 'leader') return 'admin';
+/**
+ * The tier for a bare role string — the pure core of `tierOf`.
+ *
+ * Split out so `identityOf` (and any roster row that has a role but not a whole `User`) can resolve
+ * the tier without fabricating a `User`. `tierOf(user)` delegates here, so its behaviour is
+ * unchanged: a null/absent role folds to `team`, `super_admin` → master, `admin`/`leader` → admin.
+ */
+export function tierOfRole(role: string | null | undefined): Tier {
+  if (role === 'super_admin') return 'master';
+  if (role === 'admin' || role === 'leader') return 'admin';
   return 'team';
+}
+
+export function tierOf(user: User | null): Tier {
+  return tierOfRole(user?.role);
 }
 
 /**
@@ -146,6 +156,104 @@ export function capabilitiesOf(user: User | null, viewAs?: Tier | null): Capabil
  */
 export function canViewClients(user: User | null, viewAs?: Tier | null): boolean {
   return capabilitiesOf(user, viewAs).tier !== 'team';
+}
+
+/* ------------------------------------------------------------------ department + identity */
+
+/**
+ * The 9 canonical departments — MUST mirror `cgpe-backend-main/utils/rbac.js` `DEPARTMENTS`.
+ *
+ * Kept in step BY HAND (there is no shared package), exactly like `appUi.tsx`'s
+ * `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json`. The app and the backend must agree on
+ * which department string is "recognised", because the backend's module matrix (and any future
+ * department scope) keys off this same canonicalisation — a client that canonicalised differently
+ * would silo a member the server does not, or vice-versa.
+ *
+ * ⚠️ KNOWN DATA GAP (verified against `staff_unified`, 2026-08-25): live staff carry four values
+ * that are NOT in this list — `GENERAL INSURANCE`, `BANKING & COLLECTION`, `DRIVER`, `IT` — so
+ * `canonicalizeDepartment` returns `null` for them and those members read as "not siloed" (full
+ * role-wide access). Adding/mapping them is the BACKEND's to own (edit `utils/rbac.js` +
+ * `rbac_config`); this port stays faithful to the deployed backend so the two never disagree.
+ */
+export const DEPARTMENTS = [
+  'SALES-CGPE_Tree',
+  'SALES - RENEWALS & LIC',
+  'SALES - MUTUAL FUNDS & WEALTH',
+  'SALES',
+  'Operations',
+  'RECRUITMENT & CALLING',
+  'HEALTH INSURANCE',
+  'TATA AIA',
+  'OTHERS',
+] as const;
+
+/**
+ * Normalise a messy department string to one of the 9 canonical values, or `null`.
+ *
+ * A faithful port of `utils/rbac.js#canonicalizeDepartment`: exact (case-insensitive) match first,
+ * then the same keyword rules, then `null` for anything unrecognised (which the backend treats as
+ * "not siloed — keeps legacy role-wide access"). Keep the two byte-for-byte equivalent.
+ */
+export function canonicalizeDepartment(raw: string | null | undefined): string | null {
+  if (!raw || typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s) return null;
+  const exact = DEPARTMENTS.find((d) => d.toLowerCase() === s.toLowerCase());
+  if (exact) return exact;
+  const u = s.toUpperCase();
+  if (u.includes('CGPE') && u.includes('TREE')) return 'SALES-CGPE_Tree';
+  if (u.includes('RENEWAL') || u.includes('LIC')) return 'SALES - RENEWALS & LIC';
+  if (u.includes('MUTUAL') || u.includes('WEALTH')) return 'SALES - MUTUAL FUNDS & WEALTH';
+  if (u.includes('RECRUIT') || u.includes('CALLING')) return 'RECRUITMENT & CALLING';
+  if (u.includes('HEALTH')) return 'HEALTH INSURANCE';
+  if (u.includes('TATA')) return 'TATA AIA';
+  if (u.includes('OPERATION')) return 'Operations';
+  if (u === 'SALES' || u.includes('SALES')) return 'SALES';
+  if (u === 'OTHER' || u === 'OTHERS') return 'OTHERS';
+  return null; // IT / HR / GENERAL INSURANCE / BANKING & COLLECTION / DRIVER / … → not siloed
+}
+
+/** The six roles the backend enum (`Profile.role`) actually enforces. */
+const ENUM_ROLES: ReadonlySet<string> = new Set<Role>([
+  'payroll_staff', 'advisor', 'learn_advisor', 'leader', 'admin', 'super_admin',
+]);
+
+/**
+ * The resolved "who is this person" identity — the single field the owner asked for, derived from
+ * the three raw inputs (`role`, `department`, `_origRole`) with `role` AUTHORITATIVE.
+ *
+ *  - `tier`         : master | admin | team — from `role` ALONE (the server's authority).
+ *  - `department`   : the canonical department, or `null` when unrecognised (⇒ not siloed).
+ *  - `departmentRaw`: the string as stored, kept for display + for the un-siloed-but-present case.
+ *  - `siloed`       : `department !== null` — whether a department wall could apply to them.
+ *  - `drift`        : `_origRole` is a REAL role AND differs from `role` — a post-merge role change
+ *                     to reconcile (e.g. Ved Test: origin `super_admin`, working `admin`). A legacy
+ *                     job title like `ops`/`sales`/`manager` is NOT a drift — it was never an enum
+ *                     role, just the merge flattening a title to `advisor`.
+ *
+ * `_origRole` is READ ONLY to raise `drift`; it is never allowed to change the tier — that would
+ * silently re-grant power the working `role` has already dropped.
+ */
+export type Identity = {
+  role: string;
+  tier: Tier;
+  department: string | null;
+  departmentRaw: string | null;
+  siloed: boolean;
+  drift: boolean;
+};
+
+export function identityOf(
+  input: { role?: string | null; department?: string | null; origRole?: string | null } | null,
+): Identity {
+  const role = input?.role ?? 'advisor';
+  const departmentRaw = typeof input?.department === 'string' && input.department.trim()
+    ? input.department.trim()
+    : null;
+  const department = canonicalizeDepartment(departmentRaw);
+  const orig = typeof input?.origRole === 'string' ? input.origRole.trim() : '';
+  const drift = !!orig && ENUM_ROLES.has(orig) && orig !== role;
+  return { role, tier: tierOfRole(role), department, departmentRaw, siloed: department !== null, drift };
 }
 
 /**

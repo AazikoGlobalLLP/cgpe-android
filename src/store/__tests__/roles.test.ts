@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, canViewAs, canViewClients, tierOf } from '@/store/roles';
+import {
+  canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, canViewAs, canViewClients,
+  canonicalizeDepartment, identityOf, tierOf, tierOfRole,
+} from '@/store/roles';
 import type { Role, User } from '@/data/types';
 
 /* ------------------------------------------------------------------ *
@@ -188,5 +191,113 @@ describe('canViewClients — Master + Admin only, Team excluded (Point 9, 2026-0
     // capabilitiesOf only lets you preview a LOWER tier, so a stray viewAs='admin' is ignored.
     expect(canViewClients(withRole('advisor'), 'admin')).toBe(false);
     expect(canViewClients(withRole('advisor'), 'master')).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * tierOfRole — the role-string core of tierOf (2026-08-25)
+ * ------------------------------------------------------------------ */
+describe('tierOfRole agrees with tierOf for every role, incl. the empty cases', () => {
+  it('maps each role to the same tier tierOf(user) would', () => {
+    for (const role of ALL_ROLES) {
+      expect(tierOfRole(role)).toBe(tierOf(withRole(role)));
+    }
+  });
+  it('folds a null/undefined/unknown role to team, exactly like tierOf(null)', () => {
+    expect(tierOfRole(null)).toBe('team');
+    expect(tierOfRole(undefined)).toBe('team');
+    expect(tierOfRole('not_a_role')).toBe('team');
+    expect(tierOf(null)).toBe('team');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * canonicalizeDepartment — faithful port of backend utils/rbac.js (2026-08-25).
+ * Must stay byte-for-byte equivalent so the app and server silo the same people.
+ * ------------------------------------------------------------------ */
+describe('canonicalizeDepartment', () => {
+  it('passes the 9 canonical values through (case-insensitive exact match)', () => {
+    expect(canonicalizeDepartment('Operations')).toBe('Operations');
+    expect(canonicalizeDepartment('operations')).toBe('Operations');
+    expect(canonicalizeDepartment('TATA AIA')).toBe('TATA AIA');
+    expect(canonicalizeDepartment('SALES - RENEWALS & LIC')).toBe('SALES - RENEWALS & LIC');
+    expect(canonicalizeDepartment('SALES - MUTUAL FUNDS & WEALTH')).toBe('SALES - MUTUAL FUNDS & WEALTH');
+    expect(canonicalizeDepartment('SALES-CGPE_Tree')).toBe('SALES-CGPE_Tree');
+    expect(canonicalizeDepartment('RECRUITMENT & CALLING')).toBe('RECRUITMENT & CALLING');
+    expect(canonicalizeDepartment('SALES')).toBe('SALES');
+  });
+
+  it('maps messy/legacy strings via the keyword rules', () => {
+    expect(canonicalizeDepartment('renewals dept')).toBe('SALES - RENEWALS & LIC');
+    expect(canonicalizeDepartment('LIC')).toBe('SALES - RENEWALS & LIC');
+    expect(canonicalizeDepartment('mutual fund')).toBe('SALES - MUTUAL FUNDS & WEALTH');
+    expect(canonicalizeDepartment('recruitment')).toBe('RECRUITMENT & CALLING');
+    expect(canonicalizeDepartment('health')).toBe('HEALTH INSURANCE');
+    expect(canonicalizeDepartment('tata')).toBe('TATA AIA');
+  });
+
+  it('returns null for the FOUR real values not in the canonical list — the known un-siloed gap', () => {
+    // Verified against staff_unified 2026-08-25: these return null → "not siloed" (full role-wide
+    // access). Fixing them is the backend's job; the port must match the backend, which returns null.
+    expect(canonicalizeDepartment('GENERAL INSURANCE')).toBe(null);
+    expect(canonicalizeDepartment('BANKING & COLLECTION')).toBe(null);
+    expect(canonicalizeDepartment('DRIVER')).toBe(null);
+    expect(canonicalizeDepartment('IT')).toBe(null);
+  });
+
+  it('returns null for empty / null / non-string input', () => {
+    expect(canonicalizeDepartment('')).toBe(null);
+    expect(canonicalizeDepartment('   ')).toBe(null);
+    expect(canonicalizeDepartment(null)).toBe(null);
+    expect(canonicalizeDepartment(undefined)).toBe(null);
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * identityOf — the "who is this person" model: role (authoritative) + department + _origRole drift.
+ * Cases mirror the REAL staff_unified rows the owner reconciled on 2026-08-25.
+ * ------------------------------------------------------------------ */
+describe('identityOf', () => {
+  it('a team advisor with a canonical department is team-tier, siloed, no drift', () => {
+    // e.g. Yash Ghelani — role advisor, dept SALES, _origRole "sales" (a job title, not a demotion).
+    const id = identityOf({ role: 'advisor', department: 'SALES', origRole: 'sales' });
+    expect(id.tier).toBe('team');
+    expect(id.department).toBe('SALES');
+    expect(id.departmentRaw).toBe('SALES');
+    expect(id.siloed).toBe(true);
+    expect(id.drift).toBe(false); // "sales" is not an enum role → not a drift
+  });
+
+  it('flags DRIFT only when _origRole is a REAL role that differs from role (the Ved Test case)', () => {
+    // Ved Test — _origRole super_admin, working role admin → a genuine post-merge demotion.
+    const ved = identityOf({ role: 'admin', department: '', origRole: 'super_admin' });
+    expect(ved.tier).toBe('admin');
+    expect(ved.drift).toBe(true);
+    // Sagar — _origRole super_admin AND role super_admin → NO drift.
+    const sagar = identityOf({ role: 'super_admin', department: '', origRole: 'super_admin' });
+    expect(sagar.tier).toBe('master');
+    expect(sagar.drift).toBe(false);
+    // A legacy job-title origin (ops/manager/driver) is NEVER a drift.
+    expect(identityOf({ role: 'advisor', origRole: 'manager' }).drift).toBe(false);
+    expect(identityOf({ role: 'advisor', origRole: 'driver/commute-work' }).drift).toBe(false);
+  });
+
+  it('never lets _origRole change the tier — role is authoritative', () => {
+    // Even though origin was super_admin, the working role admin decides the tier (no re-promotion).
+    expect(identityOf({ role: 'admin', origRole: 'super_admin' }).tier).toBe('admin');
+  });
+
+  it('keeps departmentRaw but null-canonicalises an un-recognised department (siloed:false)', () => {
+    // Aashubhai — dept DRIVER → not canonical → un-siloed, but we keep the raw label for display.
+    const drv = identityOf({ role: 'advisor', department: 'DRIVER', origRole: 'driver/commute-work' });
+    expect(drv.department).toBe(null);
+    expect(drv.departmentRaw).toBe('DRIVER');
+    expect(drv.siloed).toBe(false);
+  });
+
+  it('null / empty input resolves to a team advisor with no department', () => {
+    const id = identityOf(null);
+    expect(id).toEqual({ role: 'advisor', tier: 'team', department: null, departmentRaw: null, siloed: false, drift: false });
+    expect(identityOf({}).tier).toBe('team');
   });
 });

@@ -164,6 +164,13 @@ export function adaptClient(raw: any): Client {
 
 export function adaptUser(raw: any): User {
   raw = raw || {};
+  // Department + the pre-merge original role ride in the login `user` object already
+  // (`toPublicJSON()` returns the whole staff_unified row). Carry them so the app can key
+  // department logic + drift detection off them (see `identityOf` in store/roles.ts). Emit each
+  // key ONLY when non-empty — an absent department must not become a present-but-empty string,
+  // and the empty-string rows ('' for the IT/admins masters) read the same as truly absent.
+  const dept = typeof raw.department === 'string' ? raw.department.trim() : '';
+  const orig = typeof raw._origRole === 'string' ? raw._origRole.trim() : '';
   return {
     id: String(raw.user_id || raw._id || raw.id || 'u1'),
     name: raw.full_name || raw.name || 'Advisor',
@@ -174,6 +181,8 @@ export function adaptUser(raw: any): User {
     branch: raw.branch || raw.branch_name || '',
     agentCode: raw.agent_code || raw.employee_id || raw.code || '',
     tier: (raw.tier || raw.club || 'Growth') as User['tier'],
+    ...(dept ? { department: dept } : {}),
+    ...(orig ? { origRole: orig } : {}),
   };
 }
 
