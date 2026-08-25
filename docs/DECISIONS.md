@@ -4179,3 +4179,32 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   contract change, and the roster gap is a data problem not a wire problem.
 - Result: `9ac8c18` (roster merge), `7a49774` (essential details). Gates: tsc 0 / npm test **953**
   (+22) / eslint 0 new errors. Device-unverified (OTA-eligible). No `contracts/`/INBOX change.
+
+## 2026-08-25 — Point 11 Document picker (client half): picker + honest upload errors (`a4e6dd0`)
+- **Scope: the client half only** (picker + honest errors). The durable claim↔file link and the
+  DigitalOcean Spaces env are owner/OPS + `[api]`+`[decision]` and were deliberately NOT wired — a
+  contract cannot be guessed (`routes/fileAttachments.js` exists but is unwired; needs the owner's
+  endpoint/shape decision). INBOX untouched (no concrete ask yet).
+- **The picker is a 3-source action sheet** — Take a photo / Choose from gallery / Choose a file —
+  replacing the old camera-first / gallery-only-on-permission-deny flow. `expo-document-picker`
+  (~57.0.1) is NATIVE → **NOT OTA**, so this needs a fresh APK. App.json unchanged: document-picker
+  needs no config plugin on Android (Storage Access Framework); image-picker perms already declared.
+- **Precheck against the backend's OWN limits, failing OPEN.** The server collapses the two commonest
+  user errors — multer `LIMIT_FILE_SIZE` → 400, a rejected type → a plain `Error` → 500
+  (`middleware/errorHandler.js`) — so an HTTP status alone can't tell "too big" from "wrong type".
+  `precheckUpload` (mirroring `routes/upload.js`: 10 MB cap + the exact MIME allowlist) catches both
+  before the request and names them precisely; it fails OPEN on an unknown size/unresolvable type so
+  the server stays the backstop. The mirrored numbers are pinned in tests so the two never drift.
+- **`uploadFile` reshaped `{url,key}|null` → typed `UploadOutcome`** (`ok:true{url,key,ephemeral}` |
+  `ok:false{reason}`). An upload failure is screen-specific, so it no longer flips the global health
+  banner; the screen shows the named reason. The old `demo://`-URL special-case is replaced by an
+  explicit `reason:'not_signed_in'`.
+- **A loopback/ephemeral upload is a warning, NOT a recorded success.** With cloud storage off,
+  `routes/upload.js` returns 200 with a `${BACKEND_URL||'http://localhost:3001'}/uploads/...` URL on
+  throwaway disk (the owner's "captures vanish" bug). `isEphemeralUrl` detects the loopback host; the
+  screen says "uploaded, but the server won't keep it" and does NOT list the file / tick the checklist
+  — a success claim would be a lie.
+- **Native pickers isolated in one UI module** (`ui/DocumentSource.tsx`); the tested decisions live in
+  pure `lib/fileUpload.ts` — the standing native-in-test-graph safety pattern.
+- Result: `a4e6dd0`. Gates: tsc 0 / npm test **978** (+25) / eslint 0 new errors. Device-unverified
+  (native-only surface; web can't exercise the pickers). No `contracts/`/INBOX change.

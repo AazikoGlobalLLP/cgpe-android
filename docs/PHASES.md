@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-25 — POINT 11 DOCUMENT PICKER (client half) SHIPPED: source sheet + honest upload errors (`a4e6dd0`, pushed aaziko Shivam).**
+The Claims "Capture or upload" button now opens a 3-source sheet — **Take a photo / Choose from gallery / Choose a file**
+(PDF/Word/Excel/image) — via `expo-document-picker` (~57.0.1, **NATIVE → NOT OTA, needs a fresh APK**). Before this, the
+gallery was reachable only by DENYING the camera and there was no file/PDF path at all. `uploadFile` was reshaped from
+`{url,key}|null` to a typed `UploadOutcome`, so a failure names its real cause — *too large / wrong type / timed out /
+couldn't reach server / not signed in / server rejected* — instead of one generic banner. NEW pure tested
+`src/lib/fileUpload.ts` mirrors the LIVE backend limits (`routes/upload.js`: 10 MB cap + exact MIME allowlist):
+`precheckUpload` catches too-big/wrong-type BEFORE the request (the server collapses them — `LIMIT_FILE_SIZE`→400,
+rejected-type→plain 500), failing OPEN on unknowns; `isEphemeralUrl` flags a loopback fallback URL = the "captures
+vanish" signature (Spaces unset → 200 with a `localhost` URL on throwaway disk) so the app says "uploaded but the server
+won't keep it" and does NOT record it as attached. Native pickers isolated in NEW `src/ui/DocumentSource.tsx` (out of the
+Vitest graph); both Claims screens rewired. tsc 0 / npm test **978** (+25) / eslint 0 new errors. Device-unverified. No
+contract/INBOX change. DECISIONS 2026-08-25. **Owner/OPS to finish #10:** cut a NEW APK, set the DigitalOcean Spaces env
+(`DO_SPACES_*`+`BACKEND_URL`, `:3001` restart — until then uploads are ephemeral and the app honestly says so), and decide
+the durable claim↔file link (`[api]`+`[decision]`; `routes/fileAttachments.js` exists but unwired). **This was the last
+self-contained OTA `[m]` backlog item — all are now shipped.**
+
 **✅ 2026-08-25 — POINT 13 PAYROLL SHIPPED: whole-team roster + master-only bank panel (2 commits, pushed aaziko Shivam).**
 The "only Pavitra shows" bug was a data-seeding gap: `GET /payroll/compute` iterates only `PayrollProfile` docs.
 Shipped two OTA slices: (1) **Roster merge** `9ac8c18` — new pure `data/payroll.ts` `mergePayrollRoster`
@@ -2132,10 +2149,11 @@ worklist. These three are the immediate lane:**
    master/admin-only (`4575106`), ✅ **#9 Contest mapper (`9793327`)**, ✅ **role identity model (`9f8e47d`)**,
    ✅ **#7-refinement SALES-advisor own-only client view / owner Q4 (`cc4657f`, backend P90 verified live first)**,
    ✅ **#8 wire the inert RBAC feature-gates (`6b63a1e`)**, ✅ **Point 13 Payroll whole-team roster + master-only
-   bank panel (`9ac8c18`, `7a49774`; owner decided bank=master/masked, Aadhaar/PAN off the phone)**. **Every
-   self-contained OTA Band-2 item AND Point 13 are now shipped.** The one remaining major backlog item is native:
-   **#10 Document picker** (P1, NOT OTA — `expo-document-picker` native → a new APK + OPS DigitalOcean Spaces env;
-   scope BOTH the picker code and the OPS switch). **Owner-owned to land shipped work on device:** run the 3 prod
+   bank panel (`9ac8c18`, `7a49774`; owner decided bank=master/masked, Aadhaar/PAN off the phone)**, ✅ **#10
+   Document picker CLIENT HALF (`a4e6dd0`; source sheet photo/gallery/file + honest upload errors; NATIVE → not OTA)**.
+   **Every self-contained OTA `[m]` Band-2 item AND Point 13 are now shipped — there is no OTA client item left.** What
+   remains for **#10** is owner/OPS only: cut a NEW APK (native module), set the DigitalOcean Spaces env, and decide the
+   durable claim↔file link (`[api]`+`[decision]`, `routes/fileAttachments.js` unwired). **Owner-owned to land shipped work on device:** run the 3 prod
    scripts (`promoteStaffSuperAdmin.js` / `addGeneralInsuranceDept.js --commit` / `seedAppRolePreferences.js`), do
    the on-device sales-advisor Clients check, AND **the Point 13 DATA job — create `payroll_profiles` for the rest
    of the team** (until then the team reads "data pending" — the honest state, not a bug). **Also open (owner
@@ -2147,8 +2165,9 @@ worklist. These three are the immediate lane:**
    per-role/department access matrix (P6, blocks #8); the task-create policy (P5); and the backend `[api]`
    tokenized-search relay (P2). None can be pushed from this session (push 403 to origin; `aaziko` works for our
    branch, but backend deploy is owner-owned).
-3. **Document upload (P11) needs its own APK** — adding `expo-document-picker` is a native module (not OTA), so
-   the picker + honest-error work ships in a fresh build, paired with the owner's Spaces-env OPS switch.
+3. **Document upload (P11) — client half SHIPPED (`a4e6dd0`), now needs its APK + OPS.** The picker + honest-error
+   work is done and pushed but is native (not OTA), so it reaches the team only in a fresh EAS build, paired with the
+   owner's Spaces-env OPS switch. Then (owner decision) wire the durable claim↔file link. No client work is pending.
 
 **Earlier standing relays still owed** (handed as plain-language relays, NOT INBOX): **B3 clock-out map layer** —
    ask cgpe-api to surface the stored `DayLog.clockOutLoc` on `GET /live-locations` (or a companion) so

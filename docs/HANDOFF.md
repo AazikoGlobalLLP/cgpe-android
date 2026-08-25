@@ -1,63 +1,73 @@
-# HANDOFF — CGPE Connect (Android) — Point 13 Payroll (whole-team roster + master-only bank panel) — 2026-08-25
+# HANDOFF — CGPE Connect (Android) — Point 11 Document picker (client half) — 2026-08-25
 
 ## Done
-- **Payroll now lists the WHOLE team, not just Pavitra.** The roster used to render only members who
-  have a `PayrollProfile` (that's the "only one member shows" symptom). It now left-joins the full
-  staff directory with the computed roster, so every staff member appears; anyone without a computed
-  row shows an amber **"Data pending"** pill instead of being absent. The header gains a `N data
-  pending` count and a one-line explanation of what it means.
-- **A master (super_admin) can see each member's Essential details on the payroll detail screen** —
-  shift timing + beneficiary / bank / account / IFSC. The **account number is masked to the last 4
-  with tap-to-reveal**. **Aadhaar and PAN are never shown** — they are dropped before they enter app
-  state. A non-master admin sees the pay breakdown but not the bank panel. Each blank field reads
-  "pending", so a half-filled profile is honest rather than a confident blank.
-- Gates green: `tsc` 0 · `npm test` **953** (+22 across the two slices) · `eslint` 0 new errors
-  (2 pre-existing warnings untouched). Two commits pushed to `aaziko Shivam` (`9ac8c18`, `7a49774`).
-  All OTA-eligible, device-unverified. The backend endpoint was confirmed LIVE on prod (`GET
-  /payroll/profiles/:userId` → 401 not 404; `/health` 200) — no backend change was needed.
+- **The Claims upload flow is real now.** The "Capture or upload a document" button on both
+  claim screens opens a source sheet with the three real choices — **Take a photo · Choose
+  from gallery · Choose a file** (PDF / Word / Excel / image). Before this, the gallery was
+  reachable *only* by denying the camera, and there was no file/PDF path at all even though the
+  backend accepts them.
+- **Upload failures now name their real cause** instead of one generic "didn't upload" banner:
+  *too large* / *wrong type* (caught client-side before the request, using the backend's own
+  10 MB cap + MIME allowlist) / *timed out* / *couldn't reach server* / *not signed in* /
+  *server rejected*.
+- **The "captures vanish" bug is now honest.** When cloud storage is off, the server returns a
+  `localhost` URL on throwaway disk; the app detects that loopback URL and says *"uploaded, but
+  the server won't keep it — ask your admin to enable storage"* and refuses to list it as a
+  durably-attached document, rather than showing a false green success.
+- Gates green: `tsc` 0 · `npm test` **978** (+25) · `eslint` 0 new errors (3 pre-existing
+  warnings untouched). One commit pushed to `aaziko Shivam` (`a4e6dd0`). **NOT OTA** — a native
+  module was added, so this needs a fresh APK. Device-unverified.
 
 ## Files changed
-- `src/data/payroll.ts` (new, pure + tested) — `mergePayrollRoster` (directory × compute roster, id
-  join with normalized-name fallback; orphan payroll rows kept, never dropped), `payrollRosterStats`
-  (members / with-pay / pending / total), `maskAccountNumber` (last-4 visible, rest bulleted).
-- `src/data/__tests__/payroll.test.ts` (new) — 15 cases over the merge, stats and account mask.
-- `src/app/payroll.tsx` — fetches the directory (`getAssignableTeam`) alongside the roster, renders
-  the merged whole-team list, adds the "data pending" pill + header count; `MemberRow` handles a
-  profile-less member. `roster === null` still shows the honest could-not-load state.
-- `src/data/api.ts` — new `getPayrollProfile(userId)` (whitelists bank + shift + salary basics,
-  DROPS `aadhar_no`/`pan_no`; ok / missing(404) / error outcomes) + `PayrollProfile`/`PayrollProfileResult` types.
-- `src/data/__tests__/api-payroll.test.ts` — 7 new cases, incl. the load-bearing test that a
-  response's Aadhaar/PAN are not present in the returned object.
-- `src/app/payroll-detail.tsx` — master-only "Essential details" section (real super_admin gate via
-  `canSeeTeamPerformance`), shift + bank with a masked/tap-to-reveal account row.
+- `src/lib/fileUpload.ts` (new, pure + tested) — `MAX_UPLOAD_BYTES`/`ALLOWED_UPLOAD_MIME` mirror
+  the live `cgpe-backend-main/routes/upload.js` multer config; `precheckUpload` (too-big/wrong-type
+  gate that FAILS OPEN on unknowns), `classifyUploadStatus`, `isEphemeralUrl` (the loopback
+  "vanishes" signature), `describeUploadFailure` (honest per-reason copy, numbers sourced from the
+  constants — not invented).
+- `src/lib/__tests__/fileUpload.test.ts` (new) — 21 cases over the limit mirror, precheck, classify,
+  ephemeral detection, copy.
+- `src/ui/DocumentSource.tsx` (new) — the `DocumentSourceSheet` (3 sources) + the ONLY place the
+  native pickers (`expo-image-picker` + `expo-document-picker`) are imported; kept out of the
+  Vitest graph on purpose. The OS document browser is constrained to the accepted MIME types.
+- `src/data/api.ts` — `uploadFile` reshaped from `{url,key}|null` to a typed `UploadOutcome`
+  (`ok:true{url,key,ephemeral}` | `ok:false{reason}`); no longer flips the global health banner
+  (an upload failure is screen-specific, not an outage).
+- `src/data/__tests__/api-resilience.test.ts` — the 2 upload cases updated to the new shape, +4
+  new (ephemeral, non-ok status classify, 2xx-no-url, not-signed-in-no-fetch).
+- `src/app/claim-new.tsx`, `src/app/claim/[id].tsx` — both rewired: open the source sheet, precheck,
+  upload, branch on the typed outcome via `describeUploadFailure`; the old camera-first / gallery-on-deny
+  flow and the `demo://` special-case are gone.
+- `package.json` / `package-lock.json` — `expo-document-picker ~57.0.1` (`npx expo install`).
 
 ## Decisions made
-- **Bank details on the phone: master only, account masked, Aadhaar/PAN never** (owner via
-  AskUserQuestion, 2026-08-25). This deliberately reverses the older "no PII on the phone" rule, but
-  only for the master and only for bank fields.
-- **Aadhaar/PAN are dropped in `getPayrollProfile`, not just hidden in the UI** — so they never enter
-  app state, the strongest client-side guarantee possible without a backend change.
-- **Client-side directory merge, not the optional `[api]` "include all staff" compute mode** — the
-  merge covers it with no contract change, and the roster gap is a data problem, not a wire problem.
+- **Scope this session to the client half only** (picker + honest errors). The durable claim↔file
+  link and the DigitalOcean Spaces env are owner/OPS + `[api]`+`[decision]` and were deliberately
+  NOT wired — a contract can't be guessed (project rule).
+- **Client-side precheck against the backend's OWN limits**, because the server collapses too-large
+  (multer `LIMIT_FILE_SIZE` → 400) and rejected-type (a plain `Error` → 500) so status alone can't
+  tell them apart. The precheck fails OPEN on an unknown size/type — the server stays the backstop.
+- **Flag a loopback/ephemeral upload as a warning, and do NOT record it** as attached/ticked — the
+  file will be wiped on the next redeploy, so a success claim would be a lie (the owner's exact bug).
+- **Native pickers isolated in one UI module** (`ui/DocumentSource.tsx`), tested decisions in a pure
+  `lib/fileUpload.ts` — the standing pattern for native-in-test-graph safety.
 
 ## Known broken / deliberately skipped
-- **The real "why only one shows" fix is a DATA job, owner/OPS** — create `payroll_profiles`
-  (salary + segment) for the rest of the team, in the admin panel or a seed script. Until then the
-  team correctly reads "data pending"; no client code can conjure a salary that was never entered.
-- **Transit caveat (flagged to owner, NOT filed):** the admin endpoint still SENDS the full record
-  (incl. Aadhaar/PAN) in the JSON body; the app never stores or shows them, but they do reach the
-  device in transit. Stripping them would need a backend change, and that same endpoint feeds the
-  admin panel which legitimately edits them — so it is an optional `[api]` hardening, only if the
-  owner asks. No INBOX item filed.
-- **Device-unverified** — masked/reveal, the "data pending" rows, and the master-only gate were not
-  walked on a device this session.
+- **NOT OTA — needs a fresh EAS APK.** `expo-document-picker` is native; the picker does not reach
+  the team until a new `preview` build is cut and installed.
+- **Uploads still land on ephemeral disk until OPS sets Spaces.** `DO_SPACES_*` + `BACKEND_URL` must
+  be set on the server and `:3001` restarted; until then the app honestly says "the server won't keep
+  it" but nothing is durably stored. (Already in the backlog OPS relay text.)
+- **No durable claim↔file link.** `routes/fileAttachments.js` exists but is unwired — needs the owner's
+  decision on which endpoint/shape, then a relay. INBOX untouched (no concrete ask yet).
+- **Device-unverified** — the source sheet, gallery/file pick, precheck messages, and the ephemeral
+  warning were not walked on a device this session (web can't exercise the native pickers).
 
 ## Next session starts here
-- Phase: **#10 Document picker** (owner backlog Point 11) — the last major backlog item; add a
-  file/gallery picker + honest errors + the attach call. **NOT OTA** — `expo-document-picker` is a
-  native module, so it needs a fresh APK, and it needs the owner's DigitalOcean **Spaces env** OPS
-  switch or claim uploads land on throwaway disk. (Alternatively, act on the Point 13 owner items:
-  seed the payroll profiles + on-device check.)
+- Phase: **owner/OPS follow-through on Point 11** — there is no self-contained OTA `[m]` backlog item
+  left. Options: cut the APK for Point 11; or, once the owner decides the claim↔file link model, wire
+  it; or start a net-new feature (P7 goals / P8 WhatsApp automation / P12 voice) which each need a
+  spec-lock first. Confirm the direction with the owner before building.
 - First command: `/boot`
-- Watch out for: **#10 is native, not OTA** — do not promise it reaches the team by OTA; it needs a
-  new EAS build AND the Spaces env set server-side, so scope both the picker code and the OPS switch.
+- Watch out for: **do not tell the owner "document upload works" from this commit** — the picker works,
+  but real uploads are still ephemeral until the Spaces env is set AND a new APK is installed. Both are
+  owner/OPS, not code.
