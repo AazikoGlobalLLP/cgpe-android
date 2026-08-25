@@ -49,7 +49,7 @@ import {
   type QueuedWrite, type QueueKind, type FlushOutcome,
 } from '@/lib/writeQueue';
 import * as pendingBus from './pendingWrites';
-import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification, adaptLicPlan, adaptAttendanceHistory } from './adapt';
+import { adaptClient, adaptLead, adaptUser, adaptClaim, adaptWaThread, adaptWaMessage, adaptReminder, adaptNotification, adaptContest, adaptLicPlan, adaptAttendanceHistory } from './adapt';
 // Types only. The seed arrays these modules once exported (`teamMembers`, `teamActivityFeed`,
 // `tasks`) were deleted — importing them is what kept sample records inside the shipped bundle,
 // one `??` away from reaching a screen. Task data comes from getTasks; team data from /profiles.
@@ -2138,7 +2138,13 @@ export async function unregisterPushToken(token: string): Promise<boolean> {
 }
 
 export async function getContests(): Promise<Contest[]> {
-  return (await tryReal<Contest[]>('/contests', {}, isArr)) ?? unavailable('/contests', state.contests);
+  // The wire rows are raw Contest documents in a different shape (title/reward_description/
+  // target_goal/end_date + a per-caller user_progress/leaderboard) — adaptContest maps them to
+  // the app's Contest and scores rank against the signed-in user. Reading them as Contest[]
+  // straight off the wire (the old code) mapped every field to undefined → blank cards (Point 7).
+  const raw = await tryReal<any[]>('/contests', {}, isArr);
+  if (!raw) return unavailable('/contests', state.contests);
+  return raw.map((r) => adaptContest(r, currentUserId));
 }
 export async function getLicPlans(): Promise<LicPlan[]> {
   // GET /api/lic-plans → { success:true, data:{ meta, plans } } (routes/licPlans.js:62-71).

@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   adaptAttendanceHistory,
-  adaptClaim, adaptClient, adaptLead, adaptLicPlan, adaptNotification, adaptReminder,
+  adaptClaim, adaptClient, adaptContest, adaptLead, adaptLicPlan, adaptNotification, adaptReminder,
   adaptUser, adaptWaMessage, adaptWaThread,
   dayMatches, isBirthdayThisMonth, isBirthdayToday, isPremiumDueThisMonth, monthMatches,
 } from '@/data/adapt';
@@ -811,5 +811,84 @@ describe('adaptLicPlan', () => {
     expect(p.name).toBe('');
     expect(p.tags).toEqual([]);
     expect(p.minAge).toBe(0);
+  });
+});
+
+/* ============================================================ adaptContest
+ * The wire shape is a raw Contest document (title/reward_description/target_goal/target_unit/
+ * end_date) annotated per-caller with user_progress + a top-5 leaderboard. The pre-adapter code
+ * read this straight into `Contest[]`, so every field was undefined and every card rendered
+ * blank (owner backlog Point 7). These pin the real backend field names → app shape mapping.
+ */
+describe('adaptContest — real backend document → app Contest', () => {
+  // A faithful slice of `GET /api/contests` data[i] (routes/contests.js:44-49 + models/Contest.js).
+  const contestRow = (over: Record<string, any> = {}) => ({
+    _id: 'ct_501',
+    title: 'Diwali Sales Sprint',
+    description: 'Close the most policies before Diwali.',
+    type: 'sales',
+    start_date: '2026-09-01T00:00:00.000Z',
+    end_date: '2026-09-30T00:00:00.000Z',
+    target_goal: 200,
+    target_unit: 'policies',
+    reward_description: 'Goa trip for the top 3',
+    status: 'active',
+    is_participating: true,
+    user_progress: 120,
+    leaderboard: [
+      { user_id: 'u_lead', user_name: 'Top Gun', current_progress: 190, rank: 1 },
+      { user_id: 'u_me', user_name: 'Me', current_progress: 120, rank: 2 },
+    ],
+    ...over,
+  });
+
+  it('maps the real field names the app screen reads — none of which match the wire', () => {
+    const p = adaptContest(contestRow(), 'u_me');
+    expect(p.id).toBe('ct_501');
+    expect(p.name).toBe('Diwali Sales Sprint');            // title, not name
+    expect(p.reward).toBe('Goa trip for the top 3');       // reward_description, not reward
+    expect(p.ends).toBe('2026-09-30T00:00:00.000Z');       // end_date, not ends
+    expect(p.metric).toBe('120 of 200 policies');          // built from user_progress/target/unit
+  });
+
+  it('progress is the user\'s own share of the goal, 0..1', () => {
+    expect(adaptContest(contestRow(), 'u_me').progress).toBeCloseTo(0.6, 5); // 120/200
+  });
+
+  it('clamps an over-target progress to 1 (never > 100%)', () => {
+    expect(adaptContest(contestRow({ user_progress: 250 }), 'u_me').progress).toBe(1);
+  });
+
+  it('a zero or missing target yields progress 0 — never NaN or Infinity', () => {
+    const zero = adaptContest(contestRow({ target_goal: 0, user_progress: 5 }), 'u_me');
+    expect(zero.progress).toBe(0);
+    expect(Number.isFinite(zero.progress)).toBe(true);
+    const missing = adaptContest(contestRow({ target_goal: undefined }), 'u_me');
+    expect(missing.progress).toBe(0);
+    expect(missing.metric).toBe('policies');   // falls back to the bare unit when no target
+  });
+
+  it('populates rank only from the user\'s own leaderboard row', () => {
+    expect(adaptContest(contestRow(), 'u_me').rank).toBe(2);
+    expect(adaptContest(contestRow(), 'u_lead').rank).toBe(1);
+  });
+
+  it('omits rank when the user is not in the (top-5) leaderboard — never a guessed #0', () => {
+    expect(adaptContest(contestRow(), 'u_stranger').rank).toBeUndefined();
+    expect(adaptContest(contestRow(), null).rank).toBeUndefined();       // no signed-in id
+    expect(adaptContest(contestRow({ leaderboard: [] }), 'u_me').rank).toBeUndefined();
+  });
+
+  it('defaults the unit to points when the contest carries none', () => {
+    expect(adaptContest(contestRow({ target_unit: undefined }), 'u_me').metric).toBe('120 of 200 points');
+  });
+
+  it('does not throw on a null/garbage row and keeps a usable, non-blank card', () => {
+    const p = adaptContest(null, 'u_me');
+    expect(p.name).toBe('Contest');    // the pre-adapter bug rendered this blank
+    expect(p.reward).toBe('');
+    expect(p.progress).toBe(0);
+    expect(p.rank).toBeUndefined();
+    expect(p.ends).toBe('');
   });
 });

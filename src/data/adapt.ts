@@ -3,7 +3,7 @@
  * app's typed shapes. Mirrors backend services/greetingEngine.js normalizeClient so
  * real client data renders correctly. Also holds the fupDate premium-due rule.
  */
-import type { AppNotification, Claim, Client, Lead, LeadStage, LicPlan, Policy, Reminder, User, WaMessage, WaThread } from './types';
+import type { AppNotification, Claim, Client, Contest, Lead, LeadStage, LicPlan, Policy, Reminder, User, WaMessage, WaThread } from './types';
 
 function num(v: any): number {
   const n = Number(v);
@@ -409,6 +409,50 @@ export function adaptNotification(raw: any): AppNotification {
     read: !!(raw.read ?? raw.is_read),
     kind,
   };
+}
+
+/* ------------------------------------------------------------ Contests
+ * Backend `GET /api/contests` (routes/contests.js) returns raw Contest documents
+ * (models/Contest.js) inside the standard `{success,data}` envelope, each ANNOTATED per caller
+ * with `user_progress` (this user's current_progress), `is_participating`, and a top-5
+ * `leaderboard` (each entry carries `user_id` + `rank`). NONE of those field names match the
+ * app's `Contest` shape — the doc has `title`/`reward_description`/`target_goal`/`target_unit`/
+ * `end_date`, the app wants `name`/`reward`/`metric`/`ends` — so before this adapter existed the
+ * screen read `Contest[]` straight off the wire and mapped EVERY field to `undefined`: blank
+ * name, no reward, a 0% meter, no metric label, no countdown, no rank. Any real contest rendered
+ * as an empty card (owner backlog Point 7).
+ *
+ * `progress` is the user's OWN progress toward the goal (`user_progress / target_goal`), clamped
+ * 0..1; a 0 or missing target yields 0 rather than a NaN/Infinity meter. `rank` is populated ONLY
+ * when this user actually appears in the (top-5) leaderboard — it is never inferred from a
+ * progress tie — so an absent rank is honest silence, not a fabricated "#0".
+ */
+export function adaptContest(raw: any, userId?: string | null): Contest {
+  raw = raw || {};
+  const target = num(raw.target_goal);
+  const progressUnits = num(raw.user_progress);
+  const progress = target > 0 ? Math.min(1, Math.max(0, progressUnits / target)) : 0;
+
+  const unit = String(raw.target_unit || 'points').trim() || 'points';
+  const metric = target > 0 ? `${progressUnits} of ${target} ${unit}` : unit;
+
+  let rank: number | undefined;
+  if (userId != null && Array.isArray(raw.leaderboard)) {
+    const mine = raw.leaderboard.find((p: any) => p && String(p.user_id) === String(userId));
+    const r = mine ? Number(mine.rank) : NaN;
+    if (Number.isFinite(r) && r > 0) rank = r;
+  }
+
+  const out: Contest = {
+    id: String(raw._id || raw.id || ''),
+    name: String(raw.title || raw.name || 'Contest').trim(),
+    reward: String(raw.reward_description || raw.reward || '').trim(),
+    progress,
+    metric,
+    ends: iso(parseDate(raw.end_date || raw.ends)),
+  };
+  if (rank != null) out.rank = rank;
+  return out;
 }
 
 /* ------------------------------------------------------------------ *
