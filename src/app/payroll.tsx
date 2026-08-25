@@ -14,6 +14,8 @@ import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
 import * as api from '@/data/api';
 import type { PayrollRow } from '@/data/api';
+import type { TeamMember } from '@/data/team';
+import { mergePayrollRoster, payrollRosterStats, type PayrollRosterEntry } from '@/data/payroll';
 import { inr } from '@/lib/format';
 
 /* ------------------------------------------------------------------ *
@@ -29,6 +31,14 @@ import { inr } from '@/lib/format';
  * NO PII ON THE PHONE. `/compute` deliberately omits the sensitive columns (Aadhaar / PAN /
  * bank) — those live only on `/profiles` and `/export` (routes/payroll.js:306). This screen
  * shows salary amount, attendance-derived days/hours, and the server-computed payable.
+ *
+ * WHOLE TEAM, DATA-PENDING MADE VISIBLE (POINT 13). `/compute` iterates only members who have a
+ * `PayrollProfile`, so the owner saw only the one person with a profile and everyone else looked
+ * *dropped*. This screen now left-joins the full staff directory (`getAssignableTeam` → `/profiles`)
+ * with the computed roster (pure `mergePayrollRoster`, tested in `data/payroll.ts`): every member
+ * appears and anyone without a computed row is flagged "data pending" instead of being absent.
+ * Creating the missing profiles is a DATA job (owner/OPS) — no client code conjures a salary that
+ * was never entered; this only makes the gap honest and visible.
  *
  * THE APP NEVER MULTIPLIES. Every `payable` is computed server-side. The one arithmetic here
  * is the roster TOTAL, which is a sum of the server's own per-member payables — an aggregate
@@ -79,6 +89,7 @@ export default function Payroll() {
   const [months] = useState(lastTwelveMonths);
   const [sel, setSel] = useState(0);                       // index into `months`; 0 = current month
   const [roster, setRoster] = useState<PayrollRow[] | null>(null);
+  const [directory, setDirectory] = useState<TeamMember[]>([]);  // full staff list, so pending members show
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -96,9 +107,16 @@ export default function Payroll() {
   const load = useCallback(async (opts: { refresh?: boolean; current?: () => boolean } = {}) => {
     if (!isAdmin) { setLoading(false); return; }           // never fetch the admin endpoint as a non-admin
     if (opts.refresh) setRefreshing(true);
-    const rows = await api.getPayrollRoster(period.year, period.month);
+    // Both admin-only calls in parallel: the computed roster (profile-holders) and the full staff
+    // directory. `getAssignableTeam` never rejects — it returns [] on failure — so a directory miss
+    // degrades to the profile-holders alone, never an error. `roster === null` is the only failure.
+    const [rows, dir] = await Promise.all([
+      api.getPayrollRoster(period.year, period.month),
+      api.getAssignableTeam(),
+    ]);
     if (!alive.current || (opts.current && !opts.current())) return;
     setRoster(rows);
+    setDirectory(dir);
     setLoading(false);
     setRefreshing(false);
   }, [isAdmin, period.year, period.month]);
@@ -120,11 +138,12 @@ export default function Payroll() {
 
   const retry = useCallback(() => { haptics.tap(); setLoading(true); void load(); }, [load]);
 
-  // Sum of the server's own per-member payables — an aggregate of computed figures, NOT a
+  // The whole-team roster (directory left-joined with the computed rows) and its header figures — the
+  // total is a sum of the server's OWN per-member payables, an aggregate of computed figures, never a
   // salary derived on-device. Hooks run unconditionally, ahead of every branch below.
-  const totalPayable = useMemo(() => (roster ?? []).reduce((s, r) => s + num(r.payable), 0), [roster]);
-  const shownTotal = useCountUp(totalPayable);
-  const withPay = useMemo(() => (roster ?? []).filter((r) => num(r.payable) > 0).length, [roster]);
+  const merged = useMemo(() => mergePayrollRoster(directory, roster ?? []), [directory, roster]);
+  const stats = useMemo(() => payrollRosterStats(merged), [merged]);
+  const shownTotal = useCountUp(stats.totalPayable);
 
   // Belt-and-braces: the entry row already gates on the real role, but a leader who deep-links
   // here (mobile tier folds leader into "admin") must see an honest refusal, not a 403 blank.
@@ -173,11 +192,11 @@ export default function Payroll() {
               : 'We could not load the payroll roster for this month. Pull down or retry.'}
             action={{ label: 'Try again', onPress: retry }}
           />
-        ) : roster.length === 0 ? (
+        ) : merged.length === 0 ? (
           <EmptyState
             icon="people-outline"
-            title="No payroll profiles yet"
-            subtitle="Nobody has a salary profile for this month. Payroll profiles are created in the admin panel; once they exist, each member's computed pay appears here."
+            title="No team members to show"
+            subtitle="We could not find any staff to place on the payroll roster. Pull down to try again."
           />
         ) : (
           <>
@@ -187,11 +206,14 @@ export default function Payroll() {
                 <Eyebrow>{`Total payable · ${period.label}`}</Eyebrow>
                 <Metric value={inr(shownTotal)} size={font.display} style={{ marginTop: 4 }} />
                 <Row style={{ marginTop: spacing.md, gap: spacing.sm, flexWrap: 'wrap' }}>
-                  <Pill label={`${roster.length} ${roster.length === 1 ? 'member' : 'members'}`} tone="neutral" small numeric />
-                  {withPay > 0 ? <Pill label={`${withPay} with pay`} tone="success" small numeric /> : null}
+                  <Pill label={`${stats.members} ${stats.members === 1 ? 'member' : 'members'}`} tone="neutral" small numeric />
+                  {stats.withPay > 0 ? <Pill label={`${stats.withPay} with pay`} tone="success" small numeric /> : null}
+                  {stats.pending > 0 ? <Pill label={`${stats.pending} data pending`} tone="warning" small numeric /> : null}
                 </Row>
-                <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md }} numberOfLines={2}>
-                  Computed by the server from each member&apos;s attendance. Figures are gross, before deductions.
+                <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md }} numberOfLines={3}>
+                  {stats.pending > 0
+                    ? 'Computed by the server from each member’s attendance (gross, before deductions). Members marked “data pending” have no salary profile yet — an admin sets one up in the panel before their pay can be computed.'
+                    : 'Computed by the server from each member’s attendance. Figures are gross, before deductions.'}
                 </Txt>
               </Card>
             </Appear>
@@ -201,7 +223,7 @@ export default function Payroll() {
               <View>
                 <SectionHeader title="By member" />
                 <ListSection>
-                  {roster.map((r, i) => <MemberRow key={`${r.user_id}-${i}`} row={r} year={period.year} month={period.month} />)}
+                  {merged.map((e, i) => <MemberRow key={`${e.user_id}-${i}`} entry={e} year={period.year} month={period.month} />)}
                 </ListSection>
               </View>
             </Appear>
@@ -251,37 +273,48 @@ function MonthStrip({ months, sel, onPick }: { months: MonthOpt[]; sel: number; 
   );
 }
 
-/* One member's row: name, pay segment + present/working days, and the server's payable. A row
- * with no matching staff profile, or no attendance, says so rather than printing a bare ₹0.
- * Tapping opens the per-member breakdown + activity for THIS month (Phase 67). */
-function MemberRow({ row, year, month }: { row: PayrollRow; year: number; month: number }) {
+/* One member's row. A member WITH a payroll profile shows their pay segment + present/working days and
+ * the server's payable (or "No pay"/"No staff match" rather than a bare ₹0). A member WITHOUT a profile
+ * (Point 13) shows their department/role and an amber "Data pending" pill — visible, not dropped.
+ * Tapping opens the per-member breakdown for THIS month (Phase 67); the detail screen itself renders
+ * an honest "no payroll profile" state for a pending member, so the tap is always safe. */
+function MemberRow({ entry, year, month }: { entry: PayrollRosterEntry; year: number; month: number }) {
   const router = useRouter();
-  const m = row.months?.[0];
-  const seg = SEGMENT_LABEL[row.segment] ?? row.segment;
-  const parts = [seg];
-  if (m) parts.push(`${num(m.present_days)}/${num(m.working_days)} days`);
-  const payable = num(row.payable);
+  const row = entry.row;
+  const m = row?.months?.[0];
+  const parts: string[] = [];
+  if (row) {
+    parts.push(SEGMENT_LABEL[row.segment] ?? row.segment);
+    if (m) parts.push(`${num(m.present_days)}/${num(m.working_days)} days`);
+  } else if (entry.branch) {
+    parts.push(entry.branch);                              // pending: show what we DO know
+  } else if (entry.role) {
+    parts.push(entry.role);
+  }
+  const payable = num(row?.payable);
   const open = () => {
     haptics.select();
     router.push({
       pathname: '/payroll-detail',
-      params: { user_id: row.user_id, name: row.name ?? '', year: String(year), month: String(month) },
+      params: { user_id: entry.user_id, name: entry.name ?? '', year: String(year), month: String(month) },
     });
   };
   return (
     <PersonRow
-      name={row.name || row.user_id || 'Member'}
-      subtitle={parts.join(' · ')}
-      subtitleNumeric
+      name={entry.name || entry.user_id || 'Member'}
+      subtitle={parts.length ? parts.join(' · ') : undefined}
+      subtitleNumeric={!!row}
       size={40}
       onPress={open}
       style={{ marginHorizontal: 0, paddingHorizontal: spacing.lg, borderRadius: 0 }}
       right={
-        !row.staff_found
-          ? <Pill label="No staff match" tone="warning" small />
-          : payable > 0
-            ? <Metric value={inr(payable)} size={font.body} />
-            : <Pill label="No pay" tone="neutral" small />
+        entry.pending
+          ? <Pill label="Data pending" tone="warning" small />
+          : !row?.staff_found
+            ? <Pill label="No staff match" tone="warning" small />
+            : payable > 0
+              ? <Metric value={inr(payable)} size={font.body} />
+              : <Pill label="No pay" tone="neutral" small />
       }
     />
   );
