@@ -24,7 +24,8 @@ import * as api from '@/data/api';
 import type { CampaignSummary } from '@/data/api';
 import { whatsapp } from '@/lib/actions';
 import { useAuth } from '@/store/auth';
-import { canViewClients } from '@/store/roles';
+import { canViewClients, capabilitiesOf } from '@/store/roles';
+import { useAppUi } from '@/store/appUi';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
@@ -282,6 +283,13 @@ function CampaignsScreen() {
   const { confirm } = useConfirm();
   const router = useRouter();
   const { jobs, startCampaign } = useJobs();
+  const { user, viewAs } = useAuth();
+  const { can, ready: uiReady } = useAppUi();
+  // Band 2 #8 (2026-08-25): the screen is already master/admin-only (Campaigns() wrapper guards on
+  // canViewClients), so `caps.runCampaigns` holds here; the RBAC `can_send_campaign` flag is ANDed
+  // so a seeded config can disable sending for a specific admin/department. Fails OPEN.
+  const canSend = capabilitiesOf(user, viewAs).runCampaigns
+    && (uiReady ? can('can_send_campaign') !== false : true);
 
   const [kind, setKind] = useState<Kind>('renewal');
   const [summary, setSummary] = useState<CampaignSummary | null>(null);
@@ -491,7 +499,7 @@ function CampaignsScreen() {
 
   /* ---------- the bulk commitment ---------- */
   const sendAll = useCallback(async () => {
-    if (sending) return;
+    if (sending || !canSend) return;
 
     if (count <= 0) {
       haptics.warn();
@@ -537,14 +545,14 @@ function CampaignsScreen() {
     if (!alive.current) return;
     if (monitor) openJob(id);
     else toast('Running in the background. Tap the progress bar to monitor.', 'info');
-  }, [sending, count, confirm, kind, meta.icon, startCampaign, openJob, toast]);
+  }, [sending, canSend, count, confirm, kind, meta.icon, startCampaign, openJob, toast]);
 
   /* ---------- the single commitment ---------- */
   const sendOne = useCallback((r: Rec) => {
-    if (!r.phone) return;
+    if (!r.phone || !canSend) return;
     haptics.tap();
     whatsapp(r.phone, r.message);
-  }, []);
+  }, [canSend]);
 
   /* ---------- empty copy: three genuinely different states ---------- */
   const emptyBlock = count > 0 ? (
@@ -667,9 +675,9 @@ function CampaignsScreen() {
                   size="lg"
                   variant="whatsapp"
                   icon="logo-whatsapp"
-                  label={sending ? 'Starting' : count > 0 ? `Send to all ${num(count)}` : 'Nobody to send to'}
+                  label={!canSend ? 'Sending is disabled for your role' : sending ? 'Starting' : count > 0 ? `Send to all ${num(count)}` : 'Nobody to send to'}
                   loading={sending}
-                  disabled={count === 0}
+                  disabled={count === 0 || !canSend}
                   onPress={() => { void sendAll(); }}
                   style={{ marginTop: spacing.lg }}
                 />

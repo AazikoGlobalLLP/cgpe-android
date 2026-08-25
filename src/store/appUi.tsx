@@ -50,6 +50,34 @@ export const FEATURE_KEYS = [
 ] as const;
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
 
+/**
+ * WIRING STATUS as of Band 2 #8 (2026-08-25). A `can(...)` gate only bites where the app actually
+ * has a control to gate. Recorded here so the un-wired flags don't read as "forgotten":
+ *
+ *  WIRED — consumed via `can(...)`:
+ *   • can_clock_in              → home clock-in hero
+ *   • can_create_task           → home / tasks / task-new create (AND caps.assignTasks)
+ *   • can_assign_task_to_others → task/[id] transfer            (AND caps.assignTasks)
+ *   • can_send_campaign         → campaigns send                (AND caps.runCampaigns)
+ *   • can_dispatch_notification → notify screen guard           (AND caps.manageTeam)
+ *   • can_create_claim          → claims "New claim" Fab + empty-state  (flag-only, default true)
+ *   • can_claim_ticket          → tickets/[id] "I'll take this"          (flag-only, default true)
+ *   • can_view_team_roster      → home roster
+ *   • can_view_org_analytics    → home analytics
+ *
+ *  NOT wired ON PURPOSE — already gated TIGHTER by an owner-locked rule:
+ *   • can_view_agent_map / can_view_movement_paths → master-only via `canSeeLiveLocation` (roles.ts).
+ *     The JSON grants these to admin, but Phase 40 locked live location to the real super_admin.
+ *     ANDing a fail-open flag can only NARROW, never widen, so wiring it would merely add a way to
+ *     hide the map from master too. Left as-is (owner decision A, 2026-08-25).
+ *
+ *  NO APP AFFORDANCE YET — nothing to gate (owner decision B, 2026-08-25):
+ *   • can_advance_claim_status → the app has no claim status-advance control (no endpoint exists).
+ *   • can_export_data          → no admin/bulk export; account.tsx's OWN-data DPDP export is a
+ *                                privacy right and deliberately NOT behind this admin flag.
+ *   • can_edit_client          → no client-edit control (no `updateClient` in api.ts).
+ */
+
 /** Collections global search may be pointed at. */
 export const SEARCH_SCOPES = ['clients', 'leads', 'claims', 'tasks', 'tickets', 'prospects', 'families', 'kb'] as const;
 

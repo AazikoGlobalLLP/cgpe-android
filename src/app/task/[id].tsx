@@ -27,6 +27,7 @@ import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
+import { useAppUi } from '@/store/appUi';
 
 /* ------------------------------------------------------------------ *
  * Task detail — the workflow screen.
@@ -135,12 +136,18 @@ export default function TaskDetail() {
   const toast = useToast();
   const health = useDataHealth();
   const { user, viewAs } = useAuth();
+  const { can, ready: uiReady } = useAppUi();
   // Band 2 #3 (Point 5): reassignment is an assign-to-others action. A team-tier advisor has no
   // roster to transfer to (the directory endpoints 403 them) and the RBAC config sets
   // can_assign_task_to_others:false for team, so the transfer affordance is shown only to entitled
   // tiers (admin/leader/master). EDIT is NOT gated — the backend PATCH has no ownership gate, so a
   // member may edit the task assigned to them.
-  const canAssign = capabilitiesOf(user, viewAs).assignTasks;
+  // Band 2 #8 (2026-08-25): `caps.assignTasks` is the tier gate that actually protects team-tier
+  // today (it 403s them from the roster too); the RBAC `can_assign_task_to_others` flag is ANDed
+  // so a future seeded role config can tighten it further. It fails OPEN (missing/loading = allow),
+  // so an app-UI outage never hides a legitimately-entitled admin's transfer control.
+  const canAssign = capabilitiesOf(user, viewAs).assignTasks
+    && (uiReady ? can('can_assign_task_to_others') !== false : true);
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [task, setTask] = useState<Task | null>(null);

@@ -28,6 +28,7 @@ import { Appear } from '@/ui/motion';
 import { spacing, useTheme } from '@/theme/theme';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
+import { useAppUi } from '@/store/appUi';
 import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import { useT } from '@/i18n';
@@ -57,6 +58,7 @@ export default function NotifyScreen() {
   const toast = useToast();
   const { user, viewAs } = useAuth();
   const caps = capabilitiesOf(user, viewAs);
+  const { can, ready: uiReady } = useAppUi();
 
   const alive = useRef(true);
   useEffect(() => {
@@ -152,7 +154,11 @@ export default function NotifyScreen() {
 
   /* Team members must not see this screen at all. The backend enforces the same rule with
      `authorize('admin','leader')`, so this is a courtesy, not the security boundary. */
-  if (!caps.manageTeam) {
+  // Band 2 #8 (2026-08-25): `caps.manageTeam` is the tier gate (admin/master) that protects team
+  // today; the RBAC `can_dispatch_notification` flag is ANDed so a seeded config can additionally
+  // deny an admin. It denies ONLY on an explicit `false` and only once the config has settled
+  // (uiReady), so an app-UI outage never wrongly locks an entitled admin out of dispatch.
+  if (!caps.manageTeam || (uiReady && can('can_dispatch_notification') === false)) {
     return (
       <Screen>
         <Header title="Notify team" back />

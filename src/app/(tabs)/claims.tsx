@@ -20,6 +20,7 @@ import type { ClaimsSummary } from '@/data/api';
 import type { Claim, ClaimStatus } from '@/data/types';
 import { CLAIM_STATUS } from '@/data/labels';
 import { inrShort } from '@/lib/format';
+import { useAppUi } from '@/store/appUi';
 
 /* ------------------------------------------------------------------ *
  * The claims register.
@@ -145,6 +146,11 @@ export default function Claims() {
   const { spacing, font } = c;
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { can, ready: uiReady } = useAppUi();
+  // Band 2 #8 (2026-08-25): registering a claim is a team-allowed action (schema default true), so
+  // there is no tier gate — the RBAC `can_create_claim` flag gates the affordance alone, failing
+  // OPEN (missing/loading = allowed) so today every tier keeps it and a future config can hide it.
+  const canCreateClaim = uiReady ? can('can_create_claim') !== false : true;
   const health = useDataHealth();
 
   const [claims, setClaims] = useState<Claim[]>([]);
@@ -320,7 +326,7 @@ export default function Claims() {
                   icon={empty.icon}
                   title={empty.title}
                   subtitle={empty.subtitle}
-                  action={empty.add
+                  action={empty.add && canCreateClaim
                     ? { label: 'New claim', onPress: () => router.push('/claim-new') }
                     : { label: 'Show all claims', onPress: () => pickFilter('all') }}
                 />
@@ -337,12 +343,14 @@ export default function Claims() {
         />
       )}
 
-      <Fab
-        icon="add"
-        label="New claim"
-        onPress={() => router.push('/claim-new')}
-        style={{ bottom: insets.bottom + 76 }}
-      />
+      {canCreateClaim ? (
+        <Fab
+          icon="add"
+          label="New claim"
+          onPress={() => router.push('/claim-new')}
+          style={{ bottom: insets.bottom + 76 }}
+        />
+      ) : null}
     </Screen>
   );
 }

@@ -17,6 +17,7 @@ import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
+import { useAppUi } from '@/store/appUi';
 import * as api from '@/data/api';
 import { fmtDate, fmtTime, timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
@@ -152,6 +153,7 @@ export default function TicketDetail() {
   const health = useDataHealth();
   const toast = useToast();
   const { user } = useAuth();
+  const { can, ready: uiReady } = useAppUi();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   const [ticket, setTicket] = useState<api.Ticket | null>(null);
@@ -196,7 +198,11 @@ export default function TicketDetail() {
   const owner = ticket?.owner?.name?.trim() ?? '';
   const ownedByMe = !!owner && !!me && owner.toLowerCase() === me.toLowerCase();
   const ownedByOther = !!owner && !ownedByMe;
-  const canClaim = !!ticket && !owner && !ticket.is_closed;
+  // Band 2 #8 (2026-08-25): claiming a ticket is a team-allowed action (schema default true) — no
+  // tier gate; the RBAC `can_claim_ticket` flag gates it alone, failing OPEN (missing/loading =
+  // allowed) so every tier keeps it today and a future config can withdraw it per role.
+  const canClaim = !!ticket && !owner && !ticket.is_closed
+    && (uiReady ? can('can_claim_ticket') !== false : true);
 
   /* ---------- writes ---------- */
 
