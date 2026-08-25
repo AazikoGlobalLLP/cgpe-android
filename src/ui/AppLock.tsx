@@ -143,7 +143,10 @@ export function AppLock() {
     >
       <View style={{ width: 96, height: 96, borderRadius: 30, overflow: 'hidden', ...shadow(c, 2) }}>
         <Grad colors={c.gradientBrand} style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Ionicons name="lock-closed" size={44} color="#fff" />
+          {/* onPrimary, not white: gradientBrand is the accent, so a light department accent needs
+              dark ink here to stay visible (round 4). The title/subtitle below sit on gradientHero
+              (accent-immune), so they keep white. */}
+          <Ionicons name="lock-closed" size={44} color={c.onPrimary} />
         </Grad>
       </View>
       <Text style={{ color: '#fff', ...type('800', 22), marginTop: 24 }}>App locked</Text>
@@ -152,8 +155,10 @@ export function AppLock() {
       </Text>
       <Pressable onPress={attempt} disabled={trying} style={{ marginTop: 28, borderRadius: radius.md, overflow: 'hidden', width: '100%', maxWidth: 320 }}>
         <Grad colors={c.gradientBrand} style={{ height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-          <Ionicons name="finger-print" size={22} color="#fff" />
-          <Text style={{ color: '#fff', ...type('800', 16) }}>{trying ? 'Verifying…' : 'Unlock'}</Text>
+          {/* onPrimary on the accent gradient — the only visible affordance on the lock screen must
+              not disappear under a light accent (round 4). */}
+          <Ionicons name="finger-print" size={22} color={c.onPrimary} />
+          <Text style={{ color: c.onPrimary, ...type('800', 16) }}>{trying ? 'Verifying…' : 'Unlock'}</Text>
         </Grad>
       </Pressable>
     </View>

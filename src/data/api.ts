@@ -320,6 +320,42 @@ const state = {
   tasks: [] as Task[],
 };
 
+/**
+ * Wipe every per-user, in-memory buffer this module holds, so NONE of the outgoing user's own
+ * records — or the client / claim / WhatsApp PII in the lookup caches — can be read by the NEXT
+ * person on a shared handset (loophole hunt round 4, 2026-08-25).
+ *
+ * WHY `store/auth`'s existing purge is not enough. `purgeUserScopedCaches()` sweeps the
+ * AsyncStorage / SecureStore keys, but this module's own module-scope `state` write buffer and the
+ * `clientCache` / `claimCache` / `waThreadCache` Maps live only in JS memory and were never cleared
+ * on logout, a silent 401 expiry, or a user switch. Two concrete cross-user leaks that closed:
+ *   • `unavailable('/claims', state.claims)` (and `/leads`) hands the previous user's OWN buffered
+ *     offline-create records — client name, phone, policy number, amount — to the next user during
+ *     any read outage.
+ *   • `getClient` / `getClaim` / `getWaThread` are cache-FIRST: they `return clone(cache.get(id))`
+ *     before any network call or backend 403, so a still-cached id served book PII the server would
+ *     have refused for the next user.
+ * Invoked from BOTH `clear()` (explicit logout) and `onSessionExpired` (silent 401) in
+ * `store/auth.tsx`, mirroring the round-3 shared-handset teardown. `clientCache` / `claimCache` /
+ * `waThreadCache` are declared later in this file; this only runs at call time, long after the
+ * module has finished evaluating, so the forward reference is safe.
+ */
+export function resetApiState() {
+  state.leads = [];
+  state.clients = [];
+  state.claims = [];
+  state.reminders = [];
+  state.waThreads = [];
+  state.notifications = [];
+  state.commission = null;
+  state.contests = [];
+  state.licPlans = [];
+  state.tasks = [];
+  clientCache.clear();
+  claimCache.clear();
+  waThreadCache.clear();
+}
+
 /* ------------------------------------------------------------------- Tasks */
 function adaptTask(raw: any): Task {
   return {

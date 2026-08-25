@@ -564,6 +564,14 @@ export default function Home() {
 
   const caps = capabilitiesOf(user, viewAs);
   const isTeam = caps.tier === 'team';
+  // Round-4 loophole hunt (2026-08-25): the two leadership widgets — the team roster (colleague
+  // names/roles/live-duty, each row → /team/[id]) and the portfolio-analytics snapshot (org-wide
+  // client/premium/claim totals) — must follow the role-derived capability, NOT the RBAC flag alone.
+  // Their flags FAIL OPEN when a role config is unseeded (the prod reality) and DEFAULT_UI ships both
+  // widgets `visible:true`, so without a caps gate a TEAM advisor's Home renders both with live data.
+  // View-as-aware (like bookHidden), so a master previewing "view as team" also loses them.
+  const canRosterCap = caps.manageTeam;
+  const canAnalyticsCap = caps.orgAnalytics;
   // Point 9 (owner decision, 2026-08-24): the client book is master/admin-only, so its home
   // sub-view tiles (segments, families) are dropped for a user without book access.
   const bookHidden = !canViewClients(user, viewAs);
@@ -675,6 +683,13 @@ export default function Home() {
     if (bookHidden) {
       body = body.filter((w) => w.key !== 'segments' && w.key !== 'families' && w.key !== 'campaigns');
     }
+    // Round-4 loophole hunt (2026-08-25): drop the leadership widgets for anyone without the
+    // role-derived capability — same reason and shape as bookHidden above. Removing them here (not
+    // just gating the fetch) takes away the widget SHELL and its "See all → /team|/analytics"
+    // deep-link too, so a team advisor never sees the roster/org totals AND cannot walk into those
+    // screens from Home. `has('team_roster')` then reads false, which also zeroes the fetch below.
+    if (!canRosterCap) body = body.filter((w) => w.key !== 'team_roster');
+    if (!canAnalyticsCap) body = body.filter((w) => w.key !== 'analytics');
     // D6a (owner, 2026-08-22): a LEANER Home for non-tech TEAM members. The secondary "reference"
     // tiles (notice board, campaigns, segments, families, knowledge base, commissions, attendance —
     // the LINK_WIDGETS) sink below the day's actionable widgets (my tasks, leads, prospects, claims,
@@ -686,7 +701,7 @@ export default function Home() {
       body = [...body.filter((w) => !isSecondary(w.key)), ...body.filter((w) => isSecondary(w.key))];
     }
     return kpi.length ? [...kpi, ...body] : body;
-  }, [configWidgets, config, fallbackWidgets, isTeam, bookHidden]);
+  }, [configWidgets, config, fallbackWidgets, isTeam, bookHidden, canRosterCap, canAnalyticsCap]);
 
   const hero: HeroMode = readHero(config);
 
@@ -701,8 +716,12 @@ export default function Home() {
   // Tasks tab and task-new. The flag alone fails OPEN when unseeded, so without the caps term a team
   // advisor would still be shown "Add task" here and dead-end at the create screen's entry guard.
   const canCreateTask = caps.assignTasks && (storeReady ? can('can_create_task') !== false : true);
-  const canRoster = storeReady ? can('can_view_team_roster') !== false : true;
-  const canOrgAnalytics = storeReady ? can('can_view_org_analytics') !== false : true;
+  // Defence-in-depth on the FETCH (the widget filter above already removes the shells): AND the
+  // fail-open RBAC flag with the role-derived capability, exactly as canCreateTask does. Without the
+  // caps term the flag reads true for an unseeded team role and would fire the roster/snapshot round
+  // trip (loophole hunt round 4, 2026-08-25).
+  const canRoster = canRosterCap && (storeReady ? can('can_view_team_roster') !== false : true);
+  const canOrgAnalytics = canAnalyticsCap && (storeReady ? can('can_view_org_analytics') !== false : true);
 
   /**
    * WHAT THIS DASHBOARD ACTUALLY NEEDS.

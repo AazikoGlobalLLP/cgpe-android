@@ -95,6 +95,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const off = onSessionExpired((reason: ExpiryReason) => {
       setExpiredNotice(EXPIRY_MESSAGE[reason]);
       api.setAuthToken(null);
+      // Mirror clear()'s teardown, not a partial one. Nulling the current user drops the outgoing
+      // user's id/name (used as ownership/assignedBy defaults) and their reactive write-queue; and
+      // resetApiState() wipes the in-memory record buffer + the client/claim/WhatsApp PII caches so
+      // the NEXT person on a shared handset cannot read them through a cache-first getter or a
+      // read-outage fallback (loophole hunt round 4, 2026-08-25). The AsyncStorage/SecureStore + push
+      // teardown below is the round-3 half; these two are the in-memory half the same audit missed.
+      api.setCurrentUser(null, null);
+      api.resetApiState();
       setUser(null);
       setViewAsState(null);
       resetHealth();
@@ -182,7 +190,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const priorRaw = await storage.get(USER_KEY);
       const priorId = priorRaw ? (JSON.parse(priorRaw)?.id ?? null) : null;
-      if (priorId && priorId !== u.id) await purgeUserScopedCaches();
+      if (priorId && priorId !== u.id) {
+        await purgeUserScopedCaches();
+        api.resetApiState();   // and the in-memory buffer/PII caches, before the new token is written (round 4)
+      }
     } catch { /* a malformed stored user must never block a fresh sign-in */ }
     api.setAuthToken(token);
     api.setCurrentUser(u.id, u.name);
@@ -265,6 +276,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const clear = async () => {
     api.setAuthToken(null);
     api.setCurrentUser(null, null);
+    api.resetApiState();   // wipe the in-memory record buffer + client/claim/WhatsApp PII caches (round 4)
     resetHealth();
     resetFreshness();   // Phase 57a — no stale-cache chip may survive into the next session
     await purgeUserScopedCaches();

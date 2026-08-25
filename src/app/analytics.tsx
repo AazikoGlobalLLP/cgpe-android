@@ -14,6 +14,9 @@ import { useDataHealth } from '@/ui/health-banner';
 
 import * as api from '@/data/api';
 import { inr, inrShort } from '@/lib/format';
+import { useAuth } from '@/store/auth';
+import { capabilitiesOf } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
  * Analytics — the data console.
@@ -129,6 +132,7 @@ export default function Analytics() {
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
+  const { user, viewAs, ready } = useAuth();
 
   const [stats, setStats] = useState<Stats>(null);
   const [camp, setCamp] = useState<Camp>(null);
@@ -259,6 +263,19 @@ export default function Analytics() {
   const totalClients = stats?.total_clients ?? 0;
   const reachShare = camp && totalClients > 0 ? camp.opted_in / totalClients : 0;
   const renewalShare = camp && totalClients > 0 ? camp.renewal_due / totalClients : 0;
+
+  // Round-4 loophole hunt (2026-08-25): this console shows org-wide client / premium / claim totals —
+  // leadership data. Gate it IN-SCREEN (defence-in-depth for a deep-link), matching the hardened Home
+  // analytics affordance. Wait for `ready` so a real admin is not flashed the refusal during restore.
+  if (ready && !capabilitiesOf(user, viewAs).orgAnalytics) {
+    return (
+      <RestrictedNotice
+        title="Portfolio analytics"
+        heading="Analytics is for managers"
+        subtitle="Organisation-wide figures are visible to team leads and admins."
+      />
+    );
+  }
 
   return (
     <Screen>

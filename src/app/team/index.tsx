@@ -16,6 +16,9 @@ import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import type { TeamActivity, TeamMember } from '@/data/team';
 import { inrShort, timeAgo } from '@/lib/format';
+import { useAuth } from '@/store/auth';
+import { capabilitiesOf } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
  * The roster.
@@ -33,6 +36,7 @@ export default function Team() {
   const router = useRouter();
   const c = useTheme();
   const health = useDataHealth();
+  const { user, viewAs, ready } = useAuth();
 
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [activity, setActivity] = useState<TeamActivity[]>([]);
@@ -97,6 +101,21 @@ export default function Team() {
   }, [team, q]);
 
   const searching = q.trim().length > 0;
+
+  // Round-4 loophole hunt (2026-08-25): the roster carries every colleague's premium (MTD) figure and
+  // links to /team/[id], so it is a team-management surface — gate it IN-SCREEN, not only behind the
+  // Home affordance (which this same audit hardened). Wait for `ready` so a real manager is not
+  // flashed the refusal during session restore (the monitor/performance pattern). View-as-aware, so a
+  // master previewing "view as team" sees the team's own (blocked) experience.
+  if (ready && !capabilitiesOf(user, viewAs).manageTeam) {
+    return (
+      <RestrictedNotice
+        title="Team"
+        heading="Team view is for managers"
+        subtitle="The team roster and each member's figures are visible to team leads and admins. You can see your own work from the Home and Tasks tabs."
+      />
+    );
+  }
 
   return (
     <Screen>

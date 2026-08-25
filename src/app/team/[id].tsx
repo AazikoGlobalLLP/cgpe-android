@@ -21,7 +21,8 @@ import type { TeamMember } from '@/data/team';
 import { inrShort, timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useAuth } from '@/store/auth';
-import { canSeeLiveLocation } from '@/store/roles';
+import { canSeeLiveLocation, capabilitiesOf } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
@@ -41,7 +42,7 @@ export default function TeamMemberDetail() {
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { user } = useAuth();
+  const { user, viewAs, ready } = useAuth();
   // Coordinates are master-only across the contract (Phase 66); the button is REAL-super_admin gated.
   const canSeeLive = canSeeLiveLocation(user);
 
@@ -92,6 +93,21 @@ export default function TeamMemberDetail() {
     if (s.openClaims > 0) out.push({ label: 'Open claims', value: String(s.openClaims), icon: 'shield-half-outline', tone: 'danger' });
     return out;
   }, [m]);
+
+  // Round-4 loophole hunt (2026-08-25): this screen shows a colleague's premium (MTD) / clients /
+  // claims figures and recent activity — team-management data. Gate it in-screen (defence-in-depth
+  // for a deep-link), matching /team and the hardened Home roster affordance. Wait for `ready` so a
+  // real manager is not flashed the refusal during session restore. The live-location card keeps its
+  // own tighter master-only gate below.
+  if (ready && !capabilitiesOf(user, viewAs).manageTeam) {
+    return (
+      <RestrictedNotice
+        title="Member"
+        heading="Member view is for managers"
+        subtitle="A team member's figures and activity are visible to team leads and admins."
+      />
+    );
+  }
 
   if (loading) return <MemberSkeleton />;
 

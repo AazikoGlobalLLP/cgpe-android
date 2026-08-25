@@ -63,7 +63,10 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                   <Text style={{ color: c.text, fontFamily: 'Geist_700Bold', fontWeight: '700', fontSize: 15 }}>{state.cancelText || 'Cancel'}</Text>
                 </Pressable>
                 <Pressable onPress={() => finish(true)} style={{ flex: 1, height: 48, borderRadius: radius.md, backgroundColor: state.destructive ? c.danger : c.primary, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: '#fff', fontFamily: 'Geist_800ExtraBold', fontWeight: '800', fontSize: 15 }}>{state.confirmText || 'Confirm'}</Text>
+                  {/* danger is always red → white reads; the non-destructive button sits on the brand
+                      accent, so use the computed onPrimary (dark ink under a light department accent)
+                      instead of hardcoded white, which would vanish on a pale accent (round 4). */}
+                  <Text style={{ color: state.destructive ? '#fff' : c.onPrimary, fontFamily: 'Geist_800ExtraBold', fontWeight: '800', fontSize: 15 }}>{state.confirmText || 'Confirm'}</Text>
                 </Pressable>
               </View>
             </Pressable>
