@@ -257,6 +257,44 @@ export function identityOf(
 }
 
 /**
+ * True when a raw department string is in the SALES family — mirrors backend
+ * `utils/rbac.isSalesDepartment` (P90/D-117): a canonical department that starts with "SALES"
+ * (`SALES-CGPE_Tree`, `SALES - RENEWALS & LIC`, `SALES - MUTUAL FUNDS & WEALTH`, `SALES`).
+ * `Operations` / `GENERAL INSURANCE` / `OTHERS` are NOT sales. Composes `canonicalizeDepartment`
+ * so the app and the server share ONE department vocabulary.
+ */
+export function isSalesDepartment(raw: string | null | undefined): boolean {
+  const canon = canonicalizeDepartment(raw);
+  return !!canon && canon.toUpperCase().startsWith('SALES');
+}
+
+/**
+ * A SALES-department advisor — mirrors backend `middleware/auth.isSalesAdvisor` (P90/D-117).
+ * The server admits exactly these team users to a STRICT own-only client view (`GET /clients` +
+ * `GET /clients/:id`, scoped to `advisor_id === them`, never the unowned firm book, never another
+ * advisor's client). Reads the REAL role + department — never the view-as tier — so the app gate
+ * matches the server's token-based decision. Every other team role (learn_advisor / payroll_staff)
+ * and every non-sales advisor stays fully 403'd on the book.
+ */
+export function isSalesAdvisor(user: User | null): boolean {
+  return !!user && user.role === 'advisor' && isSalesDepartment(user.department);
+}
+
+/**
+ * Who may open the Clients LIST + a client DETAIL: the full-book tiers (master/admin/leader, via
+ * `canViewClients`) OR a sales-department advisor (own-only, server-enforced strict — P90/D-117).
+ *
+ * Use this ONLY for the two surfaces the backend opened to a sales advisor (`GET /clients`,
+ * `GET /clients/:id` — and the client-search that rides the list endpoint). The WHOLE-BOOK surfaces
+ * — segments, families, campaigns, birthdays, generate-report — stay on `canViewClients`, because
+ * the server keeps `requireClientBook` (master/admin/leader) on them and 403s a sales advisor; the
+ * app must not show those to one.
+ */
+export function canViewOwnClients(user: User | null, viewAs?: Tier | null): boolean {
+  return canViewClients(user, viewAs) || isSalesAdvisor(user);
+}
+
+/**
  * Accent identity per tier so the three sides feel visibly different.
  *
  * Retinted onto the panel's azure-teal identity: admin takes the brand azure, team takes

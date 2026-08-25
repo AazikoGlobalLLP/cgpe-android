@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 
 import { useAuth } from '@/store/auth';
-import { canViewClients } from '@/store/roles';
+import { canViewOwnClients } from '@/store/roles';
 import { useAppUi } from '@/store/appUi';
 import { motion, radius, spacing, useTheme } from '@/theme/theme';
 import { Grad, Txt } from '@/ui/base';
@@ -60,7 +60,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
   // tab is dropped from the bar for a team-tier user (the screen itself also guards — this just
   // stops offering the tab). Master/admin keep it.
   const order = useMemo(
-    () => (canViewClients(user, viewAs) ? rawOrder : rawOrder.filter((n) => n !== 'clients')),
+    () => (canViewOwnClients(user, viewAs) ? rawOrder : rawOrder.filter((n) => n !== 'clients')),
     [rawOrder, user, viewAs],
   );
 

@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   canMonitorTeam, canSeeLiveLocation, canSeeTeamPerformance, canViewAs, canViewClients,
-  canonicalizeDepartment, identityOf, tierOf, tierOfRole,
+  canViewOwnClients, canonicalizeDepartment, identityOf, isSalesAdvisor, isSalesDepartment,
+  tierOf, tierOfRole,
 } from '@/store/roles';
 import type { Role, User } from '@/data/types';
 
@@ -299,5 +300,72 @@ describe('identityOf', () => {
     const id = identityOf(null);
     expect(id).toEqual({ role: 'advisor', tier: 'team', department: null, departmentRaw: null, siloed: false, drift: false });
     expect(identityOf({}).tier).toBe('team');
+  });
+});
+
+/* ------------------------------------------------------------------ *
+ * SALES-advisor client-book carve-out (backend Phase 90 / D-117, 2026-08-25).
+ * The app gate MUST mirror the server's dept-based rule (isSalesDepartment/isSalesAdvisor), or the
+ * app shows a tab the server 403s (or hides one it allows). Cases mirror the real reconciled roster.
+ * ------------------------------------------------------------------ */
+const withRoleDept = (role: Role, department?: string): User => ({ ...withRole(role), department });
+
+describe('isSalesDepartment — the 4 SALES-* canonical departments only', () => {
+  it('is true for every SALES-family department (incl. legacy variants that canonicalise into it)', () => {
+    for (const d of ['SALES', 'SALES-CGPE_Tree', 'SALES - RENEWALS & LIC', 'SALES - MUTUAL FUNDS & WEALTH', 'mutual fund', 'renewals']) {
+      expect(isSalesDepartment(d)).toBe(true);
+    }
+  });
+  it('is false for non-sales departments and empties', () => {
+    for (const d of ['Operations', 'TATA AIA', 'RECRUITMENT & CALLING', 'GENERAL INSURANCE', 'DRIVER', 'IT', '', null, undefined]) {
+      expect(isSalesDepartment(d as any)).toBe(false);
+    }
+  });
+});
+
+describe('isSalesAdvisor — an advisor in a SALES department (mirrors backend middleware)', () => {
+  it('admits an advisor whose department is in the SALES family', () => {
+    // Yash Ghelani (SALES) and Daniesh Adak (SALES - MUTUAL FUNDS & WEALTH) — real sales advisors.
+    expect(isSalesAdvisor(withRoleDept('advisor', 'SALES'))).toBe(true);
+    expect(isSalesAdvisor(withRoleDept('advisor', 'SALES - MUTUAL FUNDS & WEALTH'))).toBe(true);
+    // Jagdish Bhai's dept is 'SALES - RENEWALS & LIC' → the SERVER counts him as a sales advisor by
+    // DEPARTMENT even though the owner describes his function as ops; the app must match the server.
+    expect(isSalesAdvisor(withRoleDept('advisor', 'SALES - RENEWALS & LIC'))).toBe(true);
+  });
+  it('refuses a non-sales advisor, a departmentless advisor, and every non-advisor role', () => {
+    expect(isSalesAdvisor(withRoleDept('advisor', 'TATA AIA'))).toBe(false);   // Pavitra — ops product line
+    expect(isSalesAdvisor(withRoleDept('advisor', 'Operations'))).toBe(false);
+    expect(isSalesAdvisor(withRole('advisor'))).toBe(false);                    // no department
+    expect(isSalesAdvisor(withRoleDept('learn_advisor', 'SALES'))).toBe(false); // only role 'advisor'
+    expect(isSalesAdvisor(withRoleDept('payroll_staff', 'SALES'))).toBe(false);
+    expect(isSalesAdvisor(withRoleDept('admin', 'SALES'))).toBe(false);         // admin is caught by canViewClients, not this
+    expect(isSalesAdvisor(null)).toBe(false);
+  });
+});
+
+describe('canViewOwnClients — Clients list/detail: full-book tiers OR a sales advisor (own-only)', () => {
+  it('admits master/admin/leader (the full-book tiers) regardless of department', () => {
+    expect(canViewOwnClients(withRole('super_admin'))).toBe(true);
+    expect(canViewOwnClients(withRole('admin'))).toBe(true);
+    expect(canViewOwnClients(withRole('leader'))).toBe(true);
+  });
+  it('admits a SALES-department advisor (server scopes them own-only), refuses other team users', () => {
+    expect(canViewOwnClients(withRoleDept('advisor', 'SALES'))).toBe(true);
+    expect(canViewOwnClients(withRoleDept('advisor', 'TATA AIA'))).toBe(false);     // ops advisor
+    expect(canViewOwnClients(withRole('advisor'))).toBe(false);                      // no dept
+    expect(canViewOwnClients(withRoleDept('learn_advisor', 'SALES'))).toBe(false);
+    expect(canViewOwnClients(null)).toBe(false);
+  });
+  it('is a strict SUPERSET of canViewClients — never narrower', () => {
+    for (const role of ALL_ROLES) {
+      const u = withRoleDept(role, 'SALES');
+      if (canViewClients(u)) expect(canViewOwnClients(u)).toBe(true);
+    }
+  });
+  it('honours view-as: a master previewing the team side still loses the client list', () => {
+    // The carve-out reads the REAL role, and a super_admin is not a sales advisor, so previewing
+    // team drops the list exactly like canViewClients does — preview fidelity is preserved.
+    expect(canViewOwnClients(withRole('super_admin'), 'team')).toBe(false);
+    expect(canViewOwnClients(withRole('admin'), 'team')).toBe(false);
   });
 });

@@ -20,7 +20,7 @@ import { daysUntil, fmtDate, inr, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { renewalMessage } from '@/lib/messages';
 import { useAuth } from '@/store/auth';
-import { canViewClients } from '@/store/roles';
+import { canViewOwnClients } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
@@ -90,7 +90,7 @@ type ReportPayload = {
  */
 export default function ClientDetail() {
   const { user, viewAs, ready } = useAuth();
-  if (ready && !canViewClients(user, viewAs)) {
+  if (ready && !canViewOwnClients(user, viewAs)) {
     return (
       <RestrictedNotice
         title="Client"

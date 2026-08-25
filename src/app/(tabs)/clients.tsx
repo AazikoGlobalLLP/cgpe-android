@@ -21,7 +21,7 @@ import { daysUntil, fmtDay, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
-import { canViewClients } from '@/store/roles';
+import { canViewOwnClients } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 /* ------------------------------------------------------------------ *
@@ -65,7 +65,7 @@ const countBy = (items: Client[], pred: (cl: Client) => boolean) => items.reduce
  */
 export default function Clients() {
   const { user, viewAs, ready } = useAuth();
-  if (ready && !canViewClients(user, viewAs)) {
+  if (ready && !canViewOwnClients(user, viewAs)) {
     return (
       <RestrictedNotice
         title="Clients"

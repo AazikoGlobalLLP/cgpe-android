@@ -15,7 +15,7 @@ import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import { storage } from '@/lib/storage';
 import { useAuth } from '@/store/auth';
-import { canViewClients } from '@/store/roles';
+import { canViewOwnClients } from '@/store/roles';
 
 import * as api from '@/data/api';
 import { getHealth } from '@/data/health';
@@ -216,7 +216,10 @@ export default function Search() {
   // Point 9 (owner decision, 2026-08-24): the client book is master/admin-only, so a team-tier
   // user's search never queries or shows clients (search fetches clients independently of the
   // hidden Clients tab — this closes that leak). Other collections are their own scope.
-  const canClients = canViewClients(user, viewAs);
+  // A sales-department advisor may search the client book too, but the server scopes it to their
+  // OWN clients (P90/D-117); master/admin/leader get the full book. Whole-book search groups
+  // (segments/families) are not part of this — those stay master/admin only.
+  const canClients = canViewOwnClients(user, viewAs);
 
   const [q, setQ] = useState('');
   const [res, setRes] = useState<Results>(NOTHING);

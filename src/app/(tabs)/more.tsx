@@ -18,7 +18,7 @@ import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { arrangeMoreSections, useAppUi } from '@/store/appUi';
-import { canViewClients, capabilitiesOf, canViewAs, TIER_THEME } from '@/store/roles';
+import { canViewClients, canViewOwnClients, capabilitiesOf, canViewAs, TIER_THEME } from '@/store/roles';
 import type { Tier } from '@/store/roles';
 import { APP } from '@/constants/config';
 import * as api from '@/data/api';
@@ -138,8 +138,11 @@ export default function More() {
   const caps = capabilitiesOf(user, viewAs);
   const realCaps = capabilitiesOf(user);
   // Point 9 (owner decision, 2026-08-24): the client book is master/admin-only, so a team-tier
-  // user loses the Clients / Segments / Families menu entries (their screens also guard).
-  const canClients = canViewClients(user, viewAs);
+  // user loses the Segments / Families menu entries (their screens also guard). P90/D-117 refines
+  // it: a SALES-department advisor regains the Clients LIST entry (own-only, server-strict), but
+  // NOT the whole-book Segments / Families / premium modules — the server still 403s those.
+  const canClients = canViewOwnClients(user, viewAs);   // Clients list — incl. sales advisor
+  const canBook = canViewClients(user, viewAs);         // whole-book modules — master/admin only
   const isAdmin = caps.manageTeam;
   const liveSession = api.isRealSession();
   const { isHidden, config } = useAppUi();
@@ -267,7 +270,8 @@ export default function More() {
     items: g.keys.flatMap((key): Entry[] => {
       // Point 9: drop the client-book modules for a team-tier user. 'premium' routes to
       // /campaigns, whose audience preview shows client names + phones from the whole book.
-      if (!canClients && (key === 'clients' || key === 'segments' || key === 'families' || key === 'premium')) return [];
+      if (!canClients && key === 'clients') return [];
+      if (!canBook && (key === 'segments' || key === 'families' || key === 'premium')) return [];
       const cat = MORE_CATALOGUE[key];
       if (!cat) return [];   // key came from MORE_KEYS, so always defined; guarded for safety
       if (key === 'profile') return [{ ...cat, value: user.name, navKey: key }];
