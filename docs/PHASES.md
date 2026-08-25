@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-25 — ROLE IDENTITY MODEL + SALES-CLIENT CARVE-OUT + BAND 2 #8 GATES (3 commits, pushed aaziko Shivam).**
+Deeply analyzed the merged `staff_unified` collection and reconciled all 21 staff with the owner + their senior
+(only Ankit Shah changes vs DB: advisor→super_admin, an owner-run script). Then shipped three units:
+(1) **Identity model** `9f8e47d` — `User` now carries `department`+`origRole` (login was dropping them; backend
+sends the whole row via `toPublicJSON`), new pure `identityOf`/`canonicalizeDepartment`(9 depts mirror backend)/
+`tierOfRole`, Department shown on Profile. (2) **SALES-advisor own-only client view** `cc4657f` — mirrors backend
+P90/D-117 (`isSalesDepartment`/`isSalesAdvisor`/`canViewOwnClients`): a sales-dept advisor opens the Clients
+tab/list/detail/search (server-strict own-only); segments/families/campaigns stay master/admin. **Shipped ONLY
+after verifying Phase 89/90 are on deployed `origin/main` `990c660` (`/health` 200)** — the deploy-gap discipline
+(first check found them unmerged on origin/Shivam; held + relayed; owner deployed; re-verified). (3) **Band 2 #8**
+`6b63a1e` — 5 inert RBAC flags wired via caps-AND-flag (fail-open): assign-task/send-campaign/dispatch-notif (AND
+the tier cap) + create-claim/claim-ticket (flag-only, default true); other 5 documented-not-wired (agent-map/
+movement master-only already; advance-claim/export/edit-client no affordance). Behaviour unchanged today; a seeded
+config can now tighten per role. tsc 0 / npm test **931** (+21) / eslint 0 new. OTA-eligible, device-unverified.
+Memory `staff-role-reconciliation-2026-08-25`; DECISIONS 2026-08-25. **Owner-owned next:** run the 3 prod scripts
+(Ankit promote / General-Insurance dept / seedAppRolePreferences) + on-device sales-advisor Clients check.
+
 **✅ 2026-08-25 — BAND 2 #9 SHIPPED: Contest mapper fix (`9793327`, pushed aaziko Shivam).**
 Owner backlog Point 7 (latent bug). `getContests` read `GET /api/contests` straight into `Contest[]` with only
 an `isArray` check — no adapter — so the raw contest docs (`title`/`reward_description`/`target_goal`/
@@ -2097,13 +2114,17 @@ worklist. These three are the immediate lane:**
 1. **Band-2 shipped so far:** ✅ report 12 s fix (`4516dd9`), ✅ Tasks local search (`c47be1b`), ✅ task-flow
    mitigations (`af7e492`), ✅ calendar grid (`c3c3537`), ✅ #5 Client Search **CLOSED no-build** (`9121020`),
    ✅ #6 premium-403 fix + dead-code (`fb64734`), ✅ #6b retire /premium (`9967db3`), ✅ #7 client-access
-   master/admin-only (`4575106`), ✅ **#9 Contest mapper (`9793327`)**. **Every self-contained OTA Band-2 item is
-   now shipped.** Next lane depends on an owner input or a native build: **#8 wire the 10 inert role toggles**
-   (P1, needs the owner's Point 6 role matrix FIRST) · **Point 13 Payroll** (P1 — roster-merge + "data pending"
-   warnings + bank/essential-details panel; the details half needs the owner's PII/role/masking decision, and the
-   real unblock is the owner/OPS data job of creating payroll profiles for the team) · **#10 Document picker**
-   (P1, NOT OTA — `expo-document-picker` native → a new APK + OPS Spaces env). **Also open (owner call):** gate the
-   WhatsApp hub / search-Tickets group / task-contact sheet for team too, or leave them (separate surfaces)?
+   master/admin-only (`4575106`), ✅ **#9 Contest mapper (`9793327`)**, ✅ **role identity model (`9f8e47d`)**,
+   ✅ **#7-refinement SALES-advisor own-only client view / owner Q4 (`cc4657f`, backend P90 verified live first)**,
+   ✅ **#8 wire the inert RBAC feature-gates (`6b63a1e`)**. **Every self-contained OTA Band-2 item is now shipped,
+   and #8 is done — no longer blocked on the P6 matrix (the flags are wired fail-open and a seeded config now
+   tightens them).** Next lane depends on an owner input or a native build: **Point 13 Payroll** (P1 — roster-merge
+   + "data pending" warnings + bank/essential-details panel; the details half needs the owner's PII/role/masking
+   decision, and the real unblock is the owner/OPS data job of creating payroll profiles for the team) · **#10
+   Document picker** (P1, NOT OTA — `expo-document-picker` native → a new APK + OPS Spaces env). **Owner-owned to
+   land this session's work on device:** run the 3 prod scripts (`promoteStaffSuperAdmin.js` / `addGeneralInsuranceDept.js
+   --commit` / `seedAppRolePreferences.js`) + do the on-device sales-advisor Clients check. **Also open (owner call):**
+   gate the WhatsApp hub / search-Tickets group / task-contact sheet for team too, or leave them (separate surfaces)?
 2. **Owner Band-1 actions (in parallel — mostly plain-language relays in the backlog doc):**
    3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode); **P9 client-access
    DECIDED (master/admin only) and the backend-403 `[api]` relay is now FILED at the top of `../contracts/INBOX.md`

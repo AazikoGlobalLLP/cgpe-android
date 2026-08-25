@@ -4102,3 +4102,53 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - Result: 4 commits (`9121020`, `fb64734`, `9967db3`, `4575106`), all pushed aaziko Shivam. Final gates:
   tsc 0 / npm test **902** / eslint 0 new errors. Device-unverified (OTA-eligible). Specs:
   `docs/spec/BAND2-5-client-search.md`, `docs/spec/BAND2-7-client-access.md`.
+
+## 2026-08-25 — Role identity model + SALES-advisor client carve-out + Band 2 #8 feature-gates
+
+- Context: owner asked to deeply analyze the merged `staff_unified` collection and define ONE canonical
+  identity per person from `role` + `_origRole` + `department`, then finish the paused Band 2 #8 (wire the
+  inert RBAC flags). Analysis done against the real backend (`scripts/mergeStaffUnified.js`, `utils/scope.js`,
+  `utils/rbac.js`, `routes/auth.js`, `models/Profile.js`) — not the reply.
+
+- Decision: **`role` is AUTHORITATIVE; `_origRole` is a drift-flag only, never a grant.** The merge flattens
+  every `team_members` job title (ops/sales/manager/driver…) to `role:advisor`, and `_origRole` keeps the
+  original. `identityOf().drift` fires ONLY when `_origRole` is a real enum role that differs from `role`
+  (Ved Test: super_admin→admin). Letting `_origRole` set the tier would silently re-promote a demoted account.
+
+- Decision: **the app carries `department`+`origRole` now** (`User` + `adaptUser`). The backend already sent the
+  whole row via `toPublicJSON`; `adaptUser` was dropping all but 9 fields. `canonicalizeDepartment` is a faithful
+  BY-HAND port of `utils/rbac.js` (must stay in sync — like `SCHEMA_FEATURE_DEFAULTS` mirrors the JSON).
+  ⚠️ 4 live dept values (`GENERAL INSURANCE`/`BANKING & COLLECTION`/`DRIVER`/`IT`) canonicalise to null →
+  un-siloed; fixing them is the backend's job (kept the port faithful so app+server agree).
+
+- Decision: **role reconciliation finals (owner + senior, in-session).** Only ONE role changes vs live DB —
+  **Ankit Shah `advisor → super_admin`** (owner-run `promoteStaffSuperAdmin.js`, ⚠️ merge-revert + no-password
+  caveats). All 20 others already match. Recorded to memory `staff-role-reconciliation-2026-08-25`.
+
+- Decision: **the SALES-advisor client carve-out (Q4) mirrors the server's DEPARTMENT rule byte-for-byte.**
+  Backend P90/D-117 (`middleware/auth.requireClientBookOrOwn`+`isSalesAdvisor`, `utils/rbac.isSalesDepartment`
+  = canonical dept startsWith "SALES") admits a sales advisor to a STRICT own-only view. App added
+  `isSalesDepartment`/`isSalesAdvisor`(real role, not view-as)/`canViewOwnClients` (=`canViewClients` OR
+  `isSalesAdvisor`). Applied ONLY to the two surfaces the server opens (clients list + detail, plus the search
+  that rides the list endpoint); segments/families/campaigns stay on `canViewClients` (server keeps
+  `requireClientBook` and 403s a sales advisor). Consequence: Jagdish Bhai (dept SALES-RENEWALS, owner-called
+  "ops") counts as a sales advisor for client access — correct, the app MUST match the server.
+
+- Process: **verified DEPLOYMENT before shipping the carve-out** (the standing deploy-gap discipline). On first
+  check Phases 88–90 were on `origin/Shivam` but NOT `origin/main` (prod at Phase 87) — held the app change and
+  handed the owner a merge+deploy relay. After the owner deployed, re-verified: `origin/main`=`990c660`,
+  `merge-base --is-ancestor` exit 0 for P89+P90, `/health` 200 — THEN shipped. Shipping against the undeployed
+  server would have re-leaked the whole client book to a sales advisor.
+
+- Decision (Band 2 #8): **5 of 10 inert flags wired via the caps-AND-flag pattern** (`caps.X && (uiReady ?
+  can('flag') !== false : true)` — fails open so an app-UI outage never hides an entitled control):
+  can_assign_task_to_others (task transfer, AND assignTasks), can_send_campaign (AND runCampaigns),
+  can_dispatch_notification (AND manageTeam), can_create_claim + can_claim_ticket (flag-only, default true so
+  team keeps them). **5 NOT wired, documented in `appUi.tsx`:** agent-map/movement-paths are already master-only
+  via `canSeeLiveLocation` (a fail-open flag can only narrow, never widen — decision A); advance-claim/
+  export-data/edit-client have no app affordance (decision B — account.tsx's own-data DPDP export is a privacy
+  right, not this admin flag). Behaviour unchanged today; a seeded config can now tighten per role.
+
+- Result: 3 commits (`9f8e47d` identity, `cc4657f` sales carve-out, `6b63a1e` #8 gates), all pushed aaziko
+  Shivam. Final gates: tsc 0 / npm test **931** / eslint 0 new errors. Device-unverified (OTA-eligible).
+  Still owner-owned: the 3 prod scripts + the on-device sales-advisor Clients check.

@@ -1,54 +1,65 @@
-# HANDOFF — CGPE Connect (Android) — Band 2 #9 (Contest mapper) + backlog Point 13 (Payroll) — 2026-08-25
+# HANDOFF — CGPE Connect (Android) — Role identity model + sales-client carve-out + Band 2 #8 gates — 2026-08-25
 
 ## Done
-- **A real contest now renders instead of a blank card.** `GET /api/contests` returns raw contest
-  documents whose field names don't match the app's `Contest` shape, so the screen was mapping every
-  field to `undefined` — blank name, no reward, a 0% meter, no metric, no countdown, no rank. A new
-  adapter maps the real shape, so a live contest shows its name, reward, the user's own progress
-  toward the goal, a metric line, a days-left countdown, and the user's rank **only** when they're in
-  the leaderboard (never a guessed `#0`). This was a latent bug — it never bit only because no live
-  contest has been created yet.
-- **A new, verified worklist row (Point 13) was added** explaining why Payroll shows only one member
-  and how to fix it — investigated against the real backend, no code shipped for it this session.
-- Gates on the final state: `tsc` 0 · `npm test` **910** (+8) · `eslint` 0 new errors. Contest fix is
-  device-unverified (OTA-eligible, pure JS). Both commits pushed to `aaziko Shivam`.
+- **The app now knows each staff member's department.** Login was silently dropping `department` and
+  `_origRole` (the backend sends the whole `staff_unified` row via `toPublicJSON`, but `adaptUser`
+  kept only 9 fields). Both now flow through, and a member's **Department shows on their Profile**.
+- **A "final identity" model exists.** Pure `identityOf({role, department, origRole})` →
+  `{tier, department (canonical|null), siloed, drift}`: `role` is authoritative, `_origRole` only
+  raises a **drift** flag (never a grant), department is canonicalised against the backend's 9.
+- **A sales-department advisor can open the Clients tab and see ONLY their own clients** (server
+  enforces strict own-only), while Segments/Families/Campaigns stay master/admin. This was shipped
+  **only after verifying the backend gate is live on `origin/main`** — enabling it against the
+  undeployed server would have re-leaked the whole ~9k client book.
+- **5 role-permission toggles now actually gate their controls** (task transfer, campaign send,
+  notification dispatch, New-claim, claim-ticket). Behaviour is unchanged today (flags fail open /
+  the tier already grants them); a future seeded per-role config can now tighten each.
+- **The 21-staff role reconciliation is complete** (owner + their senior signed off). Only ONE role
+  actually changes vs the live DB: **Ankit Shah `advisor → super_admin`** (an owner-run DB script).
+- Gates on the final state: `tsc` 0 · `npm test` **931** (+21 across the session) · `eslint` 0 new
+  errors. Three commits pushed to `aaziko Shivam`. All OTA-eligible, device-unverified.
 
 ## Files changed
-- `src/data/adapt.ts` — NEW pure `adaptContest(raw, userId?)`: maps the backend contest doc
-  (`title`/`reward_description`/`target_goal`/`target_unit`/`end_date` + per-caller `user_progress`
-  + top-5 `leaderboard`) → the app `Contest`; progress = clamp01(user_progress/target_goal), rank
-  only from the user's own leaderboard row.
-- `src/data/api.ts` — `getContests` now maps each wire row through `adaptContest(r, currentUserId)`
-  and keeps the `unavailable()` outage fallback (was reading raw rows as `Contest[]`).
-- `src/data/__tests__/adapt.test.ts` — +8 `adaptContest` cases (field mapping, clamp, zero-target
-  guard, rank-from-own-row, rank-omitted, unit default, null-row safety).
-- `docs/spec/BAND2-9-contest-mapper.md` — NEW decision/spec record.
-- `docs/OWNER-BACKLOG-2026-08-24.md` — NEW Point 13 (payroll): master-table row + deep section.
+- `src/data/types.ts` — `User` gains optional `department` + `origRole`.
+- `src/data/adapt.ts` — `adaptUser` carries `department`/`_origRole` (trimmed; key omitted when empty).
+- `src/store/roles.ts` — `DEPARTMENTS` (9, mirrors backend) + `canonicalizeDepartment` port;
+  `tierOfRole` core (tierOf delegates); `identityOf`; `isSalesDepartment`/`isSalesAdvisor`/
+  `canViewOwnClients` (the sales carve-out, mirrors backend P90 byte-for-byte).
+- `src/app/profile.tsx` — Department row under Access level.
+- `src/app/(tabs)/_layout.tsx`, `(tabs)/clients.tsx`, `client/[id].tsx`, `search.tsx` — client
+  tab/list/detail/search → `canViewOwnClients` (opens to a sales advisor, own-only).
+- `src/app/(tabs)/more.tsx` — split: `clients` entry → own-clients; segments/families/premium stay full-book.
+- `src/app/task/[id].tsx`, `notify.tsx`, `campaigns.tsx`, `(tabs)/claims.tsx`, `tickets/[id].tsx` — the 5 gates.
+- `src/store/appUi.tsx` — 14-flag wiring-status doc block (which are wired, which not, and why).
+- `src/store/__tests__/roles.test.ts` (+21), `src/data/__tests__/adapt.test.ts` — new coverage.
 
 ## Decisions made
-- **Contest `rank` is shown only when the signed-in user appears in the (top-5) leaderboard** — never
-  inferred from a progress tie. An absent rank is honest silence, not a fabricated `#0`.
-- **Contest `metric` label = "`<progress>` of `<target>` `<unit>`"** (unit defaults to `points`); a
-  zero/missing target yields progress 0, never a NaN/Infinity meter.
-- **Point 13 is triage-only this session** (owner asked to *describe* it, not build it). The row records
-  that "only Pavitra shows" is a **data-seeding gap** (only one `payroll_profiles` row exists), plus a
-  product decision the owner is now making (put bank/essential PII on the phone), not a compute bug.
+- **`role` is authoritative; `_origRole` is a drift-flag only, never a grant** — else a demoted
+  super_admin (Ved Test) would silently re-promote.
+- **The sales carve-out mirrors the server's DEPARTMENT rule exactly** — so Jagdish Bhai (dept
+  `SALES - RENEWALS & LIC`) counts as a sales advisor for client access even though the owner calls
+  his function "ops". The app MUST match the server or the two disagree.
+- **Did NOT ship the app carve-out until Phase 89/90 were confirmed ancestors of `origin/main`**
+  (deploy-gap discipline). Verified: `origin/main` = `990c660`, `/health` 200.
+- **5 flags wired, 5 not** — agent-map/movement-paths are already master-only via `canSeeLiveLocation`
+  (a fail-open flag can only narrow, never widen); advance-claim/export-data/edit-client have no app
+  affordance (owner decisions A/B).
 
 ## Known broken / deliberately skipped
-- **Point 13 (Payroll) is not built** — deliberately. It needs an owner decision (show bank/Aadhaar/PAN
-  on a field phone? which role? masked?) and an owner/OPS data job (create payroll profiles for the rest
-  of the team). No code makes a profile-less member show pay.
-- Contest fix is **device-unverified** — no live contest exists to see it render on a phone (OTA-eligible).
-- Pre-existing, untouched: `api.ts:912`/`:1338` two unused-var lint **warnings** (not introduced here);
-  the 4 non-English `emptyCalendarBody` copies still say "strip" (owe one human line each).
+- **3 owner-run PROD scripts unverified** — `promoteStaffSuperAdmin.js` (Ankit), `addGeneralInsuranceDept.js
+  --commit`, `seedAppRolePreferences.js` (Ops/Sales menu). Ankit also has no password yet.
+- **Device-unverified** — a sales advisor's Clients tab shows own/few or empty (server returns own-only;
+  most `advisor_id` links aren't backfilled on the import yet), NOT the whole book.
+- **`cgpe-connect.staff_unified.json`** (password hashes + PII) is still in the repo root, untracked and
+  NOT committed — the owner should delete it.
+- Pre-existing lint warnings (`claims.tsx` nonce dep, `more.tsx` unused `c`) — not introduced here.
 
 ## Next session starts here
-- Phase: **Band 2 #8 — wire the 10 inert role toggles** (P1, but needs the owner's Point 6 role matrix
-  first) **OR the Claims document picker** (P1, NOT OTA — `expo-document-picker` is native → a new APK,
-  plus the OPS Spaces env). **OR, if the owner has decided on Point 13**, build the payroll roster merge +
-  "data pending" warnings + bank/essential-details panel (OTA). Every self-contained OTA Band-2 item is
-  now shipped, so the remaining client work depends on an owner decision or a native build.
+- Phase: **Point 13 — Payroll roster merge + "data pending" + bank/essential panel** (needs the owner's
+  PII/role/masking decision + the OPS data job of creating payroll profiles) **OR #10 Document picker**
+  (P1, NOT OTA — `expo-document-picker` is native → a new APK + OPS Spaces env). Every self-contained OTA
+  Band-2 item is now shipped.
 - First command: `/boot`
-- Watch out for: **Point 13's bank/essential-details half reverses the standing "NO PII ON THE PHONE"
-  rule** (`payroll.tsx:29-31`). Do not put Aadhaar/PAN/account numbers on the phone until the owner has
-  explicitly chosen the role + masking — recommend master-only + last-4 masked, Aadhaar/PAN off entirely.
+- Watch out for: **never re-open a client surface for team without first confirming the backend gate is
+  deployed on `origin/main`** — the app-side hiding is the only thing protecting the book when the server
+  gate isn't live (this session's Phase 89/90 deploy-gap catch).
