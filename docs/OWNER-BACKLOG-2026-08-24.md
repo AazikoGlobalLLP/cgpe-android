@@ -38,6 +38,9 @@ P2 = enhancement / polish / new feature. **Owner tags:** `[m]` cgpe-mobile (I bu
 | **7** | **Goal-based** system (role + goals) | **P2** | `[decision]`+`[api]`+`[admin]`+`[m]` | No — net-new feature; spec-lock first |
 | **8** | Personalized **WhatsApp automation** + multiple numbers | **P2** | `[decision]`+`[api]`+`[ops]`+`[m]` | Partial — personalization done; automation/numbers new |
 | **12** | **Voice Assistant** (explicitly LAST) | **P2** | `[decision]`+`[m]`+`[ops]` | No — feasible, but needs a native rebuild + a spike |
+| **13** | **Payroll shows only ONE member** — want everyone, pay per their work, + bank/essential details, + a "data pending" warning | **P1** | `[ops-data]`+`[decision]`+`[m]`+(opt)`[api]` | Partial — I can show ALL staff + pending-warnings + a bank/details panel now (OTA); the reason only one shows is a data job (owner) |
+
+_(Point 13 added 2026-08-25 — owner observation after using the app; verified against real code same as the other 12.)_
 
 ---
 
@@ -483,6 +486,39 @@ weak.
 **Decisions I need:** go/no-go on a native cycle for the lowest-priority item; on-device vs server speech (privacy
 vs accuracy — the team says client financial details aloud); is Gujarati a hard requirement or is Hindi/Hinglish OK
 for v1; read-only v1? is the backend LLM actually enabled on prod (OPS)? **Priority:** P2, last.
+
+---
+
+## Point 13 — Payroll shows only ONE member; want everyone + pay-per-work + bank/essential details + a "data pending" warning → **P1** `[ops-data]`+`[decision]`+`[m]`+(opt)`[api]`
+
+_(Added 2026-08-25. Owner: "inside Payroll only Pavitra bhai shows — work out why everyone isn't showing, and make it so each person's payroll shows according to their work; from there add bank details / whatever essential details; and show a warning that this employee's data is pending.")_
+
+**What you noticed:** open Payroll and only **one** member (Pavitra) appears; the rest of the team is missing. You want every employee listed with pay computed from their work, their bank/essential details visible, and a clear warning where an employee's data isn't set up yet.
+
+**What's really happening (verified — this is a DATA gap, not a broken screen):** The Payroll roster is `GET /api/payroll/compute` (`src/data/api.ts:2700` → `routes/payroll.js:368`), and `buildRoster()` iterates **only `PayrollProfile` documents** — `const profiles = await PayrollProfile.find(filter)` (`routes/payroll.js:327`), then computes each one's pay from *their own* `daylogs`. **A member appears in Payroll only if an admin created a payroll profile for them** (`POST /api/payroll/profiles`, which requires `salary_amount` + `segment`). So "only Pavitra shows" means **only Pavitra has a payroll profile** — everyone else has none, so there's no salary/segment to compute and they never enter the roster. This is exactly the shape of Point 6 (RBAC built but *unseeded*): the machine is fine, the per-member data was never entered. The app even says so in its own copy ("Payroll profiles are created in the admin panel; once they exist, each member's computed pay appears here" — `payroll.tsx:180`), but that message only shows when the roster is **totally** empty, so with one profile present it's hidden and the screen just looks like it's dropping people.
+
+Two more verified facts that shape the fix:
+- **"Pay according to work" already works — but needs a salary to multiply.** Attendance/worked-hours is read live from every member's `daylogs` (`routes/payroll.js:335`, `services/payrollAttendance.js`), so the *work* side exists for everyone. But pay = work × a **rate**, and the rate lives on the payroll profile (`salary_amount` + `segment`). No profile ⇒ genuinely nothing to compute, not a bug to fix in code. So "show everyone's pay per their work" still requires each employee to have a salary profile (or a department default) — a **data job**.
+- **Bank/essential details already exist server-side and are reachable — but are deliberately kept OFF the phone today.** `PayrollProfile` carries `beneficiary_name / bank_name / account_no / ifsc_code / aadhar_no / pan_no` (`models/PayrollProfile.js`, deployed on `origin/main`), and `GET /api/payroll/profiles/:userId` (admin-only) returns the **full** doc including them. But `/compute` and the detail screen intentionally **omit** all PII (`payroll.tsx:29-31` "NO PII ON THE PHONE"; `publicRow()` drops bank fields). Adding bank/essential details to the app therefore **reverses that earlier decision** — which the owner is now explicitly asking for, but it must be flagged as a sensitivity call (see Decisions).
+
+**Root cause:** ~80% an **unseeded data job** (only one `payroll_profiles` row exists) + a **product decision** the owner is now changing (show bank/essential PII on the phone) + a small **client gap** (the roster shows only profile-holders instead of the whole team, so a missing profile reads as a dropped person rather than a "pending" one).
+
+**Who owns it:** `[ops-data]` create payroll profiles for the rest of the staff (the real reason only one shows) · `[decision]` may the app show bank/Aadhaar/PAN on a field phone, and to which role, masked or full · `[m]` show every staff member with a "data pending" warning + a bank/essential-details panel · (optional) `[api]` an "include all staff" compute mode so the app needs one call, not two.
+
+**What changes:**
+- *Client now (OTA, admin-gated screen so no new exposure surface):* **merge the compute roster with the full staff directory.** The app already has `getAssignableTeam()` (`/profiles?limit=500`, all active staff) and `getPayrollRoster()` (profile-holders). Show **every** staff member; anyone with no computed row renders as a **"Payroll data pending"** warning row (amber `Pill`, no ₹) instead of being absent — so the roster is the whole team and the gaps are visible, not silent. On the **detail** screen, additionally fetch `GET /api/payroll/profiles/:userId` and render an **"Essential details"** section (salary/segment/shift + bank: beneficiary / bank / account / IFSC), each missing field marked "pending" — behind whatever role/masking the owner picks.
+- *Data (owner/OPS — the actual "why only one shows" fix):* create a `payroll_profiles` row (salary_amount + segment, + bank/PII if wanted) for **each** staff member, in the admin panel or via a one-time seed script (same pattern as the Point 6 RBAC seeding). Until this is done, the app will correctly show the rest of the team as "data pending" — which is the honest state, not an error.
+- *Backend (optional relay):* add `?include_all_staff=true` to `/compute` that left-joins `Profiles` and returns profile-less members as `{ staff_found:true, profile:null, payable:null }`, so the app doesn't need the second directory call. Nice-to-have; the client merge covers it without a backend change.
+
+**Effort:** client **M** (roster merge + pending rows + detail bank/essential section), OTA. Data job **S per member but manual** (dominant cost, owner/OPS). Optional `[api]` compute mode **S**.
+
+**Decisions I need from you:**
+1. **Bank/Aadhaar/PAN on the phone — yes/no, and how?** This reverses the current "no PII on the phone" rule. Recommend: show bank details (beneficiary/bank/account/IFSC) to **super_admin/master only** (not the whole admin tier), and **mask** the account number to the last 4 by default with a tap-to-reveal — and keep **Aadhaar/PAN off the phone entirely** unless you specifically need them there. Your call.
+2. **The seeding: who enters the payroll profiles for the rest of the team, and with what salary/segment?** (This is the real unblock — no code makes a profile-less member show pay.) Do you want a **department default** salary/segment so a member with no explicit profile still computes, or must every member be entered individually?
+3. Should a "data pending" member be **hidden** or **shown as a warning row** (recommend shown — you asked for the warning)?
+4. Want the optional backend "include all staff" mode, or is the app-side merge fine?
+
+**Priority:** **P1** — you can't run payroll for the team and it reads as broken; but note the dominant fix is a **data job (create the profiles)**, and the client work makes the gap visible + adds the details, it does not conjure salaries that were never entered.
 
 ---
 
