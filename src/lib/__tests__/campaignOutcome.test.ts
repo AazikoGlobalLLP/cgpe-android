@@ -45,9 +45,18 @@ describe('campaignOutcome', () => {
     expect(out.logText).toBe('Sent');
   });
 
-  it('a success with no count falls back to the whole audience total', () => {
-    const out = campaignOutcome({ ok: true, count: 0 }, 42);
+  it('a success with NO count (undefined) falls back to the whole audience total', () => {
+    const out = campaignOutcome({ ok: true }, 42);   // count absent → "server said ok, no number"
     expect(out.sent).toBe(42);
     expect(out.logText).toBe('Campaign dispatched.');
+  });
+
+  it('a success with an EXPLICIT 0 count reports 0, NOT the whole audience (loophole audit round 3)', () => {
+    // The backend returns {success:true, data:{count:0}} when opt-in/dedup/cap filtered every recipient
+    // at send time. This used to read as "sent to the whole audience" (0 || total = total) — a false
+    // "Dispatched to N clients" for real policyholders who got nothing.
+    const out = campaignOutcome({ ok: true, count: 0 }, 42);
+    expect(out.sent).toBe(0);
+    expect(out.status).toBe('done');
   });
 });

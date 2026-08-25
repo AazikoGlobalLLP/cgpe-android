@@ -16,9 +16,11 @@ import type { SpineTone } from '@/ui/spine';
 import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
+import { clockKeyFor } from '@/lib/clockKey';
 
 import * as api from '@/data/api';
 import { fmtDay, fmtTime } from '@/lib/format';
+import { useAuth } from '@/store/auth';
 import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
@@ -59,9 +61,6 @@ const MONTH_LONG = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ];
-
-/** Key for the local record of today's clock-in, written by (tabs)/home. */
-const todayKey = () => 'clock.' + new Date().toDateString();
 
 const stamp = (v?: string): number => {
   if (!v) return NaN;
@@ -135,6 +134,7 @@ export default function Attendance() {
   const t = useT();
   const router = useRouter();
   const health = useDataHealth();
+  const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -158,7 +158,7 @@ export default function Attendance() {
     try {
       // A storage read can reject on a locked device, and a half-written entry can fail to
       // parse. Neither is a reason to lose the history below it.
-      const saved = await AsyncStorage.getItem(todayKey()).catch(() => null);
+      const saved = await AsyncStorage.getItem(clockKeyFor(user?.id)).catch(() => null);
       if (!current()) return;
       let mark: Today | null = null;
       if (saved) {
@@ -183,7 +183,7 @@ export default function Attendance() {
     } finally {
       if (current()) { setLoading(false); setRefreshing(false); }
     }
-  }, []);
+  }, [user]);
 
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 

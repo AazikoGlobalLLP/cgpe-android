@@ -1576,9 +1576,12 @@ export async function getReminders(): Promise<Reminder[]> {
     async () => {
       if (sessionReal && !FORCE_DEMO) {
         try {
-          const { ok, json } = await req('/reminders?limit=100');
+          const { ok, status, json } = await req('/reminders?limit=100');
           const arr = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : null);
           if (ok && arr) return arr.map(adaptReminder);
+          // Same as getNotifications: a 403/404/501 is "not deployed / not for this role", not a global
+          // outage. getReminders also runs on Home for every user (loophole audit round 3, 2026-08-25).
+          if (!ok) reportIfOutage(status, '/reminders');
         } catch { /* fall through */ }
       }
       return null;
@@ -1977,9 +1980,14 @@ export async function getNotifications(): Promise<AppNotification[]> {
     async () => {
       if (sessionReal && !FORCE_DEMO) {
         try {
-          const { ok, json } = await req('/notifications?limit=50');
+          const { ok, status, json } = await req('/notifications?limit=50');
           const arr = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : null);
           if (ok && arr) return arr.map(adaptNotification);
+          // Classify a 403/404/501 as "not deployed / not for this role" so `unavailable` stays quiet
+          // instead of pinning a false GLOBAL outage banner — this runs on Home for every user, so an
+          // unclassified miss reads as an org-wide outage against a healthy backend (loophole audit
+          // round 3, 2026-08-25; same fix as getLeads).
+          if (!ok) reportIfOutage(status, '/notifications');
         } catch { /* fall through */ }
       }
       return null;
@@ -3473,13 +3481,16 @@ export async function getCampaignAudience(type: 'renewal' | 'birthday' | 'annive
   return { count: real.count ?? 0, matched: real.matched ?? real.count ?? 0, sample: real.sample || [] };
 }
 /** One-click BULK send: premium reminders (type:'renewal'), birthday, etc. */
-export async function sendCampaign(type: 'renewal' | 'birthday' | 'anniversary' | 'maturity' | 'marketing', opts: { text?: string; limit?: number; filters?: any } = {}): Promise<{ ok: boolean; count: number; message: string; needsRole?: boolean }> {
+export async function sendCampaign(type: 'renewal' | 'birthday' | 'anniversary' | 'maturity' | 'marketing', opts: { text?: string; limit?: number; filters?: any } = {}): Promise<{ ok: boolean; count?: number; message: string; needsRole?: boolean }> {
   if (sessionReal && !FORCE_DEMO) {
     try {
       const { ok, status, json } = await req('/campaigns/send', { method: 'POST', body: JSON.stringify({ type, ...opts }) }, 30000);
       if (status === 403) return { ok: false, count: 0, message: 'Only admin/leader can send bulk campaigns.', needsRole: true };
       const data = json?.data ?? {};
-      return { ok: !!(json?.success), count: data.count ?? 0, message: json?.message || (ok ? 'Sent' : 'Send failed') };
+      // Pass the server's count THROUGH, undefined and all: an explicit 0 (nobody dispatched) must not
+      // read as "no number" and fall back to the whole audience (loophole audit round 3, 2026-08-25).
+      const rawCount = typeof data.count === 'number' ? data.count : undefined;
+      return { ok: !!(json?.success), count: rawCount, message: json?.message || (ok ? 'Sent' : 'Send failed') };
     } catch (e: any) {
       return { ok: false, count: 0, message: e?.message || 'Send failed' };
     }

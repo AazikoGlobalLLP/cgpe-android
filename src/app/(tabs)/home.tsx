@@ -23,6 +23,7 @@ import type { SpineTone } from '@/ui/spine';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
+import { clockKeyFor } from '@/lib/clockKey';
 
 import { useAuth } from '@/store/auth';
 import { DEFAULT_UI, useAppUi } from '@/store/appUi';
@@ -757,7 +758,7 @@ export default function Home() {
    * `api.getClockState()` call in `load`). This cache only exists so the hero paints
    * instantly instead of flashing "Clock in" for one frame before the network answers.
    */
-  const clockKey = `clock.${user?.id || 'anon'}.${new Date().toDateString()}`;
+  const clockKey = clockKeyFor(user?.id);   // per-user key; readers use the SAME builder (lib/clockKey)
 
   const load = useCallback(async (isRefresh = false) => {
     const seq = ++loadSeq.current;
@@ -944,11 +945,19 @@ export default function Home() {
         const geo = await api.checkGeofence(fix.lat, fix.lng, fix.accuracy);
         if (!mounted.current) return;
         if (!clock.in) {
-          if (!geo.allowed) {
+          // Hard-block ONLY when the location is UNDETERMINABLE (distance_m null → "Enable location"):
+          // the server 403s that (LOCATION_RESTRICTION) and no reason can satisfy it. A MEASURED
+          // out-of-range is Phase-50 "allowed WITH a reason" — do NOT hard-return, or the client
+          // pre-check refuses what the server would accept (checkGeofence's own invariant), stranding a
+          // field agent >200m from every office so their day's attendance/payroll is never recorded.
+          // Fall through: api.clockIn returns needsReason (400 REASON_REQUIRED) and the reason Sheet
+          // below (the res.needsReason branch) drives it, mirroring the clock-OUT path (loophole audit
+          // round 3, 2026-08-25 — the Phase-50 migration left this Phase-7 hard-block in place).
+          if (!geo.allowed && geo.distance_m == null) {
             haptics.warn();
             setNotice({
               tone: 'warning',
-              title: 'Too far to clock in',
+              title: 'Location needed to clock in',
               message: geo.message,
             });
             return;

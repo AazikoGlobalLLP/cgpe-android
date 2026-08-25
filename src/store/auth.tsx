@@ -98,8 +98,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setViewAsState(null);
       resetHealth();
+      resetFreshness();
       void storage.remove(TOKEN_KEY);
       void storage.remove(USER_KEY);
+      // A silent 401 expiry must tear down the OUTGOING user's per-user artifacts the SAME way an
+      // explicit logout does — NOT just null the token. Otherwise the still-running recorder's shift
+      // sid (in track.state) and the device push-token binding (push.sentToken) survive into the NEXT
+      // user who signs in on this shared handset: their GPS then uploads onto the previous user's shift
+      // and they receive the previous user's pushes. persist()'s different-user guard cannot cover this
+      // because USER_KEY is already removed above, so its priorId reads null and the purge is skipped.
+      // Same partial-teardown class the 2026-08-21 audit fixed for track.*; push + the expiry path were
+      // the gaps (loophole audit round 3, 2026-08-25).
+      void purgeUserScopedCaches();
+      void clearPushRegistration();
     });
     return off;
   }, []);

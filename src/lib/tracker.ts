@@ -611,18 +611,24 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
 /**
  * PHASE 71 — take ONE location fix right now and feed it through `ingest`, so a live shift or 24/7
  * session that the OS location stream has starved (Doze / OEM battery-kill) still records a point
- * within the ceiling. High accuracy on purpose: like PHASE 63's shift profile, a High (~10 m) fix
- * survives the backend's shift-point >100 m drop, so a coarser reading would be silently discarded.
- * Best-effort and bounded — a fix that does not arrive inside `FORCED_FIX_TIMEOUT_MS` is abandoned and
- * the next tick retries. Reusing `ingest` (not a bespoke post) means de-dup, mock-drop, shift/ambient
- * attribution and delivery all stay in the ONE honest write path — the forced point is treated exactly
- * like an OS-delivered one.
+ * within the ceiling. Best-effort and bounded — a fix that does not arrive inside
+ * `FORCED_FIX_TIMEOUT_MS` is abandoned and the next tick retries. Reusing `ingest` (not a bespoke
+ * post) means de-dup, mock-drop, shift/ambient attribution and delivery all stay in the ONE honest
+ * write path — the forced point is treated exactly like an OS-delivered one.
+ *
+ * ACCURACY MATCHES THE SESSION, not a constant. A live SHIFT wants High (~10 m) so the fix survives
+ * the backend's shift-point >100 m drop. An off-duty AMBIENT session (no shift sid) must stay on the
+ * COARSE profile (Balanced ~100 m): ambient points are NOT distance-dropped server-side, so High buys
+ * nothing, and a forced High fix while the phone sits at home would store a ~10 m home coordinate
+ * roughly hourly under Doze — the exact "continuous ~10 m home recording" escalation `AMBIENT_PROFILE`
+ * exists to avoid (loophole audit round 3, 2026-08-25).
  */
-async function captureForcedPoint(): Promise<void> {
+async function captureForcedPoint(hasShift: boolean): Promise<void> {
+  const accuracy = hasShift ? Location.Accuracy.High : Location.Accuracy.Balanced;
   let loc: Location.LocationObject | null = null;
   try {
     loc = await withTimeout(
-      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),
+      Location.getCurrentPositionAsync({ accuracy }),
       FORCED_FIX_TIMEOUT_MS,
     );
   } catch {
@@ -666,7 +672,7 @@ async function watchdogTick(): Promise<void> {
   // caught within the hour at the next. HONEST CEILING: WorkManager is itself Doze-deferred, so this
   // is best-effort, not a hard real-time guarantee.
   if (isBufferStale(state.lastAt, Date.now())) {
-    await captureForcedPoint();
+    await captureForcedPoint(!!state.sid);   // High for a live shift, coarse Balanced for ambient
   }
 }
 

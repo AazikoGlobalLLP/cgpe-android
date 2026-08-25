@@ -18,6 +18,7 @@ import type { AgentPin } from '@/data/api';
 import type { TeamMember } from '@/data/team';
 import { fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { clockKeyFor } from '@/lib/clockKey';
 import { LeafletMap, type MapBreak } from '@/ui/LeafletMap';
 import { useAuth } from '@/store/auth';
 import { canSeeLiveLocation } from '@/store/roles';
@@ -99,7 +100,7 @@ export default function AgentMap() {
     const [tm, pn, saved, brk] = await Promise.all([
       api.getTeam(),
       api.getAgentLocations(),
-      AsyncStorage.getItem('clock.' + new Date().toDateString()).catch(() => null),
+      AsyncStorage.getItem(clockKeyFor(user?.id)).catch(() => null),   // per-user key (lib/clockKey)
       // PHASE 66: break points for the orange pins. A non-master 403 comes back quietly empty.
       api.getBreakLocations().catch(() => [] as api.MemberBreaks[]),
     ]);
@@ -109,7 +110,7 @@ export default function AgentMap() {
     setBreaks(brk);
     setMine(readMine(saved));
     setLoading(false);
-  }, [isMaster]);
+  }, [isMaster, user]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

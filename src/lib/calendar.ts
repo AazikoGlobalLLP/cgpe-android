@@ -17,6 +17,7 @@ import * as Calendar from 'expo-calendar';
 
 import { storage } from '@/lib/storage';
 import * as api from '@/data/api';
+import { getHealth } from '@/data/health';
 import { buildSyncItems, planSync, fingerprint, allDayRange, type SyncMap } from '@/lib/calendarSync';
 
 const isWeb = Platform.OS === 'web';
@@ -102,7 +103,16 @@ export async function syncCalendar(): Promise<void> {
     const desired = buildSyncItems(tasks, reminders);
     const map = await readMap();
     const plan = planSync(desired, map);
-    if (!plan.create.length && !plan.update.length && !plan.remove.length) return;
+    // GUARD THE DESTRUCTIVE HALF. getTasks/getReminders NEVER throw on an outage — a failed read reports
+    // to data/health and resolves to the EMPTY write buffer. An outage-empty `desired` would make
+    // planSync mark every mirrored event for REMOVAL, wiping the user's phone-calendar mirror for tasks
+    // that still exist server-side (recreated only on the next successful sync). So skip the removes
+    // whenever either source is currently known-failed; create/update still run (loophole audit round 3,
+    // 2026-08-25). The failures list is sticky until the endpoint itself succeeds, so this also covers a
+    // cached-empty re-serve that didn't re-stamp health.
+    const sourceDown = getHealth().failures.some((k) => k === '/tasks' || k === '/reminders');
+    const removes = sourceDown ? [] : plan.remove;
+    if (!plan.create.length && !plan.update.length && !removes.length) return;
 
     if (!(await ensurePermission())) return;
     const cal = await getCalendar();
@@ -142,7 +152,7 @@ export async function syncCalendar(): Promise<void> {
       }
     }
 
-    for (const { key, eventId } of plan.remove) {
+    for (const { key, eventId } of removes) {
       try {
         const ev = await Calendar.ExpoCalendarEvent.get(eventId);
         await ev.delete();

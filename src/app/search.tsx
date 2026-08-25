@@ -388,7 +388,13 @@ export default function Search() {
       };
       setRes(next);
       setRan(term);
-      setRunFailed(getHealth().at !== healthMark);
+      // The at-delta tells us if THIS run stamped a NEW failure — but the leads/claims/tasks bulk is
+      // served from a 90s cache, so a bulk that FAILED on an earlier query and is still down re-serves
+      // its empty result WITHOUT re-stamping `at`, and the delta misses it → a real outage would render
+      // as "found nothing". The health failures list is sticky until that endpoint itself succeeds, so
+      // also fail the run when a bulk collection is currently known-down (loophole audit round 3).
+      const bulkDown = getHealth().failures.some((k) => k === '/leads' || k === '/claims' || k === '/tasks');
+      setRunFailed(getHealth().at !== healthMark || bulkDown);
       setSearching(false);
 
       const found = next.clients.length + next.leads.length + next.claims.length

@@ -182,4 +182,33 @@ describe('getNotifications', () => {
     expect(out).toEqual([]);
     expect(health.getHealth().degraded).toBe(true);
   });
+
+  it('a 404 (endpoint not deployed) resolves EMPTY but does NOT raise the global banner (loophole audit round 3)', async () => {
+    // getNotifications runs on Home for EVERY user; an unclassified miss pinned a false org-wide outage
+    // banner against a healthy backend. A 404/403/501 is "not deployed / not for this role", not an outage.
+    fetchSpy.mockResolvedValue(reply(404, { success: false, message: 'Not found' }));
+    const p = api.getNotifications();
+    await vi.advanceTimersByTimeAsync(2000);
+    const out = await p;
+    expect(out).toEqual([]);
+    expect(health.getHealth().degraded).toBe(false);
+  });
+
+  it('a 403 (not for this role) resolves EMPTY but does NOT raise the global banner', async () => {
+    fetchSpy.mockResolvedValue(reply(403, { success: false, message: 'Access denied' }));
+    const p = api.getNotifications();
+    await vi.advanceTimersByTimeAsync(2000);
+    const out = await p;
+    expect(out).toEqual([]);
+    expect(health.getHealth().degraded).toBe(false);
+  });
+
+  it('a 500 IS an outage and still raises the banner', async () => {
+    fetchSpy.mockResolvedValue(reply(500, { success: false, message: 'boom' }));
+    const p = api.getNotifications();
+    await vi.advanceTimersByTimeAsync(2000);   // 5xx GET retries once before unavailable()
+    const out = await p;
+    expect(out).toEqual([]);
+    expect(health.getHealth().degraded).toBe(true);
+  });
 });
