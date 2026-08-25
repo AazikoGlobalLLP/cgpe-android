@@ -1,73 +1,76 @@
-# HANDOFF — CGPE Connect (Android) — Loophole hunt rounds 2 & 3 — 2026-08-25
+# HANDOFF — CGPE Connect (Android) — Loophole hunt round 4 — 2026-08-25
 
 ## Done
-- **Two adversarial loophole hunts** (multi-agent workflows) over the code shipped since the
-  2026-08-21 audit, then over the modules that audit never touched. **13 real defects found,
-  verified, fixed, and pushed** across two commits — every fix JS-only / OTA-eligible.
-- **Round 2 (`2f07a1e`) — 5 fixes** in the post-2026-08-21 code:
-  - **[HIGH] `claim-new` client picker** now carries the same client-book guard as every other
-    client surface — a team advisor could previously enumerate the whole ~9k book through the
-    claim's client search (Point-9 gated 13 surfaces, missed this one).
-  - `isEphemeralUrl` now catches the real prod ephemeral upload (`https://cgpe.in/uploads/…`),
-    so a redeploy-wiped upload is no longer recorded as durably attached.
-  - The offline poison-cap no longer counts network throws, so an offline create isn't dropped
-    on its first transient 5xx.
-  - A `409 idempotency_in_progress` on a queue replay is kept+retried, not dropped with a false
-    "could not be saved".
-  - `mergePayrollRoster` no longer attaches one salary row to a same-named member.
-- **Round 3 (`c6ea5ec`) — 8 fixes** in the previously-unaudited modules:
-  - **[HIGH] Silent 401 token expiry** now runs the full per-user teardown (tracker + push) that
-    logout does — previously the next user on a shared handset had their GPS post to the previous
-    user's shift and received the previous user's pushes.
-  - **[HIGH] Out-of-range clock-in** is no longer silently blocked — a field agent away from the
-    office now gets the Phase-50 reason prompt instead of being unable to record attendance.
-  - Off-duty ambient location no longer records at High (~10 m) accuracy; the clock marker key is
-    now shared per-user (a clocked-in day no longer shows "absent"); the campaign "sent" count no
-    longer claims the whole audience when zero were dispatched; `getNotifications`/`getReminders`
-    no longer flip a false org-wide outage banner on a 403/404; search and calendar-sync no longer
-    misread an outage as "empty".
-- Gates green on both: `tsc` 0 · `npm test` **991** (round 2 → 984, round 3 → 991) · `eslint`
-  0 new errors. **Device-unverified.** `contracts/INBOX.md` untouched (no cross-repo ask).
+- **A fourth adversarial loophole hunt** (4 independent finder agents, each candidate re-verified by
+  hand against the real code) over the surfaces rounds 1–3 never audited: **boot / route-restore /
+  session-lifecycle, tab-nav RBAC, i18n honesty, theme / density**. **5 real defects fixed, gate-green,
+  pushed** (`6736ede`, `aaziko Shivam`) — every fix JS-only / OTA-eligible / **device-unverified**.
+- **[HIGH] Shared-handset in-memory PII bleed sealed.** `data/api.ts`'s module-scope write buffer
+  (`state`) and the `clientCache` / `claimCache` / `waThreadCache` lookup Maps survived logout / silent
+  401 expiry / user-switch (round 3 sealed only the on-disk caches). Because `getClient` / `getClaim` /
+  `getWaThread` are **cache-first** (they return before any network call or backend 403), the outgoing
+  user's client-book / claim / phone PII was served to the next person on a shared handset with no
+  server check; a read-outage also handed over the previous user's buffered offline-creates. New
+  exported `resetApiState()` now runs from `clear()` **and** `onSessionExpired` (+ the `persist()`
+  different-user branch). `onSessionExpired` also now nulls the current user like `clear()` did.
+- **[MED, live today] A team-tier advisor's Home no longer renders the team roster + org-analytics
+  widgets.** They were gated only on the fail-open RBAC flags, and `DEFAULT_UI` (the fallback used when
+  a role config is unseeded — the current prod state) ships both widgets `visible:true`, so a team
+  advisor's Home showed colleague names/duty + org-wide totals with live data. Now filtered on
+  view-as-aware `caps.manageTeam` / `caps.orgAnalytics`, mirroring the Point-9 `bookHidden` pattern
+  (removes the shell + its `/team|/analytics` deep-link), with the fetch gate ANDed too.
+- **[MED] `/team`, `/team/[id]`, `/analytics` now carry an in-screen role guard** — they previously
+  rendered colleague premium figures + org totals to any signed-in token (deep-linkable). Added the
+  `RestrictedNotice` ready-gated early-return the sibling monitoring screens use.
+- **[MED] Confirm primary button + AppLock unlock button/icons no longer hardcode `#fff`** on the brand
+  accent — they use `c.onPrimary`, so a light department accent no longer makes the main confirm CTA or
+  the biometric-unlock button invisible.
+- Gates: `tsc` 0 · `npm test` **993** (+2, `api-reset.test.ts`) · `eslint` 0 new errors.
+  `contracts/` / INBOX untouched (every fix maps to an already-decided rule — no cross-repo ask).
 
 ## Files changed
-- `docs/AUDIT-2026-08-25-loophole-hunt.md` (new) — round-2 report (5 defects).
-- `docs/AUDIT-2026-08-25-loophole-hunt-round3.md` (new) — round-3 report (8 fixes).
-- Round 2: `src/app/claim-new.tsx` (client-book guard), `src/lib/fileUpload.ts` (`/uploads/`
-  ephemeral detection), `src/data/api.ts` (flush poison-cap), `src/lib/writeQueue.ts` (409/429
-  keep), `src/data/payroll.ts` (name-collision) + their tests.
-- Round 3: `src/store/auth.tsx` (expiry teardown), `src/app/(tabs)/home.tsx` (clock-in reason
-  fall-through), `src/lib/tracker.ts` (ambient accuracy), `src/lib/clockKey.ts` (new shared key
-  builder) + `src/app/attendance.tsx` + `src/app/agent-map.tsx` (use it), `src/lib/campaignOutcome.ts`
-  + `src/data/api.ts` (campaign count; notifications/reminders classify), `src/app/search.tsx`
-  (cached-bulk outage), `src/lib/calendar.ts` (no delete on outage) + tests.
+- `src/data/api.ts` — new exported `resetApiState()` (empties `state.*` + clears the 3 PII Maps).
+- `src/store/auth.tsx` — call `resetApiState()` + `setCurrentUser(null,null)` from `onSessionExpired`,
+  `clear()`, and the `persist()` different-user branch.
+- `src/app/(tabs)/home.tsx` — pre-derive `canRosterCap`/`canAnalyticsCap` (view-as caps); filter the
+  `team_roster` + `analytics` widgets on them; AND the fetch gate; add them to the memo deps (scalars,
+  to dodge the preserve-manual-memoization trap).
+- `src/app/team/index.tsx`, `src/app/team/[id].tsx`, `src/app/analytics.tsx` — `RestrictedNotice`
+  early-return gated on `caps.manageTeam` / `caps.orgAnalytics`, ready-guarded.
+- `src/ui/Confirm.tsx`, `src/ui/AppLock.tsx` — `c.onPrimary` on accent-backed foregrounds (white kept
+  only on the always-red danger button and the accent-immune `gradientHero` title).
+- `src/data/__tests__/api-reset.test.ts` (new) — proves the cache stops short-circuiting after teardown.
+- `docs/AUDIT-2026-08-25-loophole-hunt-round4.md` (new) — the full round-4 report.
 
 ## Decisions made
-- **Every fix maps to an existing spec/rule, not a new product call** — Point-9 client-book policy,
-  the 2026-08-21 shared-handset teardown pattern, the Phase-50 allow-with-reason clock contract, the
-  `reportIfOutage` honesty classifier, the no-fabrication rule. So the hunts hardened decided
-  behavior; they did not decide anything new.
-- **Fixed only adversarially-CONFIRMED findings** (each re-checked by an independent refuter). The
-  `shared-handset-auth` finder in round 2 returned empty — the 2026-08-21 consent/session fixes held
-  through the identity refactor, so nothing was changed there.
-- **`contracts/INBOX.md` deliberately not touched** — no fix needed a backend/contract change that
-  wasn't already filed (the server `GET /clients` gate and the Spaces env are pre-existing owner/OPS
-  relays).
+- **Ran the hunt with the Agent tool, not a billed Workflow** — the user said "go" to the boot plan,
+  which is not the explicit multi-agent-orchestration opt-in that Workflow requires; 4 finders + manual
+  verification was cheaper and sufficient.
+- **Fixed only findings that map to an already-decided rule** (Point-9 client-book policy, the
+  shared-handset teardown pattern, the `onPrimary` convention, RBAC-fail-open danger-zone). No new
+  product call was made.
+- **Home fix removes the widget shell, not just the fetch** — mirroring `bookHidden`, so the team user
+  never sees the shell OR its deep-link, and `has('team_roster')` then reads false which also zeroes the
+  fetch. View-as-aware, so a master previewing "view as team" also loses them (the correct preview).
+- **Four items left document-only** — the Hindi/Hinglish `कल` tomorrow=yesterday collision and the
+  hardcoded "Clocked in {time}" both need **human translation copy** (machine translation forbidden);
+  the accent-contrast clamp and accent==danger items would **override the admin's chosen accent**.
 
 ## Known broken / deliberately skipped
-- **Device-unverified** — the auth/tracker/clock/campaign paths can't be exercised by `tsc`/`npm test`
-  or web; they were reasoned against the real code and mirror already-working sibling paths.
-- **Two round-3 HIGH fixes are dormant until an owner/OPS action:** the clock-in fix (#3) activates
-  when the owner seeds the two office geofence pins; the push half of the expiry fix (#8) only matters
-  once the FCM V1 key is on EAS. Both are in place ahead of those.
-- **Lower-risk surfaces not yet audited:** boot/route-restore, i18n, theme/density, tab-nav RBAC.
-- **Nothing new shipped to devices** — both commits are OTA-eligible but still ride the next
-  over-the-air update / the pending Point-11 native APK.
+- **Device-unverified** — the auth/tracker/RBAC/theme paths can't be exercised by `tsc`/`npm test`/web;
+  reasoned against real code, mirroring already-working sibling paths.
+- **The team-RBAC leak was live today** under the unseeded-config prod state — now closed in the app;
+  the real authority is still the backend (a team account should also be 403'd server-side on
+  `/team/*` and org aggregates — not filed as it is a pre-existing broader item, and the client gate is
+  defence-in-depth).
+- **Four document-only items** (above) are unfixed by design — they need owner copy or a product call.
+- **Nothing new reaches devices yet** — this commit is OTA-eligible but rides the next OTA / the pending
+  Point-10 native APK.
 
 ## Next session starts here
-- Phase: **owner/OPS follow-through, OR a round-4 hunt over the lower-risk surfaces** (boot/route-restore,
-  i18n, theme, tab-nav RBAC) — confirm the direction with the owner; there is no self-contained OTA `[m]`
-  backlog item outstanding.
+- Phase: **owner/OPS follow-through** (no self-contained OTA `[m]` client item is outstanding), OR — if
+  the owner wants — supply the human copy for the two i18n document-only items so they can be wired.
 - First command: `/boot`
-- Watch out for: **do not tell the owner any of these 13 fixes are "verified working" — they are
-  code-verified and gate-green but device-unverified**, and two of the round-3 HIGH fixes only take
-  effect after an owner/OPS step (office pins / FCM key).
+- Watch out for: **do not tell the owner any of these 5 fixes are "verified working"** — they are
+  code-verified and gate-green but **device-unverified**; and when adding any RBAC affordance, remember
+  the flag alone FAILS OPEN — always AND it with the role-derived `caps.*` (that was the Home leak).

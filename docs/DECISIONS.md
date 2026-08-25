@@ -6,6 +6,42 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-25 — Loophole hunt round 4: 5 fixes over the previously-unaudited lower-risk surfaces (`6736ede`)
+
+**Context.** Rounds 1–3 audited the daily-flow / location / offline / roles code. Four surfaces were
+still un-audited: boot/route-restore/session-lifecycle, tab-nav RBAC, i18n honesty, theme/density. The
+owner said "go" to the round-4 plan from `/boot`.
+
+**Decision.** Ran 4 independent finder agents **via the Agent tool, not a billed Workflow** — "go" to a
+boot plan is not the explicit multi-agent-orchestration opt-in Workflow requires, and manual
+verification of each candidate was cheaper and sufficient. Fixed only findings that map to an
+already-decided rule; five landed:
+- **[HIGH] `resetApiState()`** — `data/api.ts`'s in-memory `state` buffer + `clientCache`/`claimCache`/
+  `waThreadCache` survived teardown; the cache-first getters (`getClient`/`getClaim`/`getWaThread`
+  return before any network/403) made this a cross-user PII read on a shared handset. New export called
+  from `clear()` + `onSessionExpired` (+ persist different-user). Extends the round-3 teardown to the
+  in-memory half.
+- **[MED, live] Home team-roster + analytics widgets** were gated only on the fail-open RBAC flags, and
+  `DEFAULT_UI` (the unseeded-config fallback = prod reality) ships both `visible:true` → a team advisor
+  saw them with live data. Filter on view-as-aware `caps.manageTeam`/`caps.orgAnalytics` like
+  `bookHidden` (removes shell + deep-link); AND the fetch gate. Chose to remove the SHELL, not just the
+  fetch, so the deep-link vector closes too.
+- **[MED] `/team`,`/team/[id]`,`/analytics` in-screen guards** — added the `RestrictedNotice`
+  ready-gated early-return the sibling monitoring screens already use (defence-in-depth for deep-links).
+- **[MED] `onPrimary` on Confirm/AppLock** — the primary confirm button and the AppLock unlock
+  button/icons hardcoded `#fff` on the brand accent; use `c.onPrimary` so a light department accent
+  keeps them readable. White kept only on the always-red danger button + the accent-immune
+  `gradientHero` title.
+
+**Consequence.** `6736ede`, gates tsc 0 / npm test **993** (+2) / eslint 0-new, device-unverified, no
+contract/INBOX change. **Four items left document-only** (recorded, not fixed): the hi/hi-en `कल`
+tomorrow=yesterday Tasks-header collision and the hardcoded "Clocked in {time}" need **human copy**
+(machine translation forbidden); an accent-as-foreground contrast clamp and an accent==danger collision
+would **override the admin's chosen accent** (harden recommendations only). Report
+`docs/AUDIT-2026-08-25-loophole-hunt-round4.md`.
+
+---
+
 ## 2026-08-25 — Loophole hunts rounds 2 & 3: fix only adversarially-confirmed findings, all mapped to existing rules
 
 **Context.** After the owner opted into a loophole hunt, three multi-agent workflows ran this session's
@@ -4248,3 +4284,4 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   pure `lib/fileUpload.ts` — the standing native-in-test-graph safety pattern.
 - Result: `a4e6dd0`. Gates: tsc 0 / npm test **978** (+25) / eslint 0 new errors. Device-unverified
   (native-only surface; web can't exercise the pickers). No `contracts/`/INBOX change.
+

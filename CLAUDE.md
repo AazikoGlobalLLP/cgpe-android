@@ -294,6 +294,14 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 ## Danger zones
 - `src/data/api.ts` (1744 lines, 56 importers) — `state` is a write buffer, not seed data.
   `setAuthToken` silently disables all network calls for a token starting `demo-`.
+  **⚠️ IN-MEMORY PER-USER STATE MUST BE RESET ON TEARDOWN (loophole round 4, 2026-08-25).** The module
+  holds per-user data in JS memory that `store/auth`'s AsyncStorage/SecureStore purge does NOT touch:
+  the `state` buffer AND the `clientCache`/`claimCache`/`waThreadCache` Maps. `getClient`/`getClaim`/
+  `getWaThread` are **cache-first** (return `clone(cache.get(id))` before any network call or backend
+  403), so on a shared handset a cached record leaks to the next user with no server check. The exported
+  **`resetApiState()`** empties all of them and is called from `clear()` + `onSessionExpired` (+ the
+  `persist()` different-user branch). **If you add another module-scope per-user Map/buffer here, add it
+  to `resetApiState()`** — a purge in `store/auth` alone will NOT clear it.
 - `src/app/(tabs)/home.tsx` (1915 lines) — the only consumer of `useAppUi()`.
 - `src/app/_layout.tsx:18` `import '@/lib/tracker'` is load-bearing; removing it kills background GPS
   on headless wakeups while foreground testing still passes.
@@ -333,6 +341,14 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   caps term is what protects the tier, the flag term lets a future seeded config tighten it. Gating on the flag alone
   is the bug the Home create-affordance had (`home.tsx:688`) and the trap Point 6's "wire the 10 inert toggles" will
   hit. `caps.assignTasks` was verified to equal the backend's own create allow-list `['admin','leader','super_admin']`.
+  **⚠️ THE SAME TRAP HIT A DASHBOARD *WIDGET*, NOT JUST A BUTTON (loophole round 4, 2026-08-25).** `DEFAULT_UI`
+  (the fallback used when a role config is unseeded — the prod reality) ships the `team_roster` + `analytics`
+  widgets `visible:true`, so gating them on the flag alone rendered the team roster + org totals to a TEAM
+  advisor's Home with live data. Fix mirrored the Point-9 `bookHidden` filter: pre-derive a scalar caps const
+  (`caps.manageTeam`/`caps.orgAnalytics`, view-as-aware), **remove the widget from the `widgets` array** (kills
+  the shell AND its deep-link — not just the fetch), AND add the caps term to the fetch gate. When you gate a
+  hook dep on `caps.x`, pre-derive a SCALAR const and depend on THAT (`[canRosterCap]`), never `caps.x` in the
+  array — same preserve-manual-memoization dep-trap as above.
 - `store/roles.ts` `tierOf()` grants Master by `user.role === 'super_admin'` (Phase 11,
   2026-08-11) — no email literal, but that means Master tier now lives entirely in the backend's
   `Profile.role` field. If Master unexpectedly reads as Admin/Team, that is a database row on the

@@ -14,6 +14,23 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-25 — LOOPHOLE HUNT ROUND 4 SHIPPED: 5 fixes over the previously-unaudited surfaces (`6736ede`, pushed aaziko Shivam).**
+Four independent finder agents (Agent tool, NOT a billed Workflow) over boot/route-restore/session-lifecycle, tab-nav RBAC,
+i18n honesty, theme/density — each candidate re-verified by hand against the real code. **1 HIGH:** shared-handset in-memory PII
+bleed — `data/api.ts`'s `state` write buffer + the `clientCache`/`claimCache`/`waThreadCache` Maps survived logout / silent-401 /
+user-switch (round 3 sealed only on-disk caches); the cache-first getters (`getClient`/`getClaim`/`getWaThread` return before any
+network/403) made this a cross-user PII read → new exported `resetApiState()` called from `clear()` + `onSessionExpired` (+ persist
+different-user); `onSessionExpired` also now nulls the current user. **3 MED:** (live today) Home rendered the team-roster + org-
+analytics widgets to a TEAM advisor — gated only on fail-open flags while `DEFAULT_UI` ships both `visible:true` → filter on
+view-as-aware `caps.manageTeam`/`caps.orgAnalytics` like `bookHidden` (removes shell + `/team|/analytics` deep-link) + AND the
+fetch (`home.tsx`); `/team`,`/team/[id]`,`/analytics` had NO in-screen guard (colleague premium + org totals to any token) → added
+the `RestrictedNotice` ready-gated early-return the sibling monitoring screens use; Confirm primary button + AppLock unlock
+button/icons hardcoded `#fff` on the brand accent → `c.onPrimary` (`ui/Confirm.tsx`, `ui/AppLock.tsx`). **4 document-only:** hi/hi-en
+`कल` tomorrow=yesterday Tasks-header collision + hardcoded "Clocked in {time}" (need HUMAN copy — machine translation forbidden);
+accent-as-foreground contrast clamp + accent==danger collision (would override the admin's chosen accent). tsc 0 / npm test **993**
+(+2, `api-reset.test.ts`) / eslint 0-new. No contract/INBOX change. Report `docs/AUDIT-2026-08-25-loophole-hunt-round4.md`; memory
+`loophole-hunt-round4-2026-08-25`; DECISIONS 2026-08-25. **Device-unverified.**
+
 **✅ 2026-08-25 — LOOPHOLE HUNT ROUND 3 SHIPPED: 8 fixes over location/attendance/campaign/outage-honesty/push (`c6ea5ec`, pushed aaziko Shivam).**
 Multi-agent hunt over the modules rounds 1-2 never audited (background location/tracker, geofence clock-flow, WhatsApp/campaigns,
 outage-honesty, push/calendar). 15 agents, 9 confirmed → 8 distinct fixes, all OTA-eligible, device-unverified. **3 HIGH:** (1+8)
@@ -2173,13 +2190,15 @@ exercise.
 **CURRENT next 3 (2026-08-25 — backlog is `docs/OWNER-BACKLOG-2026-08-24.md`, now 13 points; the authoritative
 worklist. These three are the immediate lane:**
 
-0. **✅ LOOPHOLE HUNTS ROUNDS 2 & 3 DONE (13 defects fixed, `2f07a1e` + `c6ea5ec`).** Adversarial multi-agent hunts
-   over the post-2026-08-21 code and then the modules round 1 never touched (location/tracker, geofence clock-flow,
-   campaigns, outage-honesty, push/calendar). All OTA-eligible, gate-green, device-unverified. **Surfaces STILL
-   un-audited (candidate round 4):** boot/route-restore, i18n, theme/density, tab-nav RBAC. **Next-session direction
-   (confirm with owner):** either owner/OPS follow-through, or a round-4 hunt over those lower-risk surfaces — there is
-   NO self-contained OTA `[m]` backlog item outstanding. Two round-3 HIGH fixes are dormant until an owner/OPS action
-   (clock-in #3 → seed the office geofence pins; push #8 → FCM V1 key on EAS).
+0. **✅ LOOPHOLE HUNTS ROUNDS 2, 3 & 4 DONE (18 defects fixed, `2f07a1e` + `c6ea5ec` + `6736ede`).** Adversarial
+   multi-agent hunts over the post-2026-08-21 code, then the modules round 1 never touched (location/tracker, geofence,
+   campaigns, outage-honesty, push/calendar), then (round 4) the lower-risk surfaces — boot/route-restore, tab-nav RBAC,
+   i18n, theme/density. All OTA-eligible, gate-green, device-unverified. **The four candidate round-4 surfaces are now
+   audited; there is no obvious un-audited surface left.** **Next-session direction:** owner/OPS follow-through — there is
+   NO self-contained OTA `[m]` backlog item outstanding. Dormant-until-owner: round-3 clock-in #3 → seed the office
+   geofence pins; round-3 push #8 → FCM V1 key on EAS. **Round-4 document-only (need OWNER input):** two i18n items need
+   human Hindi/Hinglish copy (the `कल` tomorrow=yesterday collision + a `{time}` placeholder for "Clocked in"); two theme
+   items are harden-only (would override the admin's chosen accent).
 1. **Band-2 shipped so far:** ✅ report 12 s fix (`4516dd9`), ✅ Tasks local search (`c47be1b`), ✅ task-flow
    mitigations (`af7e492`), ✅ calendar grid (`c3c3537`), ✅ #5 Client Search **CLOSED no-build** (`9121020`),
    ✅ #6 premium-403 fix + dead-code (`fb64734`), ✅ #6b retire /premium (`9967db3`), ✅ #7 client-access
