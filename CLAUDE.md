@@ -118,6 +118,13 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   three without rewriting the flagged call sites, and do **not** silence `react-hooks/purity` (kept
   on) — fix its hits at source, as Phase 15 did for the one `Date.now()`-in-render case in `home.tsx`
   (`useState(() => Date.now())`).
+  **⚠️ `react-hooks/preserve-manual-memoization` DEP TRAP (loophole-hunt round 3, 2026-08-25): a
+  `useCallback`/`useMemo` dep array must match the deps the compiler INFERS, and the compiler infers the
+  whole OBJECT a nested read comes from, not the leaf.** If the body reads `user?.id`, the inferred dep is
+  `user` — a manual `[user?.id]` is a hard ERROR ("Inferred less specific property than source"). Use
+  `[user]`, not `[user?.id]`. This bit twice this session when wiring `attendance.tsx`/`agent-map.tsx` to a
+  per-user clock key; `tsc` + `npm test` are BOTH green on the wrong array — only cache-free `npx eslint`
+  catches it, so lint the touched screen after adding any hook dep.
 - `npm run e2e` — **Phase 18 watchable E2E harness** (Playwright + Expo **web**, lives in `e2e/`,
   outside `src/` so it is invisible to the three gates — `tsconfig` excludes it, eslint ignores
   `e2e/**`, Vitest is scoped to `src/`, EAS never bundles it). Opens a real browser that walks all 42

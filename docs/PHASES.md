@@ -14,6 +14,36 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-25 — LOOPHOLE HUNT ROUND 3 SHIPPED: 8 fixes over location/attendance/campaign/outage-honesty/push (`c6ea5ec`, pushed aaziko Shivam).**
+Multi-agent hunt over the modules rounds 1-2 never audited (background location/tracker, geofence clock-flow, WhatsApp/campaigns,
+outage-honesty, push/calendar). 15 agents, 9 confirmed → 8 distinct fixes, all OTA-eligible, device-unverified. **3 HIGH:** (1+8)
+**silent-401 teardown gap** — `onSessionExpired` did a PARTIAL teardown (nulled token, removed USER_KEY) but did NOT purge `track.*`
+or the push token, so on a shared handset the next user's GPS posted to the prev user's shift AND they got the prev user's pushes;
+now runs `purgeUserScopedCaches()` + `clearPushRegistration()` like logout (`store/auth.tsx`). (3) **out-of-range clock-IN silently
+blocked** — the client geofence pre-check hard-returned on a measured out-of-range once office pins are set, so a field agent >200m
+from every office couldn't record attendance (defeats Phase-50); now hard-blocks ONLY the undeterminable-location case and falls
+through to the server's reason prompt (`home.tsx`). **+5 MED/LOW:** ambient High-accuracy off-duty → Balanced (`tracker.ts`);
+clock-key drift (readers used the old device-scoped key → present shown absent) → new shared `lib/clockKey.ts` (`attendance.tsx`,
+`agent-map.tsx`); campaign `count||total` misread an explicit 0 → false "Dispatched to N" (`campaignOutcome.ts`+`api.ts`);
+`getNotifications`/`getReminders` 403/404/501 → false global banner, now classify like `getLeads` (`api.ts`); search cached-bulk
+outage read as "found nothing" (`search.tsx`); calendar-sync deleted mirrored events on an outage-empty fetch (`calendar.ts`).
+tsc 0 / npm test **991** (+7) / eslint 0-new. No contract/INBOX change. Report `docs/AUDIT-2026-08-25-loophole-hunt-round3.md`;
+memory `loophole-hunt-round3-2026-08-25`; DECISIONS 2026-08-25. **Owner/OPS gates:** #3 activates on seeding the office pins; #8's
+push half only matters once the FCM V1 key is on EAS.
+
+**✅ 2026-08-25 — LOOPHOLE HUNT ROUND 2 SHIPPED: 5 fixes over the post-2026-08-21 code (`2f07a1e`, pushed aaziko Shivam).**
+Multi-agent hunt over code shipped 2026-08-22..25 (offline write-queue, document upload, roles/payroll, identity). 11 agents,
+6 confirmations → 5 distinct fixes, all OTA-eligible, device-unverified. **1 HIGH:** `claim-new` client picker had NO client-book
+guard → a team advisor could enumerate the whole ~9k book through the claim's client search; Point-9 (`4575106`) gated 13 surfaces
+but missed this one; added the same `canViewOwnClients` wrapper as `client/[id]`. **+4 MED:** `isEphemeralUrl` missed the prod
+`/uploads/` fallback (BACKEND_URL is the public domain, not loopback) → a redeploy-wiped upload read as durably attached, now
+detects the `/uploads/` route on any host (`lib/fileUpload.ts`); the offline poison-cap counted network throws → an offline create
+dropped on its first 5xx, now bumps only on a real server 5xx (`api.ts` `flushWriteQueue`); a `409 idempotency_in_progress` was
+dropped as a 4xx refusal, now kept+retried (`lib/writeQueue.ts` `flushDecision`); `mergePayrollRoster` byName fallback attached one
+salary row to a same-named member (`data/payroll.ts`). **`shared-handset-auth` finder returned CLEAN** — the 2026-08-21
+consent/session fixes held through the identity refactor. tsc 0 / npm test **984** / eslint 0-new. No contract/INBOX change.
+Report `docs/AUDIT-2026-08-25-loophole-hunt.md`; memory `loophole-hunt-round2-2026-08-25`.
+
 **✅ 2026-08-25 — POINT 11 DOCUMENT PICKER (client half) SHIPPED: source sheet + honest upload errors (`a4e6dd0`, pushed aaziko Shivam).**
 The Claims "Capture or upload" button now opens a 3-source sheet — **Take a photo / Choose from gallery / Choose a file**
 (PDF/Word/Excel/image) — via `expo-document-picker` (~57.0.1, **NATIVE → NOT OTA, needs a fresh APK**). Before this, the
@@ -2143,6 +2173,13 @@ exercise.
 **CURRENT next 3 (2026-08-25 — backlog is `docs/OWNER-BACKLOG-2026-08-24.md`, now 13 points; the authoritative
 worklist. These three are the immediate lane:**
 
+0. **✅ LOOPHOLE HUNTS ROUNDS 2 & 3 DONE (13 defects fixed, `2f07a1e` + `c6ea5ec`).** Adversarial multi-agent hunts
+   over the post-2026-08-21 code and then the modules round 1 never touched (location/tracker, geofence clock-flow,
+   campaigns, outage-honesty, push/calendar). All OTA-eligible, gate-green, device-unverified. **Surfaces STILL
+   un-audited (candidate round 4):** boot/route-restore, i18n, theme/density, tab-nav RBAC. **Next-session direction
+   (confirm with owner):** either owner/OPS follow-through, or a round-4 hunt over those lower-risk surfaces — there is
+   NO self-contained OTA `[m]` backlog item outstanding. Two round-3 HIGH fixes are dormant until an owner/OPS action
+   (clock-in #3 → seed the office geofence pins; push #8 → FCM V1 key on EAS).
 1. **Band-2 shipped so far:** ✅ report 12 s fix (`4516dd9`), ✅ Tasks local search (`c47be1b`), ✅ task-flow
    mitigations (`af7e492`), ✅ calendar grid (`c3c3537`), ✅ #5 Client Search **CLOSED no-build** (`9121020`),
    ✅ #6 premium-403 fix + dead-code (`fb64734`), ✅ #6b retire /premium (`9967db3`), ✅ #7 client-access

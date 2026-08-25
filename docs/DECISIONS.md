@@ -6,6 +6,46 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-25 — Loophole hunts rounds 2 & 3: fix only adversarially-confirmed findings, all mapped to existing rules
+
+**Context.** After the owner opted into a loophole hunt, three multi-agent workflows ran this session's
+lineage: round 1 (2026-08-21, 9 defects) predated it; rounds 2 and 3 (this session) covered the code shipped
+AFTER round 1, then the modules round 1 never touched (location/tracker, geofence clock-flow, campaigns,
+outage-honesty, push/calendar). Each finder's output was re-checked by an independent refuter before any fix.
+
+**Decision.** (1) Fix ONLY findings that survived adversarial verification (`real:true`) — round 2 confirmed
+5 of its raw findings, round 3 confirmed 9 of 10. (2) Every fix must map to an ALREADY-DECIDED rule, never a
+new product call: the Point-9 client-book policy, the 2026-08-21 shared-handset teardown pattern, the Phase-50
+allow-with-reason clock contract, the `reportIfOutage` honesty classifier, and the no-fabrication rule. (3)
+Do NOT touch `contracts/INBOX.md` — no confirmed fix needed a backend/contract change that wasn't already filed
+(the server `GET /clients` gate and the Spaces env are pre-existing owner/OPS relays). (4) The two HIGH
+shared-handset findings (#1 tracker sid, #8 push token) share ONE root cause — `onSessionExpired` did a partial
+teardown — so one fix (run the full logout teardown on a silent expiry) closes both.
+
+**Consequence.** 13 defects fixed across `2f07a1e` (round 2, +5) and `c6ea5ec` (round 3, +8), all JS-only /
+OTA-eligible, gates `tsc` 0 / `npm test` 991 / `eslint` 0-new. All device-unverified. Two round-3 HIGH fixes
+are dormant until an owner/OPS action (clock-in #3 activates on seeding the office geofence pins; push #8 only
+matters once the FCM V1 key is on EAS). Reports: `docs/AUDIT-2026-08-25-loophole-hunt.md` (round 2) +
+`docs/AUDIT-2026-08-25-loophole-hunt-round3.md` (round 3).
+
+## 2026-08-25 — Out-of-range clock-in is ALLOWED with a reason, never silently blocked (round-3 #3 fix)
+
+**Context.** Round-3 hunt confirmed that once the owner sets the two office geofence pins (`enforce:true`), the
+client-side geofence pre-check in `home.tsx` hard-returned on ANY `checkGeofence` refusal — including a MEASURED
+out-of-range — so a field agent >200 m from every office could not clock in at all, and that day's
+attendance/payroll was never recorded. This contradicts the Phase-50 contract (`docs/spec/PHASE-50.md` §3/§6.3)
+and the deployed backend, which returns `400 REASON_REQUIRED` (allow-with-reason) for a known out-of-range and
+`403 LOCATION_RESTRICTION` only for an UNDETERMINABLE location.
+
+**Decision.** The client pre-check hard-blocks ONLY the undeterminable-location case (`geo.distance_m == null` →
+"Enable location"). A measured out-of-range (`!geo.allowed && geo.distance_m != null`) falls through to
+`api.clockIn`, whose `res.needsReason` (400) drives the existing reason Sheet — mirroring the clock-OUT path.
+This restores `checkGeofence`'s own invariant ("it may never refuse something the server would allow").
+
+**Consequence.** A field agent away from the office is prompted for a reason and can record attendance; a
+master is notified. Dormant until the owner seeds the office pins (the fix is in place for when they do). Fixed
+in `c6ea5ec`.
+
 ## 2026-08-25 — Backlog Point 13: Payroll shows only one member = a data-seeding gap, not a bug
 
 **Context.** Owner reported that inside Payroll only one member ("Pavitra") appears, and asked to work
