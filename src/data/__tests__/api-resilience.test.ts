@@ -125,17 +125,44 @@ describe('testConnection — the on-device app-vs-WiFi probe', () => {
   });
 });
 
-describe('uploadFile — the stall guard (Phase 55)', () => {
-  it('carries an AbortController signal on the upload request (the old code had none)', async () => {
+describe('uploadFile — a typed outcome, not {url,key}|null (Point 11)', () => {
+  it('carries an AbortController signal (Phase 55) and returns ok:true with the stored url', async () => {
     fetchSpy.mockResolvedValue(reply(200, { success: true, data: { url: 'https://cdn/x.jpg', key: 'x' } }));
     const r = await api.uploadFile('file:///tmp/a.jpg', 'a.jpg');
-    expect(r).toEqual({ url: 'https://cdn/x.jpg', key: 'x' });
+    expect(r).toEqual({ ok: true, url: 'https://cdn/x.jpg', key: 'x', ephemeral: false });
     const uploadCall = fetchSpy.mock.calls.find((c) => String(c[0]).includes('/upload'));
     expect(uploadCall?.[1]?.signal).toBeInstanceOf(AbortSignal);
   });
 
-  it('returns null when the upload throws — e.g. the abort a timeout fires — instead of hanging', async () => {
+  it('flags a loopback fallback URL as ephemeral (the "captures vanish" bug)', async () => {
+    fetchSpy.mockResolvedValue(reply(200, { success: true, data: { url: 'http://localhost:3001/uploads/general/x.jpg', key: 'x' } }));
+    expect(await api.uploadFile('file:///tmp/a.jpg', 'a.jpg')).toEqual({
+      ok: true, url: 'http://localhost:3001/uploads/general/x.jpg', key: 'x', ephemeral: true,
+    });
+  });
+
+  it('classifies a non-ok status instead of one generic failure', async () => {
+    fetchSpy.mockResolvedValue(reply(403, { success: false, error: 'no' }));
+    expect(await api.uploadFile('file:///tmp/a.jpg', 'a.jpg')).toEqual({ ok: false, reason: 'unauthorized' });
+  });
+
+  it('treats a 2xx with no url as a server non-acceptance, not a fake success', async () => {
+    fetchSpy.mockResolvedValue(reply(200, { success: true, data: {} }));
+    expect(await api.uploadFile('file:///tmp/a.jpg', 'a.jpg')).toEqual({ ok: false, reason: 'server' });
+  });
+
+  it('returns a typed failure (not a hang) when the upload throws', async () => {
     fetchSpy.mockRejectedValue(abortErr());
-    expect(await api.uploadFile('file:///tmp/a.jpg', 'a.jpg')).toBeNull();
+    const r = await api.uploadFile('file:///tmp/a.jpg', 'a.jpg');
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe('network');
+  });
+
+  it('never leaves the handset without a real session — returns not_signed_in, no fetch', async () => {
+    api.setAuthToken('demo-abc');   // a `demo-` token disables real network calls
+    const p = api.uploadFile('file:///tmp/a.jpg', 'a.jpg');
+    await vi.advanceTimersByTimeAsync(600);   // clear the fake-session wait(500)
+    expect(await p).toEqual({ ok: false, reason: 'not_signed_in' });
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

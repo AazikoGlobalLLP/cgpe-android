@@ -3,7 +3,6 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 
 import { font, radius, spacing, useTheme } from '@/theme/theme';
 import { Card, Eyebrow, Header, Metric, Row, Screen, SectionHeader, Txt } from '@/ui/base';
@@ -14,7 +13,9 @@ import { DataRow, ListSection, Pill } from '@/ui/data';
 import { Spine, SpineRow } from '@/ui/spine';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
+import { DocumentSourceSheet, type PickSource, type PickOutcome } from '@/ui/DocumentSource';
 import { haptics } from '@/lib/haptics';
+import { precheckUpload, describeUploadFailure, resolveMime, type UploadFailure } from '@/lib/fileUpload';
 
 import * as api from '@/data/api';
 import type { Claim, ClaimStatus } from '@/data/types';
@@ -145,6 +146,7 @@ export default function ClaimDetail() {
   const [claim, setClaim] = useState<Claim | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
   /** Bumped to re-run the focus effect after a retry. */
   const [nonce, setNonce] = useState(0);
@@ -193,66 +195,46 @@ export default function ClaimDetail() {
 
   /* ---------- the upload (a real write, to /upload) ---------- */
 
-  const capture = async () => {
-    if (!claim) return;
-    const cam = await ImagePicker.requestCameraPermissionsAsync();
-    if (!mounted.current) return;
+  // Screen-specific failure → inline Banner naming the real cause; a hard failure buzzes danger,
+  // a "your setup" condition warns. `describeUploadFailure` owns the copy.
+  const showUploadFailure = (reason: UploadFailure) => {
+    const d = describeUploadFailure(reason);
+    if (d.tone === 'danger') haptics.error(); else haptics.warn();
+    setNotice(d);
+  };
 
-    let result: ImagePicker.ImagePickerResult;
-    if (cam.granted) {
-      result = await ImagePicker.launchCameraAsync({ quality: 0.5 });
-    } else {
-      const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!mounted.current) return;
-      if (!lib.granted) {
-        haptics.warn();
-        setNotice({
-          tone: 'warning',
-          title: 'Camera and photos are blocked',
-          message: 'Allow camera or photo access in your device settings to attach a document to this claim.',
-        });
-        return;
-      }
-      result = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
+  // POINT 11: the button now opens a source sheet (photo / gallery / file). This runs after the
+  // OS picker returns and owns precheck → upload → the honest result / checklist tick.
+  const onPicked = async (source: PickSource, out: PickOutcome) => {
+    if (!mounted.current || !claim) return;
+    if (out.kind === 'cancelled') return;
+    if (out.kind === 'blocked') {
+      haptics.warn();
+      setNotice({
+        tone: 'warning',
+        title: source === 'camera' ? 'Camera access is off' : 'Photo access is off',
+        message: source === 'camera'
+          ? 'Allow camera access in your device settings, or choose a file or a photo from your gallery instead.'
+          : 'Allow photo access in your device settings, or take a photo or choose a file instead.',
+      });
+      return;
     }
-    if (!mounted.current) return;
-    if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
+
+    const file = out.file;
+    const pre = precheckUpload(file);
+    if (pre) { showUploadFailure(pre); return; }
 
     setUploading(true);
-    const up = await api.uploadFile(
-      asset.uri,
-      asset.fileName || `claim-${claim.ref || claim.id}-${total + 1}.jpg`,
-      asset.mimeType || 'image/jpeg',
-    );
+    const up = await api.uploadFile(file.uri, file.name, resolveMime(file) || 'application/octet-stream');
     // The upload can outlive a back-press; the file still lands on the server, but this
     // screen must not touch state once it is gone.
     if (!mounted.current) return;
     setUploading(false);
 
-    if (!up) {
-      // A failed write is screen-specific, so it raises an inline Banner rather than
-      // leaving a tick the server never accepted.
-      haptics.error();
-      setNotice({
-        tone: 'danger',
-        title: 'The document did not upload',
-        message: 'It never reached the server, so the checklist has not been changed. Check your connection and try again.',
-      });
-      return;
-    }
-
-    // `demo://` is what the API layer returns when there is no real session, i.e. nothing
-    // left this handset. That must never be reported as an upload.
-    if (up.url.startsWith('demo://')) {
-      haptics.warn();
-      setNotice({
-        tone: 'warning',
-        title: 'The document was not sent',
-        message: 'This session is not signed in to the register, so the file stayed on the handset. Sign in again and retry.',
-      });
-      return;
-    }
+    if (!up.ok) { showUploadFailure(up.reason); return; }
+    // Reached the server but landed on throwaway disk (cloud storage not configured) — it will be
+    // wiped on redeploy, so the checklist is NOT ticked; the warning says why.
+    if (up.ephemeral) { showUploadFailure('not_stored'); return; }
 
     // The file is on the server. The register has no endpoint that links a file to a claim,
     // so the ONLY thing recorded here is the local checklist tick, and the group footer and
@@ -475,7 +457,7 @@ export default function ClaimDetail() {
               variant="outline"
               full
               loading={uploading}
-              onPress={capture}
+              onPress={() => setSourceOpen(true)}
             />
             <Txt size={font.cap} color={c.faint} numberOfLines={3} style={{ textAlign: 'center', lineHeight: 17 }}>
               Files go to the CGPE server. The register cannot link a file to a claim yet, so quote the reference when you tell the claims desk.
@@ -571,6 +553,13 @@ export default function ClaimDetail() {
           style={{ flex: 1 }}
         />
       </View>
+
+      {/* ---------- document source (photo / gallery / file) ---------- */}
+      <DocumentSourceSheet
+        visible={sourceOpen}
+        onClose={() => setSourceOpen(false)}
+        onResult={onPicked}
+      />
     </Screen>
   );
 }

@@ -3,7 +3,6 @@ import { Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
 
 import { font, radius, spacing, useTheme } from '@/theme/theme';
 import { Header, KeyboardScroll, Row, Screen, Txt } from '@/ui/base';
@@ -13,9 +12,11 @@ import type { FeedbackTone } from '@/ui/feedback';
 import { DataRow, ListSection } from '@/ui/data';
 import { Avatar, PersonRow } from '@/ui/identity';
 import { Sheet } from '@/ui/sheet';
+import { DocumentSourceSheet, type PickSource, type PickOutcome } from '@/ui/DocumentSource';
 import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
+import { precheckUpload, describeUploadFailure, resolveMime, type UploadFailure } from '@/lib/fileUpload';
 
 import * as api from '@/data/api';
 import type { Claim, ClaimDoc, Client } from '@/data/types';
@@ -124,6 +125,7 @@ export default function ClaimNew() {
   const [docs, setDocs] = useState<ClaimDoc[]>([]);
 
   const [uploading, setUploading] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
 
@@ -176,61 +178,49 @@ export default function ClaimNew() {
 
   /* ---------- documents ---------- */
 
-  const capture = async () => {
-    const cam = await ImagePicker.requestCameraPermissionsAsync();
+  // Raise the named failure attached to what caused it: a bad file type is a warning about the
+  // pick, a dead socket is a danger about the transport. `describeUploadFailure` owns the copy.
+  const showUploadFailure = (reason: UploadFailure) => {
+    const d = describeUploadFailure(reason);
+    if (d.tone === 'danger') haptics.error(); else haptics.warn();
+    setNotice(d);
+  };
+
+  // POINT 11: the "Capture a document" button now opens a source sheet (photo / gallery / file).
+  // This handler runs AFTER the OS picker returns and owns precheck → upload → honest result.
+  const onPicked = async (source: PickSource, out: PickOutcome) => {
     if (!mounted.current) return;
-
-    let result: ImagePicker.ImagePickerResult;
-    if (cam.granted) {
-      result = await ImagePicker.launchCameraAsync({ quality: 0.5 });
-    } else {
-      const lib = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (!mounted.current) return;
-      if (!lib.granted) {
-        haptics.warn();
-        setNotice({
-          tone: 'warning',
-          title: 'Camera and photos are blocked',
-          message: 'Allow camera or photo access in your device settings to attach a document to this claim.',
-        });
-        return;
-      }
-      result = await ImagePicker.launchImageLibraryAsync({ quality: 0.5 });
-    }
-    if (!mounted.current) return;
-    if (result.canceled || !result.assets?.length) return;
-    const asset = result.assets[0];
-    const name = asset.fileName || `claim-document-${docs.length + 1}.jpg`;
-
-    setUploading(true);
-    const up = await api.uploadFile(asset.uri, name, asset.mimeType || 'image/jpeg');
-    if (!mounted.current) return;
-    setUploading(false);
-
-    if (!up) {
-      haptics.error();
-      setNotice({
-        tone: 'danger',
-        title: 'The document did not upload',
-        message: 'It never reached the server, so it has not been attached. Check your connection and try again.',
-      });
-      return;
-    }
-
-    // `demo://` is what the API layer hands back when there is no real session: nothing
-    // left the handset, so nothing may be listed as uploaded.
-    if (up.url.startsWith('demo://')) {
+    if (out.kind === 'cancelled') return;
+    if (out.kind === 'blocked') {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'The document was not sent',
-        message: 'This session is not signed in to the register, so the file stayed on the handset. Sign in again and retry.',
+        title: source === 'camera' ? 'Camera access is off' : 'Photo access is off',
+        message: source === 'camera'
+          ? 'Allow camera access in your device settings, or choose a file or a photo from your gallery instead.'
+          : 'Allow photo access in your device settings, or take a photo or choose a file instead.',
       });
       return;
     }
 
+    const file = out.file;
+    // Catch the two commonest mistakes (too big / wrong type) before wasting an upload — the
+    // reason is precise because the check uses the server's own limits.
+    const pre = precheckUpload(file);
+    if (pre) { showUploadFailure(pre); return; }
+
+    setUploading(true);
+    const up = await api.uploadFile(file.uri, file.name, resolveMime(file) || 'application/octet-stream');
+    if (!mounted.current) return;
+    setUploading(false);
+
+    if (!up.ok) { showUploadFailure(up.reason); return; }
+    // Reached the server but landed on throwaway disk (cloud storage not configured): it will be
+    // wiped on the next redeploy, so it is NOT listed as an attached document — say so instead.
+    if (up.ephemeral) { showUploadFailure('not_stored'); return; }
+
     haptics.success();
-    setDocs((prev) => [...prev, { id: `d${Date.now()}`, name, received: true }]);
+    setDocs((prev) => [...prev, { id: `d${Date.now()}`, name: file.name, received: true }]);
     setNotice(null);
   };
 
@@ -447,7 +437,7 @@ export default function ClaimNew() {
           <Group
             label="Documents"
             hint={docs.length === 0
-              ? 'Optional. Each capture is uploaded to the CGPE server as soon as you take it.'
+              ? 'Optional. Take a photo, pick one from your gallery, or choose a file — it uploads as soon as you pick it.'
               : `${docs.length} file${docs.length === 1 ? '' : 's'} on the server. The register cannot link a file to a claim yet, so the names go into the notes.`}
           >
             <View style={{ gap: spacing.md }}>
@@ -477,12 +467,12 @@ export default function ClaimNew() {
               ) : null}
 
               <Button
-                label={uploading ? 'Uploading' : 'Capture a document'}
+                label={uploading ? 'Uploading' : 'Capture or upload a document'}
                 icon="camera"
                 variant="outline"
                 full
                 loading={uploading}
-                onPress={capture}
+                onPress={() => setSourceOpen(true)}
               />
             </View>
           </Group>
@@ -502,6 +492,13 @@ export default function ClaimNew() {
       }}>
         <Button label="Register claim" icon="checkmark" onPress={save} loading={saving} size="lg" full />
       </View>
+
+      {/* ---------- document source (photo / gallery / file) ---------- */}
+      <DocumentSourceSheet
+        visible={sourceOpen}
+        onClose={() => setSourceOpen(false)}
+        onResult={onPicked}
+      />
 
       {/* ---------- client picker ---------- */}
       <Sheet

@@ -42,6 +42,9 @@ import { reportFailure, reportSuccess } from './health';
 import { markFresh, markStale } from './freshness';
 import * as offlineStore from './offlineStore';
 import { decideRead, mergeById } from '@/lib/offlineCache';
+// POINT 11 (Document picker) — the pure upload decision seam: classify a failure by status,
+// spot the ephemeral-disk "vanishes" URL. Copy + client-side precheck live there too.
+import { classifyUploadStatus, isEphemeralUrl, type UploadFailure } from '@/lib/fileUpload';
 // PHASE 57b — the safe offline write queue. Pure decisions in `lib/writeQueue`; the reactive
 // in-memory mirror the UI renders from is `data/pendingWrites`.
 import {
@@ -3406,14 +3409,29 @@ export async function generateReport(clientName: string): Promise<GenerateReport
   }
 }
 
-/** Upload a captured/selected file -> POST /api/upload (multipart). Returns {url,key} or null. */
-export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 'image/jpeg'): Promise<{ url: string; key?: string } | null> {
-  if (!sessionReal || FORCE_DEMO) { await wait(500); return { url: 'demo://uploaded/' + name }; }
+/**
+ * The outcome of `uploadFile`. A discriminated union rather than `{url,key}|null`, so the
+ * screen can name the REAL failure — "too large" vs "timed out" vs "not signed in" — instead
+ * of one generic "didn't upload" banner (owner backlog Point 11). On success it also reports
+ * `ephemeral`: the file reached the server but was written to throwaway disk because cloud
+ * storage is not configured, so it must NOT be presented as durably stored.
+ */
+export type UploadOutcome =
+  | { ok: true; url: string; key?: string; ephemeral: boolean }
+  | { ok: false; reason: UploadFailure };
+
+/** Upload a captured/selected file -> POST /api/upload (multipart). */
+export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 'image/jpeg'): Promise<UploadOutcome> {
+  // No real session: nothing may leave the handset, and reporting a fake success would put a
+  // "document attached" on screen that no server is holding. (Was a `demo://` URL the screens
+  // then had to special-case; a typed reason is cleaner and honest.)
+  if (!sessionReal || FORCE_DEMO) { await wait(500); return { ok: false, reason: 'not_signed_in' }; }
   // PHASE 55: an AbortController so a stalled upload FAILS at UPLOAD_TIMEOUT instead of hanging the
   // screen forever (the old code had none). A multipart POST is non-idempotent → a single attempt,
-  // never retried; an abort surfaces as a caught throw and returns null, exactly like any failure.
+  // never retried; an abort surfaces as a caught throw and is reported as a 'timeout' below.
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), UPLOAD_TIMEOUT);
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; controller.abort(); }, UPLOAD_TIMEOUT);
   try {
     const form = new FormData();
     if (Platform.OS === 'web') {
@@ -3428,10 +3446,16 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
       body: form as any,
       signal: controller.signal,
     });
+    // An upload failure is screen-specific (a bad file type is not a server outage), so it does
+    // NOT flip the global health banner — the screen shows the named reason instead.
+    if (!res.ok) return { ok: false, reason: classifyUploadStatus(res.status) };
     const json = await res.json().catch(() => null);
     const data = json?.data ?? json;
-    return res.ok && data?.url ? { url: data.url, key: data.key } : null;
-  } catch { return null; } finally { clearTimeout(timer); }
+    if (!data?.url) return { ok: false, reason: 'server' };
+    return { ok: true, url: data.url, key: data.key, ephemeral: isEphemeralUrl(data.url) };
+  } catch {
+    return { ok: false, reason: timedOut ? 'timeout' : 'network' };
+  } finally { clearTimeout(timer); }
 }
 
 /* -------------------------------------------------------------- Campaigns */
