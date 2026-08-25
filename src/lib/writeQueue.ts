@@ -106,7 +106,8 @@ export type FlushOutcome = 'synced' | 'drop' | 'keep';
  * `{ ok, status }` when the server answered, or `'threw'` when the network failed. `attempts` is
  * the draft's count BEFORE this attempt.
  *   - 2xx                         → synced (remove)
- *   - 4xx                         → drop   (server refused; retry won't help — notify once)
+ *   - 409 / 429                   → keep   (transient — still committing / rate-limited; retry, no count)
+ *   - other 4xx                   → drop   (server refused; retry won't help — notify once)
  *   - network throw               → keep   (never reached the server — NOT a poison write, retry)
  *   - 5xx under the cap           → keep   (transient server fault — try again next reconnect)
  *   - 5xx at/over the cap         → drop   (poison-write backstop — a server that keeps 5xx-ing)
@@ -116,6 +117,14 @@ export function flushDecision(
   attempts: number,
 ): FlushOutcome {
   if (result !== 'threw' && result.ok) return 'synced';
+  // A TRANSIENT 4xx means "retry", not "refused", so it must NOT drop the user's create. `409`
+  // `idempotency_in_progress` is the server still committing THIS exact idempotent create — the
+  // contract guarantees the retry replays its stored 2xx (`contracts/api.md` §Idempotency-Key) — and
+  // `429` is rate-limiting. Dropping either raised a false "could not be saved" notice for a create
+  // that WILL succeed, and a manual re-create is the very duplicate idempotency exists to prevent
+  // (loophole audit 2026-08-25). Keep + retry on the next reconnect; these never count toward the cap.
+  const transient = result !== 'threw' && (result.status === 409 || result.status === 429);
+  if (transient) return 'keep';
   const clientRefusal = result !== 'threw' && result.status >= 400 && result.status < 500;
   if (clientRefusal) return 'drop';
   // A network THROW never reached the server, so it is not a poison write and must NEVER count

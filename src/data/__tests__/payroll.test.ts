@@ -72,6 +72,41 @@ describe('mergePayrollRoster', () => {
     expect(e.row?.payable).toBe(12000);
   });
 
+  it('does NOT attach one member\'s salary to a profile-less namesake (loophole audit 2026-08-25)', () => {
+    // Two active staff share a normalized name; only user_a has a payroll profile. user_b must stay
+    // "data pending" — never show user_a's pay — and the header total must count the one real row once.
+    const dir = [
+      member({ id: 'user_a', name: 'Ravi Kumar' }),
+      member({ id: 'user_b', name: 'Ravi Kumar' }),   // namesake, no profile
+    ];
+    const roster = [payRow({ user_id: 'user_a', name: 'Ravi Kumar', payable: 50000 })];
+
+    const out = mergePayrollRoster(dir, roster);
+    const a = out.find((e) => e.user_id === 'user_a')!;
+    const b = out.find((e) => e.user_id === 'user_b')!;
+    expect(a.pending).toBe(false);
+    expect(a.row?.payable).toBe(50000);
+    expect(b.pending).toBe(true);            // NOT handed user_a's ₹50,000
+    expect(b.row).toBeNull();
+    expect(payrollRosterStats(out)).toEqual({ members: 2, withPay: 1, pending: 1, totalPayable: 50000 });
+  });
+
+  it('does NOT hand one DRIFTED row to two same-named members — ambiguous name → both pending, pay counted once', () => {
+    const dir = [
+      member({ id: 'id_1', name: 'Ravi Kumar' }),
+      member({ id: 'id_2', name: 'Ravi Kumar' }),
+    ];
+    // one drifted row whose user_id matches NEITHER directory id, sharing the collided name
+    const roster = [payRow({ user_id: 'drifted_x', name: 'Ravi Kumar', payable: 40000 })];
+
+    const out = mergePayrollRoster(dir, roster);
+    const members = out.filter((e) => e.user_id === 'id_1' || e.user_id === 'id_2');
+    expect(members.every((e) => e.pending && e.row === null)).toBe(true);   // never guessed
+    const orphan = out.find((e) => e.user_id === 'drifted_x')!;
+    expect(orphan.row?.payable).toBe(40000);                                // real pay surfaces, not dropped
+    expect(payrollRosterStats(out).totalPayable).toBe(40000);              // counted once, not doubled
+  });
+
   it('keeps a payroll row that matches NO directory member — real pay is never dropped', () => {
     const out = mergePayrollRoster([member({ id: 'user_a', name: 'Asha' })], [
       payRow({ user_id: 'user_a', name: 'Asha', payable: 25000 }),

@@ -104,6 +104,17 @@ describe('flushDecision — spec row 11', () => {
     expect(flushDecision({ ok: false, status: 403 }, 0)).toBe('drop');
     expect(flushDecision({ ok: false, status: 422 }, 0)).toBe('drop');
   });
+  it('409 idempotency_in_progress → keep, NEVER drop (the server is still committing THIS create; the retry gets the stored 2xx — loophole audit 2026-08-25)', () => {
+    expect(flushDecision({ ok: false, status: 409 }, 0)).toBe('keep');
+    // Regression pin: 409 used to fall into the 4xx→drop branch, raising a false "could not be saved"
+    // notice for a lead the server DID commit — and a manual re-create is the very duplicate the
+    // idempotency key exists to prevent. It is transient, so it must keep even past the attempt cap.
+    expect(flushDecision({ ok: false, status: 409 }, MAX_ATTEMPTS + 5)).toBe('keep');
+  });
+  it('429 rate-limited → keep (slow down; do not drop the user\'s create)', () => {
+    expect(flushDecision({ ok: false, status: 429 }, 0)).toBe('keep');
+    expect(flushDecision({ ok: false, status: 429 }, MAX_ATTEMPTS + 5)).toBe('keep');
+  });
   it('5xx under the attempt cap → keep (transient)', () => {
     expect(flushDecision({ ok: false, status: 500 }, 0)).toBe('keep');
     expect(flushDecision({ ok: false, status: 503 }, 1)).toBe('keep');

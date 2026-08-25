@@ -17,6 +17,9 @@ import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import { precheckUpload, describeUploadFailure, resolveMime, type UploadFailure } from '@/lib/fileUpload';
+import { useAuth } from '@/store/auth';
+import { canViewOwnClients } from '@/store/roles';
+import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 import * as api from '@/data/api';
 import type { Claim, ClaimDoc, Client } from '@/data/types';
@@ -90,7 +93,31 @@ function firstPolicy(cl: Client): string {
   return n && n !== '—' ? n : '';
 }
 
+/**
+ * Point 9 (owner decision, 2026-08-24) + loophole audit 2026-08-25: the New-claim client picker
+ * searches the WHOLE client book (`getClientsPage` across ~9,000 rows), so it is a client-book
+ * surface and must carry the SAME master/admin (+ sales-advisor own-only) gate as the Clients list
+ * and `client/[id]` — it was the one client-book surface Point 9's lockdown missed, letting a
+ * team-tier advisor enumerate every client's name/number/policy through the picker. Thin wrapper so
+ * the real screen's hooks are untouched (no conditional-hooks hazard), matching `client/[id].tsx`.
+ * The server-side `GET /clients` role gate is the actual authority (filed to INBOX); this is the
+ * defence-in-depth half. A sales advisor passes and the server scopes their picker to own-only.
+ */
 export default function ClaimNew() {
+  const { user, viewAs, ready } = useAuth();
+  if (ready && !canViewOwnClients(user, viewAs)) {
+    return (
+      <RestrictedNotice
+        title="New claim"
+        heading="Filing a claim needs client-book access"
+        subtitle="A claim is filed against a client from the book, which is available to administrators, the master account, and sales advisors for their own clients. Ask an administrator to register this claim for you."
+      />
+    );
+  }
+  return <ClaimNewScreen />;
+}
+
+function ClaimNewScreen() {
   const c = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();

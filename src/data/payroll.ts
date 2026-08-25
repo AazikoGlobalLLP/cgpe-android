@@ -49,18 +49,36 @@ function rank(e: PayrollRosterEntry): number {
 
 /** Left-join the full staff directory with the computed payroll roster (see file header). */
 export function mergePayrollRoster(directory: TeamMember[], roster: PayrollRow[]): PayrollRosterEntry[] {
+  // The set of directory ids + how many members share each normalized name — both needed to keep the
+  // name fallback from misattributing pay (loophole audit 2026-08-25, see below).
+  const dirIds = new Set<string>();
+  const dirNameCount = new Map<string, number>();
+  for (const mem of directory) {
+    dirIds.add(norm(mem.id));
+    const nm = norm(mem.name);
+    dirNameCount.set(nm, (dirNameCount.get(nm) ?? 0) + 1);
+  }
+
   const byId = new Map<string, PayrollRow>();
-  const byName = new Map<string, PayrollRow>();
+  const byName = new Map<string, PayrollRow | null>();
   for (const r of roster) {
     const id = norm(r.user_id);
     if (id && !byId.has(id)) byId.set(id, r);      // first wins — a duplicate keeps the earlier row
+    // The name fallback exists ONLY to recover a row whose id lines up with NO directory member (an
+    // id-space drift). A row already OWNED by a directory id must never also be reachable by name — or
+    // a profile-less namesake would show that member's pay and the total would double-count. And a
+    // name that appears on more than one row is AMBIGUOUS (null) so it is never guessed. (Loophole
+    // audit 2026-08-25: the old map indexed every row by name and had no already-claimed guard.)
     const nm = norm(r.name);
-    if (nm && !byName.has(nm)) byName.set(nm, r);
+    if (nm && id && !dirIds.has(id)) byName.set(nm, byName.has(nm) ? null : r);
   }
 
   const used = new Set<PayrollRow>();
   const entries: PayrollRosterEntry[] = directory.map((mem) => {
-    const row = byId.get(norm(mem.id)) ?? byName.get(norm(mem.name)) ?? null;
+    // Honour a name match only when the DIRECTORY name is unique too — two members sharing a name can't
+    // both claim one drifted row. `byId` (id-owned) always wins; the name map holds only drifted rows.
+    const nameHit = dirNameCount.get(norm(mem.name)) === 1 ? byName.get(norm(mem.name)) : null;
+    const row = byId.get(norm(mem.id)) ?? nameHit ?? null;
     if (row) used.add(row);
     return { user_id: mem.id, name: mem.name, role: mem.role, branch: mem.branch, row, pending: !row };
   });

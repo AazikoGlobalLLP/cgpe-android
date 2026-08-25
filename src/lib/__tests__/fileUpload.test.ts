@@ -115,9 +115,17 @@ describe('isEphemeralUrl — the "captures vanish" signature', () => {
     expect(isEphemeralUrl('http://0.0.0.0:3001/uploads/x.png')).toBe(true);
     expect(isEphemeralUrl('http://droplet.local/uploads/x.png')).toBe(true);
   });
-  it('accepts a real cloud/CDN URL as durable', () => {
+  it('flags the local-disk /uploads/ fallback on ANY host, not just loopback (loophole audit 2026-08-25)', () => {
+    // On prod BACKEND_URL is the PUBLIC domain, so the throwaway fallback URL is NOT loopback but is
+    // still on droplet disk wiped on the next redeploy. Detecting only loopback let this read as
+    // durably attached — the exact "captures vanish" bug the guard exists to prevent.
+    expect(isEphemeralUrl('https://cgpe.in/uploads/general/x.jpg')).toBe(true);
+    expect(isEphemeralUrl('https://cgpe.in/uploads/claims/scan.pdf')).toBe(true);
+  });
+  it('accepts a real DigitalOcean Spaces / CDN URL as durable', () => {
     expect(isEphemeralUrl('https://cgpe.blr1.digitaloceanspaces.com/general/x.jpg')).toBe(false);
-    expect(isEphemeralUrl('https://cgpe.in/uploads/general/x.jpg')).toBe(false);
+    // Durability keys off the /uploads/ route, not the host: a NON-/uploads/ path on cgpe.in is durable.
+    expect(isEphemeralUrl('https://cgpe.in/media/general/x.jpg')).toBe(false);
   });
   it('does not throw on a malformed URL', () => {
     expect(isEphemeralUrl('not a url')).toBe(false);

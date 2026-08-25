@@ -97,3 +97,25 @@ describe('flushWriteQueue — a draft enqueued during a replay is never clobbere
     expect(finalQ.find((d) => d.id === 'pending-X')!.attempts).toBe(1);
   });
 });
+
+describe('flushWriteQueue — a network THROW keep does NOT bump the poison-cap counter (loophole audit 2026-08-25)', () => {
+  it('an offline flush (replay throws) keeps the draft at attempts:0, so a later 5xx still gets the full cap', async () => {
+    const X = leadDraft('pending-X', 'Xavier', '1112223330');
+    // Start it partway to the cap — a legitimate offline draft that has replayed a few times.
+    await store.saveQueue('u1', [{ ...X, attempts: 3 }]);
+
+    // The network is dead: the replay POST throws (no server answer at all).
+    fetchSpy.mockImplementation(async () => { throw new Error('Network request failed'); });
+
+    const res = await api.flushWriteQueue();
+    expect(res.synced).toBe(0);
+    expect(res.dropped).toBe(0);                              // a throw NEVER drops
+
+    const finalQ = await store.loadQueue('u1');
+    const x = finalQ.find((d) => d.id === 'pending-X')!;
+    expect(x).toBeDefined();
+    // The bug: the throw bumped attempts to 4, so the very NEXT server 5xx would hit the cap and drop
+    // a create that never reached the server. The fix keeps it flat — only a real 5xx counts.
+    expect(x.attempts).toBe(3);
+  });
+});

@@ -108,17 +108,29 @@ export function classifyUploadStatus(status: number): UploadFailure {
 }
 
 /**
- * True when the server handed back a loopback / private URL. That is the signature of the
- * "captures vanish" bug: with DigitalOcean Spaces unset, `routes/upload.js` falls back to
- * `${BACKEND_URL || 'http://localhost:3001'}/uploads/...` on throwaway droplet disk. The
- * upload "succeeded" (200) but the file is not reachable and is wiped on the next redeploy,
- * so we must NOT report it as durably stored.
+ * True when the server handed back a throwaway local-disk URL. That is the signature of the
+ * "captures vanish" bug: with DigitalOcean Spaces unset (or a transient Spaces failure),
+ * `routes/upload.js` falls back to `${BACKEND_URL || 'http://localhost:3001'}/uploads/...` on
+ * droplet disk. The upload "succeeded" (200) but the file is wiped on the next redeploy, so we must
+ * NOT report it as durably stored.
+ *
+ * Two signatures, because the host alone is NOT enough: in dev `BACKEND_URL` is unset so the URL is
+ * loopback, but ON PROD `BACKEND_URL` is the PUBLIC domain (it must be — the same fallback serves
+ * WhatsApp campaign media, which has to be publicly reachable), so the throwaway URL is
+ * `https://cgpe.in/uploads/...` — not loopback, yet still ephemeral. So we also key off the express
+ * static `/uploads/` route the fallback uses: a durable Spaces object never uses it (its key is
+ * `${folder}/${file}`, host `*.digitaloceanspaces.com`, no `/uploads/` prefix). Detecting only the
+ * loopback sub-case let a redeploy-wiped upload read as durably attached on prod (loophole audit
+ * 2026-08-25).
  */
 export function isEphemeralUrl(url: string): boolean {
   const host = (url.match(/^https?:\/\/([^/:]+)/i)?.[1] || '').toLowerCase();
   if (!host) return false;
   if (host === 'localhost' || host === '127.0.0.1' || host === '0.0.0.0') return true;
   if (host.endsWith('.local')) return true;
+  // The local-disk fallback serves from `/uploads/...` on WHATEVER host BACKEND_URL is set to.
+  const path = url.replace(/^https?:\/\/[^/]+/i, '');
+  if (/^\/uploads\//i.test(path)) return true;
   return false;
 }
 

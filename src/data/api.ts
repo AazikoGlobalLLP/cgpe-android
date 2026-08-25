@@ -3802,10 +3802,10 @@ async function replayWrite(draft: QueuedWrite): Promise<{ ok: boolean; status: n
   // time), so a create the server COMMITTED before its ack was lost now REPLAYS on the server (its
   // stored 2xx) instead of inserting a duplicate row. A draft persisted BEFORE this field existed has
   // no key and simply replays without the header — exactly the old behaviour, no worse. The key is
-  // metadata, not body, so the byte-identical-body guarantee below is untouched. (Note: this can only
-  // ever be the FIRST retry of a committed create — the online attempt threw before enqueue, and
-  // `flushWriteQueue` is re-entrancy-guarded — so the server's 409 `idempotency_in_progress` is
-  // unreachable from here; a genuine replay always gets the stored success back.)
+  // metadata, not body, so the byte-identical-body guarantee below is untouched. (Note: a 409
+  // `idempotency_in_progress` IS reachable here — a slow server can still be committing the first
+  // request when a foreground/reconnect flush replays the same key — so `flushDecision` treats 409 as
+  // a transient KEEP, not a drop; the next replay then gets the stored 2xx. Loophole audit 2026-08-25.)
   const headers = draft.idempotencyKey ? { 'Idempotency-Key': draft.idempotencyKey } : undefined;
   if (draft.kind === 'note') {
     const { ok, status, json } = await req('/notice-board', {
@@ -3864,18 +3864,28 @@ export async function flushWriteQueue(): Promise<{ synced: number; dropped: numb
     // mid-flush isn't in this snapshot, so it simply replays on the next flush — never lost.
     const drafts = await offlineStore.loadQueue(uid);
     for (const draft of drafts) {
-      let outcome: FlushOutcome;
+      let result: { ok: boolean; status: number } | 'threw';
       try {
-        outcome = flushDecision(await replayWrite(draft), draft.attempts);
+        result = await replayWrite(draft);
       } catch {
-        outcome = flushDecision('threw', draft.attempts);
+        result = 'threw';
       }
+      const outcome: FlushOutcome = flushDecision(result, draft.attempts);
       if (outcome === 'synced') synced++;
       else if (outcome === 'drop') dropped++;
       // Re-read AFTER the await: `latest` includes anything enqueued during this replay. Mutating
       // only draft.id (removeFromQueue / bumpAttempt are id-keyed) leaves a concurrent draft intact.
       const latest = await offlineStore.loadQueue(uid);
-      const next = outcome === 'keep' ? bumpAttempt(latest, draft.id) : removeFromQueue(latest, draft.id);
+      // The poison-write cap counts ONLY a genuine server 5xx. A network THROW never reached the
+      // server, and a transient 409/429 keep is the server saying "retry" — neither is a poison write,
+      // so both keep the draft WITHOUT bumping `attempts`. Bumping on a throw let a few offline
+      // foregrounds inflate the counter and then drop a real create on its FIRST 5xx on reconnect —
+      // silent data loss (loophole audit 2026-08-25; complements the pure fix in `flushDecision`).
+      const serverFault = result !== 'threw' && result.status >= 500;
+      const next =
+        outcome === 'keep'
+          ? (serverFault ? bumpAttempt(latest, draft.id) : latest)
+          : removeFromQueue(latest, draft.id);
       await offlineStore.saveQueue(uid, next);
       pendingBus.setPending(next);
     }
