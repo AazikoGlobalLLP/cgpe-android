@@ -6,6 +6,54 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-25 — Backlog Point 13: Payroll shows only one member = a data-seeding gap, not a bug
+
+**Context.** Owner reported that inside Payroll only one member ("Pavitra") appears, and asked to work
+out why everyone isn't showing, then show each person's pay per their work + bank/essential details +
+a "data pending" warning. Verified against real code: `GET /api/payroll/compute` iterates **only
+`PayrollProfile` documents** (`routes/payroll.js:327`), so a member shows only if an admin created a
+payroll profile (salary + segment) for them. Attendance/work is read live for everyone, but pay =
+work × rate, and the rate lives on the profile — so a profile-less member has genuinely nothing to
+compute. Bank/Aadhaar/PAN exist on `PayrollProfile` and are reachable via the admin-only
+`/payroll/profiles/:userId`, but are deliberately kept off the phone today (`payroll.tsx:29-31`).
+
+**Decision.** Recorded as **backlog Point 13** (triage only — describe, don't build this session). Root
+cause = an **unseeded data job** (only one `payroll_profiles` row exists), analogous to Point 6's
+unseeded RBAC. The fix has three owned parts: `[ops-data]` create profiles for the rest of the team (the
+real unblock); `[decision]` whether to put bank/essential PII on the phone and how (recommend
+super_admin/master only, account masked to last-4, Aadhaar/PAN off entirely); `[m]` merge the compute
+roster with the full staff directory (`getAssignableTeam`) so every member shows and profile-less ones
+render as a "Payroll data pending" warning, plus a bank/essential-details panel on the detail screen.
+
+**Consequence.** No code shipped for Point 13. Putting bank/essential details on the phone **reverses**
+the standing "NO PII ON THE PHONE" rule, so it must wait on the owner's role/masking decision. The
+client roster-merge + pending-warning half is OTA-buildable now and does not conjure salaries that were
+never entered — until the profiles are seeded, the rest of the team correctly reads as "data pending."
+
+---
+
+## 2026-08-25 — Band 2 #9: Contest mapper — a dedicated adapter, rank only when known
+
+**Context.** Owner backlog Point 7 flagged the Contest surface as broken. Verified: `getContests` read
+`GET /api/contests` straight into `Contest[]` with only an `isArray` check — no adapter. The wire rows
+are raw contest documents (`title`/`reward_description`/`target_goal`/`target_unit`/`end_date` +
+per-caller `user_progress` + top-5 `leaderboard`), none of whose field names match the app's `Contest`
+shape, so every field mapped to `undefined` and any real contest rendered as a blank card. Latent —
+no live contest has been created yet.
+
+**Decision.** Added a pure `adaptContest(raw, userId?)` (`src/data/adapt.ts`), wired into `getContests`
+with the existing `unavailable()` outage fallback. `progress = clamp01(user_progress / target_goal)`
+(0/missing target → 0, never NaN/Infinity); `metric = "<progress> of <target> <unit>"` (unit defaults
+to `points`); `rank` set **only** when the signed-in `currentUserId` appears in the leaderboard — never
+inferred from a progress tie. Verified the mapping against deployed `origin/main` `49482e9` (route +
+model byte-identical). +8 tests.
+
+**Consequence.** A real contest now renders fully. An absent rank is honest silence, not a fabricated
+`#0`. `contests.tsx` was already a correct `Contest` consumer and stayed untouched. Commit `9793327`,
+pushed `aaziko Shivam`. tsc 0 / npm test 910 / eslint 0 new. Device-unverified (no live contest to see).
+
+---
+
 ## 2026-08-24 — Band 2 #2: Tasks-tab local search + the search scorer extracted to `lib/searchScore.ts`
 
 **Context.** Owner backlog Point 2: the Tasks tab had no search box, forcing a trip to the global

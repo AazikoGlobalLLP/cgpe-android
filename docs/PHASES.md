@@ -14,6 +14,26 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-25 — BAND 2 #9 SHIPPED: Contest mapper fix (`9793327`, pushed aaziko Shivam).**
+Owner backlog Point 7 (latent bug). `getContests` read `GET /api/contests` straight into `Contest[]` with only
+an `isArray` check — no adapter — so the raw contest docs (`title`/`reward_description`/`target_goal`/
+`target_unit`/`end_date` + per-caller `user_progress` + top-5 `leaderboard`) mapped every field to `undefined`
+and any real contest rendered as a blank card. NEW pure `adaptContest(raw, userId?)` in `data/adapt.ts`:
+progress = clamp01(user_progress/target_goal) (0/missing target → 0, never NaN/Inf); metric = "`<prog>` of
+`<target>` `<unit>`" (unit defaults `points`); **rank set only when the signed-in user appears in the leaderboard**
+— never a guessed `#0`. `getContests` maps each row + keeps the `unavailable()` fallback; `contests.tsx` unchanged
+(already a correct consumer). Verified vs deployed `origin/main` `49482e9` (route+model byte-identical). +8 tests.
+tsc 0 / npm test **910** (+8) / eslint 0 new. OTA-eligible, device-unverified. Spec `docs/spec/BAND2-9-contest-mapper.md`.
+
+**🆕 2026-08-25 — BACKLOG POINT 13 ADDED (Payroll shows only one member) — triage only, not built.**
+Owner observation: only "Pavitra" appears in Payroll. Verified: `GET /api/payroll/compute` iterates ONLY
+`PayrollProfile` docs (`routes/payroll.js:327`), so a member shows only if an admin created a payroll profile
+(salary+segment) for them — a data-seeding gap (like Point 6 RBAC-unseeded), not a compute bug. Documented the
+fix plan: app merges the compute roster with the full staff directory → profile-less members show a "data
+pending" warning row (OTA); detail screen adds a bank/essential-details panel from the admin-only
+`/payroll/profiles/:userId` (**reverses the "no PII on phone" rule** — owner decision: role + masking); real
+unblock = owner/OPS creating profiles for the rest of the team. See `docs/OWNER-BACKLOG-2026-08-24.md` Point 13.
+
 **✅ 2026-08-24 — BAND 2 #7 SHIPPED: client book is MASTER/ADMIN ONLY (`4575106`, pushed aaziko Shivam).**
 Owner backlog Point 9, owner-decided "master/admin only". Team-tier now sees NO client surface: the Clients tab
 (`_layout`), the Clients/Segments/Families/premium More modules, the Home segments/families/campaigns widgets +
@@ -2071,18 +2091,19 @@ exercise.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-24 — after the owner 12-point backlog was triaged into `docs/OWNER-BACKLOG-2026-08-24.md`
-and APK `7a384ee3` was cut). The backlog doc is the authoritative worklist; these three are the immediate lane:**
+**CURRENT next 3 (2026-08-25 — backlog is `docs/OWNER-BACKLOG-2026-08-24.md`, now 13 points; the authoritative
+worklist. These three are the immediate lane:**
 
 1. **Band-2 shipped so far:** ✅ report 12 s fix (`4516dd9`), ✅ Tasks local search (`c47be1b`), ✅ task-flow
-   mitigations (`af7e492`), ✅ calendar grid (`c3c3537`), ✅ #5 Client Search **CLOSED no-build** (`9121020`,
-   owner declined the scoped mode), ✅ #6 premium-403 fix + dead-code (`fb64734`), ✅ #6b retire /premium
-   (`9967db3`), ✅ #7 client-access master/admin-only (`4575106`). **Next Band-2 lane: #9 Contest mapper fix**
-   (P2, OTA, self-contained — every field of the app's Contest type mismatches the backend, so any real contest
-   renders blank; no owner dependency) **OR #8 wire the 10 inert role toggles** (P1, but needs the owner's Point 6
-   role matrix FIRST). Recommend #9 as the safe standalone next; #8 blocks on the matrix. **Also open (owner
-   call):** gate the WhatsApp hub / search-Tickets group / task-contact sheet for team too, or leave them
-   (separate surfaces, not "the client book")?
+   mitigations (`af7e492`), ✅ calendar grid (`c3c3537`), ✅ #5 Client Search **CLOSED no-build** (`9121020`),
+   ✅ #6 premium-403 fix + dead-code (`fb64734`), ✅ #6b retire /premium (`9967db3`), ✅ #7 client-access
+   master/admin-only (`4575106`), ✅ **#9 Contest mapper (`9793327`)**. **Every self-contained OTA Band-2 item is
+   now shipped.** Next lane depends on an owner input or a native build: **#8 wire the 10 inert role toggles**
+   (P1, needs the owner's Point 6 role matrix FIRST) · **Point 13 Payroll** (P1 — roster-merge + "data pending"
+   warnings + bank/essential-details panel; the details half needs the owner's PII/role/masking decision, and the
+   real unblock is the owner/OPS data job of creating payroll profiles for the team) · **#10 Document picker**
+   (P1, NOT OTA — `expo-document-picker` native → a new APK + OPS Spaces env). **Also open (owner call):** gate the
+   WhatsApp hub / search-Tickets group / task-contact sheet for team too, or leave them (separate surfaces)?
 2. **Owner Band-1 actions (in parallel — mostly plain-language relays in the backlog doc):**
    3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode); **P9 client-access
    DECIDED (master/admin only) and the backend-403 `[api]` relay is now FILED at the top of `../contracts/INBOX.md`
