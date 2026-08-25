@@ -1,76 +1,62 @@
-# HANDOFF — CGPE Connect (Android) — Loophole hunt round 4 — 2026-08-25
+# HANDOFF — CGPE Connect (Android) — Verification + APK build — 2026-08-25
 
 ## Done
-- **A fourth adversarial loophole hunt** (4 independent finder agents, each candidate re-verified by
-  hand against the real code) over the surfaces rounds 1–3 never audited: **boot / route-restore /
-  session-lifecycle, tab-nav RBAC, i18n honesty, theme / density**. **5 real defects fixed, gate-green,
-  pushed** (`6736ede`, `aaziko Shivam`) — every fix JS-only / OTA-eligible / **device-unverified**.
-- **[HIGH] Shared-handset in-memory PII bleed sealed.** `data/api.ts`'s module-scope write buffer
-  (`state`) and the `clientCache` / `claimCache` / `waThreadCache` lookup Maps survived logout / silent
-  401 expiry / user-switch (round 3 sealed only the on-disk caches). Because `getClient` / `getClaim` /
-  `getWaThread` are **cache-first** (they return before any network call or backend 403), the outgoing
-  user's client-book / claim / phone PII was served to the next person on a shared handset with no
-  server check; a read-outage also handed over the previous user's buffered offline-creates. New
-  exported `resetApiState()` now runs from `clear()` **and** `onSessionExpired` (+ the `persist()`
-  different-user branch). `onSessionExpired` also now nulls the current user like `clear()` did.
-- **[MED, live today] A team-tier advisor's Home no longer renders the team roster + org-analytics
-  widgets.** They were gated only on the fail-open RBAC flags, and `DEFAULT_UI` (the fallback used when
-  a role config is unseeded — the current prod state) ships both widgets `visible:true`, so a team
-  advisor's Home showed colleague names/duty + org-wide totals with live data. Now filtered on
-  view-as-aware `caps.manageTeam` / `caps.orgAnalytics`, mirroring the Point-9 `bookHidden` pattern
-  (removes the shell + its `/team|/analytics` deep-link), with the fetch gate ANDed too.
-- **[MED] `/team`, `/team/[id]`, `/analytics` now carry an in-screen role guard** — they previously
-  rendered colleague premium figures + org totals to any signed-in token (deep-linkable). Added the
-  `RestrictedNotice` ready-gated early-return the sibling monitoring screens use.
-- **[MED] Confirm primary button + AppLock unlock button/icons no longer hardcode `#fff`** on the brand
-  accent — they use `c.onPrimary`, so a light department accent no longer makes the main confirm CTA or
-  the biometric-unlock button invisible.
-- Gates: `tsc` 0 · `npm test` **993** (+2, `api-reset.test.ts`) · `eslint` 0 new errors.
-  `contracts/` / INBOX untouched (every fix maps to an already-decided rule — no cross-repo ask).
+- **Full pre-build verification / completeness audit** at the owner's request ("verify everything is
+  complete; if perfect, build; if anything app-side is unfinished, finish it first — I don't want to
+  rebuild the APK repeatedly"). Conclusion: **the app-side is complete and build-ready. No source
+  changed this session.**
+  - **Gates all green (re-run this session):** `tsc` 0 · `npm test` **993** (61 files) · `eslint`
+    0 errors / 12 warnings (the documented Phase-15 baseline — no new errors).
+  - **Git in sync:** local `HEAD` == `aaziko/Shivam` at `eb6e9c6`; no uncommitted source (only the
+    local `.claude/settings.json` + 3 untracked root `.txt`/`.json` files, none build-relevant).
+  - **Native build correctness confirmed:** the only reason a new APK is needed is Point 10's
+    `expo-document-picker` (native). Verified it is in `package.json` (`~57.0.1`), genuinely imported
+    and used (`src/ui/DocumentSource.tsx`), and is an autolinked module needing no config-plugin
+    entry — so this APK will ship a working picker.
+  - **Confirmed nothing app-side is half-finished** — incl. the one ambiguous item (Band-2 #8's "5
+    RBAC flags not wired"): those were correctly left alone (3 have no app control to gate, 1 is
+    already master-only where a fail-open flag can only narrow).
+- **Launched the EAS Android `preview` APK build** (headless, `--non-interactive`). *(Build ID + the
+  direct `.apk` URL are appended below once the build finishes — see "APK build" section.)*
+- **Flagged a real gap (owner chose to defer):** **OTA is NOT set up** — there is no `expo-updates`
+  in the project, so the docs' "OTA-eligible" label is theoretical: today every JS-only change reaches
+  devices ONLY via a full APK rebuild + reinstall. Offered to bake EAS Update into this build (future
+  JS fixes ship over-the-air, no rebuild). **Owner chose to build now as-is, without OTA.**
 
 ## Files changed
-- `src/data/api.ts` — new exported `resetApiState()` (empties `state.*` + clears the 3 PII Maps).
-- `src/store/auth.tsx` — call `resetApiState()` + `setCurrentUser(null,null)` from `onSessionExpired`,
-  `clear()`, and the `persist()` different-user branch.
-- `src/app/(tabs)/home.tsx` — pre-derive `canRosterCap`/`canAnalyticsCap` (view-as caps); filter the
-  `team_roster` + `analytics` widgets on them; AND the fetch gate; add them to the memo deps (scalars,
-  to dodge the preserve-manual-memoization trap).
-- `src/app/team/index.tsx`, `src/app/team/[id].tsx`, `src/app/analytics.tsx` — `RestrictedNotice`
-  early-return gated on `caps.manageTeam` / `caps.orgAnalytics`, ready-guarded.
-- `src/ui/Confirm.tsx`, `src/ui/AppLock.tsx` — `c.onPrimary` on accent-backed foregrounds (white kept
-  only on the always-red danger button and the accent-immune `gradientHero` title).
-- `src/data/__tests__/api-reset.test.ts` (new) — proves the cache stops short-circuiting after teardown.
-- `docs/AUDIT-2026-08-25-loophole-hunt-round4.md` (new) — the full round-4 report.
+- None (source). Docs only: `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/PHASES.md`.
 
 ## Decisions made
-- **Ran the hunt with the Agent tool, not a billed Workflow** — the user said "go" to the boot plan,
-  which is not the explicit multi-agent-orchestration opt-in that Workflow requires; 4 finders + manual
-  verification was cheaper and sufficient.
-- **Fixed only findings that map to an already-decided rule** (Point-9 client-book policy, the
-  shared-handset teardown pattern, the `onPrimary` convention, RBAC-fail-open danger-zone). No new
-  product call was made.
-- **Home fix removes the widget shell, not just the fetch** — mirroring `bookHidden`, so the team user
-  never sees the shell OR its deep-link, and `has('team_roster')` then reads false which also zeroes the
-  fetch. View-as-aware, so a master previewing "view as team" also loses them (the correct preview).
-- **Four items left document-only** — the Hindi/Hinglish `कल` tomorrow=yesterday collision and the
-  hardcoded "Clocked in {time}" both need **human translation copy** (machine translation forbidden);
-  the accent-contrast clamp and accent==danger items would **override the admin's chosen accent**.
+- **Build now, as-is, no OTA** (owner directive: "build the new apk now ASAP"). OTA (`expo-updates`)
+  was offered and declined for this build; it remains a recommended future addition to end the
+  rebuild-per-JS-fix cycle (would need to be baked into a build to take effect).
+- **No code written** — the audit found every self-contained app-side item already shipped; the entire
+  remaining backlog is owner-owned (decisions / OPS-env / data jobs / `[api]` relays / human i18n copy),
+  so there was nothing to "finish first" before building.
 
 ## Known broken / deliberately skipped
-- **Device-unverified** — the auth/tracker/RBAC/theme paths can't be exercised by `tsc`/`npm test`/web;
-  reasoned against real code, mirroring already-working sibling paths.
-- **The team-RBAC leak was live today** under the unseeded-config prod state — now closed in the app;
-  the real authority is still the backend (a team account should also be 403'd server-side on
-  `/team/*` and org aggregates — not filed as it is a pre-existing broader item, and the client gate is
-  defence-in-depth).
-- **Four document-only items** (above) are unfixed by design — they need owner copy or a product call.
-- **Nothing new reaches devices yet** — this commit is OTA-eligible but rides the next OTA / the pending
-  Point-10 native APK.
+- **Device-unverified** — as with all recent work; `tsc`/`npm test`/web do not exercise the native
+  paths (document picker, biometric, background GPS, push).
+- **OTA not configured** — deliberately, per owner (see Decisions). Consequence: the next JS-only fix
+  will require another APK rebuild until OTA is added.
+- **Remaining backlog is 100% owner-owned, cannot be coded here:** owner decisions (Goals P7, WhatsApp
+  automation/multi-number P8, Voice P12, role matrix P6); OPS env (report webhook P1, Spaces upload
+  P10, WhatsApp live-send P8); data jobs (payroll profiles P13, the 3 prod scripts, client-ownership
+  P9); `[api]` relays (tokenized search P2, durable claim↔file link P10); human i18n copy (the two
+  round-4 document-only strings). Full detail: `docs/OWNER-BACKLOG-2026-08-24.md`.
 
 ## Next session starts here
-- Phase: **owner/OPS follow-through** (no self-contained OTA `[m]` client item is outstanding), OR — if
-  the owner wants — supply the human copy for the two i18n document-only items so they can be wired.
+- Phase: **owner/OPS follow-through** — no self-contained OTA `[m]` client item is outstanding. Once
+  the owner acts (installs this APK + sets the OPS switches / runs the data jobs), the next app-side
+  lane is either supplying the two i18n copy strings so they can be wired, or a spec-lock on a net-new
+  owner feature (Goals / WhatsApp automation / Voice).
 - First command: `/boot`
-- Watch out for: **do not tell the owner any of these 5 fixes are "verified working"** — they are
-  code-verified and gate-green but **device-unverified**; and when adding any RBAC affordance, remember
-  the flag alone FAILS OPEN — always AND it with the role-derived `caps.*` (that was the Home leak).
+- Watch out for: **do not tell the owner any shipped fix is "verified working" — all are code-verified
+  and gate-green but device-unverified.** And **this APK carries no OTA**, so any later JS fix means
+  another full rebuild until `expo-updates` is added — mention that if the owner asks for a quick fix
+  after installing.
+
+<!-- APK build (2026-08-25) — updated when the background build completes:
+     Build ID: <pending>
+     Direct .apk URL: <pending — from `eas-cli build:view <id> --json` → .artifacts.applicationArchiveUrl>
+     Source commit built: eb6e9c6 (local working tree; EAS archives the local tree, not origin) -->

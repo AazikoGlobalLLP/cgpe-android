@@ -4285,3 +4285,26 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - Result: `a4e6dd0`. Gates: tsc 0 / npm test **978** (+25) / eslint 0 new errors. Device-unverified
   (native-only surface; web can't exercise the pickers). No `contracts/`/INBOX change.
 
+## 2026-08-25 — Pre-build verification pass + APK build launched (no source change)
+- **Context.** Owner: "verify everything is complete; if perfect, build the APK ASAP; if any app-side
+  feature is unfinished, finish it FIRST — I don't want it to come to rebuilding the APK again." So this
+  session was a completeness audit before a build, not a coding session.
+- **Verdict: app-side complete, build-ready, nothing to finish.** Re-ran all gates (`tsc` 0 / `npm test`
+  **993** / `eslint` 0-errors baseline). Git in sync (`HEAD`==`aaziko/Shivam`==`eb6e9c6`, no uncommitted
+  source). Confirmed the build-forcing native module `expo-document-picker` (~57.0.1) is in
+  `package.json`, imported/used (`ui/DocumentSource.tsx`), and autolinked (no config plugin) → the APK
+  will ship a working picker. Verified the whole 13-point backlog: every self-contained app-side item is
+  shipped; the remainder is 100% owner-owned (decisions / OPS-env / data jobs / `[api]` relays / human
+  i18n copy). Confirmed Band-2 #8's "5 unwired RBAC flags" were correctly left (no app control to gate,
+  or already master-only where a fail-open flag can't widen).
+- **Decision — OTA (`expo-updates`) NOT added; build as-is (owner's call).** Discovered OTA is not set
+  up at all (no `expo-updates`, no `runtimeVersion`, no `updates` config / channel) — so "OTA-eligible"
+  in the docs is theoretical and every JS change currently needs a full rebuild. Offered to bake EAS
+  Update into this build (background-only check, no startup delay, safe on the phones' flaky IPv6/NAT64
+  networks) to end the rebuild-per-fix cycle. **Owner chose "build now ASAP"** → built without it.
+  Recorded as the recommended next infra step; it must be baked into a build to take effect, so it
+  remains a future APK item, not an OTA one.
+- **Build.** `npx eas-cli build -p android --profile preview --non-interactive` (headless; keystore on
+  the Expo server; EAS archives the LOCAL tree = `eb6e9c6`). Build ID + direct `.apk` URL recorded in
+  `HANDOFF.md` on completion.
+

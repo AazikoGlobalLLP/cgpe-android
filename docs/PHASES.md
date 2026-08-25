@@ -14,6 +14,19 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🏗️ 2026-08-25 — PRE-BUILD VERIFICATION PASS + NEW APK BUILD LAUNCHED (no source change).**
+Owner directive: "verify everything is complete; if perfect, build the APK ASAP; if any app-side feature is unfinished,
+finish it FIRST — I don't want to rebuild the APK repeatedly." Ran a full completeness audit: **all gates green**
+(`tsc` 0 / `npm test` **993** / `eslint` 0-errors baseline); git in sync (`HEAD`==`aaziko/Shivam`==`eb6e9c6`, no
+uncommitted source); the build-forcing native module `expo-document-picker` (~57.0.1) confirmed present + imported
+(`ui/DocumentSource.tsx`) + autolinked → the APK ships a working picker; the whole 13-point backlog re-checked — every
+self-contained app-side item is shipped and the remainder is 100% owner-owned (decisions / OPS-env / data jobs / `[api]`
+relays / human i18n copy). **Verdict: nothing app-side to finish; built as-is.** Discovered + flagged that **OTA
+(`expo-updates`) is NOT set up** — offered to bake EAS Update into this build (ends the rebuild-per-JS-fix cycle);
+**owner chose "build now ASAP" without OTA.** Launched `eas-cli build -p android --profile preview --non-interactive`
+(headless; archives the local `eb6e9c6` tree). Build ID + direct `.apk` URL land in `docs/HANDOFF.md` on completion.
+DECISIONS 2026-08-25. **No code changed; device-unverified as ever.**
+
 **✅ 2026-08-25 — LOOPHOLE HUNT ROUND 4 SHIPPED: 5 fixes over the previously-unaudited surfaces (`6736ede`, pushed aaziko Shivam).**
 Four independent finder agents (Agent tool, NOT a billed Workflow) over boot/route-restore/session-lifecycle, tab-nav RBAC,
 i18n honesty, theme/density — each candidate re-verified by hand against the real code. **1 HIGH:** shared-handset in-memory PII

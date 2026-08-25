@@ -1,13 +1,13 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-25
-**Working on right now:** Ran a fourth automated safety review — this time over the parts of the app we hadn't deeply checked yet (start-up, who-can-see-what, the languages, and the look) — and fixed the real problems it found before anyone runs into them.
+**Working on right now:** Double-checked that everything on the app's side is finished and correct, then started building a fresh installable app so the whole team can get all the recent improvements on their phones.
 
 **Done this week:**
-- Fixed a **privacy problem on shared phones**: after one person's login ended, some of their information could still be shown to the next person who signed in — client details, a claim, or a phone number the app had recently loaded. The app now fully clears that the moment any login ends, so nothing carries over to the next person.
-- Closed a **"who can see what" gap**: an ordinary team member's home screen was showing the **team roster and company-wide sales figures** — information meant for team leads and managers. Those now only appear for the right roles, and the pages behind them are locked the same way.
-- Fixed a **display problem**: if a team's brand colour is a light shade, the "Confirm" button and the fingerprint-unlock button could show invisible text. They now always stay readable.
-- Every change was **checked twice** — found by one automated reviewer, then independently re-checked against the real code before fixing — and everything passed our automated checks (**993 tests green**) and is saved to the shared code store.
+- Went through the full checklist one more time before building and confirmed **there is nothing left unfinished on our side** — every improvement from the past weeks is done, saved, and passes all our automated checks (993 checks, all green).
+- Confirmed the part that made a new app version necessary — the new "upload a document / choose a file" feature in Claims — is correctly built in, so it will actually work once installed.
+- **Started building the new app version.** It builds on a server and takes about 15–20 minutes; when it's ready you'll get a direct download link to install it on the team's phones.
+- Pointed out one thing worth doing later: right now, even a tiny text fix means building and reinstalling the whole app again. There's a standard way to push small fixes to phones instantly without reinstalling — we can add it next time if you want to stop rebuilding for every small change.
 
-**Blocked on:** Nothing is blocking. A couple of smaller polish items are waiting on you — the app shows two Hindi words ("tomorrow"/"yesterday") that read the same, which needs the correct wording from a person (we don't let the computer guess translations), and a colour-contrast tweak that would only matter if a very unusual brand colour is chosen.
+**Blocked on:** Nothing on our side. Everything still open needs you — installing this new app version, the server settings already on your list (reports, document storage, WhatsApp), and adding each staff member's payroll and roles so those screens fill in.
 
-**Next:** The remaining work all needs you, not us — building and installing the new app version, and the server switches already on your list. There's no app-side work stuck waiting on our side.
+**Next:** You install and try the new app version, and work through the server-side items on your list. There is no app work waiting on us.
