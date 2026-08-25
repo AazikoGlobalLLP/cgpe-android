@@ -87,6 +87,20 @@ export function mergePayrollRoster(directory: TeamMember[], roster: PayrollRow[]
  * the sum of the server's own payables — an aggregate of computed figures, never a rate the app derived
  * (CLAUDE.md money rule). Kept pure + tested so the count/total logic can't drift from the merge.
  */
+/**
+ * Mask a bank account number to its last 4 digits for the master's payroll-detail view (Point 13,
+ * owner decision 2026-08-25: bank details to master only, account masked with tap-to-reveal). Every
+ * hidden character becomes '•'; the last 4 stay visible. A value of 4 or fewer characters is returned
+ * as-is (nothing meaningful to hide). Pure, so the mask is unit-tested and can't silently regress into
+ * showing the whole number. The reveal action shows the raw `account_no` — this only shapes the
+ * default, masked display.
+ */
+export function maskAccountNumber(account: string): string {
+  const s = String(account ?? '').trim();
+  if (s.length <= 4) return s;
+  return '•'.repeat(s.length - 4) + s.slice(-4);
+}
+
 export function payrollRosterStats(entries: PayrollRosterEntry[]): { members: number; withPay: number; pending: number; totalPayable: number } {
   let withPay = 0;
   let pending = 0;

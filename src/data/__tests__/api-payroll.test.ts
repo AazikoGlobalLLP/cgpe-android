@@ -131,3 +131,79 @@ describe('getPayrollRoster — access and outages are told apart', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+/**
+ * `getPayrollProfile(userId)` → `GET /api/payroll/profiles/:userId` — the master-only "essential
+ * details" (shift + bank) for the payroll DETAIL screen (Point 13). The load-bearing guarantee is
+ * the OWNER RULE (2026-08-25): bank details reach the master only, and Aadhaar/PAN NEVER reach the
+ * phone — so the mapper must WHITELIST fields and drop `aadhar_no`/`pan_no` before they enter app
+ * state. A 404 ("no profile yet") is an answer, not an outage; a 5xx is an outage.
+ */
+const pdoc = (over: Record<string, unknown> = {}) => ({
+  user_id: 'u-asha', salary_amount: 26000, segment: 'day_wise', office_hours: 8.5,
+  shift_timing: { start: '10:00', end: '18:30' },
+  beneficiary_name: 'Asha Patel', bank_name: 'HDFC Bank',
+  account_no: '112233445566', ifsc_code: 'HDFC0001234',
+  aadhar_no: '123412341234', pan_no: 'ABCDE1234F',   // sensitive — must be DROPPED by the app
+  ...over,
+});
+
+describe('getPayrollProfile — request + whitelist', () => {
+  it('GETs /payroll/profiles/:userId with the encoded user_id', async () => {
+    serve(200, { success: true, data: pdoc() });
+    await api.getPayrollProfile('u-asha');
+    expect(urls()[0]).toContain('/payroll/profiles/u-asha');
+  });
+
+  it('maps only the whitelisted fields and DROPS aadhaar/pan entirely', async () => {
+    serve(200, { success: true, data: pdoc() });
+    const r = await api.getPayrollProfile('u-asha');
+    expect(r.status).toBe('ok');
+    if (r.status !== 'ok') return;
+    expect(r.profile).toMatchObject({
+      user_id: 'u-asha', salary_amount: 26000, segment: 'day_wise', office_hours: 8.5,
+      beneficiary_name: 'Asha Patel', bank_name: 'HDFC Bank',
+      account_no: '112233445566', ifsc_code: 'HDFC0001234',
+      shift_timing: { start: '10:00', end: '18:30' },
+    });
+    // The owner rule: Aadhaar/PAN are NEVER on the phone — not even in the in-memory object.
+    expect('aadhar_no' in r.profile).toBe(false);
+    expect('pan_no' in r.profile).toBe(false);
+    expect((r.profile as Record<string, unknown>).aadhar_no).toBeUndefined();
+    expect((r.profile as Record<string, unknown>).pan_no).toBeUndefined();
+  });
+
+  it('returns the account number WHOLE — masking is a render concern, not a data one', async () => {
+    serve(200, { success: true, data: pdoc({ account_no: '999888777666' }) });
+    const r = await api.getPayrollProfile('u-asha');
+    expect(r.status === 'ok' && r.profile.account_no).toBe('999888777666');
+  });
+
+  it('drops a blank shift/bank field to undefined so the screen can mark it "pending"', async () => {
+    serve(200, { success: true, data: pdoc({ bank_name: '   ', shift_timing: {} }) });
+    const r = await api.getPayrollProfile('u-asha');
+    if (r.status !== 'ok') throw new Error('expected ok');
+    expect(r.profile.bank_name).toBeUndefined();
+    expect(r.profile.shift_timing).toBeUndefined();
+  });
+});
+
+describe('getPayrollProfile — missing vs error are told apart', () => {
+  it('returns { status: "missing" } on 404 (no profile yet) and raises NO banner', async () => {
+    serve(404, { success: false, message: 'Payroll profile not found' });
+    expect(await api.getPayrollProfile('u-none')).toEqual({ status: 'missing' });
+    expect(health.getHealth().degraded).toBe(false);
+  });
+
+  it('returns { status: "error" } on 503 (DB down) and DOES raise the outage banner', async () => {
+    serve(503, { success: false, error: 'Database not connected' });
+    expect(await api.getPayrollProfile('u-asha')).toEqual({ status: 'error' });
+    expect(health.getHealth().degraded).toBe(true);
+  });
+
+  it('makes no request at all on a demo session', async () => {
+    api.setAuthToken('demo-token');
+    expect(await api.getPayrollProfile('u-asha')).toEqual({ status: 'error' });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -13,7 +13,8 @@ import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import { fmtDay, inr } from '@/lib/format';
 import * as api from '@/data/api';
-import type { PayrollRow, TaskReportMember, TaskReportResult } from '@/data/api';
+import type { PayrollProfile, PayrollProfileResult, PayrollRow, TaskReportMember, TaskReportResult } from '@/data/api';
+import { maskAccountNumber } from '@/data/payroll';
 import { useAuth } from '@/store/auth';
 import { canSeeTeamPerformance } from '@/store/roles';
 
@@ -32,6 +33,11 @@ import { canSeeTeamPerformance } from '@/store/roles';
  *     never the folded tier) and uses the same proven `{scope:'all'}` call the team-performance
  *     screen makes, then picks this member out of the roster client-side. An admin (non-master)
  *     sees the pay breakdown but not the activity.
+ *   • ESSENTIAL DETAILS (POINT 13) — shift timing + bank details (beneficiary / bank / account /
+ *     IFSC) from `GET /payroll/profiles/:userId`, MASTER-ONLY (owner decision 2026-08-25). The
+ *     account number is MASKED to the last 4 with tap-to-reveal; Aadhaar & PAN are NEVER shown or
+ *     even stored — `getPayrollProfile` drops them before they reach app state. Each blank field
+ *     reads "pending", so a half-filled profile is honest rather than a confident blank.
  *
  * DOUBLE-GATED, like payroll.tsx. The pay data comes from the admin-only `/compute`; a leader
  * (folded into the mobile "admin" tier but 403'd by the backend) must see an honest refusal, not
@@ -60,6 +66,20 @@ type ActivityState =
   | { status: 'ok'; member: TaskReportMember | null }
   | { status: 'error' };
 
+/**
+ * The master-only "essential details" outcome — shift + bank (Point 13). Kept DISTINCT the same way
+ * ActivityState is: a failed profile read (5xx / timeout) must not read as "no bank details on file".
+ *   • skipped — the viewer is not a master, so nothing is fetched or shown.
+ *   • missing — the member has no payroll profile (404) → an honest "profile pending" note.
+ *   • ok      — the profile loaded; individual fields may still be blank ("pending" per field).
+ *   • error   — the read failed; show a could-not-load line, not an empty panel.
+ */
+type EssentialState =
+  | { status: 'skipped' }
+  | { status: 'missing' }
+  | { status: 'ok'; profile: PayrollProfile }
+  | { status: 'error' };
+
 export default function PayrollDetail() {
   const c = useTheme();
   const insets = useSafeAreaInsets();
@@ -81,6 +101,7 @@ export default function PayrollDetail() {
 
   const [row, setRow] = useState<PayrollRow | null | 'missing'>(null);     // null = loading/error, 'missing' = not in roster
   const [activity, setActivity] = useState<ActivityState>({ status: 'skipped' });
+  const [essential, setEssential] = useState<EssentialState>({ status: 'skipped' });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -90,10 +111,12 @@ export default function PayrollDetail() {
   const load = useCallback(async (opts: { refresh?: boolean; current?: () => boolean } = {}) => {
     if (!isAdmin) { setLoading(false); return; }                           // never call the admin endpoint as a non-admin
     if (opts.refresh) setRefreshing(true);
-    // Pay from the admin roster (find this member); activity only if a real master (proven scope=all).
-    const [roster, report] = await Promise.all([
+    // Pay from the admin roster (find this member); activity + bank/shift essentials only if a real
+    // master (proven scope=all; bank details are master-only per the owner's Point-13 decision).
+    const [roster, report, prof] = await Promise.all([
       api.getPayrollRoster(year, month),
       isMaster ? api.getTaskReport(monthKey, { scope: 'all' }) : Promise.resolve<TaskReportResult | null>(null),
+      isMaster ? api.getPayrollProfile(userId) : Promise.resolve<PayrollProfileResult>({ status: 'error' }),
     ]);
     if (!alive.current || (opts.current && !opts.current())) return;
     if (roster === null) {
@@ -101,6 +124,17 @@ export default function PayrollDetail() {
     } else {
       const found = roster.find((r) => String(r.user_id) === userId) ?? null;
       setRow(found ?? 'missing');
+    }
+    // Essential details (master-only). A 404 is "no profile yet", not an outage; keep it distinct
+    // from a read error so a blank never reads as a confident "no bank details".
+    if (!isMaster) {
+      setEssential({ status: 'skipped' });
+    } else if (prof.status === 'ok') {
+      setEssential({ status: 'ok', profile: prof.profile });
+    } else if (prof.status === 'missing') {
+      setEssential({ status: 'missing' });
+    } else {
+      setEssential({ status: 'error' });
     }
     // Keep "report failed" distinct from "member did nothing" — a null-from-error would otherwise
     // render as a confident empty list (the deploy-gap 404 is silent, so this is the only signal).
@@ -266,9 +300,35 @@ export default function PayrollDetail() {
               </Appear>
             ) : null}
 
-            {/* ---------------- Activity (master-only) ---------------- */}
+            {/* ---------------- Essential details: shift + bank (master-only, Point 13) ---------------- */}
             {isMaster ? (
               <Appear index={5}>
+                <View>
+                  <SectionHeader title="Essential details" />
+                  {essential.status === 'error' ? (
+                    <Card>
+                      <Txt size={font.sub} color={c.muted} numberOfLines={3}>
+                        {health.degraded
+                          ? 'The bank & shift details could not be reached, so this is blank rather than empty. Pull down to try again.'
+                          : 'We couldn’t load this member’s bank & shift details. Pull down or retry.'}
+                      </Txt>
+                    </Card>
+                  ) : essential.status === 'missing' ? (
+                    <Card>
+                      <Txt size={font.sub} color={c.muted} numberOfLines={3}>
+                        No payroll profile is set up for this member yet, so their shift and bank details are pending. An admin adds them in the panel.
+                      </Txt>
+                    </Card>
+                  ) : essential.status === 'ok' ? (
+                    <EssentialDetails profile={essential.profile} />
+                  ) : null}
+                </View>
+              </Appear>
+            ) : null}
+
+            {/* ---------------- Activity (master-only) ---------------- */}
+            {isMaster ? (
+              <Appear index={6}>
                 <View>
                   <SectionHeader title="Completed this month" />
                   {activity.status === 'error' ? (
@@ -300,6 +360,65 @@ function Fact({ label, value }: { label: string; value: string }) {
       <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{label}</Txt>
       <Metric value={value} size={font.body} />
     </Row>
+  );
+}
+
+/* A "label … value" line for the essential-details panel that renders an amber "Pending" pill when
+ * the value is blank — so a half-filled profile reads honestly rather than as an empty value. A
+ * `children` slot lets the account row supply its own masked/reveal control. */
+function EssentialFact({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
+  const c = useTheme();
+  const has = value != null && value.trim().length > 0;
+  return (
+    <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: spacing.md }}>
+      <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{label}</Txt>
+      {children ? children : has ? <Metric value={value!} size={font.body} /> : <Pill label="Pending" tone="warning" small />}
+    </Row>
+  );
+}
+
+/* The account number: masked to its last 4 by default, tap to reveal (owner decision — bank details
+ * to the master only, account masked). A blank account shows the "Pending" pill like any other field.
+ * The raw number is only ever displayed on the master's explicit tap; it is never persisted. */
+function AccountReveal({ account }: { account?: string }) {
+  const c = useTheme();
+  const [revealed, setRevealed] = useState(false);
+  const acct = (account ?? '').trim();
+  if (!acct) return <EssentialFact label="Account no." />;
+  return (
+    <EssentialFact label="Account no.">
+      <Pressable
+        onPress={() => { haptics.tap(); setRevealed((v) => !v); }}
+        accessibilityRole="button"
+        accessibilityLabel={revealed ? 'Hide account number' : 'Reveal account number'}
+        hitSlop={8}
+        style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+      >
+        <Metric value={revealed ? acct : maskAccountNumber(acct)} size={font.body} />
+        <Txt size={font.tiny} color={c.primary} weight="700">{revealed ? 'Hide' : 'Reveal'}</Txt>
+      </Pressable>
+    </EssentialFact>
+  );
+}
+
+/* Shift timing + bank details for the master (Point 13). Salary/segment already live in "Pay basis",
+ * so this panel adds only what isn't shown there: the shift window and the four bank fields. Aadhaar
+ * and PAN are never included — getPayrollProfile drops them before they reach app state. */
+function EssentialDetails({ profile }: { profile: PayrollProfile }) {
+  const c = useTheme();
+  const st = profile.shift_timing;
+  const shift = st && (st.start || st.end) ? `${st.start ?? '—'}–${st.end ?? '—'}` : '';
+  return (
+    <Card style={{ gap: spacing.md }}>
+      <EssentialFact label="Shift" value={shift} />
+      <EssentialFact label="Account holder" value={profile.beneficiary_name} />
+      <EssentialFact label="Bank" value={profile.bank_name} />
+      <AccountReveal account={profile.account_no} />
+      <EssentialFact label="IFSC" value={profile.ifsc_code} />
+      <Txt size={font.tiny} color={c.faint} numberOfLines={2}>
+        Bank details are shown to the master account only. Aadhaar and PAN are never shown on the phone.
+      </Txt>
+    </Card>
   );
 }
 

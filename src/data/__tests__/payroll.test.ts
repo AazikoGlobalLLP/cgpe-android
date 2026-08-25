@@ -12,7 +12,7 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { mergePayrollRoster, payrollRosterStats, type PayrollRosterEntry } from '@/data/payroll';
+import { maskAccountNumber, mergePayrollRoster, payrollRosterStats, type PayrollRosterEntry } from '@/data/payroll';
 import type { PayrollRow } from '@/data/api';
 import type { TeamMember } from '@/data/team';
 
@@ -148,5 +148,29 @@ describe('payrollRosterStats', () => {
     const stats = payrollRosterStats(entries);
     expect(stats.totalPayable).toBe(0);
     expect(stats.withPay).toBe(0);
+  });
+});
+
+describe('maskAccountNumber', () => {
+  it('masks all but the last 4 digits with bullets', () => {
+    expect(maskAccountNumber('123456789')).toBe('•••••6789');   // 9 digits → 5 dots + 6789
+    expect(maskAccountNumber('12345678901234')).toBe('••••••••••1234');
+  });
+
+  it('shows a value of 4 or fewer characters as-is (nothing meaningful to hide)', () => {
+    expect(maskAccountNumber('1234')).toBe('1234');
+    expect(maskAccountNumber('12')).toBe('12');
+  });
+
+  it('reveals exactly the last four — the masked and raw strings share their tail', () => {
+    const raw = '55667788990011';
+    expect(maskAccountNumber(raw).slice(-4)).toBe(raw.slice(-4));
+    expect(maskAccountNumber(raw)).not.toBe(raw);                // it IS masked, not a passthrough
+  });
+
+  it('trims and tolerates a blank / whitespace input', () => {
+    expect(maskAccountNumber('  9876543210  ')).toBe('••••••3210');
+    expect(maskAccountNumber('')).toBe('');
+    expect(maskAccountNumber('   ')).toBe('');
   });
 });

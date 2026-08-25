@@ -2744,6 +2744,76 @@ export async function getMyEarnings(month: string): Promise<MyEarnings> {
   }
 }
 
+/**
+ * ONE member's payroll profile — the admin-only "essential details" the payroll DETAIL screen shows
+ * a MASTER (Point 13). `GET /api/payroll/profiles/:userId` (`contracts/api.md` §`/api/payroll`;
+ * `:userId` is `Profile.user_id`, a string, NOT `_id`). Admin/super_admin only — the whole payroll
+ * router is `authorize('admin')` — so a leader/team token is 403'd; the screen gates on the real
+ * master role before calling, so a 403 is a belt-and-braces edge.
+ *
+ * ⚠️ AADHAAR & PAN ARE DROPPED HERE. The server returns the full document, but the owner's decision
+ * (2026-08-25) is bank details to the MASTER only, Aadhaar/PAN NEVER on the phone. So this WHITELISTS
+ * only the fields the app may surface — bank + shift + the non-sensitive salary basics — and never
+ * copies `aadhar_no`/`pan_no` into app state at all. The account number is still masked at render
+ * (payroll-detail.tsx); this function returns it whole for the master's tap-to-reveal.
+ *
+ * THREE OUTCOMES, told apart (empty ≠ could-not-load, CLAUDE.md rule 4):
+ *   - `ok`      — a real profile (any bank field may still be blank → the screen marks it "pending").
+ *   - `missing` — HTTP **404** `'Payroll profile not found'`: this member has no payroll profile. An
+ *                 answer, not an outage (the request completed) — no banner.
+ *   - `error`   — a 5xx / dead network / read-timeout abort / contract-shape miss. `reportIfOutage`
+ *                 raises the banner (answer statuses 401/403/404/501 excepted).
+ */
+export type PayrollProfile = {
+  user_id: string;
+  salary_amount?: number;
+  segment?: string;
+  office_hours?: number;
+  shift_timing?: { start?: string; end?: string };
+  beneficiary_name?: string;
+  bank_name?: string;
+  account_no?: string;
+  ifsc_code?: string;
+  // aadhar_no / pan_no are DELIBERATELY absent — never surfaced, never stored on the phone.
+};
+
+export type PayrollProfileResult =
+  | { status: 'ok'; profile: PayrollProfile }
+  | { status: 'missing' }
+  | { status: 'error' };
+
+export async function getPayrollProfile(userId: string): Promise<PayrollProfileResult> {
+  if (FORCE_DEMO || !sessionReal) return { status: 'error' };                  // no request attempted
+  const id = String(userId ?? '').trim();
+  if (!id) return { status: 'error' };
+  const path = `/payroll/profiles/${encodeURIComponent(id)}`;
+  const key = healthKey(path);
+  const s = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+  try {
+    const { ok, status, json } = await req(path, {}, REQUEST_TIMEOUT, key);
+    if (status === 404) return { status: 'missing' };                          // no profile for this member
+    if (!ok) { reportIfOutage(status, key); return { status: 'error' }; }
+    const data = json?.data;
+    if (!isObj(data)) { reportFailure(key); return { status: 'error' }; }       // 200 but the shape drifted
+    const st = isObj(data.shift_timing) ? { start: s(data.shift_timing.start), end: s(data.shift_timing.end) } : undefined;
+    const profile: PayrollProfile = {
+      user_id: String(data.user_id ?? id),
+      salary_amount: typeof data.salary_amount === 'number' ? data.salary_amount : undefined,
+      segment: s(data.segment),
+      office_hours: typeof data.office_hours === 'number' ? data.office_hours : undefined,
+      shift_timing: st && (st.start || st.end) ? st : undefined,
+      beneficiary_name: s(data.beneficiary_name),
+      bank_name: s(data.bank_name),
+      account_no: s(data.account_no),
+      ifsc_code: s(data.ifsc_code),
+    };
+    return { status: 'ok', profile };
+  } catch {
+    reportFailure(key);                                                        // dead network or the abort
+    return { status: 'error' };
+  }
+}
+
 /* --------------------------------------------------- Movement tracking */
 export type TrackPoint = { lat: number; lng: number; at?: string | number; accuracy?: number; speed?: number; heading?: number; battery?: number };
 export type TrackSession = { session_id: string; date: string; started_at: string; ended_at: string | null; point_count: number; distance_m: number };
