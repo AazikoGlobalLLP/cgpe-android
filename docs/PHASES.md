@@ -14,6 +14,21 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-25 — POINT 13 PAYROLL SHIPPED: whole-team roster + master-only bank panel (2 commits, pushed aaziko Shivam).**
+The "only Pavitra shows" bug was a data-seeding gap: `GET /payroll/compute` iterates only `PayrollProfile` docs.
+Shipped two OTA slices: (1) **Roster merge** `9ac8c18` — new pure `data/payroll.ts` `mergePayrollRoster`
+left-joins the full staff directory (`getAssignableTeam` → `/profiles`) with the compute roster, so **every**
+member appears and a profile-less one shows an amber **"Data pending"** pill (never dropped); header gains a
+`N data pending` count. `payrollRosterStats` pins the counts/total. (2) **Master-only Essential details**
+`7a49774` — owner decided (AskUserQuestion) **bank details to the MASTER only, account masked with tap-to-reveal,
+Aadhaar/PAN NEVER on the phone**. New `getPayrollProfile(userId)` (`GET /payroll/profiles/:userId`, Phase 25a,
+verified LIVE on prod 401-not-404) WHITELISTS shift + bank and **drops `aadhar_no`/`pan_no` before they enter app
+state**; detail screen renders shift + beneficiary/bank/account(masked)/IFSC, each blank field "pending", gated on
+real super_admin via `canSeeTeamPerformance`. tsc 0 / npm test **953** (+22) / eslint 0 new errors. OTA-eligible,
+device-unverified. No contract/INBOX change. DECISIONS 2026-08-25. **Owner-owned unblock:** the DATA job — create
+`payroll_profiles` for the rest of the team (until then they correctly read "data pending"). **Optional (flagged,
+not filed):** strip Aadhaar/PAN in transit = a backend `[api]` hardening, only if owner asks.
+
 **✅ 2026-08-25 — ROLE IDENTITY MODEL + SALES-CLIENT CARVE-OUT + BAND 2 #8 GATES (3 commits, pushed aaziko Shivam).**
 Deeply analyzed the merged `staff_unified` collection and reconciled all 21 staff with the owner + their senior
 (only Ankit Shah changes vs DB: advisor→super_admin, an owner-run script). Then shipped three units:
@@ -42,7 +57,7 @@ progress = clamp01(user_progress/target_goal) (0/missing target → 0, never NaN
 (already a correct consumer). Verified vs deployed `origin/main` `49482e9` (route+model byte-identical). +8 tests.
 tsc 0 / npm test **910** (+8) / eslint 0 new. OTA-eligible, device-unverified. Spec `docs/spec/BAND2-9-contest-mapper.md`.
 
-**🆕 2026-08-25 — BACKLOG POINT 13 ADDED (Payroll shows only one member) — triage only, not built.**
+**✅ 2026-08-25 — BACKLOG POINT 13 (Payroll shows only one member) — NOW BUILT (see the top entry). Triage record below.**
 Owner observation: only "Pavitra" appears in Payroll. Verified: `GET /api/payroll/compute` iterates ONLY
 `PayrollProfile` docs (`routes/payroll.js:327`), so a member shows only if an admin created a payroll profile
 (salary+segment) for them — a data-seeding gap (like Point 6 RBAC-unseeded), not a compute bug. Documented the
@@ -2116,15 +2131,15 @@ worklist. These three are the immediate lane:**
    ✅ #6 premium-403 fix + dead-code (`fb64734`), ✅ #6b retire /premium (`9967db3`), ✅ #7 client-access
    master/admin-only (`4575106`), ✅ **#9 Contest mapper (`9793327`)**, ✅ **role identity model (`9f8e47d`)**,
    ✅ **#7-refinement SALES-advisor own-only client view / owner Q4 (`cc4657f`, backend P90 verified live first)**,
-   ✅ **#8 wire the inert RBAC feature-gates (`6b63a1e`)**. **Every self-contained OTA Band-2 item is now shipped,
-   and #8 is done — no longer blocked on the P6 matrix (the flags are wired fail-open and a seeded config now
-   tightens them).** Next lane depends on an owner input or a native build: **Point 13 Payroll** (P1 — roster-merge
-   + "data pending" warnings + bank/essential-details panel; the details half needs the owner's PII/role/masking
-   decision, and the real unblock is the owner/OPS data job of creating payroll profiles for the team) · **#10
-   Document picker** (P1, NOT OTA — `expo-document-picker` native → a new APK + OPS Spaces env). **Owner-owned to
-   land this session's work on device:** run the 3 prod scripts (`promoteStaffSuperAdmin.js` / `addGeneralInsuranceDept.js
-   --commit` / `seedAppRolePreferences.js`) + do the on-device sales-advisor Clients check. **Also open (owner call):**
-   gate the WhatsApp hub / search-Tickets group / task-contact sheet for team too, or leave them (separate surfaces)?
+   ✅ **#8 wire the inert RBAC feature-gates (`6b63a1e`)**, ✅ **Point 13 Payroll whole-team roster + master-only
+   bank panel (`9ac8c18`, `7a49774`; owner decided bank=master/masked, Aadhaar/PAN off the phone)**. **Every
+   self-contained OTA Band-2 item AND Point 13 are now shipped.** The one remaining major backlog item is native:
+   **#10 Document picker** (P1, NOT OTA — `expo-document-picker` native → a new APK + OPS DigitalOcean Spaces env;
+   scope BOTH the picker code and the OPS switch). **Owner-owned to land shipped work on device:** run the 3 prod
+   scripts (`promoteStaffSuperAdmin.js` / `addGeneralInsuranceDept.js --commit` / `seedAppRolePreferences.js`), do
+   the on-device sales-advisor Clients check, AND **the Point 13 DATA job — create `payroll_profiles` for the rest
+   of the team** (until then the team reads "data pending" — the honest state, not a bug). **Also open (owner
+   call):** gate the WhatsApp hub / search-Tickets group / task-contact sheet for team too, or leave them?
 2. **Owner Band-1 actions (in parallel — mostly plain-language relays in the backlog doc):**
    3 OPS switches (report webhook env / DigitalOcean Spaces env / WhatsApp n8n live-send mode); **P9 client-access
    DECIDED (master/admin only) and the backend-403 `[api]` relay is now FILED at the top of `../contracts/INBOX.md`

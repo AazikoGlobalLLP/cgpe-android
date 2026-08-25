@@ -4152,3 +4152,30 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - Result: 3 commits (`9f8e47d` identity, `cc4657f` sales carve-out, `6b63a1e` #8 gates), all pushed aaziko
   Shivam. Final gates: tsc 0 / npm test **931** / eslint 0 new errors. Device-unverified (OTA-eligible).
   Still owner-owned: the 3 prod scripts + the on-device sales-advisor Clients check.
+
+## 2026-08-25 — Point 13: Payroll whole-team roster + master-only bank panel (2 commits, pushed aaziko Shivam)
+
+- **Symptom (owner):** Payroll shows only "Pavitra". **Root cause (verified):** `GET /payroll/compute`
+  iterates ONLY `PayrollProfile` docs — a member shows only if an admin created a payroll profile for
+  them. A data-seeding gap (like Point 6 RBAC-unseeded), not a compute bug.
+- **Decision — make the gap VISIBLE, don't hide it.** New pure `mergePayrollRoster` (`data/payroll.ts`)
+  left-joins the full staff directory (`getAssignableTeam` → `/profiles`) with the compute roster: every
+  member appears, and a profile-less one renders an amber "Data pending" pill. Join by id with a
+  normalized-name fallback (like `roster.ts`); orphan payroll rows kept, never dropped. `roster === null`
+  (service down) still wins over the merge → honest could-not-load, not "everyone pending".
+- **Decision — bank details on the phone: MASTER only, account MASKED, Aadhaar/PAN NEVER** (owner via
+  AskUserQuestion, 2026-08-25). Deliberately reverses the earlier "no PII on the phone" rule, but only for
+  the master (real super_admin via `canSeeTeamPerformance`, never the folded tier) and only bank fields.
+  Account masked to last-4 with tap-to-reveal (`maskAccountNumber`, pure + tested).
+- **Decision — drop Aadhaar/PAN in `getPayrollProfile`, not just hide in UI.** The mapper WHITELISTS
+  bank + shift + salary basics and never copies `aadhar_no`/`pan_no` into app state — the strongest
+  client guarantee without a backend change. Endpoint `GET /payroll/profiles/:userId` is admin-only,
+  Phase 25a, verified LIVE on prod (401 not 404) — no backend change, no contract change.
+- **Deferred (owner-owned, NOT filed):** (1) the DATA job — create `payroll_profiles` for the team
+  (the real unblock; until then the team reads "data pending"). (2) The transit caveat — the admin
+  endpoint still SENDS Aadhaar/PAN in the JSON; the app never stores/shows them. Stripping in transit
+  needs a backend change and the panel needs the full doc, so it stays an optional `[api]` hardening.
+- **Chose the client-side merge over the optional `[api]` include-all-staff compute mode** — no
+  contract change, and the roster gap is a data problem not a wire problem.
+- Result: `9ac8c18` (roster merge), `7a49774` (essential details). Gates: tsc 0 / npm test **953**
+  (+22) / eslint 0 new errors. Device-unverified (OTA-eligible). No `contracts/`/INBOX change.
