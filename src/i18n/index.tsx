@@ -136,6 +136,20 @@ const en = {
   'guide.step2Title': "See today's tasks", 'guide.step2Body': 'Your work for today is listed right here on this screen.',
   'guide.step3Title': 'Mark done', 'guide.step3Body': 'Swipe a task, or tap the tick, once it is finished.',
   'guide.gotIt': 'Got it',
+  // PHASE 77 — Settings › Storage. All five languages were SUPPLIED BY THE OWNER on 2026-08-26 and
+  // are not machine-translated. `Cancel` deliberately reuses `common.cancel` rather than adding a
+  // twelfth key. Where a Hinglish/Roman-Gujarati value below is the plain English word, that is the
+  // owner's own choice and the same sanctioned trade-vocab fallback as `common.whatsapp`.
+  'storage.title': 'Storage',
+  'storage.description': 'Manage the files and downloads the app has saved temporarily.',
+  'storage.clear': 'Clear cached downloads',
+  'storage.clearing': 'Clearing cache…',
+  'storage.confirmTitle': 'Clear cache?',
+  'storage.confirmBody': 'This removes the temporary files the app has saved. Your original files are not affected.',
+  'storage.clearCta': 'Clear',
+  'storage.doneBody': 'Temporary files were removed successfully.',
+  'storage.partialBody': 'Some temporary files could not be removed. You can try again.',
+  'storage.failBody': 'There was a problem removing the temporary files. Please try again.',
 };
 
 /** Every dictionary carries exactly the English key set. */
@@ -211,6 +225,16 @@ const gu: Dict = {
   'guide.step2Title': 'આજના ટાસ્ક જુઓ', 'guide.step2Body': 'આજનું તમારું કામ આ જ સ્ક્રીન પર અહીં દર્શાવેલું છે.',
   'guide.step3Title': 'પૂર્ણ તરીકે માર્ક કરો', 'guide.step3Body': 'ટાસ્ક પૂર્ણ થયા પછી તેને સ્વાઇપ કરો અથવા ટિક પર ટેપ કરો.',
   'guide.gotIt': 'સમજાયું',
+  'storage.title': 'સ્ટોરેજ',
+  'storage.description': 'એપ દ્વારા તાત્કાલિક રીતે સેવ કરેલી ફાઇલો અને ડાઉનલોડ મેનેજ કરો.',
+  'storage.clear': 'કૅશ કરેલા ડાઉનલોડ સાફ કરો',
+  'storage.clearing': 'કૅશ સાફ થઈ રહ્યો છે…',
+  'storage.confirmTitle': 'કૅશ સાફ કરવો છે?',
+  'storage.confirmBody': 'આ એપ દ્વારા સેવ કરેલી તાત્કાલિક ફાઇલો દૂર કરશે. તમારી મૂળ ફાઇલો પર કોઈ અસર નહીં થાય.',
+  'storage.clearCta': 'સાફ કરો',
+  'storage.doneBody': 'તાત્કાલિક ફાઇલો સફળતાપૂર્વક દૂર કરવામાં આવી છે.',
+  'storage.partialBody': 'કેટલીક તાત્કાલિક ફાઇલો દૂર કરી શકાઈ નથી. તમે ફરી પ્રયાસ કરી શકો છો.',
+  'storage.failBody': 'તાત્કાલિક ફાઇલો દૂર કરતી વખતે સમસ્યા આવી. કૃપા કરીને ફરી પ્રયાસ કરો.',
 };
 
 const hi: Dict = {
@@ -282,6 +306,16 @@ const hi: Dict = {
   'guide.step2Title': 'आज के टास्क देखें', 'guide.step2Body': 'आज का आपका काम इसी स्क्रीन पर यहाँ दिया गया है।',
   'guide.step3Title': 'पूरा मार्क करें', 'guide.step3Body': 'टास्क पूरा होने के बाद उसे स्वाइप करें या टिक पर टैप करें।',
   'guide.gotIt': 'समझ गया',
+  'storage.title': 'स्टोरेज',
+  'storage.description': 'ऐप द्वारा अस्थायी रूप से सेव की गई फ़ाइलें और डाउनलोड प्रबंधित करें।',
+  'storage.clear': 'कैश किए गए डाउनलोड साफ़ करें',
+  'storage.clearing': 'कैश साफ़ किया जा रहा है…',
+  'storage.confirmTitle': 'कैश साफ़ करें?',
+  'storage.confirmBody': 'यह ऐप द्वारा सेव की गई अस्थायी फ़ाइलें हटा देगा। आपकी मूल फ़ाइलें प्रभावित नहीं होंगी।',
+  'storage.clearCta': 'साफ़ करें',
+  'storage.doneBody': 'अस्थायी फ़ाइलें सफलतापूर्वक हटा दी गई हैं।',
+  'storage.partialBody': 'कुछ अस्थायी फ़ाइलें हटाई नहीं जा सकीं। आप दोबारा कोशिश कर सकते हैं।',
+  'storage.failBody': 'अस्थायी फ़ाइलें हटाते समय समस्या हुई। कृपया दोबारा कोशिश करें।',
 };
 
 /**
@@ -358,6 +392,16 @@ const hiEn: Dict = {
   'guide.step2Title': 'Aaj ke tasks dekhein', 'guide.step2Body': 'Aaj ka aapka kaam isi screen par yahin listed hai.',
   'guide.step3Title': 'Done mark karein', 'guide.step3Body': 'Task complete hone ke baad use swipe karein ya tick par tap karein.',
   'guide.gotIt': 'Samajh gaya',
+  'storage.title': 'Storage',
+  'storage.description': 'App ke temporary saved files aur downloads manage karein.',
+  'storage.clear': 'Cached downloads saaf karein',
+  'storage.clearing': 'Cache clear ho raha hai…',
+  'storage.confirmTitle': 'Cache clear karein?',
+  'storage.confirmBody': 'Isse app ke temporary saved files remove ho jayenge. Aapki original files par koi asar nahi padega.',
+  'storage.clearCta': 'Clear',
+  'storage.doneBody': 'Temporary files successfully remove ho gayi hain.',
+  'storage.partialBody': 'Kuch temporary files remove nahi ho saki. Aap dobara try kar sakte hain.',
+  'storage.failBody': 'Temporary files remove karte waqt problem aayi. Please dobara try karein.',
 };
 
 /**
@@ -434,6 +478,16 @@ const guEn: Dict = {
   'guide.step2Title': 'Aajna tasks juo', 'guide.step2Body': 'Aajnu tamaru kaam aa j screen par ahi listed chhe.',
   'guide.step3Title': 'Puru mark karo', 'guide.step3Body': 'Task puro thai gaya pachi tene swipe karo athva tick par tap karo.',
   'guide.gotIt': 'Samajayu',
+  'storage.title': 'Storage',
+  'storage.description': 'App na temporary saved files ane downloads manage karo.',
+  'storage.clear': 'Cached downloads clear karo',
+  'storage.clearing': 'Cache clear thai rahyo chhe…',
+  'storage.confirmTitle': 'Cache clear karvo chhe?',
+  'storage.confirmBody': 'Aa app na temporary saved files remove karshe. Tamari original files par koi asar nahi pade.',
+  'storage.clearCta': 'Clear',
+  'storage.doneBody': 'Temporary files successfully remove thai gai chhe.',
+  'storage.partialBody': 'Ketlik temporary files remove thai shaki nathi. Tame fari try kari shako cho.',
+  'storage.failBody': 'Temporary files remove karta problem aavi. Please fari try karo.',
 };
 
 /**

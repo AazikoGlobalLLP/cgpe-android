@@ -60,7 +60,10 @@ describe('i18n dictionaries — parity and value quality', () => {
     // English trade-vocab word 'Search' in ALL five (the same sanctioned fallback as 'WhatsApp'
     // etc.; it is also the natural word in Hinglish/Roman-Gujarati). Native gu/hi script copy is
     // owner-owed if desired — NOT machine-translated here.
-    expect(EN_KEYS.length).toBe(133);
+    // Bumped 133 → 143 for the 10 Phase 77 `storage.*` keys (2026-08-26) — Settings › Storage and
+    // the clear-cache flow. Owner human copy in all 5 languages, supplied in-chat, NOT machine-
+    // translated. `Cancel` reuses the existing `common.cancel` rather than adding an 11th key.
+    expect(EN_KEYS.length).toBe(143);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

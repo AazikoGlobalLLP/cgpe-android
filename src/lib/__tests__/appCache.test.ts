@@ -1,12 +1,16 @@
 /**
- * PHASE 77 — the "Clear cached downloads" wording.
+ * PHASE 77 — the "Clear cached downloads" outcome logic.
  *
- * The point of these is not the English; it is that a partial clear is never reported as a full
- * one, and that no branch ever produces a size. The owner asked why the app grows from 63 MB to
- * 125 MB, and the temptation with a question like that is to answer it with a number the app
- * cannot measure — none of the three underlying calls reports bytes (`Image.clearDiskCache()`
- * resolves a boolean, the WebView's `clearCache(true)` returns nothing, `Directory.delete()`
- * returns nothing). The last test here is the guard against a figure creeping back in.
+ * Two things are pinned here. First, a partial clear is never reported as a full one: the whole
+ * value of the control is that its answer can be trusted. Second, this module returns i18n KEYS
+ * and never a sentence — the owner supplied all five languages for `storage.*` on 2026-08-26, and
+ * a literal creeping back in here would ship untranslated English to 21 field phones.
+ *
+ * There is deliberately no megabyte figure anywhere, in any language. The owner asked why the app
+ * grows from 63 MB to 125 MB, and the temptation is to answer with a number the app cannot
+ * measure — none of the three underlying calls reports bytes (`Image.clearDiskCache()` resolves a
+ * boolean, the WebView's `clearCache(true)` returns nothing, `Directory.delete()` returns
+ * nothing). Keys instead of sentences makes that fabrication impossible by construction.
  */
 import { describe, expect, it } from 'vitest';
 import { describeCacheClear } from '@/lib/appCache';
@@ -25,13 +29,13 @@ describe('describeCacheClear', () => {
   it('reports a full clear as a success', () => {
     const r = describeCacheClear(R({ tiles: true, images: true, temp: true }));
     expect(r.tone).toBe('success');
-    expect(r.message).toContain('Cached downloads cleared');
+    expect(r.messageKey).toBe('storage.doneBody');
   });
 
   it('says plainly when nothing was cleared, and offers the one thing that helps', () => {
     const r = describeCacheClear(R());
     expect(r.tone).toBe('warning');
-    expect(r.message).toContain('Nothing could be cleared');
+    expect(r.messageKey).toBe('storage.failBody');
   });
 
   it('NEVER calls a partial clear a success — all six mixed outcomes stay a warning', () => {
@@ -43,7 +47,7 @@ describe('describeCacheClear', () => {
     for (const r of partial) {
       const said = describeCacheClear(r);
       expect(said.tone, JSON.stringify(r)).toBe('warning');
-      expect(said.message, JSON.stringify(r)).toContain('not all of them');
+      expect(said.messageKey, JSON.stringify(r)).toBe('storage.partialBody');
     }
   });
 
@@ -53,18 +57,14 @@ describe('describeCacheClear', () => {
     expect(describeCacheClear(R({ temp: true })).tone).toBe('warning');
   });
 
-  it('never claims an amount of space — no branch may contain a digit (convention 4)', () => {
-    for (const r of ALL) {
-      const m = describeCacheClear(r).message;
-      expect(m, JSON.stringify(r)).not.toMatch(/\d+\s*(MB|KB|GB|bytes)/i);
-      expect(m, JSON.stringify(r)).not.toMatch(/\d/);
-    }
-  });
-
-  it('always returns a non-empty message and a valid tone', () => {
+  it('returns only keys the dictionaries actually define, never a raw sentence', () => {
+    // The guard against this module drifting back to English. `storage.*` copy was supplied by the
+    // owner in all five languages; a literal here would ship untranslated to 21 field phones.
+    const KNOWN = ['storage.doneBody', 'storage.partialBody', 'storage.failBody'];
     for (const r of ALL) {
       const said = describeCacheClear(r);
-      expect(said.message.length).toBeGreaterThan(0);
+      expect(KNOWN, JSON.stringify(r)).toContain(said.messageKey);
+      expect(said.messageKey, JSON.stringify(r)).not.toMatch(/\s/);
       expect(['success', 'warning']).toContain(said.tone);
     }
   });

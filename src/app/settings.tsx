@@ -250,11 +250,10 @@ export default function Settings() {
     if (clearing) return;
     haptics.tap();
     const go = await confirm({
-      title: 'Clear cached downloads?',
-      message:
-        'Frees the space taken by documents, photos and map images this phone has already downloaded. Anything still needed downloads again, so do this on WiFi rather than in the field. It does not sign you out and it does not delete any of your work. The app’s own install size does not change — your phone’s Settings › Apps › CGPE Connect › Storage shows the real figures.',
-      confirmText: 'Clear',
-      cancelText: 'Cancel',
+      title: t('storage.confirmTitle'),
+      message: t('storage.confirmBody'),
+      confirmText: t('storage.clearCta'),
+      cancelText: t('common.cancel'),
       icon: 'trash-outline',
     });
     if (!go || !live.current) return;
@@ -265,10 +264,12 @@ export default function Settings() {
   const onCacheCleared = (r: CacheClearResult) => {
     setClearing(false);
     if (!live.current) return;
+    // `describeCacheClear` hands back an i18n KEY, not a sentence, so the outcome copy is
+    // translated like everything else on this screen rather than being English-only.
     const said = describeCacheClear(r);
     if (said.tone === 'success') haptics.success();
     else haptics.warn();
-    toast(said.message, said.tone === 'success' ? 'success' : 'info');
+    toast(t(said.messageKey), said.tone === 'success' ? 'success' : 'info');
   };
 
   const themeValue = c.scheme === 'dark' ? 'Dark, follows system' : 'Light, follows system';
@@ -441,14 +442,11 @@ export default function Settings() {
                 what it cannot: the install size is not a cache and no in-app button can shrink it.
                 No megabyte figure is shown because nothing underneath reports one, and a guessed
                 number would be exactly the fabrication convention 4 exists to stop. */}
-            <ListSection
-              title="Storage"
-              footer="Documents, photos and map images stay on the phone after you open them, which is why the app grows with use. Clearing frees that space; anything still needed downloads again. The app’s own install size is not affected — Settings › Apps › CGPE Connect › Storage shows the real figures."
-            >
+            <ListSection title={t('storage.title')} footer={t('storage.description')}>
               <Appear index={0}>
                 <DataRow
                   icon="trash-outline"
-                  label={clearing ? 'Clearing…' : 'Clear cached downloads'}
+                  label={clearing ? t('storage.clearing') : t('storage.clear')}
                   value=""
                   onPress={clearCaches}
                 />

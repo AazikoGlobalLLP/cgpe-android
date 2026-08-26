@@ -40,7 +40,12 @@ export type CacheClearResult = {
 };
 
 export type CacheClearMessage = {
-  message: string;
+  /**
+   * An i18n key, NOT a sentence. The screen resolves it through `t()`, which is what keeps this
+   * module free of English (and free of any import) while the copy stays translatable — all five
+   * languages for these were supplied by the owner on 2026-08-26 and are not machine-translated.
+   */
+  messageKey: 'storage.doneBody' | 'storage.partialBody' | 'storage.failBody';
   tone: 'success' | 'warning';
 };
 
@@ -48,26 +53,17 @@ export type CacheClearMessage = {
 const LEGS: (keyof CacheClearResult)[] = ['tiles', 'images', 'temp'];
 
 /**
- * Turn a clear attempt into the sentence the user sees. A partial clear is reported as partial,
+ * Turn a clear attempt into the message the user sees. A partial clear is reported as partial,
  * never rounded up to "done" — the whole value of the control is that its answer can be trusted.
+ *
+ * Note there is deliberately no "nothing to clear" outcome, even though the supplied copy offered
+ * one: `temp` is reported TRUE when the picker directories are simply absent, because having
+ * nothing to delete is a success, not a failure. So an all-false result really does mean every leg
+ * refused, and it must say so rather than reassuring the user that the phone was already clean.
  */
 export function describeCacheClear(r: CacheClearResult): CacheClearMessage {
   const done = LEGS.filter((k) => r[k]).length;
-
-  if (done === LEGS.length) {
-    return {
-      tone: 'success',
-      message: 'Cached downloads cleared. They download again the next time you need them.',
-    };
-  }
-  if (done > 0) {
-    return {
-      tone: 'warning',
-      message: 'Some cached downloads were cleared, but not all of them. You can try again.',
-    };
-  }
-  return {
-    tone: 'warning',
-    message: 'Nothing could be cleared right now. Close the app fully and try again.',
-  };
+  if (done === LEGS.length) return { tone: 'success', messageKey: 'storage.doneBody' };
+  if (done > 0) return { tone: 'warning', messageKey: 'storage.partialBody' };
+  return { tone: 'warning', messageKey: 'storage.failBody' };
 }
