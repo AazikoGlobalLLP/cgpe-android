@@ -78,6 +78,12 @@ documented baseline, unchanged). Everything below is **device-unverified**.
   `docs/PHASES.md` § "Phase 77 leftovers".
 - **Owner owes the 11 real LIC plan names** for `cgpe-backend-main/data/lic_plans_library.json`.
   "LIC Plan 102" is honest, but it is not a name.
+- **Owner owes translation copy — the consolidated, batched, fillable ask is
+  `docs/i18n/COPY-REQUEST-2026-08-26.md`.** Hand them that file; do not re-derive the list. Four
+  **already-wired** keys are wrong on phones today and the parity test is blind to them (it rejects
+  only `value === key`, never `value === English`): `tab.search` untranslated in gu+hi, the consent
+  buttons English in hi-en, `tasks.tomorrow`/`tasks.yesterday` both `कल`/`Kal`, and
+  `tasks.emptyCalendarBody` still saying "strip". Fixing those 14 strings is the cheapest batch.
 - **Everything here is device-unverified** — the `Directory.delete()` path, the splash timing against
   the real native cross-fade, and the throwaway-WebView `clearCache` all need a phone.
 - **The `[admin]` items are untouched** — a different repo (`cgpe-front-main-RECOVERED`).
