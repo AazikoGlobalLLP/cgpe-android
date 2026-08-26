@@ -4446,3 +4446,90 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   the Windows fingerprint trap, and it only reports the refusal AFTER uploading a ~317 MB archive.
   Owner's decision: wait for the reset or `eas billing:subscribe starter`. There is no OTA, so nothing
   from this phase reaches a phone until a build runs.
+
+## 2026-08-26 — Phase 78 (i18n Batch 2 · hourly GPS · storage diagnosis · video evidence)
+
+- **The owner reversed their own Phase-63 GPS decision, and it is recorded as THEIRS.** The request
+  (hourly instead of every 60 s, for battery and mobile data) arrived via `contracts/INBOX.md`. It was
+  NOT actioned on the relay alone: the consequence was put to the owner in writing first — a nine-hour
+  shift now records ~9 points, so the master live map draws nine straight hops, which looks exactly
+  like the "no points / straight line" bug Phase 63 was written to fix — and they confirmed anyway.
+  It is a cost decision for 21 field staff, not an oversight. The owner-#1 guard test was therefore
+  edited **openly and only in its cadence clause**; `distanceInterval: 0` and `accuracy: 'high'` are
+  untouched and still asserted, because those two lose points OUTRIGHT (a stationary phone recording
+  nothing; a coarse fix discarded by the backend's >100 m filter) rather than merely spacing them out.
+  Two second-order effects were found and documented at the code rather than left to surprise someone:
+  shift-attribution slop widened from ~60 s to **up to an hour**, and the 15-minute watchdog is now the
+  PRIMARY source of route points rather than a backstop (`STALE_AFTER_MS` is 45 min, so it fires before
+  a healthy hourly stream delivers).
+
+- **`common.offlineBody` was deliberately NOT swept, contradicting the copy request.** The request
+  described it as "one canonical replacement for all 39 variants (60 occurrences)". Reading them
+  showed **zero sites match it verbatim**, and each of the 39 names *what* could not load ("an empty
+  inbox here is not confirmed", "so this is blank rather than empty — not that this member did
+  nothing"). Collapsing them into one generic sentence would destroy the outage-honesty convention
+  the app is built on (CLAUDE.md #4: "no clients" ≠ "could not load clients"). They are per-screen
+  copy for a later batch, not a mechanical swap. **Do not re-file this as unfinished Batch 2 work.**
+
+- **Composed strings were left English rather than concatenated.** `On duty (n)`, `${duration} on
+  duty`, `On duty, ${elapsed}` and `withCount('All', n)` need placeholder keys that do not exist.
+  Hindi and Gujarati word order differs from English, so gluing `t()` fragments into a template
+  literal is a bug, not a shortcut.
+
+- **An adversarial review caught a dead-code swap on Home**, the same shape as Phase 77's LIC
+  fallback: the `t('common.onDuty')` branch is unreachable because `elapsed` is always truthy when
+  clocked in, so the sweep would have LOOKED complete while the app's most-looked-at caption stayed
+  English. Fixed by also switching the reachable literal, at the cost of English reading "On duty"
+  instead of "on duty" — a casing change flagged to the owner rather than made silently.
+
+- **🔴 A top-level import of a native module broke the whole app at boot, and all three gates were
+  green on it.** `import { Video } from 'react-native-compressor'` throws at MODULE-EVALUATION time
+  (`Main.js` runs `const Compressor = createCompressor();` at module scope and throws `LINKING_ERROR`
+  when the native side is not linked), so no function-body try/catch can ever see it. And it is
+  reached at BOOT: expo-router imports routes synchronously (`asyncRoutes` is not enabled) and
+  `getRoutesCore.js` calls `validateRouteTreeExports` → an **unguarded `node.loadRoute()` on EVERY
+  route file**. Both claim screens import the transcoder, so `expo start --go`, `expo start --web`
+  and `npm run e2e` would all have died at startup — taking the everyday photo/PDF path down with
+  them, in exactly the environments a production APK cannot currently be built for. Now `require`d
+  lazily inside the try. **This is a DIFFERENT trap from the documented native-module-in-Vitest one,
+  and only a reviewer reading the library's source could have found it.**
+
+- **The video byte budget was modelled wrong and fixed before shipping.** Reserving a fixed FRACTION
+  of a fixed byte budget for audio under-provisions it, because audio is muxed through at a
+  per-second cost: a 180 s clip reserved ~1.5 MB for a track that actually costs ~2.9 MB, so the
+  muxed file landed OVER the cap while the video track was encoded exactly to budget. Since Android's
+  duration cap is only a hint, over-length clips are not hypothetical. Audio is now charged as a
+  bitrate per second, and a `MIN_VIDEO_BITRATE_BPS` floor means an impossible clip is refused
+  honestly instead of being encoded into unusable mush.
+
+- **Compress video to fit the EXISTING 10 MB cap rather than raise it** (owner's choice, offered with
+  two alternatives and their costs). Consequence, and the reason it was worth asking: the backend
+  needs **no size change and no nginx `client_max_body_size` change** — only a MIME allowlist change.
+
+- **Upload failures now read the SERVER'S OWN WORDS before falling back to the status code.** A
+  rejected file type is thrown from multer's `fileFilter` and surfaces as a bare **500** carrying
+  `{error:'File type video/mp4 is not allowed'}`. On status alone that is indistinguishable from a
+  real outage, so the user was told "try again in a moment" for a condition that can never succeed —
+  they would re-record, re-compress and re-upload over mobile data forever. Deliberately
+  conservative: an unrecognised body still falls through to `classifyUploadStatus`, so a genuine 5xx
+  is never relabelled as a content problem.
+
+- **A RECORD is not a LINK, and the difference was not faked.** `POST /api/file-attachments` is live
+  (mount on `origin/main` `app.js:466`; answers 401), so the uploaded URL is now recorded instead of
+  discarded — but its field whitelist has **no `entity_id`**, so nothing ties a file to a specific
+  claim. The claim id rides in `description` as human text only and the checklist tick stays local.
+  Overloading `category`/`description` to fake a relationship would put something in the database
+  that nothing can safely query, so `entity_id` was filed as an `[api]` ask instead.
+
+- **The storage diagnosis was confirmed on PROD, not inferred from a local `.env`.**
+  `GET https://cgpe.in/internal/api/upload` returns `{"cloudStorageConfigured":false}` — the backend
+  reports it itself. Combined with `BACKEND_URL` being unset, every attachment is written to droplet
+  disk and handed back `http://localhost:3001/uploads/…`, which on a phone means the phone. The app
+  was already detecting and reporting this honestly; it is a server gap, not an app bug.
+
+- **Two backend bugs were found that are dormant today and become live the moment storage is on:**
+  the "fall back to local storage if cloud upload fails" path **cannot run** (the temp file is
+  unlinked inside `cloudStorage.js`'s own error handler, then `upload.js` renames that deleted file →
+  ENOENT → 500), and four `cloudStorage.js` behaviours are DigitalOcean-Spaces-specific and silently
+  wrong against MinIO (`forcePathStyle`, the bucket missing from the returned URL, per-object ACLs,
+  plus the fallback bug).

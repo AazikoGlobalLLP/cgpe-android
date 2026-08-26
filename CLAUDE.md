@@ -358,6 +358,50 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   (`docs/PHASES.md` §"Phase 77 leftovers") — Android's reduce-motion switch takes `Appear` out of
   the picture entirely, and a `uiautomator dump` separates "invisible" from "not rendered".
 
+## Native modules: TWO different traps, and the second one is worse
+
+The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`. This is a
+**separate** one, found 2026-08-26 when it nearly shipped:
+
+🔴 **NEVER `import` a native module at the top level of ANY file a ROUTE can reach.** Use a lazy
+`require()` inside the try/catch that is meant to handle its absence.
+- **Why a top-level import is not equivalent.** `react-native-compressor`'s `Main.js` runs
+  `const Compressor = createCompressor();` at **module scope** and throws `LINKING_ERROR` when the
+  native side is not linked. A static `import` therefore throws while the MODULE is being evaluated —
+  **before any function-body try/catch exists to catch it.** A module that documents itself as
+  "fails open" does not fail open if its import can throw.
+- **Why it reaches boot.** In development expo-router imports routes **synchronously**
+  (`asyncRoutes` is not enabled in `app.json`), so `getRoutesCore.js` runs
+  `validateRouteTreeExports` → an **UNGUARDED `node.loadRoute()` on EVERY route file**. One route
+  that transitively imports the module takes down `npx expo start --go`, `npx expo start --web` AND
+  `npm run e2e` at startup — and with them every unrelated feature on every other screen.
+- **A production EAS build is unaffected** (`NODE_ENV=production` skips the validation and the module
+  IS linked), which is exactly why nothing local catches it: **`tsc`, `npm test` and `eslint` were
+  ALL GREEN on the broken version.** Only reading the library's own source finds it.
+- The live example is `src/lib/videoTranscode.ts`; the reasoning is written at the `require` itself.
+  **Do not "tidy" it back into an import statement.**
+- Corollary for any new native dependency: check whether it does work at module scope before
+  importing it, and prefer keeping it behind a lazy require in a module only screens import.
+
+## Verifying the backend WITHOUT guessing (2026-08-26)
+
+- **`GET https://cgpe.in/internal/api/upload` reports the live storage state** —
+  `{"success":true,...,"cloudStorageConfigured":false}`. Use it before diagnosing any attachment
+  problem; it settles "is storage on in prod?" in one command, with no auth. As of 2026-08-26 it is
+  **false**, and `BACKEND_URL` is unset, so every upload lands on droplet disk and returns
+  `http://localhost:3001/uploads/...` — which on a phone means the phone. That is the "captures
+  vanish" bug, and it is a SERVER gap: the app already detects it (`isEphemeralUrl`) and is honest.
+- **A no-auth `curl` distinguishes deployed from not:** `401` = deployed and protected, `404`/`501` =
+  not on the deployed build. `POST /api/file-attachments` → **401**, i.e. live (mount is on
+  `origin/main` at `app.js:466`). ⚠️ Its field whitelist has **no `entity_id`**, so it can RECORD a
+  file but cannot LINK one to a claim — do not fake that by overloading `category`/`description`.
+- **The upload route names its own failure in the BODY.** A rejected type is thrown from multer's
+  `fileFilter` and surfaces as a bare **500** carrying `{error:'File type video/mp4 is not allowed'}`;
+  `LIMIT_FILE_SIZE` is a **400** carrying `File too large`. `classifyUploadFailureBody`
+  (`lib/fileUpload.ts`) reads those words so a PERMANENT rejection is never reported with transient
+  "try again" copy. Keep it conservative — an unrecognised body must fall through to the status, or a
+  real 5xx gets relabelled as a content problem.
+
 ## Danger zones
 - `src/data/api.ts` (1744 lines, 56 importers) — `state` is a write buffer, not seed data.
   `setAuthToken` silently disables all network calls for a token starting `demo-`.
@@ -370,6 +414,15 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   `persist()` different-user branch). **If you add another module-scope per-user Map/buffer here, add it
   to `resetApiState()`** — a purge in `store/auth` alone will NOT clear it.
 - `src/app/(tabs)/home.tsx` (1915 lines) — the only consumer of `useAppUi()`.
+- ⚠️ **GPS sampling is HOURLY on all three profiles (`motion.ts` `HOURLY_MS`), and that is an OWNER
+  decision, not a regression.** 2026-08-26 the owner asked for hourly instead of 60 s for battery and
+  mobile data, was shown in writing that a nine-hour shift then records ~9 points and the live map
+  draws nine straight hops (the shape of the bug Phase 63 fixed), and confirmed anyway. The owner-#1
+  guard test was edited openly and ONLY in its cadence clause. **Do not "fix" it back**, and do NOT
+  loosen `distanceInterval: 0` or `accuracy: 'high'` — those lose points OUTRIGHT rather than merely
+  spacing them out. Two consequences are documented at the code: attribution slop widened to up to an
+  hour, and the 15-min watchdog is now the PRIMARY point source (`STALE_AFTER_MS` 45 min fires before
+  a healthy hourly stream), so battery cost belongs to that path.
 - `src/app/_layout.tsx:18` `import '@/lib/tracker'` is load-bearing; removing it kills background GPS
   on headless wakeups while foreground testing still passes.
 - Provider order in `_layout.tsx`: `AppUiProvider` inside `AuthProvider`, `ToastProvider` inside
@@ -452,6 +505,19 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   already present in `node_modules` as a *transitive* dep (as `expo-file-system` was) does NOT count:
   the lock needs it under the ROOT `packages[""].dependencies`. Fix with
   `npm install --package-lock-only` (no re-install, one-line diff), and commit it with the change.
+- **i18n — BATCH 2 IS SWEPT (2026-08-26, `48b3509`): 118 call sites across 43 files now translate.**
+  Do **not** re-file it as outstanding. Two deliberate exclusions that will look like gaps:
+  (a) **`common.offlineBody` was NOT wired and should not be** — the copy request called it "one
+  canonical replacement for all 39 variants", but **zero sites match it verbatim** and each of the 39
+  names *what* failed ("an empty inbox here is not confirmed"). Collapsing them destroys the
+  outage-honesty convention (#4 below). They need per-screen copy in a later batch.
+  (b) **composed strings stay English** (`On duty (n)`, `${duration} on duty`, `withCount('All', n)`)
+  — they need placeholder keys that do not exist, and gluing `t()` into a template literal breaks
+  Hindi/Gujarati word order. Next i18n job is **Batch 5 (sign-in)**, and its literals must be
+  extracted verbatim into `docs/i18n/COPY-REQUEST-2026-08-26.md` BEFORE asking for copy.
+  ⚠️ **A local `t` shadows the translator.** Renaming the LOCAL (not the translator) is the fixed
+  convention — done for `agent-track` (`t`→`track`), `kb` (`t`→`tag`), `performance` (`t`→`task`);
+  `notes.tsx` and `tickets/index.tsx` still bind the translator as `tr`.
 - **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** **143 keys** exist (was 75 when this line was written; bumped as phases added copy); ~6 files use `t()`
   substantially and — as of **Phase 21 P1 (2026-08-12)** — **16 more screens** wire a handful of shared
   `common.*` labels (`Call`/`Cancel`/`Delete`/`WhatsApp`/`Today`). **RECOUNTED Phase 77: it is ~49 of the

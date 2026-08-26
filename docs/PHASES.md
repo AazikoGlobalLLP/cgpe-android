@@ -14,9 +14,9 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**🌍 2026-08-26 (latest) — PHASE 78: i18n BATCH 2 SWEPT · GPS NOW HOURLY (owner reversal) · CAPTURE BUG FOUND.**
-Commits `48b3509` · `97f2d13` · `8e249bb`, pushed to `aaziko/Shivam`.
-Gates: `tsc` 0 · `npm test` **1006** · `eslint` 0 errors. Device-unverified.
+**🌍 2026-08-26 (latest) — PHASE 78: i18n BATCH 2 SWEPT · GPS NOW HOURLY (owner reversal) · STORAGE BUG PROVEN ON PROD · VIDEO EVIDENCE SHIPPED.**
+Commits `48b3509` · `97f2d13` · `8e249bb` · `ba534b1` · `ad2fd5a` · `ab391ca` · `4cad297`, pushed to `aaziko/Shivam`.
+Gates: `tsc` 0 · `npm test` **1037** (was 1005) · `eslint` 0 errors. Device-unverified.
 - **✅ i18n Batch 2 wired** — 118 hardcoded English strings across **43 files** now call keys that
   already held human copy (`Try again` alone was 54 copies in 41 files). Run as a 7-group sweep +
   7-group adversarial review. **`common.offlineBody` was deliberately NOT swept:** zero sites match
@@ -42,6 +42,21 @@ Gates: `tsc` 0 · `npm test` **1006** · `eslint` 0 errors. Device-unverified.
 - **🧪 `scripts/diagnose-blank-screen.sh`** — the two zero-build #8 discriminators, runnable on the
   APK already installed. Restores animation scale + stay-awake on any exit; records the APK sha256.
   **Not yet run — no device was attached this session.**
+- **🎥 VIDEO EVIDENCE SHIPPED (app side)** — `ad2fd5a` + `4cad297`. Record or pick a clip; it is
+  compressed on the phone from 40-80 MB to **~9.5 MB** with a live percentage, to fit the EXISTING
+  10 MB cap. **Owner chose compress-to-fit over raising the limit**, so the backend needs NO size
+  change and nginx needs nothing — **only the four video MIME strings**, which is the single gate.
+  Photo/PDF/document paths are provably untouched (pinned by test). `expo-image-picker` cannot do
+  this alone: `videoQuality` is `@platform ios` and `videoMaxDuration` on Android "depends on the
+  installed camera app", hence `react-native-compressor`.
+- **🔴 A 5-lens adversarial review caught a BOOT-BREAKING bug that tsc + 1037 tests + eslint were all
+  green on.** A top-level `import { Video } from 'react-native-compressor'` throws at
+  MODULE-EVALUATION time, and expo-router's dev-mode `validateRouteTreeExports` calls an **unguarded
+  `loadRoute()` on EVERY route file** — so `expo start --go`, `--web` and `npm run e2e` would all
+  have died at boot, taking the everyday photo/PDF path with them. Plus 6 more real defects
+  (audio budget mis-modelled for long clips, dead `stillTooLarge`, unwired progress, re-tappable
+  button during a 20 s encode, wrong permission message for video, a test made vacuous by the
+  feature itself). All fixed in `4cad297`.
 
 **🔧 2026-08-26 (later) — PHASE 77: 3 OF 4 OWNER BUGS FIXED · #8 REOPENED · APK BLOCKED ON EAS BILLING.**
 Commits `ff31376` · `c32e29f` · `ea7b8bf` · `877c689`, pushed to `aaziko/Shivam`.
@@ -97,8 +112,47 @@ session by design** — Phase 77 is where fixing starts.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-26 — the driving worklist is now `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md`,
-phases 77–83. The owner's 13-point backlog is fully shipped app-side; these three are the new lane):**
+**CURRENT next 3 (2026-08-26, after Phase 78). Almost everything worth doing is now blocked on the
+owner or on the 1 Sep build quota — so the ONE unblocked item goes first, because it needs no build:**
+
+1. **Phase 79 — run the two device tests and close #8 (the More→Today blank screen).**
+   `bash scripts/diagnose-blank-screen.sh` runs both discriminators on the APK **already installed**,
+   restores every device setting it touches (including on Ctrl-C), and records the APK's sha256 so
+   there is no doubt which build was tested. It needs **only that the owner plugs the phone in** —
+   no build, no quota, ~1 minute. Test 1 (animations off) rules `Appear` in or out for good;
+   test 2 (hierarchy dump while blank) says whether it is a paint problem or a render/data problem,
+   which decides which half of the app to look in. **Do NOT re-file `Appear`/`cancelAnimation` as
+   the cause without a device repro — Phase 77 disproved it and the disproof is written at the code.**
+
+2. **Relay the backend asks and get the storage switched on.** All filed at the top of
+   `../contracts/INBOX.md` (2026-08-26, from cgpe-mobile), and none can be pushed from here:
+   (a) **4 video MIME strings** — the single gate on the video feature just shipped;
+   (b) **`entity_id` on `POST /api/file-attachments`** — without it a file cannot be tied to a claim;
+   (c) the **failed-cloud-upload 500** that pretends to be a fallback;
+   (d) the **4 MinIO code fixes** (`forcePathStyle`, bucket-missing-from-URL, ACL, plus (c)).
+   **OPS/owner:** set `BACKEND_URL` — one line, and it makes existing attachments openable again
+   whether or not MinIO ever happens — plus the six storage values and the public-vs-presigned
+   decision. Verify with `curl https://cgpe.in/internal/api/upload`: it must stop saying
+   `cloudStorageConfigured:false`.
+
+3. **Phase 80 — the APK, on or after 1 Sep 2026.** The quota resets then (or
+   `eas billing:subscribe starter --account shivam-bhadoriya`). It will be the first build carrying
+   the Search tab, all of Phase 77, all of Phase 78 and the video feature — **and video is native, so
+   it cannot reach a phone any other way; there is no OTA.** Strongly consider adding EAS Update in
+   that same build to end the rebuild-per-fix cycle. Check the quota BEFORE promising anyone a date:
+   a doomed attempt still uploads ~317 MB before it refuses.
+
+**Then:** Phase 81 voice v1 (owner-blocked: n8n webhook URL, ElevenLabs key + 2 voice IDs, avatar
+decision) · Phase 82 Play Store submission (owner-blocked: Play Console account) · Phase 83 role-wise
+views (needs spec-lock) · the i18n Batch 5 sign-in extraction, which needs no owner input to START
+(extract the literals verbatim into the copy request BEFORE asking for four more languages).
+
+---
+
+## Superseded — previous Next 3 (2026-08-26, before Phase 78)
+
+**(the driving worklist was `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md`,
+phases 77–83. The owner's 13-point backlog is fully shipped app-side):**
 
 1. **Phase 77 — Quick visible fixes. ✅ THREE OF FOUR SHIPPED 2026-08-26; #8 REOPENED AS UNDIAGNOSED.**
    Splash (logo no longer jumps ~50% between the two splashes, tagline lifted from a measured
