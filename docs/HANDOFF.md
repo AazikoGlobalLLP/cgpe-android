@@ -19,8 +19,16 @@ cause turned out to be provably wrong and shipping the "fix" would have burned a
   WebView map-tile cache, expo-image's disk cache, and — the part that matters for everyone — the
   picked-file copies the document/photo pickers have been leaving in the cache directory forever. It
   reports a partial clear as partial, and never claims a number of megabytes.
-- **All of Phase 77's new English is translated.** The owner supplied gu / hi / hi-en / gu-en copy for
-  the entire Storage flow in-chat; 133 → **143** keys, none machine-translated.
+- **A LARGE i18n copy drop landed and is wired.** The owner supplied Batches 1–4 of
+  `docs/i18n/COPY-REQUEST-2026-08-26.md` in one go — human copy in all five languages. The dictionary
+  went **133 → 226 keys** and four things users could *see* being wrong are fixed:
+  `tab.search` was the literal word "Search" in Gujarati and Hindi on a permanent bottom tab; the
+  consent buttons were English in Hinglish on the mandatory first-run screen; **"Tomorrow" and
+  "Yesterday" were both `कल`/`Kal`**, so a Tasks overdue header read identically to an upcoming one;
+  and `tasks.emptyCalendarBody` still named the "strip" the calendar grid replaced. The 24 status
+  words (lead stages, claim statuses, segments, task statuses, priorities) now translate everywhere
+  they render, and every shared component — connection banner, Confirm, app lock, offline/sync,
+  attach-document, filters, controls, map — reads its copy through `t()`.
 - **The record was corrected where this session proved it wrong** — four triage rows in
   `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md` said things that do not survive reading the code.
 
@@ -41,8 +49,13 @@ documented baseline, unchanged). Everything below is **device-unverified**.
   clearing, because `clearCache` exists **only** as an instance method (the cache is per-application,
   so any instance clears everything), then deletes `<cache>/DocumentPicker` and `<cache>/ImagePicker`.
 - `src/app/settings.tsx` — the Storage section, confirm and toasts, all through `t()`.
-- `src/i18n/index.tsx` + `src/i18n/__tests__/dictionaries.test.ts` — 10 `storage.*` keys × 5 languages;
-  parity assertion 133 → 143. `Cancel` reuses the existing `common.cancel`.
+- `src/i18n/index.tsx` + `src/i18n/__tests__/dictionaries.test.ts` — **83 new keys × 5 languages**,
+  parity assertion **133 → 226**, plus the Batch 1 corrections to already-shipping values. `TKey` is
+  now exported so the label maps type against the real key set. `Cancel` reuses `common.cancel`.
+- `src/data/labels.ts` + `src/data/tasks.ts` — `label` **renamed** to `labelKey`. The rename is the
+  point: swapping the value in place would have type-checked silently and shipped raw keys as visible
+  text, whereas the rename turned all 31 call sites into compile errors.
+- 12 `src/ui/*` and screen files gained a translator hook; 5 hooks gained `t` in their dep arrays.
 - `src/lib/__tests__/appCache.test.ts` *(new)*, `src/data/__tests__/adapt.test.ts` — +12 tests net.
 - `package.json` + `package-lock.json` — `expo-file-system` promoted to a **declared** dependency; the
   lock had to be synced in the same commit or EAS's `npm ci` fails "not in sync".
@@ -78,15 +91,33 @@ documented baseline, unchanged). Everything below is **device-unverified**.
   `docs/PHASES.md` § "Phase 77 leftovers".
 - **Owner owes the 11 real LIC plan names** for `cgpe-backend-main/data/lic_plans_library.json`.
   "LIC Plan 102" is honest, but it is not a name.
-- **Owner owes translation copy — the consolidated, batched, fillable ask is
-  `docs/i18n/COPY-REQUEST-2026-08-26.md`.** Hand them that file; do not re-derive the list. Four
-  **already-wired** keys are wrong on phones today and the parity test is blind to them (it rejects
-  only `value === key`, never `value === English`): `tab.search` untranslated in gu+hi, the consent
-  buttons English in hi-en, `tasks.tomorrow`/`tasks.yesterday` both `कल`/`Kal`, and
-  `tasks.emptyCalendarBody` still saying "strip". Fixing those 14 strings is the cheapest batch.
+- **Batch 2's call sites are NOT swept.** Its 19 keys are translated and in the dictionary, but ~170
+  hardcoded English strings across 37 screen files still ignore them. Needs no owner input — see
+  "The i18n state, precisely" below.
+- **Batches 5–9 copy is not supplied, and cannot be asked for yet** — the copy-request doc lists only
+  counts for those, not the exact English strings. Extract the sign-in literals verbatim first.
 - **Everything here is device-unverified** — the `Directory.delete()` path, the splash timing against
   the real native cross-fade, and the throwaway-WebView `clearCache` all need a phone.
 - **The `[admin]` items are untouched** — a different repo (`cgpe-front-main-RECOVERED`).
+
+## The i18n state, precisely
+
+**Done and on the branch:** Batches 1, 3 and 4 — corrected, wired, gate-green.
+**Half-done:** Batch 2. Its 19 shared words exist in all five languages, but their **~170 hardcoded
+English call sites across 37 screen files** are untouched. `Try again` alone is **55 copies in 37
+files**, and the "server did not answer" sentence is **60 occurrences in 39 near-identical wordings**
+that all collapse into one key. **This needs no further copy from the owner** — it is a mechanical
+sweep, and it is the single biggest visible-English win left.
+**Not started:** Batch 5 onward. The copy-request doc lists only counts and screen groups for those,
+not the exact English source strings, so the sign-in literals must be extracted verbatim into the doc
+BEFORE asking the owner for four more languages — otherwise they would be translating strings nobody
+has quoted.
+
+**Two traps recorded for whoever does the sweep.** The parity test proves a key *exists* in all five
+languages; it CANNOT see a value left as the English string — that blind spot is exactly how Batch 1's
+four gaps survived. And any hook that builds a translated string needs `t` in its dependency array or
+it keeps the OLD language's text after a language switch; five hooks needed that this session, and
+only cache-free `eslint` catches it (`tsc` and `npm test` are green either way).
 
 ## Next session starts here
 
