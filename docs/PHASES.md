@@ -14,6 +14,35 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🌍 2026-08-26 (latest) — PHASE 78: i18n BATCH 2 SWEPT · GPS NOW HOURLY (owner reversal) · CAPTURE BUG FOUND.**
+Commits `48b3509` · `97f2d13` · `8e249bb`, pushed to `aaziko/Shivam`.
+Gates: `tsc` 0 · `npm test` **1006** · `eslint` 0 errors. Device-unverified.
+- **✅ i18n Batch 2 wired** — 118 hardcoded English strings across **43 files** now call keys that
+  already held human copy (`Try again` alone was 54 copies in 41 files). Run as a 7-group sweep +
+  7-group adversarial review. **`common.offlineBody` was deliberately NOT swept:** zero sites match
+  it verbatim and each of the 39 outage sentences names *what* failed, so collapsing them would
+  destroy the outage-honesty convention (CLAUDE.md #4). Composed strings (`On duty (n)`,
+  `${dutyFor} on duty`) left English — they need placeholder keys that do not exist. The review
+  caught a **dead-code swap** in `home.tsx` (the `common.onDuty` branch is unreachable because
+  `elapsed` is always truthy when clocked in) — same trap as the Phase-77 LIC fallback.
+- **⚠️ GPS sampling is now HOURLY on all three profiles** (`motion.ts` `HOURLY_MS`), **deliberately
+  reversing Phase 63 / owner #1.** Owner asked via INBOX, was shown that a nine-hour shift becomes
+  ~9 points and ~9 straight hops on the live map, and confirmed. The guard test was edited on
+  purpose; `distanceInterval: 0` + `accuracy: 'high'` were **kept** (they lose points outright,
+  not merely space them). Two effects recorded at the code: **attribution slop widened to up to an
+  hour**, and the **watchdog is now the primary point source**, not a backstop.
+- **🔎 The file-capture failure is diagnosed and it is NOT the app** —
+  `docs/MINIO-AND-CAPTURE-AUDIT-2026-08-26.md`. The backend `.env` has 13 keys and **no storage
+  key**, and `BACKEND_URL` is unset, so every upload lands on the droplet's disk and comes back as
+  `http://localhost:3001/uploads/...` — a URL that on a phone means the phone. Setting `BACKEND_URL`
+  is a one-line fix. MinIO needs **4 real code changes** (forcePathStyle, bucket-missing-from-URL,
+  ACL-vs-bucket-policy, and a failed-cloud-upload that 500s instead of falling back), plus 6 values
+  and one public-vs-signed-links decision from the owner. **Video is blocked in three places** and
+  the 10 MB cap is the real obstacle.
+- **🧪 `scripts/diagnose-blank-screen.sh`** — the two zero-build #8 discriminators, runnable on the
+  APK already installed. Restores animation scale + stay-awake on any exit; records the APK sha256.
+  **Not yet run — no device was attached this session.**
+
 **🔧 2026-08-26 (later) — PHASE 77: 3 OF 4 OWNER BUGS FIXED · #8 REOPENED · APK BLOCKED ON EAS BILLING.**
 Commits `ff31376` · `c32e29f` · `ea7b8bf` · `877c689`, pushed to `aaziko/Shivam`.
 Gates: `tsc` 0 · `npm test` **1005** (was 993) · `eslint` 0 errors / 12 warnings (baseline). Device-unverified.
