@@ -10,6 +10,10 @@ import { Banner, Skeleton, useToast } from '@/ui/feedback';
 import type { FeedbackTone } from '@/ui/feedback';
 import { DataRow, ListSection } from '@/ui/data';
 import { Appear } from '@/ui/motion';
+import { useConfirm } from '@/ui/Confirm';
+import { CacheCleaner } from '@/ui/CacheCleaner';
+import { describeCacheClear } from '@/lib/appCache';
+import type { CacheClearResult } from '@/lib/appCache';
 import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
 import { LANGS, useI18n } from '@/i18n';
@@ -73,6 +77,7 @@ export default function Settings() {
   const c = useTheme();
   const router = useRouter();
   const toast = useToast();
+  const { confirm } = useConfirm();
   const { lang, setLang, t } = useI18n();
   const { biometricEnabled, biometricAvailable, setBiometric } = useAuth();
 
@@ -84,6 +89,8 @@ export default function Settings() {
   /** PHASE 55 — the last connectivity-test verdict shown inline on the row; '' before the first run. */
   const [connMsg, setConnMsg] = useState('');
   const [testing, setTesting] = useState(false);
+  /** PHASE 77 — true only while the throwaway WebView that clears the tile cache is mounted. */
+  const [clearing, setClearing] = useState(false);
 
   /** False once this screen is gone. Read after every await, not just inside effects. */
   const live = useRef(true);
@@ -225,6 +232,43 @@ export default function Settings() {
           };
     setConnMsg(detail.value);
     setNotice({ tone: 'danger', title: detail.title, message: detail.message });
+  };
+
+  /**
+   * PHASE 77 — "the app installs at 63 MB and becomes 125 MB". Three things grow; see
+   * `lib/appCache.ts` for which and for whom. The one that affects every user is the copy each
+   * picker leaves in the cache directory for every document and photo ever attached, which
+   * nothing has ever deleted. Map tiles matter too but only for master/admin, who are the only
+   * roles that can open a map at all.
+   *
+   * The confirm is not ceremony: clearing costs the user their offline map imagery, on a network
+   * already known to be fragile. That trade is stated before it is made, not discovered later at
+   * the roadside. It deliberately does NOT promise an amount of space — nothing underneath can
+   * measure one, and the phone's own Storage screen can.
+   */
+  const clearCaches = async () => {
+    if (clearing) return;
+    haptics.tap();
+    const go = await confirm({
+      title: 'Clear cached downloads?',
+      message:
+        'Frees the space taken by documents, photos and map images this phone has already downloaded. Anything still needed downloads again, so do this on WiFi rather than in the field. It does not sign you out and it does not delete any of your work. The app’s own install size does not change — your phone’s Settings › Apps › CGPE Connect › Storage shows the real figures.',
+      confirmText: 'Clear',
+      cancelText: 'Cancel',
+      icon: 'trash-outline',
+    });
+    if (!go || !live.current) return;
+    setNotice(null);
+    setClearing(true);
+  };
+
+  const onCacheCleared = (r: CacheClearResult) => {
+    setClearing(false);
+    if (!live.current) return;
+    const said = describeCacheClear(r);
+    if (said.tone === 'success') haptics.success();
+    else haptics.warn();
+    toast(said.message, said.tone === 'success' ? 'success' : 'info');
   };
 
   const themeValue = c.scheme === 'dark' ? 'Dark, follows system' : 'Light, follows system';
@@ -393,6 +437,24 @@ export default function Settings() {
               </Appear>
             </ListSection>
 
+            {/* PHASE 77 — the owner's "app grows to 125 MB". Deliberately says what it frees and
+                what it cannot: the install size is not a cache and no in-app button can shrink it.
+                No megabyte figure is shown because nothing underneath reports one, and a guessed
+                number would be exactly the fabrication convention 4 exists to stop. */}
+            <ListSection
+              title="Storage"
+              footer="Documents, photos and map images stay on the phone after you open them, which is why the app grows with use. Clearing frees that space; anything still needed downloads again. The app’s own install size is not affected — Settings › Apps › CGPE Connect › Storage shows the real figures."
+            >
+              <Appear index={0}>
+                <DataRow
+                  icon="trash-outline"
+                  label={clearing ? 'Clearing…' : 'Clear cached downloads'}
+                  value=""
+                  onPress={clearCaches}
+                />
+              </Appear>
+            </ListSection>
+
             {/* The old "About" row was labelled About and went to Account and privacy,
                 which is two different things wearing one label. The destination is kept,
                 because it is the only route to the deletion flow from here, and the row
@@ -432,6 +494,10 @@ export default function Settings() {
           </>
         )}
       </ScrollView>
+
+      {/* Mounted only for the moment it takes to clear, then unmounted again — see CacheCleaner
+          for why a live WebView is required at all and why keeping one around would be costly. */}
+      {clearing ? <CacheCleaner onDone={onCacheCleared} /> : null}
     </Screen>
   );
 }

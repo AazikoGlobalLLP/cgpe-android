@@ -831,6 +831,59 @@ describe('adaptLicPlan', () => {
     expect(p.tags).toEqual([]);
     expect(p.minAge).toBe(0);
   });
+
+  /* PHASE 77 — the owner reported plans 102/113/122/165/172/180/181/195 all showing "Unnamed".
+   * `plan_name` is null for those rows (and for 5/836/904 — ELEVEN in total) in the backend's
+   * data/lic_plans_library.json, but the APP NEVER SEES THAT NULL: productIngestion.js:121
+   * substitutes `String(d.plan_name || 'Unnamed plan')` on ingest and :146 hands the placeholder
+   * straight back out. Verified against deployed origin/main (990c660). The first cut of this fix
+   * keyed on a falsy name and was therefore dead code — these pin the sentinel itself. */
+  describe('the backend placeholder name falls back to the LIC table number', () => {
+    /** What `GET /api/lic-plans` really returns for table 102 — note the STRING placeholder. */
+    const legacyRow = (over: Record<string, unknown> = {}) => ({
+      _id: '652f0000000000000000dead',
+      product_id: 'LIC-102',
+      plan_name: 'Unnamed plan',
+      plan_table: '102',
+      category_label: 'Legacy / to be sourced (in your book)',
+      status: 'unknown',
+      ...over,
+    });
+
+    it('labels the wire\'s "Unnamed plan" placeholder with the LIC table number', () => {
+      const p = adaptLicPlan(legacyRow());
+      expect(p.name).toBe('LIC Plan 102');
+      expect(p.code).toBe('102');
+    });
+
+    it('matches the placeholder regardless of case or padding', () => {
+      expect(adaptLicPlan(legacyRow({ plan_name: '  UNNAMED PLAN  ' })).name).toBe('LIC Plan 102');
+    });
+
+    it('still handles a genuinely null/absent name, if the backend ever stops substituting', () => {
+      expect(adaptLicPlan(legacyRow({ plan_name: null })).name).toBe('LIC Plan 102');
+      expect(adaptLicPlan(legacyRow({ plan_name: '' })).name).toBe('LIC Plan 102');
+    });
+
+    it('accepts a NUMERIC plan_table — `s()` would otherwise drop the only identifier', () => {
+      const p = adaptLicPlan(legacyRow({ product_id: 'LIC-904', plan_table: 904 }));
+      expect(p.name).toBe('LIC Plan 904');
+      expect(p.code).toBe('904');
+    });
+
+    it('never overrides a real plan name', () => {
+      expect(adaptLicPlan(legacyPlan()).name).toBe('New Endowment Plan');
+    });
+
+    it('leaves a name that merely CONTAINS the word untouched', () => {
+      expect(adaptLicPlan(legacyRow({ plan_name: 'Unnamed Plan Rider Pack' })).name)
+        .toBe('Unnamed Plan Rider Pack');
+    });
+
+    it('stays empty with no usable name AND no table number, so the screen still says "Unnamed plan"', () => {
+      expect(adaptLicPlan(legacyRow({ plan_name: 'Unnamed plan', plan_table: null })).name).toBe('');
+    });
+  });
 });
 
 /* ============================================================ adaptContest

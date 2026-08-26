@@ -45,14 +45,19 @@ session by design** — Phase 77 is where fixing starts.
 **CURRENT next 3 (2026-08-26 — the driving worklist is now `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md`,
 phases 77–83. The owner's 13-point backlog is fully shipped app-side; these three are the new lane):**
 
-1. **Phase 77 — Quick visible fixes (START HERE; needs NO owner input, so it cannot stall).**
-   More→Today blank screen (prime suspect: `Appear`'s `cancelAnimation(progress)` cleanup at
-   `ui/motion.tsx:104` freezing opacity at 0 — **hypothesis, must be reproduced on a device**) ·
-   splash redesign (native splash is logo-only by design; the JS splash's 13 px muted tagline is the
-   part the owner cannot see) · LIC "Unnamed" better fallback (show the plan number; the real fix is
-   owner-supplied names for 102/113/122/165/172/180/181/195) · app-size cache cap + a "Clear cache"
-   control in Settings (growth is the uncapped WebView map-tile cache — CartoDB + Esri satellite).
-   **Batch all of it into ONE APK that also carries the Search tab** — there is no OTA, so every
+1. **Phase 77 — Quick visible fixes. ✅ THREE OF FOUR SHIPPED 2026-08-26; #8 REOPENED AS UNDIAGNOSED.**
+   Splash (logo no longer jumps ~50% between the two splashes, tagline lifted from a measured
+   3.92:1 to 14.42:1, dark-mode white→black flash gone) · LIC "Unnamed" (the app never saw a null —
+   the BACKEND substitutes the literal string, so the first fix was dead code; now keyed on the
+   sentinel, **11** rows not 8) · Storage / "Clear cached downloads" in Settings (the every-user
+   leak is the never-deleted picker copies, NOT map tiles — tiles are master/admin-only).
+   ❌ **More→Today blank screen is NOT fixed and the recorded prime suspect is now RULED OUT.**
+   `Appear`'s `cancelAnimation` cleanup cannot be it: at every Home call site its effect deps are
+   constants, so the cleanup runs only at unmount; react-freeze is off (`ENABLE_FREEZE = false`,
+   `enableFreeze()` called nowhere), there is no `unmountOnBlur`, `BottomTabView` only appends to
+   `loaded`, and reanimated 4.5 bakes a settled `opacity: 1` into React's committed props within
+   ~1 s. **Two zero-build device tests decide it in a minute** — see "Phase 77 leftovers" below.
+   **Batch the rest into ONE APK that also carries the Search tab** — there is no OTA, so every
    rebuild is a manual reinstall on ~21 phones.
 2. **Phase 78 — Voice v1 (n8n route).** `src/voice/` core + `POST /api/voice/ask` proxy (so the n8n URL
    and secret never ship in the APK) + `<VoiceAvatar>` half-body coded shell (Lottie-ready) +

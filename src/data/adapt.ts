@@ -82,13 +82,49 @@ function daysUntil(d: Date | null): number | null {
  * from it would fabricate a number the data does not assert, so `minAge`/`maxAge`/`term` stay
  * empty and the screen drops those rows (Phase 6, D-2).
  */
+/**
+ * The backend's own placeholder for a missing LIC plan name (`productIngestion.js:121`). It
+ * arrives as a normal string, so it has to be matched by value; treated as "no name at all".
+ * Exported for the test that pins it — if the backend ever stops substituting, this simply
+ * stops matching and the real name flows through untouched.
+ */
+export const LIC_PLACEHOLDER_NAME = 'unnamed plan';
+
+function realPlanName(name: string): string {
+  return name.toLowerCase() === LIC_PLACEHOLDER_NAME ? '' : name;
+}
+
 export function adaptLicPlan(raw: any): LicPlan {
   const r = raw || {};
   const s = (v: any): string => (typeof v === 'string' ? v.trim() : '');
+  // `plan_table` is the LIC plan/table number. The seed stores it as a string for every legacy
+  // row and `unifiedToLic` passes it through as `m.plan_table || ''`, so a string is what the wire
+  // carries; the numeric arm is defence only, because `s()` would silently drop a number and this
+  // is the ONLY identifier those rows have.
+  const code = s(r.plan_table) || (typeof r.plan_table === 'number' ? String(r.plan_table) : '');
   return {
     id: s(r.product_id) || s(r._id),
-    name: s(r.plan_name),
-    code: s(r.plan_table),
+    /**
+     * `plan_name` is NULL for 11 legacy rows in the backend's `data/lic_plans_library.json`
+     * (tables 5, 102, 113, 122, 165, 172, 180, 181, 195, 836, 904 — all
+     * `category_label: "Legacy / to be sourced (in your book)"`), which is why the owner sees a
+     * wall of identical "Unnamed" entries an advisor cannot tell apart.
+     *
+     * ⚠️ THE APP NEVER SEES THAT NULL, AND A `|| fallback` HERE WOULD BE DEAD CODE. The backend
+     * substitutes a literal placeholder on the way in — `productIngestion.js:121`
+     * `product_name: String(d.plan_name || 'Unnamed plan')` — and hands it back out at `:146`
+     * `plan_name: u.product_name`. So the wire value is the truthy STRING "Unnamed plan", which is
+     * exactly why the screen's own `|| 'Unnamed plan'` never had anything to do. Verified against
+     * deployed `origin/main` (990c660), not just the local checkout.
+     *
+     * So the sentinel has to be recognised for what it is. The table number is known for all 11,
+     * and "LIC Plan 102" is how agents name these in the field, so the label comes from real data.
+     * Nothing is invented — no marketing name is guessed — and a row with neither a real name nor
+     * a number still falls through to the screen's own "Unnamed plan". The proper fix is the owner
+     * supplying the 11 names for the seed file; this stops the rows being indistinguishable today.
+     */
+    name: realPlanName(s(r.plan_name)) || (code ? `LIC Plan ${code}` : ''),
+    code,
     type: s(r.category_label) || s(r.category),
     minAge: 0,
     maxAge: 0,

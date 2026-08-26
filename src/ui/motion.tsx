@@ -101,7 +101,35 @@ export function Appear({
       offset,
       withTiming(1, { duration: motion.enter.duration, easing: ENTER_EASING }),
     );
-    return () => cancelAnimation(progress);
+    /*
+     * PHASE 77 — AN INTERRUPTED ENTRANCE MUST NOT LEAVE CONTENT INVISIBLE.
+     *
+     * `progress` drives opacity, so 0 means "not painted". The old cleanup was a bare
+     * `cancelAnimation(progress)`, and cancelAnimation FREEZES a shared value wherever it stands
+     * — inside the `withDelay` window that is still exactly 0 (reanimated's `delay()` returns the
+     * START value until the delay elapses). So a teardown mid-entrance could strand a subtree at
+     * opacity 0 while its siblings painted normally. Settling at 1 instead costs nothing when the
+     * entrance already finished (reanimated short-circuits an equal-value write) and makes that
+     * strand impossible. The trade is that an entrance interrupted partway snaps to its end state
+     * rather than continuing: a missed flourish is invisible, a missed element is a bug report.
+     *
+     * ⚠️ THIS IS LATENT-BUG HARDENING. IT IS NOT THE FIX FOR THE More→Today BLANK SCREEN, and it
+     * was very nearly shipped as one. The recorded prime suspect for that bug was this exact line,
+     * and it is WRONG: at every Home call site `Appear`'s deps (`index`, `delay`, `maxStagger`,
+     * `reduced`, `progress`) are constants, so this effect runs once at mount and its cleanup runs
+     * once at unmount — there is no third occasion on a tab switch. react-freeze is off
+     * (`react-native-screens` ships `ENABLE_FREEZE = false` and nothing calls `enableFreeze()`),
+     * there is no `unmountOnBlur`, and `BottomTabView` only ever appends to its `loaded` list, so
+     * the Today screen is natively detached on blur but never unmounted from React. On top of
+     * that, reanimated 4.5's `FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS` pushes a settled
+     * `opacity: 1` into React's own committed props within ~1 s of a successful entrance, which
+     * survives any later re-render or re-attach. Do not re-file this line as the cause without a
+     * device repro — see docs/PHASES.md for the two zero-build tests that discriminate it.
+     */
+    return () => {
+      cancelAnimation(progress);
+      progress.value = 1;
+    };
   }, [reduced, index, delay, maxStagger, progress]);
 
   const animated = useAnimatedStyle(() => ({
