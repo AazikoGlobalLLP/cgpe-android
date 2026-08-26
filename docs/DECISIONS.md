@@ -4308,3 +4308,62 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   the Expo server; EAS archives the LOCAL tree = `eb6e9c6`). Build ID + direct `.apk` URL recorded in
   `HANDOFF.md` on completion.
 
+
+## 2026-08-26 — Search tab, voice architecture (n8n owner override), 9-problem triage
+
+- **Search replaces Clients in the bottom bar** (`ba622af`). The client book is master/admin-only
+  (Point 9), so it no longer earns a permanent tab slot; Search is the one "find any record"
+  destination every tier gets. Implementation kept the `/search` route path by moving the file into
+  the `(tabs)` group — route groups are transparent, so both existing callers and typed routes were
+  unaffected (no `.expo/types` regen needed). Search glyph rendered at 26 px vs the uniform 21 px, per
+  the owner's "bada search icon". Clients/leads stay registered as `<Tabs.Screen>` so they remain
+  reachable and configurable, just off the default bar.
+- **`tab.search` shipped as "Search" in all five dictionaries.** English trade vocabulary is the
+  sanctioned fallback here (same class as "WhatsApp"), and it is the natural word in Hinglish and
+  Roman Gujarati. Native gu/hi script copy stays owner-owed. Machine translation remains forbidden.
+  Parity count bumped 132 → 133.
+- **Voice architecture analysed properly before answering.** An 11-agent workflow with adversarial
+  verification of every price, latency and language claim produced
+  `docs/VOICE-ARCHITECTURE-DECISION-2026-08-26.md`. Its verdict: run the voice round-trip in Express,
+  not n8n — **not for speed** (n8n adds only ~0.15–0.75 s) but because n8n holds direct MongoDB
+  credentials and bypasses `protect`/`visibilityScope`, so a "do-anything" assistant built on it
+  cannot know who is asking. Also found: the single chat-shaped synchronous n8n webhook in this system
+  returns an empty body today (`routes/assistant.js:5-8`), and other synchronous n8n calls take
+  15–40 s. Stack chosen: Sarvam `saaras:v3` `mode=translit` STT (the only engine emitting Latin
+  script — decisive because `staff_unified` holds 18/18 names in Latin and `fuzzyMatch.ts` is
+  character-level and script-blind), Claude returning a verb only with the app rendering the sentence
+  from human templates (so a wrong ₹ figure is structurally impossible and no client PII reaches an
+  LLM vendor), and Sarvam Bulbul v3 TTS. ≈₹6,055/mo for 21 staff at expected use.
+- **Owner override, recorded: build the n8n route anyway, for speed.** The owner read the analysis and
+  chose n8n. That is their call and the plan follows it. **One mitigation was kept and is not
+  optional:** the voice workflow must call `https://cgpe.in/internal/api/...` with the user's own JWT
+  (`X-CGPE-Token`) rather than reading Mongo directly — without it a team advisor can voice-pull the
+  whole ~9,000-client book, defeating the Point 9 gate. The full request/response contract is written
+  down in `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md` §A1 so the workflow can be built once.
+- **Character decision: half-body (shoulders-up), two personas, coded first.** On a phone the face
+  carries the personality and half-body leaves room for the transcript and the answer; full body
+  spends pixels on legs. `<VoiceAvatar persona state level muted />` ships with a Reanimated
+  implementation (zero new native dependencies, tunable without a rebuild) and a Lottie character can
+  drop in behind the same interface later. Stated plainly that "extraordinary" depends on an **asset**,
+  not on code. **Assistant Mode is a UX lock, not a kiosk** — a normal Android app cannot prevent
+  force-quit; true kiosk would be an Android Enterprise decision.
+- **ElevenLabs: Creator ($22, $11 first month) only.** Enough for all development plus a pilot; Pro /
+  Scale / Business are premature before real usage is measured, and two credit-accounting numbers are
+  undocumented publicly and must be read off the live dashboard before any larger purchase.
+- **The 9 reported problems were triaged against real code, and three of them are not app bugs.**
+  (1) LIC "Unnamed" is **data** — `plan_name` is `null` in `cgpe-backend-main/data/lic_plans_library.json`
+  for plans 102/113/122/165/172/180/181/195; the app's fallback is correct. (2) The
+  admin-must-not-see-location rule is **already enforced on mobile** (`canSeeLiveLocation()` reads the
+  real `super_admin` role, `roles.ts:72-74`, 20 tests) — any admin still seeing location is the admin
+  panel. (3) Role-wise Operations/Sales views are **already supported** by `nav.tabs`/`nav.hidden`/
+  `nav.more_sections`, so most of that request is config seeding, not app code. The upload failure was
+  probed live: `POST /upload` returns **401**, so the route is deployed — the real candidates are an
+  unset `BACKEND_URL` (which makes every locally-stored file resolve to `http://localhost:3001/...`),
+  the NAT64/MTU stall on multipart bodies, and the 10 MB / MIME whitelist. MinIO is S3-compatible and
+  the backend already speaks S3, so it needs env vars plus two small code changes (`forcePathStyle`
+  must become `true` for MinIO, and the public URL must include the bucket in the path).
+- **Told the owner plainly that "submit to the App Store today" is not achievable** — no Apple
+  Developer account, and no free route exists — and that Play Store approval is not same-day either,
+  because `ACCESS_BACKGROUND_LOCATION` forces a manual review with a justification video, and a
+  personal account created after Nov 2023 needs 12 testers for 14 days first. The complete word-by-word
+  Apple guide is still scheduled (Phase 79) so nothing is unknown when an account exists.

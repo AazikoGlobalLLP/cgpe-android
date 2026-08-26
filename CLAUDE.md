@@ -36,6 +36,26 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   `CGPE-CURRENT-PROJECT/` is a git repo with **zero commits** and `contracts/` is untracked in it,
   so every INBOX reply exists only on that disk. Do not assume it is backed up, and do not create
   that first commit yourself — it would sweep three project trees into one repo.
+- 🔴🔴 **NEVER EDIT `INBOX.md` WITH A PYTHON/NODE SCRIPT THAT OPENS IT FOR WRITING. This DESTROYED the
+  file on 2026-08-26 (685,032 bytes → 0).** `io.open(p,'w')` / `open(p,'w')` **truncates the file the
+  instant it is opened** — so when the very next line (the `.write()`) throws, the file is already
+  empty and there is no undo, no git, no VS Code local history, no shadow copy. The specific killer:
+  a `UnicodeEncodeError: surrogates not allowed`, caused by writing an emoji into the string as **two
+  separate `\uXXXX` escapes** (`"\ud83d\udd34"` is a surrogate PAIR, not a character — Python accepts
+  it in a `str` and refuses to encode it). Any exception at all would have done the same damage.
+  **The ONLY sanctioned ways to edit `INBOX.md`:** (a) the **Edit tool** with a unique surrounding-text
+  anchor (the normal path — the file is >256 KB so `Read` it with `offset`/`limit` around the anchor
+  first, e.g. `grep -n "^## Protocol"` then `Read offset=<n-8>`), or (b) **append-only** `cat >> file`.
+  If a script is genuinely unavoidable: read as **bytes** (`open(p,'rb')`), build the new bytes, write
+  to a **temp file**, assert the temp is LARGER than the original, and only then `shutil.move` it over.
+  Never write in place. And **always `cp INBOX.md INBOX.md.bak` first** — it costs nothing.
+  After ANY write, grep your own text back (the existing rule above), and also check `wc -c` is
+  ≥ the size you started with.
+  *(Recovery, if it happens again: the content is reconstructible from the Claude Code transcripts at
+  `C:\Users\A\.claude\projects\*CGPE*/*.jsonl` — every session reads INBOX at `/boot`, so scan the
+  JSONL for blocks starting `## → cgpe-` and keep the longest copy of each item header. That recovered
+  68 items / ~365 KB of the 685 KB. It is NOT byte-perfect: some items are partial and tick marks may
+  be stale.)*
 - **The owner relays `[api]` asks to the backend and confirms when they are live (proven 2026-08-14, Phase 34).**
   So a *verified* INBOX ask is actionable, not an indefinite block: verify against the real `cgpe-backend-main`
   code FIRST (tags wrong 5×), file the concise ask to `INBOX.md`, **and hand the owner a plain-language copy to
@@ -390,7 +410,7 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 - `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no
   longer describe an offline demo mode or a hand-editable localhost default. Keep them honest
   when `src/constants/config.ts`'s base-URL logic or the login path changes again.
-- **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** **75 keys** exist; ~6 files use `t()`
+- **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** **133 keys** exist (was 75 when this line was written; bumped as phases added copy); ~6 files use `t()`
   substantially and — as of **Phase 21 P1 (2026-08-12)** — **16 more screens** wire a handful of shared
   `common.*` labels (`Call`/`Cancel`/`Delete`/`WhatsApp`/`Today`); ~40 screens are still ~100% hardcoded
   English (the full worklist + plan is scoped in `docs/i18n/`). **All net-new `common.*` keys (`tryAgain`

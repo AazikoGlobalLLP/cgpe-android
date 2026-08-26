@@ -1,13 +1,32 @@
-# Status — CGPE Connect (Android)
-**Updated:** 2026-08-25
-**Working on right now:** Double-checked that everything on the app's side is finished and correct, then built a fresh installable app so the whole team can get all the recent improvements on their phones. **The new app is ready to install.**
+# Status — CGPE Connect (Android app)
+
+**Updated:** 2026-08-26
+
+**Working on right now:** Planning the voice assistant and fixing the small things in the app that look
+broken to the team.
 
 **Done this week:**
-- Went through the full checklist one more time before building and confirmed **there is nothing left unfinished on our side** — every improvement from the past weeks is done, saved, and passes all our automated checks (993 checks, all green).
-- Confirmed the part that made a new app version necessary — the new "upload a document / choose a file" feature in Claims — is correctly built in, so it will actually work once installed.
-- **Built the new app version — it's ready.** Install it on an Android phone by opening this link on the phone: https://expo.dev/artifacts/eas/1HlyVKZFsch8CSTGDqaeJWsPkMKuvxEN8Tw50Fk0PdA.apk
-- Pointed out one thing worth doing later: right now, even a tiny text fix means building and reinstalling the whole app again. There's a standard way to push small fixes to phones instantly without reinstalling — we can add it next time if you want to stop rebuilding for every small change.
+- The bottom menu of the app changed: the big **Search** button now sits where "Clients" used to be, so
+  anyone can find any record from anywhere. Clients moved into the "More" menu, where only managers can
+  see it. (This is written and tested, but it is **not on anyone's phone yet** — it needs a new app
+  install to reach them.)
+- Finished a deep study of how the **voice assistant** should work — which service should listen to
+  Gujarati and Hindi speech, which should speak back, what it will cost each month (about **₹6,000 for
+  the whole team of 21**), and how to make sure a team member cannot use voice to see information they
+  are not allowed to see. Every price and claim in that study was double-checked by a second review.
+- Went through the **nine problems the owner reported** and found the real cause of each one, instead of
+  guessing. Three of them turned out **not to be app problems at all**: the LIC plans showing "Unnamed"
+  are missing their names in the company's own plan data; the rule that only the Super Admin sees staff
+  location is **already working correctly in the app** (the issue is in the web admin panel); and the
+  request to show different menus to the Operations and Sales teams is **already supported** — it just
+  needs to be switched on in the admin panel.
+- Wrote a complete, step-by-step plan splitting all of this into seven numbered stages, with a clear list
+  of what the owner needs to provide before each one can start.
 
-**Blocked on:** Nothing on our side. Everything still open needs you — installing this new app version, the server settings already on your list (reports, document storage, WhatsApp), and adding each staff member's payroll and roles so those screens fill in.
+**Blocked on:** Several things now need the owner before work can continue — the voice web address from
+the automation tool, an ElevenLabs subscription and the two chosen voices, the storage server details for
+fixing file attachments, a Google Play developer account, and the correct names for the LIC plans.
 
-**Next:** Install and try the new app version (link above), and work through the server-side items on your list. There is no app work waiting on us.
+**Next:** Fix the four visible problems that need nothing from anyone else — the screen going blank when
+returning from the "More" menu, the opening screen, the "Unnamed" plans, and the app growing to 125 MB —
+then release one new app version containing all of it.
