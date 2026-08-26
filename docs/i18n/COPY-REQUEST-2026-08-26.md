@@ -1,5 +1,27 @@
 # Translation copy request — 2026-08-26
 
+> ## ✅ STATUS 2026-08-26 (later) — BATCHES 1–4 SUPPLIED BY THE OWNER AND FULLY WIRED
+>
+> The owner supplied Batches 1, 2, 3 and 4 in one batch and they are **in the app**
+> (`3d6b7f7` + `626aad5`). The dictionary went **143 → 226 keys**. What that means:
+>
+> - **Batch 1 — done.** All four already-wired-but-wrong keys are corrected, plus the new
+>   `home.clockedInAt`. Zero "strip" references remain; `tab.search` is `શોધો` / `खोजें`;
+>   tomorrow/yesterday no longer collide in Hindi or Hinglish.
+> - **Batch 3 — done and wired.** Every shared component (connection banner, Confirm, app lock,
+>   offline/sync, attach-document, filters, controls, map) now reads its copy through `t()`.
+> - **Batch 4 — done and wired.** All 24 status words render translated on Home, Leads, Claims,
+>   Tasks and Search.
+> - **Batch 2 — keys ARE in the dictionary, call sites are NOT yet replaced.** The 19 shared words
+>   exist in all five languages, but the ~170 hardcoded English copies across 37 screen files still
+>   need the mechanical sweep. That is the next i18n job and needs **no further copy from you**.
+> - **`storage.installNote`** is wired, restoring the install-size caveat.
+> - **`nothing_to_clear_*` was deliberately not wired** — no code path produces that state.
+>
+> **Nothing below Batch 4 has been supplied yet.** Batch 5 onward (sign-in, then the screens) still
+> needs copy, and the exact English source strings have to be extracted for you first — see the
+> note at the end.
+
 Everything in the app that still needs **human** Hindi / Hinglish / Gujarati / Roman-Gujarati copy,
 in one place, ordered so the earliest batches remove the most visible English for the least work.
 
@@ -198,3 +220,17 @@ remove far more visible English than their size suggests.
   reassure the user that the phone was already clean. Nothing owed unless you disagree.
 - **Month and weekday names** on the Tasks calendar (`January`… , `Sun`…) are currently English by an
   earlier decision. Say the word if you want them translated — that is 19 more strings.
+
+---
+
+## What to send next, and what has to happen first
+
+**Batch 5 (sign-in, ~44 strings) is the next copy ask, but the exact English source strings are not
+listed in this document** — only counts and screen groups. Asking for translations of strings that
+have not been quoted would invite guesswork, so the next session extracts the sign-in screen's
+literals verbatim, appends them here as a fillable table, and only then asks for the four languages.
+The same applies to Batches 6–9.
+
+**No copy is needed to finish Batch 2.** Its 19 keys are already translated and sitting in the
+dictionary; what remains is replacing ~170 hardcoded English strings in 37 screen files with calls to
+them. That is mechanical app work.
