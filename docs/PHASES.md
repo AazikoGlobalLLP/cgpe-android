@@ -57,8 +57,12 @@ phases 77–83. The owner's 13-point backlog is fully shipped app-side; these th
    `enableFreeze()` called nowhere), there is no `unmountOnBlur`, `BottomTabView` only appends to
    `loaded`, and reanimated 4.5 bakes a settled `opacity: 1` into React's committed props within
    ~1 s. **Two zero-build device tests decide it in a minute** — see "Phase 77 leftovers" below.
-   **Batch the rest into ONE APK that also carries the Search tab** — there is no OTA, so every
-   rebuild is a manual reinstall on ~21 phones.
+   🔴 **THE APK IS BLOCKED ON BILLING, NOT ON CODE.** The batched build (these fixes + the Search
+   tab) was attempted and refused: the **EAS free plan's monthly Android build quota is used up**,
+   resetting **1 Sep 2026**. No build was created — the newest APK is still `093a3b33`
+   (2026-08-25, commit `4be1c26`), which carries none of this. Owner's call: wait for the reset, or
+   `eas billing:subscribe starter --account shivam-bhadoriya`. There is no OTA, so nothing here
+   reaches a phone until a build runs.
 2. **Phase 78 — Voice v1 (n8n route).** `src/voice/` core + `POST /api/voice/ask` proxy (so the n8n URL
    and secret never ship in the APK) + `<VoiceAvatar>` half-body coded shell (Lottie-ready) +
    Assistant Mode lockdown + male/female personas + mic (`expo-audio`, `RECORD_AUDIO`, consent version
@@ -73,6 +77,40 @@ phases 77–83. The owner's 13-point backlog is fully shipped app-side; these th
    Nov 2023 must run a 12-tester / 14-day closed test before production. **Apple is blocked outright**
    (no $99/yr Developer account; no free route exists) — the word-by-word Apple guide still gets
    written so nothing is unknown when an account appears.
+
+### Phase 77 leftovers — the More→Today blank screen (#8)
+
+**Status: undiagnosed. The prime suspect is ruled out, and no replacement is confirmed.** Do not
+re-file `Appear`/`cancelAnimation` as the cause without a device repro — the disproof is written
+into `src/ui/motion.tsx` at the cleanup itself so the next reader cannot miss it.
+
+**Two zero-build tests decide it in a minute, and BOTH run on the APK already on the phone.** ADB
+works from here (platform-tools into the scratchpad); the owner only has to plug the phone in.
+
+1. **Animation-off test — rules `Appear` in or out completely.**
+   `adb shell settings put global transition_animation_scale 0`, force-stop, cold-start, then
+   More → Today. Android's `isReduceMotionEnabled` reads exactly that setting
+   (`AccessibilityInfoModule.kt:101-106,157`), so `useReducedMotion()` returns true, `Appear` takes
+   its reduced branch and never animates at all. **If the screen STILL blanks with animations off,
+   `Appear` is definitively not the cause.** Restore with `… transition_animation_scale 1`.
+2. **Hierarchy test — says which half of the app to look in.** While the screen is blank,
+   `adb shell uiautomator dump /sdcard/w.xml && adb pull /sdcard/w.xml`. Widget text nodes
+   **present** ⇒ a paint/opacity/native-view problem. **Absent** ⇒ a React render/data problem, and
+   every opacity theory is irrelevant.
+   (Free extra: pull-to-refresh while blank. Home's `RefreshControl` is bound to `load()`; if the
+   content comes back, a settled `opacity: 0` in React state is impossible by construction.)
+
+**Then investigate in this order — all unconfirmed, none to be presented as a root cause first:**
+(a) the `loading || !uiReady` fork on `home.tsx` — the header renders OUTSIDE it, so a stuck
+`loading` gives exactly "some things show, the rest empty" with no animation involved (note
+`HomeSkeleton` normally paints visible shimmer, so this predicts "skeletons forever", not blank —
+unless `hero: 'none'` and an empty widget list make it render nothing);
+(b) native screen detach/re-attach — `detachInactiveScreens` defaults to **true** on Android, and a
+blank-after-tab-switch is a known shape for it; the one-line A/B is
+`<Tabs detachInactiveScreens={false} …>` in `(tabs)/_layout.tsx`, but verify expo-router forwards
+the prop before trusting it, and note it trades memory;
+(c) memory pressure from the map tile cache — if the blank only reproduces after a session that
+opened a map, then #8 and #4 are the same bug and the cache work is the fix.
 
 **Then:** Phase 80 files/MinIO (needs the six env values + public-vs-presigned decision) · Phase 81
 on-demand live location (silent FCM pull; needs a DPDP consent line of its own) · Phase 82 role-wise

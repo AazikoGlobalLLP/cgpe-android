@@ -204,6 +204,17 @@ profile emits an APK**; get the **direct `.apk` download URL** with
 URL only shows an Install button when opened ON the Android phone). So when the owner asks for an APK,
 you can deliver one — do not tell them shipping is blocked. (`--non-interactive` is required — stdin is
 EOF here — and `build:view` does NOT accept `--non-interactive`, only `--json`.)
+🔴 **EAS FREE-PLAN BUILD QUOTA IS EXHAUSTED (hit 2026-08-26, Phase 77) — CHECK BEFORE PROMISING AN APK.**
+`eas build -p android` now fails with *"This account has used its Android builds from the Free plan this month,
+which will reset in 5 days (on Tue Sep 01 2026)"* → `Error: build command failed`, and **no build is created**
+(`eas build:list` still tops out at `093a3b33`, 2026-08-25). This is **not** the fingerprint trap below, not a
+code fault and not fixable from here — it is **billing, i.e. an OWNER decision**: either wait for the monthly
+reset (**1 Sep 2026**) or `eas billing:subscribe starter --account shivam-bhadoriya`. Note the quota is checked
+**AFTER** the ~317 MB project archive uploads, so a doomed attempt still costs several minutes — check the plan
+first, and tell the owner an APK is blocked rather than saying "shipping works". The editor-side gates
+(`tsc`/`npm test`/`eslint`) are unaffected; work can continue, it just cannot reach a phone.
+(Consider an `.easignore` at some point — EAS itself flags the 317 MB archive as reducible.)
+
 ⚠️ **WINDOWS FINGERPRINT TRAP (2026-08-25, build `093a3b33` v1.10.0):** the build can fail **locally**, BEFORE
 queueing, at "Computing project fingerprint" with `UNKNOWN: unknown error, open '…node_modules\react-native-reanimated\
 …\index.d.ts.map'` (a Windows file-read error — the build itself is fine, nothing wrong with the code). **Fix:
