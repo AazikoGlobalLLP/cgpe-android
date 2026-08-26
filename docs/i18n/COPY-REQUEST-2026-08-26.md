@@ -207,6 +207,28 @@ remove far more visible English than their size suggests.
 
 ---
 
+## Batch 4b — the video-evidence strings (4 strings, NEW 2026-08-26)
+
+Added when video capture shipped. These are **hardcoded English in the app right now**, on purpose:
+the keys do not exist, and `t()` falls back to the key itself, so wiring them before the copy exists
+would print `doc.recordVideo` on screen. Inventing the Gujarati/Hindi spelling of "video" would be
+machine translation, which is forbidden (`PHASE-19` §4) — so they wait here for human copy.
+
+Note `video` is trade vocabulary and can stay the English word inside the romanized rows, exactly
+like `policy` and `premium` do. What is needed is the surrounding words.
+
+| key | English | where it shows | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| `doc.recordVideo` | Record a video | the attach-document sheet, under "Take a photo" | ⬜ | ⬜ | ⬜ | ⬜ |
+| `doc.videoHint` | Videos are limited to {seconds} seconds and are made smaller on your phone before they are sent. | the hint line under the attach buttons | ⬜ | ⬜ | ⬜ | ⬜ |
+| `doc.preparingVideo` | Preparing video… | the attach button, while the clip is being compressed (10–20 s) | ⬜ | ⬜ | ⬜ | ⬜ |
+| `doc.videoStillTooLarge` | That video is still too large after compressing. Record a shorter clip. | shown when a clip cannot be squeezed under the limit | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(`{seconds}` is a placeholder — leave it exactly as `{seconds}` in your translation; the app fills
+in the number. Do not translate the braces or what is inside them.)*
+
+---
+
 ## Also owed (not translation)
 
 - **`storage.description` lost a sentence.** The Storage footer now uses the supplied short
