@@ -56,10 +56,10 @@ describe('samplingProfile', () => {
     expect(samplingProfile('moving')).toBe(MOVING_PROFILE);
     expect(samplingProfile('still')).toBe(STILL_PROFILE);
   });
-  it('MOVING records every ~60 s even when stationary, at High accuracy (PHASE 63)', () => {
+  it('MOVING records hourly even when stationary, at High accuracy (PHASE 63 + PHASE 78 cadence)', () => {
     expect(MOVING_PROFILE).toEqual({
       accuracy: 'high', // ~10 m — survives the backend accuracy<=100 m shift-point drop
-      timeInterval: 60000, // ~60 s cadence
+      timeInterval: 3600000, // PHASE 78: 60 min, owner-locked (was 60 s in PHASE 63)
       distanceInterval: 0, // 0 = deliver on the time interval even when the phone has not moved
       deferredUpdatesInterval: 60000,
     });
@@ -73,10 +73,21 @@ describe('samplingProfile', () => {
     expect(STILL_PROFILE.accuracy).toBe('high');
   });
   it('neither SHIFT profile can silently regress to a distance-throttled or coarse config (owner #1 guard)', () => {
+    // PHASE 78 EDITED THIS GUARD DELIBERATELY, and only the cadence clause. The original third
+    // assertion was `expect(p.timeInterval).toBeLessThanOrEqual(60000)`, added in PHASE 63 because the
+    // owner reported missing points and straight-line routes. On 2026-08-26 the owner asked for hourly
+    // sampling to cut battery and mobile-data cost, was told in writing that a nine-hour shift then
+    // records ~9 points and will look like that same bug, and confirmed anyway. So the cadence is now
+    // an owner-locked VALUE rather than a ceiling — pinned exactly, so a future drift is still caught.
+    //
+    // THE OTHER TWO ASSERTIONS ARE UNTOUCHED AND MUST STAY. They are the half of the Phase-63 fix that
+    // is not about frequency at all: distanceInterval 0 keeps a STATIONARY phone reporting, and High
+    // accuracy keeps each fix above the backend's >100 m drop filter. Loosening either would lose
+    // points outright rather than merely space them out — a different and worse failure than sparseness.
     for (const p of [MOVING_PROFILE, STILL_PROFILE]) {
       expect(p.distanceInterval).toBe(0); // never gate a fix on movement again (the stationary-no-points bug)
       expect(p.accuracy).toBe('high'); // never coarse enough to be dropped by the >100 m server filter
-      expect(p.timeInterval).toBeLessThanOrEqual(60000); // ~60 s or tighter, never the old 5-min stretch
+      expect(p.timeInterval).toBe(3600000); // PHASE 78 owner lock: hourly, not the PHASE 63 60 s
     }
   });
   it('AMBIENT (off-duty) stays coarser than the shift profile — no continuous 10 m off-duty tracking (privacy/battery)', () => {
@@ -85,6 +96,18 @@ describe('samplingProfile', () => {
     expect(AMBIENT_PROFILE.accuracy).toBe('balanced');
     expect(AMBIENT_PROFILE.accuracy).not.toBe(MOVING_PROFILE.accuracy); // must not silently match the shift profile
     expect(AMBIENT_PROFILE.distanceInterval).toBeGreaterThan(0); // distance-gated: a motionless off-duty phone records little
+  });
+  it('every profile samples HOURLY — the PHASE 78 owner lock (contracts/INBOX.md, 2026-08-26)', () => {
+    // The owner asked for hourly sampling instead of every 60 s, to cut battery and mobile-data cost for
+    // 21 field staff, and confirmed it after being shown that it thins a nine-hour shift to ~9 points.
+    // All three profiles carry the same cadence, so there is one number to change if that is regretted.
+    for (const p of [MOVING_PROFILE, STILL_PROFILE, AMBIENT_PROFILE]) {
+      expect(p.timeInterval).toBe(3600000); // 60 min
+    }
+    // The privacy separation between off-duty and shift recording survives the cadence change: it was
+    // never the interval that kept ambient coarse, it is the accuracy and the distance gate.
+    expect(AMBIENT_PROFILE.accuracy).not.toBe(MOVING_PROFILE.accuracy);
+    expect(AMBIENT_PROFILE.distanceInterval).toBeGreaterThan(MOVING_PROFILE.distanceInterval);
   });
 });
 

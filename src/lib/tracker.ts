@@ -124,6 +124,11 @@ const AMBIENT_NOTIF_FALLBACK: Notif = { title: 'CGPE Connect', body: 'Location o
  * shift keeps far more of its early legs. Safe on Android (SharedPreferences has no hard value-size
  * limit, verified 2026-08-19); a >12 h continuous-offline shift still evicts the oldest and would need
  * upload chunking (follow-up), and iOS's historical ~2 KB Keychain limit is moot until iOS ships.
+ *
+ * PHASE 78: the cadence is now HOURLY, so 720 is far more headroom than the "~12 h" above describes —
+ * it is now weeks of offline points, and eviction is effectively unreachable. Left at 720 ON PURPOSE:
+ * this is a CAP, it costs nothing until a device is genuinely offline for days, and lowering it could
+ * only ever discard route data that was successfully captured. Do not "right-size" it.
  */
 const MAX_POINTS = 720;
 
@@ -472,13 +477,14 @@ async function startService(notif: Notif): Promise<void> {
   const { sid } = await readState();
   const profile = sid ? samplingProfile(await readMotion()) : AMBIENT_PROFILE;
   await Location.startLocationUpdatesAsync(ROUTE_TASK, {
-    // Accuracy + cadence come from the profile above. On the shift path (PHASE 63): High accuracy + a 60 s
-    // timeInterval + distanceInterval 0, so a point lands every ~60 s even when the phone is stationary
-    // and each fix is precise enough to survive the backend's shift-point >100 m drop.
+    // Accuracy + cadence come from the profile above. On the shift path: High accuracy +
+    // distanceInterval 0, so a point lands on the time interval even when the phone is stationary and
+    // each fix is precise enough to survive the backend's shift-point >100 m drop. PHASE 78 made that
+    // time interval HOURLY (owner-locked, see `motion.ts` HOURLY_MS) — it was 60 s under PHASE 63.
     accuracy: accuracyOf(profile),
     timeInterval: profile.timeInterval,
     // distanceInterval 0 records on the time interval even when stationary. `timeInterval` throttles that
-    // to ~60 s ON ANDROID ONLY; iOS ignores `timeInterval`, so 0 there would firehose fixes at the GPS's
+    // ON ANDROID ONLY; iOS ignores `timeInterval`, so 0 there would firehose fixes at the GPS's
     // native rate (battery/data). Keep a non-zero iOS distance filter (restores the pre-63 iOS behaviour;
     // iOS background is a separate Phase-56 effort). `x || 30` only rewrites a 0 → 30.
     distanceInterval: isAndroid ? profile.distanceInterval : profile.distanceInterval || 30,
@@ -665,12 +671,19 @@ async function watchdogTick(): Promise<void> {
     running = true;
   }
   // PHASE 71 — recording SHOULD be live now (action was 'idle' or we just re-armed). The OS location
-  // stream is best-effort: under Doze it can be starved for far longer than the requested ~60 s
-  // cadence, leaving a long flat gap in the route. If the newest recorded point is stale, take one
-  // fix now so a live shift never goes a full hour without a point. The trigger sits a whole watchdog
-  // interval below the 60-min ceiling (`staleBuffer.ts`), so a point missed at one tick is still
-  // caught within the hour at the next. HONEST CEILING: WorkManager is itself Doze-deferred, so this
-  // is best-effort, not a hard real-time guarantee.
+  // stream is best-effort: under Doze it can be starved for far longer than the requested cadence,
+  // leaving a long flat gap in the route. If the newest recorded point is stale, take one fix now so a
+  // live shift never goes a full hour without a point. The trigger sits a whole watchdog interval below
+  // the 60-min ceiling (`staleBuffer.ts`), so a point missed at one tick is still caught within the
+  // hour at the next. HONEST CEILING: WorkManager is itself Doze-deferred, so this is best-effort, not
+  // a hard real-time guarantee.
+  //
+  // PHASE 78 CHANGED WHAT THIS IS. At a 60 s cadence this was a rare BACKSTOP for a starved stream. Now
+  // that the cadence is hourly and `STALE_AFTER_MS` is 45 min, the staleness trigger fires BEFORE a
+  // healthy hourly stream delivers, so this forced fix becomes a routine, often PRIMARY, source of
+  // route points. That is benign — `ingest` de-dupes and treats a forced point exactly like an
+  // OS-delivered one — but it means the real-world cadence is ~45-60 min driven from here, not 60 min
+  // driven by the OS, and battery profiling should attribute the cost to this path, not to the stream.
   if (isBufferStale(state.lastAt, Date.now())) {
     await captureForcedPoint(!!state.sid);   // High for a live shift, coarse Balanced for ambient
   }
@@ -887,9 +900,18 @@ export async function startTracking(sid: string): Promise<void> {
       }
 
       // 24/7 armed (PHASE-41 §12.1): clocking in only BEGINS shift attribution — the recorder is
-      // already running in ambient mode. Keep its buffer (a batch straddling the boundary
-      // mis-attributes by at most one ~60 s interval, the accepted slop) and keep the neutral 24/7
-      // notification — `startService` no-ops on the already-running service.
+      // already running in ambient mode. Keep its buffer and keep the neutral 24/7 notification —
+      // `startService` no-ops on the already-running service.
+      //
+      // ⚠️ PHASE 78 WIDENED THE ATTRIBUTION SLOP FROM ~60 s TO UP TO AN HOUR, and this is the one
+      // place that materially changes. A batch straddling the clock-in boundary is attributed whole,
+      // by `state.sid` at FLUSH time, so with an hourly cadence a fix taken up to an hour BEFORE the
+      // advisor clocked in can now land inside the shift (and the reverse at clock-out). That was an
+      // accepted one-minute rounding error before; it is now potentially a whole hour of off-duty
+      // movement filed under a shift. Flagged to the owner as a consequence of the hourly lock — the
+      // fix, if it is ever judged to matter, is to split the buffer at the boundary timestamp rather
+      // than attributing the batch as a unit. NOT done here: it is a behaviour change nobody asked
+      // for, and doing it silently inside a cadence change is how a subtle data bug gets shipped.
       state.sid = sid;
       await writeState(state);
       await storage.remove(LEGACY_SESSION_KEY);

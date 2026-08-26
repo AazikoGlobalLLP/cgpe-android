@@ -16,18 +16,50 @@
  * ⚠️ PHASE 63 (2026-08-19, owner #1): on the CLOCKED-IN shift path this economy is NEUTRALISED —
  * `STILL_PROFILE` equals `MOVING_PROFILE` — because the owner requires EVERY shift point retained (the
  * old "sparse when still" behaviour was a root cause of the reported no-points/straight-line bug), and
- * the `motion.test.ts` owner-#1 guard LOCKS that (distanceInterval 0 / accuracy 'high' / cadence ≤ 60 s
- * on both). Off-duty battery economy lives instead in `AMBIENT_PROFILE` (below), which the guard does
- * NOT constrain — that, not a STILL re-tune, is the lever to dial off-duty cost. Re-introducing any
- * shift-time still-economy would require a deliberate owner-#1 guard change, not a one-liner.
+ * the `motion.test.ts` owner-#1 guard LOCKS that (distanceInterval 0 / accuracy 'high' on both).
+ * That neutralisation still stands: the two shift profiles remain identical, so the classifier can
+ * never make a stationary phone record LESS than a moving one.
+ *
+ * ⚠️ PHASE 78 (2026-08-26) SUPERSEDED THE CADENCE HALF OF THAT GUARD. The owner asked for hourly
+ * sampling to cut battery and mobile-data cost, was shown what it does to route detail, and confirmed.
+ * All three profiles are now `HOURLY_MS` (see the constant below for the full decision record); the
+ * guard's `timeInterval <= 60000` assertion was replaced with one that pins the hourly value instead.
  *
  * ⚠️ NUMBERS. The spec fixes none of these, so they are PROPOSED DEFAULTS pending an owner lock, and
  * every one is a single named constant so tuning is a one-line change. The threshold is derived from
- * accelerometer physics (still noise ≈ 0.02 g, walking ≫ 0.1 g); the accuracy/always-on-60 s battery
- * cost (PHASE 63) is the GPS-behaviour tradeoff the owner should confirm against a real measurement (§3).
+ * accelerometer physics (still noise ≈ 0.02 g, walking ≫ 0.1 g). The cadence is now owner-locked
+ * (Phase 78); the ACCURACY/battery tradeoff is still the one the owner should confirm against a real
+ * measurement (§3).
  */
 
 export type MotionState = 'still' | 'moving';
+
+/**
+ * PHASE 78 (2026-08-26) — the sampling cadence for EVERY profile, shift and off-duty alike.
+ *
+ * ⚠️ THIS REVERSES PHASE 63 / OWNER #1, AND THAT WAS THE OWNER'S EXPLICIT CALL, MADE WITH THE
+ * TRADE-OFF IN FRONT OF THEM. The request arrived through `contracts/INBOX.md` (2026-08-26,
+ * cgpe-api, owner-relayed): every 60 s is too expensive on battery and mobile data, make it hourly.
+ * The consequence was put to the owner in writing before anything changed — at 60 min a nine-hour
+ * shift records roughly NINE points, so the master live map draws nine straight hops between them,
+ * which looks exactly like the "no points / straight line" bug that Phase 63 was written to fix —
+ * and the owner chose hourly anyway. It is a cost decision (battery and data for 21 field staff),
+ * not an oversight, so the owner-#1 guard below was edited deliberately rather than worked around.
+ *
+ * WHAT STILL HOLDS after the change, so route quality does not fall further than the cadence alone:
+ *   • `distanceInterval` stays 0 on both shift profiles. That is the OTHER half of the Phase-63 fix
+ *     and it is untouched — a stationary phone still reports. Gating on movement again is what made
+ *     a parked advisor record nothing at all, which is a different and worse failure than sparseness.
+ *   • `accuracy` stays 'high' on both, so each fix still survives the backend's `accuracy <= 100 m`
+ *     shift-point filter. A coarse fix is not merely imprecise here, it is DISCARDED server-side.
+ *   • The 15-min watchdog still forces a fix once the newest point is older than `STALE_AFTER_MS`
+ *     (45 min), so the ~60-minute best-effort ceiling in `staleBuffer.ts` now coincides with the
+ *     cadence instead of backstopping it. The backend's 3 h `LOCATION_GAP_THRESHOLD_MIN` stays safe.
+ *
+ * IF THE STRAIGHT-LINE ROUTES ARE REPORTED AGAIN, this constant is the first thing to read: the fix
+ * is to lower it, and the guard test records what each value costs.
+ */
+export const HOURLY_MS = 3600000;
 
 /** Std-dev of accelerometer magnitude above which the window reads as movement (g). Derived, tunable. */
 export const MOTION_STDDEV_THRESHOLD_G = 0.05;
@@ -62,12 +94,14 @@ export type SamplingProfile = {
  * `distanceInterval: 0` so a fix is delivered every `timeInterval` even when the phone is stationary —
  * the old `30` recorded NOTHING until the user moved 30 m (a root cause of the reported no-points bug).
  * `accuracy: 'high'` (~10 m) so each fix survives the backend's `accuracy <= 100 m` shift-point filter
- * that was silently dropping the coarser Balanced fixes. The battery cost of High + always-on 60 s is
- * the owner's flagged open question — dial it back here once they lock a number.
+ * that was silently dropping the coarser Balanced fixes.
+ * PHASE 78: the cadence is `HOURLY_MS`, not the Phase-63 60 s — the owner locked that number knowing
+ * it thins a nine-hour shift to ~9 points. `distanceInterval` and `accuracy` are deliberately UNCHANGED,
+ * because those two are what stop a stationary or imprecise fix being lost entirely.
  */
 export const MOVING_PROFILE: SamplingProfile = {
   accuracy: 'high',
-  timeInterval: 60000,
+  timeInterval: HOURLY_MS,
   distanceInterval: 0,
   deferredUpdatesInterval: 60000,
 };
@@ -83,7 +117,7 @@ export const MOVING_PROFILE: SamplingProfile = {
  */
 export const STILL_PROFILE: SamplingProfile = {
   accuracy: 'high',
-  timeInterval: 60000,
+  timeInterval: HOURLY_MS,
   distanceInterval: 0,
   deferredUpdatesInterval: 60000,
 };
@@ -95,10 +129,19 @@ export const STILL_PROFILE: SamplingProfile = {
  * ~10 m home recording (a privacy escalation) and does not keep the GPS radio hot around the clock
  * (battery). This preserves the pre-PHASE-63 off-duty behaviour; PHASE 63's "capture every point" is a
  * CLOCKED-IN-shift requirement only (owner #1). This constant is the lever to dial off-duty cost.
+ *
+ * ⚠️ PHASE 78 (2026-08-26, owner via `contracts/INBOX.md`): hourly, like the shift profiles. This is
+ * the profile that actually runs around the clock, so it is where the owner's battery/data complaint
+ * really lands. It stays COARSER than the shift profiles in the two ways that matter for privacy —
+ * Balanced accuracy and `distanceInterval: 30` — so off-duty tracking is still not a continuous ~10 m
+ * record of someone's home. WHAT THIS DOES NOT CHANGE: a point still arrives roughly hourly even when
+ * the OS starves this stream, because the 15-min watchdog forces a fix once the newest point is older
+ * than `STALE_AFTER_MS` (45 min) — a ~60-minute best-effort ceiling that is independent of this
+ * constant (`staleBuffer.ts`). So the backend's 3 h `LOCATION_GAP_THRESHOLD_MIN` stays safe.
  */
 export const AMBIENT_PROFILE: SamplingProfile = {
   accuracy: 'balanced',
-  timeInterval: 60000,
+  timeInterval: HOURLY_MS,
   distanceInterval: 30,
   deferredUpdatesInterval: 60000,
 };
