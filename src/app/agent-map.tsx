@@ -22,6 +22,7 @@ import { clockKeyFor } from '@/lib/clockKey';
 import { LeafletMap, type MapBreak } from '@/ui/LeafletMap';
 import { useAuth } from '@/store/auth';
 import { canSeeLiveLocation } from '@/store/roles';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Where the field is, right now.
@@ -70,6 +71,7 @@ function readMine(raw: string | null): Mine | null {
 
 export default function AgentMap() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const health = useDataHealth();
   const insets = useSafeAreaInsets();
@@ -265,7 +267,7 @@ export default function AgentMap() {
                   : tracked === 0
                     ? 'Pins appear once your team clocks in from the app with location on.'
                     : 'Everyone tracked today has clocked out. Pins return as soon as someone clocks back in.'}
-                action={{ label: 'Refresh', onPress: retry }}
+                action={{ label: t('common.refresh'), onPress: retry }}
               />
             ) : onDuty.map((p, i) => (
               <Appear key={p.id} index={i}>
@@ -310,6 +312,7 @@ export default function AgentMap() {
 
 function FieldRow({ p, onOpen }: { p: Person; onOpen: () => void }) {
   const c = useTheme();
+  const t = useT();
   return (
     <PersonRow
       name={p.name}
@@ -326,7 +329,7 @@ function FieldRow({ p, onOpen }: { p: Person; onOpen: () => void }) {
             bg={c.primarySoft}
             color={c.primary}
             onPress={() => { haptics.tap(); call(p.phone as string); }}
-            accessibilityLabel={`Call ${p.name}`}
+            accessibilityLabel={t('common.a11yCall', { name: p.name })}
           />
           <IconBtn
             icon="logo-whatsapp"
@@ -334,7 +337,7 @@ function FieldRow({ p, onOpen }: { p: Person; onOpen: () => void }) {
             bg={c.whatsappSoft}
             color={c.whatsapp}
             onPress={() => { haptics.tap(); whatsapp(p.phone as string); }}
-            accessibilityLabel={`Open WhatsApp chat with ${p.name}`}
+            accessibilityLabel={t('common.a11yWhatsapp', { name: p.name })}
           />
         </Row>
       ) : (

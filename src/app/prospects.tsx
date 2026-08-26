@@ -396,10 +396,10 @@ export default function Prospects() {
       .sort((a, b) => stageRank(a) - stageRank(b) || a.localeCompare(b));
 
     return [
-      { key: 'all', label: 'All', count: rows.length },
+      { key: 'all', label: t('common.all'), count: rows.length },
       ...keys.map((k) => ({ key: k, label: stageLabel(k), count: counts.get(k) ?? 0 })),
     ];
-  }, [statusFacets, rows, stage]);
+  }, [statusFacets, rows, stage, t]);
 
   const shown = useMemo(
     () => (stage === 'all' ? rows : rows.filter((r) => stageOf(r).toLowerCase() === stage)),
@@ -490,7 +490,7 @@ export default function Prospects() {
       if (value) out.push({ label, value, icon, copyable });
     };
 
-    add('Mobile', phoneOf(p), 'call-outline', true);
+    add(t('common.mobile'), phoneOf(p), 'call-outline', true);
     if (firm && firm !== name) add('Firm', firm, 'business-outline');
     add('City', pick(p, CITY_KEYS), 'location-outline');
     add('Category', pick(p, CATEGORY_KEYS), 'pricetag-outline');
@@ -504,7 +504,7 @@ export default function Prospects() {
     add('Replied on', niceDate(pick(p, RESPONDED_KEYS)), 'calendar-outline');
     add('On file', pick(p, NOTE_KEYS), 'document-text-outline');
     return out;
-  }, [selected]);
+  }, [selected, t]);
 
   const composition = useMemo(() => {
     if (flagDefs.length === 0) return [] as { label: string; value: number }[];
@@ -550,8 +550,8 @@ export default function Prospects() {
       }
       action={
         stage !== 'all' ? { label: 'Show every stage', onPress: () => changeStage('all') }
-          : q.trim() ? { label: 'Clear search', onPress: () => { haptics.select(); setQ(''); } }
-            : { label: 'Try again', onPress: refresh }
+          : q.trim() ? { label: t('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }
+            : { label: t('common.tryAgain'), onPress: refresh }
       }
     />
   );
@@ -760,7 +760,7 @@ export default function Prospects() {
 
           <Row>
             <Button
-              label={acting === 'note' ? 'Saving' : 'Save note'}
+              label={acting === 'note' ? t('common.saving') : 'Save note'}
               variant="outline"
               icon="create-outline"
               style={{ flex: 1 }}
@@ -769,7 +769,7 @@ export default function Prospects() {
               onPress={() => { void runAction('note'); }}
             />
             <Button
-              label={acting === 'respond' ? 'Saving' : 'Record a reply'}
+              label={acting === 'respond' ? t('common.saving') : 'Record a reply'}
               variant="secondary"
               icon="chatbubble-ellipses-outline"
               style={{ flex: 1 }}

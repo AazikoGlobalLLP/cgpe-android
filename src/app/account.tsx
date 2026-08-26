@@ -12,6 +12,7 @@ import { Appear } from '@/ui/motion';
 import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Account and privacy — including the deletion path the app stores require.
@@ -34,6 +35,7 @@ const PRIVACY_URL = 'https://cgpe.in/privacy';
 
 export default function Account() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const { user, ready, deleteAccount } = useAuth();
   const { confirm } = useConfirm();
@@ -55,7 +57,7 @@ export default function Account() {
     const first = await confirm({
       title: 'Delete your account?',
       message: 'This permanently deletes your CGPE Connect account and all associated personal data (profile, leads, client notes). This cannot be undone.',
-      confirmText: 'Continue',
+      confirmText: t('common.continue'),
       destructive: true,
       icon: 'trash',
     });
@@ -154,7 +156,7 @@ export default function Account() {
           icon="shield-outline"
           title="You are signed out"
           subtitle="Sign in to export your data or to delete your account. You can also request deletion at cgpe.in/delete-account."
-          action={{ label: 'Go to sign in', onPress: () => router.replace('/(auth)/login') }}
+          action={{ label: t('common.goToSignIn'), onPress: () => router.replace('/(auth)/login') }}
         />
       </Screen>
     );
@@ -175,7 +177,7 @@ export default function Account() {
             message={failure}
             // Re-runs the full two-step confirm. A one-tap retry on a banner would be a
             // back door around the gate the rest of this screen exists to build.
-            action={{ label: 'Try again', onPress: () => void confirmDelete() }}
+            action={{ label: t('common.tryAgain'), onPress: () => void confirmDelete() }}
             onDismiss={() => setFailure(null)}
           />
         ) : null}

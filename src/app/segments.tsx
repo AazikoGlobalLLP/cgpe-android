@@ -279,6 +279,7 @@ export default function Segments() {
 
 function SegmentsScreen() {
   const c = useTheme();
+  const t = useT();
   const health = useDataHealth();
 
   const [unit, setUnit] = useState<Unit>('individual');
@@ -460,8 +461,8 @@ function SegmentsScreen() {
       }
       action={
         flags.length > 0 ? { label: 'Clear flags', onPress: clearFlags }
-          : query ? { label: 'Clear search', onPress: () => setQ('') }
-            : { label: 'Try again', onPress: () => { haptics.tap(); void run(1, 'replace'); } }
+          : query ? { label: t('common.clearSearch'), onPress: () => setQ('') }
+            : { label: t('common.tryAgain'), onPress: () => { haptics.tap(); void run(1, 'replace'); } }
       }
     />
   );
@@ -604,7 +605,7 @@ function SegmentsScreen() {
         onChange={changeFilters}
         onReset={clearFlags}
         title={unit === 'family' ? 'Household flags' : 'Client flags'}
-        applyLabel="Show results"
+        applyLabel={t('common.showResults')}
       />
 
       <Sheet
@@ -742,7 +743,7 @@ function DetailSheet({ row, defs, onClose }: {
 
           <ListSection>
             {row.kind === 'individual' && row.phone
-              ? <DataRow label="Mobile" value={row.phone} icon="call-outline" numeric copyable />
+              ? <DataRow label={t('common.mobile')} value={row.phone} icon="call-outline" numeric copyable />
               : null}
             {row.kind === 'individual' && row.age != null
               ? <DataRow label="Age" value={`${row.age} years`} icon="person-outline" numeric />
@@ -818,7 +819,7 @@ function DetailSheet({ row, defs, onClose }: {
                         bg={c.primarySoft}
                         color={c.primary}
                         onPress={() => { haptics.tap(); call(m.phone); }}
-                        accessibilityLabel={`Call ${m.name}`}
+                        accessibilityLabel={t('common.a11yCall', { name: m.name })}
                       />
                     ) : (
                       m.cover != null && m.cover > 0
@@ -867,6 +868,7 @@ function ListFooter({ loadingMore, hasMore, count, total, onLoadMore }: {
   loadingMore: boolean; hasMore: boolean; count: number; total: number; onLoadMore: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
   if (count === 0) return null;
 
   if (loadingMore) {
@@ -885,7 +887,7 @@ function ListFooter({ loadingMore, hasMore, count, total, onLoadMore }: {
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
     }}>
       {hasMore ? (
-        <Button label="Load more" variant="ghost" size="sm" onPress={onLoadMore} />
+        <Button label={t('common.loadMore')} variant="ghost" size="sm" onPress={onLoadMore} />
       ) : (
         <Txt size={font.cap} color={c.faint} numeric>
           All {total.toLocaleString('en-IN')} shown

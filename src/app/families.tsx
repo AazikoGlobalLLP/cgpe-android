@@ -189,6 +189,7 @@ export default function Families() {
 
 function FamiliesScreen() {
   const c = useTheme();
+  const t = useT();
   const health = useDataHealth();
 
   const [q, setQ] = useState('');
@@ -304,8 +305,8 @@ function FamiliesScreen() {
             : 'Households are grouped from your client book. They appear once records are assigned to you.'
       }
       action={
-        query ? { label: 'Clear search', onPress: () => setQ('') }
-          : { label: 'Try again', onPress: () => { haptics.tap(); refresh(); } }
+        query ? { label: t('common.clearSearch'), onPress: () => setQ('') }
+          : { label: t('common.tryAgain'), onPress: () => { haptics.tap(); refresh(); } }
       }
     />
   );
@@ -485,7 +486,7 @@ function FamilySheet({ family, onClose }: { family: FamilyView | null; onClose: 
             message={units.length > 0
               ? 'Showing the copy that arrived with the list. It may be a few minutes old.'
               : 'The server did not answer. Nothing is missing from your book, it just could not be read right now.'}
-            action={{ label: 'Try again', onPress: () => { haptics.tap(); setAttempt((n) => n + 1); } }}
+            action={{ label: t('common.tryAgain'), onPress: () => { haptics.tap(); setAttempt((n) => n + 1); } }}
           />
         ) : null}
 

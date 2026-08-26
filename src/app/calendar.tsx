@@ -239,7 +239,7 @@ function EventRow({ r, index, last }: { r: Reminder; index: number; last: boolea
       subtitle={r.subtitle || r.clientName}
       tone={r.done ? 'neutral' : TONE[r.type] ?? 'primary'}
       icon={REMINDER_ICON[r.type] ?? 'notifications'}
-      right={r.done ? <Pill label="Done" tone="success" small icon="checkmark" /> : undefined}
+      right={r.done ? <Pill label={t('common.done')} tone="success" small icon="checkmark" /> : undefined}
     >
       {hasPhone && !r.done ? (
         <Row style={{ gap: spacing.sm }}>
@@ -275,13 +275,14 @@ function DayEmpty({ degraded, anyLoaded, dayLabel, nextBusy, onRetry, onJump }: 
   onRetry: () => void;
   onJump: (offset: number) => void;
 }) {
+  const t = useT();
   if (degraded) {
     return (
       <EmptyState
         icon="cloud-offline-outline"
         title="Your calendar could not load"
         subtitle="The server did not answer, so this day is unconfirmed rather than clear. Check your connection and try again."
-        action={{ label: 'Try again', onPress: onRetry }}
+        action={{ label: t('common.tryAgain'), onPress: onRetry }}
       />
     );
   }
@@ -291,7 +292,7 @@ function DayEmpty({ degraded, anyLoaded, dayLabel, nextBusy, onRetry, onJump }: 
         icon="calendar-outline"
         title="Nothing scheduled in the next 14 days"
         subtitle="Birthdays, premium chases and follow-ups appear here as soon as they are raised against your book."
-        action={{ label: 'Refresh', onPress: onRetry }}
+        action={{ label: t('common.refresh'), onPress: onRetry }}
       />
     );
   }

@@ -15,6 +15,7 @@ import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import type { MyEarnings, PayrollRow } from '@/data/api';
 import { inr } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * My earnings — the signed-in person's OWN attendance-derived pay for a month.
@@ -69,6 +70,7 @@ function lastTwelveMonths(): MonthOpt[] {
 }
 
 export default function Earnings() {
+  const t = useT();
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
@@ -179,7 +181,7 @@ export default function Earnings() {
             subtitle={health.degraded
               ? 'The salary service could not be reached, so this is blank rather than empty. Pull down or retry.'
               : 'We could not load your pay for this month. Pull down or retry.'}
-            action={{ label: 'Try again', onPress: retry }}
+            action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : nothingToShow ? (
           <EmptyState

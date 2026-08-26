@@ -340,9 +340,9 @@ export default function Notes() {
   }, [pendingRaw.length, loading, load, q, cat]);
 
   const chips = useMemo(() => ([
-    { key: 'all', label: 'All' },
+    { key: 'all', label: tr('common.all') },
     ...facets.categories.map((f) => ({ key: f.label, label: catMeta(f.label).label, count: f.value })),
-  ]), [facets.categories]);
+  ]), [facets.categories, tr]);
 
   const searching = q.trim().length > 0;
   const filterActive = searching || cat !== 'all';
@@ -374,14 +374,14 @@ export default function Notes() {
       icon="cloud-offline-outline"
       title="Your notes could not load"
       subtitle="The server did not answer, so this is not an empty board, it is an unanswered request. Check your connection and try again."
-      action={{ label: 'Try again', onPress: () => load(1, q.trim(), cat, 'replace') }}
+      action={{ label: tr('common.tryAgain'), onPress: () => load(1, q.trim(), cat, 'replace') }}
     />
   ) : searching ? (
     <EmptyState
       icon="search-outline"
       title={`No note matches "${q.trim()}"`}
       subtitle="Search looks through the note text, the original dictation and the tags."
-      action={{ label: 'Clear search', onPress: () => { haptics.select(); setQ(''); } }}
+      action={{ label: tr('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }}
     />
   ) : cat !== 'all' ? (
     <EmptyState
@@ -477,7 +477,7 @@ export default function Notes() {
               <Txt size={font.cap} color={c.faint} numeric numberOfLines={1} style={{ flex: 1 }}>
                 {total === 1 ? '1 note matches' : `${total} notes match`}
               </Txt>
-              <Button label="Clear" variant="ghost" size="sm" onPress={clearFilters} />
+              <Button label={tr('common.clear')} variant="ghost" size="sm" onPress={clearFilters} />
             </Row>
           ) : null}
         </View>

@@ -323,7 +323,7 @@ export default function TaskDetail() {
               icon="cloud-offline"
               title="This task did not load"
               subtitle="The server could not be reached, so we cannot confirm whether this task still exists."
-              action={{ label: 'Try again', onPress: () => { setLoading(true); void load(); } }}
+              action={{ label: t('common.tryAgain'), onPress: () => { setLoading(true); void load(); } }}
             />
           ) : (
             <EmptyState

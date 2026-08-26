@@ -281,7 +281,7 @@ export default function ClaimDetail() {
               icon="cloud-offline-outline"
               title="This claim did not load"
               subtitle="The server could not be reached, so we cannot confirm whether this claim still exists."
-              action={{ label: 'Try again', onPress: retry }}
+              action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           ) : (
             <EmptyState
@@ -454,7 +454,7 @@ export default function ClaimDetail() {
             )}
 
             <Button
-              label={uploading ? 'Uploading' : 'Capture or upload a document'}
+              label={uploading ? t('common.uploading') : 'Capture or upload a document'}
               icon="camera"
               variant="outline"
               full
@@ -543,7 +543,7 @@ export default function ClaimDetail() {
           color={c.primary}
           disabled={!phone}
           onPress={() => { haptics.tap(); call(phone); }}
-          accessibilityLabel={`Call ${claim.clientName}`}
+          accessibilityLabel={t('common.a11yCall', { name: claim.clientName })}
         />
         <Button
           label="Request documents"

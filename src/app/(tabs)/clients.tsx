@@ -209,8 +209,8 @@ function ClientsScreen() {
       }
       action={
         activeCount > 0 ? { label: 'Clear filters', onPress: clearFilters }
-          : q ? { label: 'Clear search', onPress: () => setQ('') }
-            : { label: 'Try again', onPress: () => fetchPage(1, q.trim(), 'replace') }
+          : q ? { label: t('common.clearSearch'), onPress: () => setQ('') }
+            : { label: t('common.tryAgain'), onPress: () => fetchPage(1, q.trim(), 'replace') }
       }
     />
   );
@@ -264,7 +264,7 @@ function ClientsScreen() {
         <Row style={{ gap: spacing.sm }}>
           <Txt size={font.cap} color={c.faint} numeric numberOfLines={1} style={{ flex: 1 }}>{readout}</Txt>
           {activeCount > 0 ? (
-            <Button label="Clear" variant="ghost" size="sm" onPress={clearFilters} />
+            <Button label={t('common.clear')} variant="ghost" size="sm" onPress={clearFilters} />
           ) : null}
         </Row>
       </View>
@@ -317,7 +317,7 @@ function ClientsScreen() {
         onChange={(next) => { haptics.select(); setFilters(next); }}
         onReset={() => { haptics.select(); setFilters({}); }}
         title="Filter loaded clients"
-        applyLabel="Show results"
+        applyLabel={t('common.showResults')}
       />
     </Screen>
   );

@@ -19,6 +19,7 @@ import { inrShort, timeAgo } from '@/lib/format';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * The roster.
@@ -35,6 +36,7 @@ import { RestrictedNotice } from '@/ui/RestrictedNotice';
 export default function Team() {
   const router = useRouter();
   const c = useTheme();
+  const t = useT();
   const health = useDataHealth();
   const { user, viewAs, ready } = useAuth();
 
@@ -139,7 +141,7 @@ export default function Team() {
               subtitle={health.degraded
                 ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
                 : 'People appear here once they are added to your branch in the admin panel.'}
-              action={{ label: 'Try again', onPress: retry }}
+              action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           </View>
         ) : (
@@ -189,7 +191,7 @@ export default function Team() {
                     icon="search-outline"
                     title={`No member matches "${q.trim()}"`}
                     subtitle="Search runs over the names, roles and branches on the roster loaded here."
-                    action={{ label: 'Clear search', onPress: () => { haptics.select(); setQ(''); } }}
+                    action={{ label: t('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }}
                   />
                 </Card>
               ) : (
@@ -215,6 +217,7 @@ export default function Team() {
 
 function MemberRow({ m, onPress }: { m: TeamMember; onPress: () => void }) {
   const c = useTheme();
+  const t = useT();
   const role = m.role.replace(/_/g, ' ');
   const subtitle = [role, m.branch].filter(Boolean).join(' · ');
 
@@ -230,7 +233,7 @@ function MemberRow({ m, onPress }: { m: TeamMember; onPress: () => void }) {
           {m.stats.premiumMtd > 0 ? (
             <Txt size={font.sub} weight="800" color={c.success} numeric>{inrShort(m.stats.premiumMtd)}</Txt>
           ) : null}
-          {m.clockedIn ? <Pill label="On duty" tone="success" small dot /> : null}
+          {m.clockedIn ? <Pill label={t('common.onDuty')} tone="success" small dot /> : null}
         </View>
       }
     />

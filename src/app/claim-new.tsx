@@ -23,6 +23,7 @@ import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
 import * as api from '@/data/api';
 import type { Claim, ClaimDoc, Client } from '@/data/types';
+import { useT } from '@/i18n';
 import { inr } from '@/lib/format';
 
 /* ------------------------------------------------------------------ *
@@ -119,6 +120,7 @@ export default function ClaimNew() {
 
 function ClaimNewScreen() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const win = useWindowDimensions();
@@ -494,7 +496,7 @@ function ClaimNewScreen() {
               ) : null}
 
               <Button
-                label={uploading ? 'Uploading' : 'Capture or upload a document'}
+                label={uploading ? t('common.uploading') : 'Capture or upload a document'}
                 icon="camera"
                 variant="outline"
                 full
@@ -578,7 +580,7 @@ function ClaimNewScreen() {
               subtitle={health.degraded
                 ? 'The server could not be reached, so this is not a confirmed empty result. Try the search again in a moment.'
                 : 'Search covers the whole book by name, policy number and mobile number. Check the spelling, or try the policy number.'}
-              action={{ label: 'Clear search', onPress: () => setQ('') }}
+              action={{ label: t('common.clearSearch'), onPress: () => setQ('') }}
             />
           ) : (
             <EmptyState

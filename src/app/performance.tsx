@@ -17,6 +17,7 @@ import * as api from '@/data/api';
 import type { TaskReport, TaskReportMember, TaskReportResult } from '@/data/api';
 import { useAuth } from '@/store/auth';
 import { canSeeTeamPerformance } from '@/store/roles';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Performance — the completed-tasks report + monthly score (PHASE-45).
@@ -61,6 +62,7 @@ const PRIORITY_TONE: Record<string, 'danger' | 'warning' | 'neutral'> = { P1: 'd
 
 export default function Performance() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const params = useLocalSearchParams<{ view?: string }>();
@@ -154,7 +156,7 @@ export default function Performance() {
             subtitle={health.degraded
               ? 'The report service could not be reached, so this is blank rather than empty. Pull down or retry.'
               : 'We could not load performance for this month. Pull down or retry.'}
-            action={{ label: 'Try again', onPress: retry }}
+            action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : teamView ? (
           <TeamReport report={report!} isCurrentMonth={isCurrentMonth} />
@@ -356,16 +358,19 @@ function CompletedList({ tasks }: { tasks: TaskReportMember['completedTasks'] })
   }
   return (
     <Card style={{ gap: spacing.md }}>
-      {tasks.map((t, i) => (
-        <View key={t.id || String(i)} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md } : undefined}>
+      {/* `task`, not `t`: the screen above binds the translator as `t` (i18n batch 2). This
+          component has no translator yet, but the 'On time'/'Late' pill below is next in line for
+          copy, and a map item named `t` is exactly the shadowing trap that would silently break it. */}
+      {tasks.map((task, i) => (
+        <View key={task.id || String(i)} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md } : undefined}>
           <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm }}>
-            <Txt size={font.sub} weight="600" numberOfLines={2} style={{ flex: 1 }}>{t.title}</Txt>
-            <Pill label={t.onTime ? 'On time' : 'Late'} tone={t.onTime ? 'success' : 'warning'} small />
+            <Txt size={font.sub} weight="600" numberOfLines={2} style={{ flex: 1 }}>{task.title}</Txt>
+            <Pill label={task.onTime ? 'On time' : 'Late'} tone={task.onTime ? 'success' : 'warning'} small />
           </Row>
           <Row style={{ gap: spacing.xs, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-            {t.priority && PRIORITY_TONE[t.priority] ? <Pill label={t.priority} tone={PRIORITY_TONE[t.priority]} small /> : null}
+            {task.priority && PRIORITY_TONE[task.priority] ? <Pill label={task.priority} tone={PRIORITY_TONE[task.priority]} small /> : null}
             <Txt size={font.tiny} color={c.faint} numeric>
-              {[t.dueAt ? `Due ${fmtDay(t.dueAt)}` : null, t.completedAt ? `Done ${fmtDay(t.completedAt)}` : null].filter(Boolean).join('  ·  ')}
+              {[task.dueAt ? `Due ${fmtDay(task.dueAt)}` : null, task.completedAt ? `Done ${fmtDay(task.completedAt)}` : null].filter(Boolean).join('  ·  ')}
             </Txt>
           </Row>
         </View>

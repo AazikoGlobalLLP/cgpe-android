@@ -190,7 +190,7 @@ function ClientDetailScreen() {
           subtitle={health.degraded
             ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
             : 'This record is no longer in the book you can see. It may have been reassigned or removed.'}
-          action={{ label: 'Try again', onPress: retry }}
+          action={{ label: t('common.tryAgain'), onPress: retry }}
         />
       </Screen>
     );
@@ -215,7 +215,7 @@ function ClientDetailScreen() {
             tone="danger"
             title="Report was not generated"
             message={failure}
-            action={{ label: 'Try again', onPress: doReport }}
+            action={{ label: t('common.tryAgain'), onPress: doReport }}
             onDismiss={() => setFailure(null)}
           />
         ) : null}
@@ -265,7 +265,7 @@ function ClientDetailScreen() {
 
         <Appear index={2}>
           <ListSection title="Contact">
-            {client.phone ? <DataRow label="Mobile" value={client.phone} icon="call-outline" numeric copyable /> : null}
+            {client.phone ? <DataRow label={t('common.mobile')} value={client.phone} icon="call-outline" numeric copyable /> : null}
             {client.email ? <DataRow label="Email" value={client.email} icon="mail-outline" copyable /> : null}
             {client.city ? <DataRow label="City" value={client.city} icon="location-outline" /> : null}
             {client.family ? <DataRow label="Family" value={client.family} icon="people-outline" /> : null}
@@ -305,7 +305,7 @@ function ClientDetailScreen() {
           color={c.primary}
           disabled={!client.phone}
           onPress={() => { haptics.tap(); call(client.phone); }}
-          accessibilityLabel={`Call ${client.name}`}
+          accessibilityLabel={t('common.a11yCall', { name: client.name })}
         />
         <IconBtn
           icon="logo-whatsapp"
@@ -314,7 +314,7 @@ function ClientDetailScreen() {
           color={c.whatsapp}
           disabled={!client.phone}
           onPress={() => { haptics.tap(); whatsapp(client.phone, `Namaste ${client.name}`); }}
-          accessibilityLabel={`Open WhatsApp chat with ${client.name}`}
+          accessibilityLabel={t('common.a11yWhatsapp', { name: client.name })}
         />
         <Button
           label="Send reminder"

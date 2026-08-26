@@ -18,6 +18,7 @@ import { canSeeLiveLocation } from '@/store/roles';
 import * as api from '@/data/api';
 import type { TrackPoint, TrackSession } from '@/data/api';
 import { fmtTime } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Movement replay, master only.
@@ -54,6 +55,7 @@ const km = (m?: number) => `${((m || 0) / 1000).toFixed(2)} km`;
 
 export default function AgentTrack() {
   const c = useTheme();
+  const t = useT();
   const health = useDataHealth();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -120,9 +122,11 @@ export default function AgentTrack() {
     // map keeps drawing the PREVIOUS shift's route under the new shift's heading until the
     // fetch returns, which is a route attributed to the wrong day.
     setActive(s); setPath([]); setLoadingPath(true);
-    const t = await api.getTrack(s.session_id);
+    // Named `track`, not `t`: the component now binds the translator as `t` (i18n batch 2),
+    // and a local `t` here would shadow it for anyone wiring copy inside this callback later.
+    const track = await api.getTrack(s.session_id);
     if (!live.current || my !== pathReq.current) return;
-    setPath(t?.points ?? []);
+    setPath(track?.points ?? []);
     setLoadingPath(false);
   }, []);
 
@@ -197,8 +201,8 @@ export default function AgentTrack() {
                       ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
                       : 'Only staff with a user account can be tracked. Add one in the admin panel first.'}
                   action={q.trim()
-                    ? { label: 'Clear search', onPress: () => { haptics.select(); setQ(''); } }
-                    : { label: 'Try again', onPress: retryMembers }}
+                    ? { label: t('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }
+                    : { label: t('common.tryAgain'), onPress: retryMembers }}
                 />
               </Card>
             ) : (
@@ -277,7 +281,7 @@ export default function AgentTrack() {
                   subtitle={health.degraded
                     ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
                     : `${sel.name} has not recorded a field route in the last 14 days. Paths appear here after they clock in from the app.`}
-                  action={{ label: 'Try again', onPress: () => loadSessions(sel) }}
+                  action={{ label: t('common.tryAgain'), onPress: () => loadSessions(sel) }}
                 />
               </ListSection>
             ) : (
@@ -308,6 +312,7 @@ function SessionRow({ s, selected, onPress }: {
   s: TrackSession; selected: boolean; onPress: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const running = !s.ended_at;
   const detail = [
     s.started_at ? fmtTime(s.started_at) : null,
@@ -339,7 +344,7 @@ function SessionRow({ s, selected, onPress }: {
           <Txt size={font.body} weight="700" numeric numberOfLines={1}>{s.date}</Txt>
           <Txt size={font.cap} color={c.muted} numeric numberOfLines={1}>{detail}</Txt>
         </View>
-        {running ? <Pill label="On duty" tone="success" small dot /> : null}
+        {running ? <Pill label={t('common.onDuty')} tone="success" small dot /> : null}
         <Ionicons
           name={selected ? 'checkmark-circle' : 'chevron-forward'}
           size={16}

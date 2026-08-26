@@ -972,7 +972,7 @@ function MapCanvas({
           icon="map-outline"
           title="The map could not open"
           subtitle="The map view could not start on this device. Try again — the points themselves are listed below. (The map itself no longer needs a connection; only the background imagery does.)"
-          action={{ label: 'Try again', onPress: onRetry }}
+          action={{ label: t('common.tryAgain'), onPress: onRetry }}
           style={{ paddingVertical: spacing.lg }}
         />
       </View>

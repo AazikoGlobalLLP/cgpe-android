@@ -170,7 +170,7 @@ export default function Leads() {
   // Counts are withheld until the fetch lands: a row of zeroes reads as data, and there is
   // no data yet.
   const options = useMemo(() => ([
-    { key: 'all' as StageFilter, label: 'All', count: loading ? undefined : leads.length },
+    { key: 'all' as StageFilter, label: t('common.all'), count: loading ? undefined : leads.length },
     ...STAGE_ORDER.map((s) => ({
       key: s as StageFilter,
       label: t(STAGE_META[s].labelKey),
@@ -305,9 +305,9 @@ export default function Leads() {
               : 'Add the first one and it will sit at the New stage until you move it forward.'
       }
       action={
-        emptyKind === 'search' ? { label: 'Clear search', onPress: () => setQ('') }
+        emptyKind === 'search' ? { label: t('common.clearSearch'), onPress: () => setQ('') }
           : emptyKind === 'filter' ? { label: 'Show all stages', onPress: () => pickStage('all') }
-            : emptyKind === 'outage' ? { label: 'Try again', onPress: refresh }
+            : emptyKind === 'outage' ? { label: t('common.tryAgain'), onPress: refresh }
               : { label: 'Add a lead', onPress: () => setAddOpen(true) }
       }
     />
@@ -378,7 +378,7 @@ export default function Leads() {
               title={notice.title}
               message={notice.message}
               onDismiss={() => setNotice(null)}
-              action={{ label: 'Refresh', onPress: () => { setNotice(null); refresh(); } }}
+              action={{ label: t('common.refresh'), onPress: () => { setNotice(null); refresh(); } }}
             />
           </View>
         ) : null}
@@ -743,6 +743,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
   onAdded: (lead: Lead, confirmed: boolean, reason?: api.WriteFailure) => void;
 }) {
   const { spacing } = useTheme();
+  const t = useT();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [interest, setInterest] = useState('');
@@ -823,7 +824,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
       subtitle="It starts at the New stage. You can move it on straight away."
       footer={
         <Button
-          label={saving ? 'Saving' : 'Add lead'}
+          label={saving ? t('common.saving') : 'Add lead'}
           icon="checkmark"
           size="lg"
           full

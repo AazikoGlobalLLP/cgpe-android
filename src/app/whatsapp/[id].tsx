@@ -16,6 +16,7 @@ import * as api from '@/data/api';
 import type { WaMessage, WaThread } from '@/data/types';
 import { daysUntil, fmtDate, fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * One WhatsApp conversation.
@@ -157,6 +158,7 @@ function buildRows(messages: WaMessage[], states: Map<string, 'sending' | 'sent'
 
 export default function Chat() {
   const c = useTheme();
+  const tr = useT(); // `t` is used as a local for the loaded thread below; translator is `tr`
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -334,7 +336,7 @@ export default function Chat() {
         icon="call"
         size={38}
         onPress={() => { haptics.tap(); call(phone); }}
-        accessibilityLabel={`Call ${thread?.name ?? 'this contact'}`}
+        accessibilityLabel={tr('common.a11yCall', { name: thread?.name ?? 'this contact' })}
       />
       <IconBtn
         icon="logo-whatsapp"
@@ -361,7 +363,7 @@ export default function Chat() {
             subtitle={health.degraded
               ? 'The server did not answer, so no message history is confirmed. Check your connection and try again.'
               : 'The chat history did not come back from the server. Try again in a moment.'}
-            action={{ label: 'Try again', onPress: retry }}
+            action={{ label: tr('common.tryAgain'), onPress: retry }}
           />
         </View>
       ) : (

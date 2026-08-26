@@ -27,6 +27,7 @@ import { useAuth } from '@/store/auth';
 import { canViewClients, capabilitiesOf } from '@/store/roles';
 import { useAppUi } from '@/store/appUi';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Campaigns console — the buckets, the audience, and the one commitment.
@@ -277,6 +278,7 @@ export default function Campaigns() {
 
 function CampaignsScreen() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const toast = useToast();
@@ -569,7 +571,7 @@ function CampaignsScreen() {
       icon="cloud-offline-outline"
       title="The audience did not load"
       subtitle="The server did not answer, so this is not a confirmed empty audience. Check your connection and try the request again."
-      action={{ label: 'Try again', onPress: () => void loadAudience(kind) }}
+      action={{ label: t('common.tryAgain'), onPress: () => void loadAudience(kind) }}
     />
   ) : (
     <EmptyState

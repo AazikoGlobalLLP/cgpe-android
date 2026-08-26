@@ -17,6 +17,7 @@ import type { PayrollProfile, PayrollProfileResult, PayrollRow, TaskReportMember
 import { maskAccountNumber } from '@/data/payroll';
 import { useAuth } from '@/store/auth';
 import { canSeeTeamPerformance } from '@/store/roles';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Payroll detail — ONE employee's pay breakdown + task activity for a month (PHASE-67).
@@ -81,6 +82,7 @@ type EssentialState =
   | { status: 'error' };
 
 export default function PayrollDetail() {
+  const t = useT();
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
@@ -228,7 +230,7 @@ export default function PayrollDetail() {
             subtitle={health.degraded
               ? 'The salary service could not be reached, so this is blank rather than empty. Pull down or retry.'
               : 'We could not load this member’s pay for this month. Pull down or retry.'}
-            action={{ label: 'Try again', onPress: retry }}
+            action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : (
           <>

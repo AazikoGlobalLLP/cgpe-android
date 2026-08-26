@@ -112,6 +112,7 @@ const createdAtOf = (t: api.Ticket): string | null => {
 
 export default function TicketsInbox() {
   const c = useTheme();
+  const tr = useT(); // `t` elsewhere in this file is ticket type-meta; the translator is `tr`
   const router = useRouter();
   const health = useDataHealth();
 
@@ -268,7 +269,7 @@ export default function TicketsInbox() {
         icon="cloud-offline-outline"
         title="The request inbox could not load"
         subtitle="The server did not answer, so nothing here is confirmed. Check your connection and pull down to refresh."
-        action={{ label: 'Try again', onPress: reload }}
+        action={{ label: tr('common.tryAgain'), onPress: reload }}
       />
     )
     : query
@@ -277,7 +278,7 @@ export default function TicketsInbox() {
           icon="search-outline"
           title={`No request matches "${query}"`}
           subtitle="Search runs over the whole inbox, by client name, phone, ticket reference, policy number or task."
-          action={{ label: 'Clear search', onPress: () => setQ('') }}
+          action={{ label: tr('common.clearSearch'), onPress: () => setQ('') }}
         />
       )
       : type !== 'all'
@@ -307,7 +308,7 @@ export default function TicketsInbox() {
                 : 'Requests raised by the WhatsApp bot, by AI-Ops or from the admin panel land here.'}
               action={state === 'active'
                 ? { label: 'Include closed', onPress: () => onState('all') }
-                : { label: 'Refresh', onPress: reload }}
+                : { label: tr('common.refresh'), onPress: reload }}
             />
           );
 

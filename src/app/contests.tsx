@@ -11,6 +11,7 @@ import { useDataHealth } from '@/ui/health-banner';
 import * as api from '@/data/api';
 import type { Contest } from '@/data/types';
 import { daysUntil } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Contests — club qualification, read as progress against a deadline.
@@ -32,6 +33,7 @@ type Shape = {
 const clamp01 = (n: number) => (Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0);
 
 export default function Contests() {
+  const t = useT();
   const health = useDataHealth();
 
   const [items, setItems] = useState<Contest[]>([]);
@@ -93,7 +95,7 @@ export default function Contests() {
             subtitle={health.degraded
               ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
               : 'Club and campaign contests appear here while they are open, with your live progress against each one.'}
-            action={{ label: 'Try again', onPress: retry }}
+            action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : (
           shaped.map((s, i) => <ContestCard key={s.ct.id} s={s} index={i} />)

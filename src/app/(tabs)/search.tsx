@@ -636,7 +636,7 @@ export default function Search() {
             icon="file-tray-outline"
             title={`No match for "${ran || term}"`}
             subtitle={`Nothing in your ${canClients ? 'clients, ' : ''}leads, claims, tickets or tasks carries that. Try a shorter piece of the name, or the last four digits of a mobile number.`}
-            action={{ label: 'Clear search', onPress: () => submitNow('') }}
+            action={{ label: t('common.clearSearch'), onPress: () => submitNow('') }}
           />
         ) : (
           <>

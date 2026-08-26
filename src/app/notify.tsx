@@ -333,7 +333,7 @@ export default function NotifyScreen() {
 
           <Row style={{ gap: spacing.sm }}>
             <Button
-              label="Clear"
+              label={t('common.clear')}
               variant="ghost"
               onPress={() => { haptics.tap(); setSelected({}); }}
               style={{ flex: 1 }}

@@ -19,6 +19,7 @@ import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
 import { useAppUi } from '@/store/appUi';
 import * as api from '@/data/api';
+import { useT } from '@/i18n';
 import { fmtDate, fmtTime, timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 
@@ -149,6 +150,7 @@ function stamp(iso: string | null): string | null {
 
 export default function TicketDetail() {
   const c = useTheme();
+  const tr = useT(); // `t` below is ticket type-meta; the translator is `tr` here
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const toast = useToast();
@@ -296,7 +298,7 @@ export default function TicketDetail() {
           subtitle={health.degraded
             ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
             : 'This ticket is not in the inbox you can see. It may have been closed, reassigned or removed.'}
-          action={{ label: 'Try again', onPress: retry }}
+          action={{ label: tr('common.tryAgain'), onPress: retry }}
         />
       </Screen>
     );
@@ -428,7 +430,7 @@ export default function TicketDetail() {
             {ticket.policy_no ? (
               <DataRow label="Policy number" value={ticket.policy_no} icon="document-text-outline" numeric copyable />
             ) : null}
-            {phone ? <DataRow label="Mobile" value={phone} icon="call-outline" numeric copyable /> : null}
+            {phone ? <DataRow label={tr('common.mobile')} value={phone} icon="call-outline" numeric copyable /> : null}
             {raisedBy ? <DataRow label="Raised by" value={raisedBy} icon="megaphone-outline" /> : null}
             {ticket.category ? <DataRow label="Category" value={titleCase(ticket.category)} icon="pricetag-outline" /> : null}
             {w.linked?.id ? (
@@ -525,7 +527,7 @@ export default function TicketDetail() {
           color={c.primary}
           disabled={!phone}
           onPress={() => { haptics.tap(); call(phone); }}
-          accessibilityLabel={`Call ${name}`}
+          accessibilityLabel={tr('common.a11yCall', { name })}
         />
         <IconBtn
           icon="logo-whatsapp"
@@ -534,7 +536,7 @@ export default function TicketDetail() {
           color={c.whatsapp}
           disabled={!phone}
           onPress={() => { haptics.tap(); whatsapp(phone, `Namaste ${name}`); }}
-          accessibilityLabel={`Open WhatsApp chat with ${name}`}
+          accessibilityLabel={tr('common.a11yWhatsapp', { name })}
         />
         {canClaim ? (
           <Button

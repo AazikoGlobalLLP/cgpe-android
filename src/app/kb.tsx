@@ -16,6 +16,7 @@ import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import type { KbArticle } from '@/data/api';
 import { fmtDate } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Knowledge Base — the field reference.
@@ -122,6 +123,7 @@ function parseBlocks(text: string): Block[] {
 
 export default function Kb() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
 
@@ -279,7 +281,7 @@ export default function Kb() {
         <Row style={{ gap: spacing.sm }}>
           <Txt size={font.cap} color={c.faint} numeric numberOfLines={1} style={{ flex: 1 }}>{readout}</Txt>
           {facetsActive ? (
-            <Button label="Clear" variant="ghost" size="sm" onPress={clearFacets} />
+            <Button label={t('common.clear')} variant="ghost" size="sm" onPress={clearFacets} />
           ) : null}
         </Row>
       </View>
@@ -323,9 +325,9 @@ export default function Kb() {
                     : 'No articles have been published to this build yet. Your branch still holds the printed circulars.'
             }
             action={
-              query ? { label: 'Clear search', onPress: () => setQ('') }
+              query ? { label: t('common.clearSearch'), onPress: () => setQ('') }
                 : facetsActive ? { label: 'Show everything', onPress: clearFacets }
-                  : { label: 'Try again', onPress: () => { haptics.tap(); void run(1, 'refresh'); } }
+                  : { label: t('common.tryAgain'), onPress: () => { haptics.tap(); void run(1, 'refresh'); } }
             }
           />
         ) : (
@@ -423,6 +425,7 @@ const READ_LEADING = 24;
 
 function ReaderSheet({ article, onClose }: { article: ArticleView | null; onClose: () => void }) {
   const c = useTheme();
+  const t = useT();
   const id = article?.ref ?? null;
 
   /**
@@ -475,7 +478,7 @@ function ReaderSheet({ article, onClose }: { article: ArticleView | null; onClos
             message={blocks.length > 0
               ? 'Showing the copy that arrived with the list. Check the review date before you quote it.'
               : 'The server did not answer. Try again once you have a signal.'}
-            action={{ label: 'Try again', onPress: () => { haptics.tap(); setAttempt((n) => n + 1); } }}
+            action={{ label: t('common.tryAgain'), onPress: () => { haptics.tap(); setAttempt((n) => n + 1); } }}
           />
         ) : null}
 
@@ -518,7 +521,9 @@ function ReaderSheet({ article, onClose }: { article: ArticleView | null; onClos
 
         {shown && shown.tags.length > 0 ? (
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
-            {shown.tags.map((t) => <Pill key={t} label={t} tone="primary" small />)}
+            {/* `tag`, not `t`: this component binds the translator as `t` (i18n batch 2), and a
+                map item named `t` would shadow it for anyone wiring copy in here later. */}
+            {shown.tags.map((tag) => <Pill key={tag} label={tag} tone="primary" small />)}
           </View>
         ) : null}
 

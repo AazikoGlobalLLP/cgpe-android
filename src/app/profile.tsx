@@ -12,6 +12,7 @@ import { Appear } from '@/ui/motion';
 import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
 import { call, email } from '@/lib/actions';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * My profile — who the app thinks you are.
@@ -32,6 +33,7 @@ import { call, email } from '@/lib/actions';
  * ------------------------------------------------------------------ */
 
 export default function Profile() {
+  const t = useT();
   const router = useRouter();
   const { user, ready } = useAuth();
 
@@ -68,7 +70,7 @@ export default function Profile() {
           icon="person-circle-outline"
           title="You are signed out"
           subtitle="Sign in again to see your agent code, branch and contact details."
-          action={{ label: 'Go to sign in', onPress: () => router.replace('/(auth)/login') }}
+          action={{ label: t('common.goToSignIn'), onPress: () => router.replace('/(auth)/login') }}
         />
       </Screen>
     );
@@ -121,7 +123,7 @@ export default function Profile() {
           <Appear index={0}>
             <DataRow
               icon="call-outline"
-              label="Mobile"
+              label={t('common.mobile')}
               value={hasPhone ? user.phone : 'Not on file'}
               tone={hasPhone ? 'neutral' : 'warning'}
               copyable={hasPhone}

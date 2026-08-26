@@ -18,6 +18,7 @@ import * as api from '@/data/api';
 import type { TeamMember } from '@/data/team';
 import { useAuth } from '@/store/auth';
 import { canMonitorTeam } from '@/store/roles';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Monitor — the master's dedicated oversight surface ("the main side"). PHASE-39.
@@ -52,6 +53,7 @@ const LENSES: Lens[] = [
 
 export default function Monitor() {
   const router = useRouter();
+  const t = useT();
   const health = useDataHealth();
   const { user, ready } = useAuth();
   const isMaster = canMonitorTeam(user);
@@ -140,7 +142,7 @@ export default function Monitor() {
                 subtitle={health.degraded
                   ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
                   : 'People appear here once they are added to your branch in the admin panel.'}
-                action={{ label: 'Try again', onPress: retry }}
+                action={{ label: t('common.tryAgain'), onPress: retry }}
               />
             </Card>
           ) : (
@@ -199,6 +201,7 @@ function LensCard({ lens, onPress }: { lens: Lens; onPress: () => void }) {
 /* ---------------- Roster row ---------------- */
 function MemberRow({ m, first, onPress }: { m: TeamMember; first: boolean; onPress: () => void }) {
   const c = useTheme();
+  const t = useT();
   const role = m.role.replace(/_/g, ' ');
   const subtitle = [role, m.branch].filter(Boolean).join(' · ');
   return (
@@ -214,7 +217,7 @@ function MemberRow({ m, first, onPress }: { m: TeamMember; first: boolean; onPre
             {m.stats.premiumMtd > 0 ? (
               <Txt size={font.sub} weight="800" color={c.success} numeric>{inrShort(m.stats.premiumMtd)}</Txt>
             ) : null}
-            {m.clockedIn ? <Pill label="On duty" tone="success" small dot /> : null}
+            {m.clockedIn ? <Pill label={t('common.onDuty')} tone="success" small dot /> : null}
           </View>
         }
       />

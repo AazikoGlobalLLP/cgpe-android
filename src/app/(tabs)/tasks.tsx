@@ -483,7 +483,7 @@ export default function Tasks() {
                         ? 'Some tasks could not be loaded, so this may be incomplete. Pull down to refresh, then search again.'
                         : 'Nothing in your tasks carries that. Try a shorter piece of the title, the client name, or the last four digits of a mobile.'
                     }
-                    action={{ label: 'Clear search', onPress: () => setQuery('') }}
+                    action={{ label: t('common.clearSearch'), onPress: () => setQuery('') }}
                   />
                 </Card>
               ) : (
@@ -921,7 +921,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
   const stepsDone = task.steps.filter((s) => s.done).length;
 
   const actions: SwipeAction[] = [];
-  if (!isPending && !isDone && onDone) actions.push({ icon: 'checkmark-done', label: 'Done', tone: 'success', onPress: onDone });
+  if (!isPending && !isDone && onDone) actions.push({ icon: 'checkmark-done', label: t('tasks.doneLabel'), tone: 'success', onPress: onDone });
   if (!isPending && !isDone && task.clientPhone) {
     actions.push({ icon: 'call', label: t('common.call'), tone: 'primary', onPress: () => { haptics.tap(); call(task.clientPhone!); } });
   }

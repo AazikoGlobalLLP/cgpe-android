@@ -143,6 +143,7 @@ function ClaimsSkeleton() {
 
 export default function Claims() {
   const c = useTheme();
+  const t = useT();
   // Phase 30: layout scale comes off the theme so `theme.density` can tighten it per department.
   const { spacing, font } = c;
   const router = useRouter();
@@ -218,7 +219,7 @@ export default function Claims() {
 
   const options = useMemo(() => {
     const list: { key: Filter; label: string; count?: number }[] = [
-      { key: 'all', label: 'All', count: counts.all },
+      { key: 'all', label: t('common.all'), count: counts.all },
       { key: 'intake', label: 'Intake', count: counts.intake },
       { key: 'docs_pending', label: 'Docs pending', count: counts.docs_pending },
       { key: 'under_review', label: 'Review', count: counts.under_review },
@@ -231,7 +232,7 @@ export default function Claims() {
       list.push({ key: 'rejected', label: 'Rejected', count: counts.rejected });
     }
     return list;
-  }, [counts, filter]);
+  }, [counts, filter, t]);
 
   const pickFilter = (next: Filter) => {
     if (next === filter) return;
@@ -320,7 +321,7 @@ export default function Claims() {
                   icon="cloud-offline-outline"
                   title="The register did not load"
                   subtitle="The server could not be reached, so this is not a confirmed empty register. Pull down to try again."
-                  action={{ label: 'Try again', onPress: retry }}
+                  action={{ label: t('common.tryAgain'), onPress: retry }}
                 />
               ) : (
                 <EmptyState

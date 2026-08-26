@@ -17,6 +17,7 @@ import type { MdrtTier } from '@/data/api';
 import type { Commission } from '@/data/types';
 import { useAuth } from '@/store/auth';
 import { fmtDate, inr, inrShort } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Commissions — what the month has actually earned, against what it was meant to.
@@ -60,6 +61,7 @@ function dateOr(iso?: string): string {
 }
 
 export default function Commissions() {
+  const t = useT();
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
@@ -204,14 +206,14 @@ export default function Commissions() {
               icon="cloud-offline-outline"
               title="Your earnings did not load"
               subtitle="The commission ledger could not be reached, so these blanks are unconfirmed rather than zero. Pull down to try again."
-              action={{ label: 'Try again', onPress: retry }}
+              action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           ) : (
             <EmptyState
               icon="wallet-outline"
               title="No commission recorded yet"
               subtitle="Once a policy you booked is processed, the earning, its payout status and the running year total appear here."
-              action={{ label: 'Refresh', onPress: retry }}
+              action={{ label: t('common.refresh'), onPress: retry }}
             />
           )
         ) : (

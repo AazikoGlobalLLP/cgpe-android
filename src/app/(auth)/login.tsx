@@ -13,6 +13,7 @@ import { haptics } from '@/lib/haptics';
 
 import { useAuth } from '@/store/auth';
 import * as api from '@/data/api';
+import { useT } from '@/i18n';
 import { APP } from '@/constants/config';
 
 /* ------------------------------------------------------------------ *
@@ -75,6 +76,7 @@ function describe(e: unknown, fallback: string): Failure {
 
 export default function Login() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
@@ -318,7 +320,7 @@ export default function Login() {
                 : 'The code request was not sent'
         }
         message={failure.message}
-        action={{ label: 'Try again', onPress: retry }}
+        action={{ label: t('common.tryAgain'), onPress: retry }}
         onDismiss={() => setFailure(null)}
       />
     ) : (

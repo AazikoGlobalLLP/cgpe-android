@@ -121,7 +121,7 @@ export default function TeamMemberDetail() {
           subtitle={health.degraded
             ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
             : 'This person is no longer on a roster you can see. They may have been moved or removed.'}
-          action={{ label: 'Try again', onPress: retry }}
+          action={{ label: t('common.tryAgain'), onPress: retry }}
         />
       </Screen>
     );
@@ -163,7 +163,7 @@ export default function TeamMemberDetail() {
             </Row>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.md }}>
-              {m.clockedIn ? <Pill label="On duty" tone="success" small dot /> : null}
+              {m.clockedIn ? <Pill label={t('common.onDuty')} tone="success" small dot /> : null}
               {!m.clockedIn && m.online ? <Pill label="Signed in" tone="info" small dot /> : null}
               {m.tier ? <Pill label={`${m.tier} club`} tone="accent" small icon="star" /> : null}
               {m.agentCode ? <Pill label={m.agentCode} tone="neutral" small numeric /> : null}
@@ -203,7 +203,7 @@ export default function TeamMemberDetail() {
 
         <Appear index={2}>
           <ListSection title="Contact">
-            {hasPhone ? <DataRow label="Mobile" value={m.phone} icon="call-outline" numeric copyable /> : null}
+            {hasPhone ? <DataRow label={t('common.mobile')} value={m.phone} icon="call-outline" numeric copyable /> : null}
             {m.email ? <DataRow label="Email" value={m.email} icon="mail-outline" copyable /> : null}
             {m.branch ? <DataRow label="Branch" value={m.branch} icon="business-outline" /> : null}
             <DataRow label="Role" value={role} icon="ribbon-outline" />
@@ -255,7 +255,7 @@ export default function TeamMemberDetail() {
           color={c.primary}
           disabled={!hasPhone}
           onPress={() => { haptics.tap(); call(m.phone); }}
-          accessibilityLabel={`Call ${m.name}`}
+          accessibilityLabel={t('common.a11yCall', { name: m.name })}
         />
         <Button
           label={t('common.whatsapp')}
@@ -282,6 +282,7 @@ export default function TeamMemberDetail() {
 
 function LiveLocationBody({ res, name }: { res: LastLocationResult | 'loading' | null; name: string }) {
   const c = useTheme();
+  const t = useT();
 
   if (res === null || res === 'loading') {
     return (
@@ -299,8 +300,8 @@ function LiveLocationBody({ res, name }: { res: LastLocationResult | 'loading' |
     // real duty state, freshness, accuracy, and copyable coordinates the master opens in their own
     // maps app. (A neutral single-pin in-app map is a separate follow-up needing a LeafletMap change.)
     const duty = loc.isClockedIn
-      ? { label: 'On duty', tone: 'success' as const }
-      : loc.offDuty ? { label: 'Off duty', tone: 'neutral' as const }
+      ? { label: t('common.onDuty'), tone: 'success' as const }
+      : loc.offDuty ? { label: t('common.offDuty'), tone: 'neutral' as const }
         : { label: 'Last shift', tone: 'neutral' as const };
     return (
       <View style={{ padding: spacing.lg, gap: spacing.md }}>

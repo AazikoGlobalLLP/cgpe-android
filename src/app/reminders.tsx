@@ -271,7 +271,7 @@ export default function Reminders() {
                 icon="cloud-offline"
                 title="Reminders did not load"
                 subtitle="The server could not be reached, so this is not a confirmed empty list. Pull down to try again."
-                action={{ label: 'Try again', onPress: () => void load(true) }}
+                action={{ label: t('common.tryAgain'), onPress: () => void load(true) }}
               />
             ) : (
               <EmptyState
@@ -342,7 +342,7 @@ function Group({ title, items, onToggle, index = 0 }: {
               // carries no swipe action — a "Reopen" here could only revert on the next refetch.
               const actions: SwipeAction[] = [];
               if (!r.done) {
-                actions.push({ icon: 'checkmark-done', label: 'Done', tone: 'success', onPress: () => onToggle(r) });
+                actions.push({ icon: 'checkmark-done', label: t('common.done'), tone: 'success', onPress: () => onToggle(r) });
                 if (r.phone) {
                   actions.push({
                     icon: 'logo-whatsapp',

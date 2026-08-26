@@ -16,6 +16,7 @@ import { haptics } from '@/lib/haptics';
 import { fmtDate, fmtDay, fmtTime, timeAgo } from '@/lib/format';
 import { getHealth } from '@/data/health';
 import * as api from '@/data/api';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Notice Board — the firm talking to the field. READ ONLY.
@@ -117,6 +118,7 @@ type Group = { key: string; title: string; rows: NoticeRow[] };
 
 export default function NoticeBoard() {
   const c = useTheme();
+  const t = useT();
   const health = useDataHealth();
 
   const [notices, setNotices] = useState<NoticeRow[]>([]);
@@ -186,10 +188,10 @@ export default function NoticeBoard() {
     const known = GROUP_ORDER.filter((k) => tally.has(k));
     const extra = [...tally.keys()].filter((k) => !GROUP_ORDER.includes(k));
     return [
-      { key: 'all', label: 'All' },
+      { key: 'all', label: t('common.all') },
       ...[...known, ...extra].map((k) => ({ key: k, label: catMeta(k).group, count: tally.get(k) })),
     ];
-  }, [notices]);
+  }, [notices, t]);
 
   const upcoming = useMemo(
     () => (asOf === 0 ? 0 : notices.reduce((n, x) => {
@@ -233,7 +235,7 @@ export default function NoticeBoard() {
       icon="cloud-offline-outline"
       title="The notice board could not load"
       subtitle="The server did not answer, so this is not an empty board, it is an unanswered request. Check your connection and try again."
-      action={{ label: 'Try again', onPress: () => load('replace') }}
+      action={{ label: t('common.tryAgain'), onPress: () => load('replace') }}
     />
   ) : cat !== 'all' ? (
     <EmptyState
@@ -247,7 +249,7 @@ export default function NoticeBoard() {
       icon="megaphone-outline"
       title="Nothing posted yet"
       subtitle="Announcements, meetings, policy updates and holidays from the firm all land here. Only admins can post, so there is nothing for you to add."
-      action={{ label: 'Refresh', onPress: () => load('refresh') }}
+      action={{ label: t('common.refresh'), onPress: () => load('refresh') }}
     />
   );
 

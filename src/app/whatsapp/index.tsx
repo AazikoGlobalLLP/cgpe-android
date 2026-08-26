@@ -73,6 +73,7 @@ function sortTime(iso: string): number {
 
 export default function WhatsAppHub() {
   const c = useTheme();
+  const tr = useT(); // `t` is a thread iteration variable throughout this component; translator is `tr`
   const router = useRouter();
   const health = useDataHealth();
 
@@ -196,9 +197,9 @@ export default function WhatsAppHub() {
               : 'Conversations appear here as soon as someone messages the business number.'
       }
       action={
-        emptyKind === 'search' ? { label: 'Clear search', onPress: clearSearch }
+        emptyKind === 'search' ? { label: tr('common.clearSearch'), onPress: clearSearch }
           : emptyKind === 'filter' ? { label: 'Show all chats', onPress: () => pickFilter('all') }
-            : { label: 'Try again', onPress: refresh }
+            : { label: tr('common.tryAgain'), onPress: refresh }
       }
     />
   );

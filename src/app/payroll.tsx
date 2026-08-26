@@ -17,6 +17,7 @@ import type { PayrollRow } from '@/data/api';
 import type { TeamMember } from '@/data/team';
 import { mergePayrollRoster, payrollRosterStats, type PayrollRosterEntry } from '@/data/payroll';
 import { inr } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Payroll — the admin/master salary roster for one month.
@@ -81,6 +82,7 @@ function lastTwelveMonths(): MonthOpt[] {
 }
 
 export default function Payroll() {
+  const t = useT();
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
@@ -190,7 +192,7 @@ export default function Payroll() {
             subtitle={health.degraded
               ? 'The salary service could not be reached, so this is blank rather than empty. Pull down to try again.'
               : 'We could not load the payroll roster for this month. Pull down or retry.'}
-            action={{ label: 'Try again', onPress: retry }}
+            action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : merged.length === 0 ? (
           <EmptyState

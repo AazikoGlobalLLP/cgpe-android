@@ -365,13 +365,14 @@ function needsAttention(tk: api.Ticket): boolean {
  * Gradient when on duty, neutral track when off — the state IS the decoration. */
 function ClockRing({ on, elapsed }: { on: boolean; elapsed?: string }) {
   const c = useTheme();
+  const t = useT();
   const inner = RING - RING_STROKE * 2;
   return (
     // Keyed on the state so the entrance replays the moment the clock flips.
     <Appear key={on ? 'on' : 'off'} distance={0}>
       <View
         accessible
-        accessibilityLabel={on ? (elapsed ? `On duty, ${elapsed}` : 'On duty') : 'Off duty'}
+        accessibilityLabel={on ? (elapsed ? `On duty, ${elapsed}` : t('common.onDuty')) : t('common.offDuty')}
         style={{
           width: RING, height: RING, borderRadius: RING / 2, overflow: 'hidden',
           alignItems: 'center', justifyContent: 'center',
@@ -389,18 +390,25 @@ function ClockRing({ on, elapsed }: { on: boolean; elapsed?: string }) {
             elapsed ? (
               <>
                 <Metric value={elapsed} size={19} />
-                <Txt size={11} weight="600" color={c.muted}>on duty</Txt>
+                {/* This is the caption that actually renders. `elapsed` is non-empty whenever the
+                    user is clocked in (`:838` always sets `time` alongside `in: true`), so the
+                    sibling branch below is the rare one — leaving this literal English would have
+                    left the app's most-looked-at label untranslated while LOOKING swept. It reuses
+                    the existing `common.onDuty` copy rather than inventing a lowercase variant; the
+                    only consequence is that English now reads "On duty" here instead of "on duty",
+                    which matches the sibling branch. Flagged to the owner as a casing change. */}
+                <Txt size={11} weight="600" color={c.muted}>{t('common.onDuty')}</Txt>
               </>
             ) : (
               <>
                 <Ionicons name="time-outline" size={26} color={c.accent} />
-                <Txt size={11} weight="600" color={c.muted}>On duty</Txt>
+                <Txt size={11} weight="600" color={c.muted}>{t('common.onDuty')}</Txt>
               </>
             )
           ) : (
             <>
               <Ionicons name="location-outline" size={26} color={c.faint} />
-              <Txt size={11} weight="600" color={c.faint}>Off duty</Txt>
+              <Txt size={11} weight="600" color={c.faint}>{t('common.offDuty')}</Txt>
             </>
           )}
         </View>
@@ -1385,7 +1393,7 @@ export default function Home() {
 
   const dutyFor = elapsedSince(clock.time);
   const dutyLine = clock.in
-    ? [dutyFor ? `${dutyFor} on duty` : 'On duty', clock.place].filter((s): s is string => !!s).join(' · ')
+    ? [dutyFor ? `${dutyFor} on duty` : t('common.onDuty'), clock.place].filter((s): s is string => !!s).join(' · ')
     : t('home.gpsCheckin');
 
   /* ---------- hero shape ---------- */
@@ -1521,7 +1529,7 @@ export default function Home() {
                   icon="cloud-offline-outline"
                   title="Today's list did not load"
                   subtitle="The server could not be reached, so this is not a confirmed empty day. Pull down to refresh."
-                  action={{ label: 'Try again', onPress: retry }}
+                  action={{ label: t('common.tryAgain'), onPress: retry }}
                 />
               ) : tasks.length === 0 ? (
                 <SmallEmpty
@@ -1606,7 +1614,7 @@ export default function Home() {
                 subtitle={unconfirmed
                   ? 'The server could not be reached, so this is not a confirmed empty day. Pull down to refresh.'
                   : 'Tasks and follow-ups dated today appear here in the order they fall due.'}
-                action={unconfirmed ? { label: 'Try again', onPress: retry } : { label: 'Open calendar', onPress: () => router.push('/calendar') }}
+                action={unconfirmed ? { label: t('common.tryAgain'), onPress: retry } : { label: 'Open calendar', onPress: () => router.push('/calendar') }}
               />
             ) : (
               <Card>
@@ -1648,7 +1656,7 @@ export default function Home() {
                   ? 'The server did not answer, so an empty list here is not confirmed. Pull down to refresh.'
                   : 'Birthdays, renewals and callbacks land here on the day they are due.'}
                 action={unsure(pendingReminders.length)
-                  ? { label: 'Try again', onPress: retry }
+                  ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: 'Open follow-ups', onPress: () => router.push('/reminders') }}
               />
             ) : (
@@ -1699,7 +1707,7 @@ export default function Home() {
                   ? 'The server did not answer, so an empty pool here is not confirmed. Pull down to refresh.'
                   : 'People you are recruiting appear here as soon as they are added.'}
                 action={unsure(prospects.length)
-                  ? { label: 'Try again', onPress: retry }
+                  ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: 'Open prospects', onPress: () => router.push('/prospects') }}
               />
             ) : (
@@ -1749,7 +1757,7 @@ export default function Home() {
                     ? 'Nothing is open right now. Closed leads — policy issued, or lost — stay on the pipeline screen.'
                     : 'New enquiries land here and move along the stages as you work them.'}
                 action={unsure(leads.length)
-                  ? { label: 'Try again', onPress: retry }
+                  ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: 'Open pipeline', onPress: () => router.push('/(tabs)/leads') }}
               />
             ) : (
@@ -1803,7 +1811,7 @@ export default function Home() {
                 subtitle={unsure(notes.length)
                   ? 'The server did not answer, so an empty board here is not confirmed. Pull down to refresh.'
                   : 'Your private board holds what you jot down here and what you dictate on WhatsApp. It is tied to your own number.'}
-                action={{ label: unsure(notes.length) ? 'Try again' : 'Open notes', onPress: unsure(notes.length) ? retry : () => router.push('/notes') }}
+                action={{ label: unsure(notes.length) ? t('common.tryAgain') : 'Open notes', onPress: unsure(notes.length) ? retry : () => router.push('/notes') }}
               />
             ) : (
               <ListSection>
@@ -1860,7 +1868,7 @@ export default function Home() {
                     ? 'Everything on the register is settled or closed. The full history stays on the Claims screen.'
                     : 'Claims raised by your policyholders appear here from intake to settlement.'}
                 action={unsure(claims.length)
-                  ? { label: 'Try again', onPress: retry }
+                  ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: 'Open claims', onPress: () => router.push('/(tabs)/claims') }}
               />
             ) : (
@@ -1907,7 +1915,7 @@ export default function Home() {
                   ? 'The server did not answer, so an empty log here is not confirmed. Pull down to refresh.'
                   : 'This log lists open tickets that are unclaimed, flagged red, or raised as P1. None of them is right now.'}
                 action={unsure(tickets.length)
-                  ? { label: 'Try again', onPress: retry }
+                  ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: 'Open all tickets', onPress: () => router.push('/tickets') }}
               />
             ) : (
@@ -1955,7 +1963,7 @@ export default function Home() {
                     ? 'Nothing is open right now. Closed tickets stay on the Tickets screen.'
                     : 'Requests raised by policyholders land here as tickets you can claim and work.'}
                 action={unsure(tickets.length)
-                  ? { label: 'Try again', onPress: retry }
+                  ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: 'Open tickets', onPress: () => router.push('/tickets') }}
               />
             ) : (
@@ -1997,7 +2005,7 @@ export default function Home() {
                   ? 'The server did not answer, so an empty roster here is not confirmed. Pull down to refresh.'
                   : 'People reporting to you appear here with their live task counts.'}
                 action={unsure(team.length)
-                  ? { label: 'Try again', onPress: retry }
+                  ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: 'Open team', onPress: () => router.push('/team') }}
               />
             ) : (
@@ -2013,7 +2021,7 @@ export default function Home() {
                         onPress={() => router.push(`/team/${m.id}`)}
                         right={
                           <Pill
-                            label={m.clockedIn ? 'On duty' : 'Off duty'}
+                            label={m.clockedIn ? t('common.onDuty') : t('common.offDuty')}
                             tone={m.clockedIn ? 'success' : 'neutral'}
                             dot
                             small
@@ -2067,7 +2075,7 @@ export default function Home() {
                 icon="cloud-offline-outline"
                 title="Analytics did not load"
                 subtitle="The server did not answer, so no total here would be confirmed. Pull down to refresh."
-                action={{ label: 'Try again', onPress: retry }}
+                action={{ label: t('common.tryAgain'), onPress: retry }}
               />
             ) : (
               <LinkCard
@@ -2378,7 +2386,7 @@ export default function Home() {
                         icon="cloud-offline-outline"
                         title="Organisation figures did not load"
                         subtitle="The server did not answer, so no org total here would be confirmed. Pull down to refresh."
-                        action={{ label: 'Try again', onPress: retry }}
+                        action={{ label: t('common.tryAgain'), onPress: retry }}
                       />
                     ) : (
                       <EmptyState

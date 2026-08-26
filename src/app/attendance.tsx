@@ -320,7 +320,7 @@ export default function Attendance() {
                       icon="cloud-offline-outline"
                       title="Attendance could not load"
                       subtitle="The server did not answer, so this history is unconfirmed rather than empty."
-                      action={{ label: 'Try again', onPress: retry }}
+                      action={{ label: t('common.tryAgain'), onPress: retry }}
                     />
                   ) : (
                     <EmptyState

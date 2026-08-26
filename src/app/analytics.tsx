@@ -17,6 +17,7 @@ import { inr, inrShort } from '@/lib/format';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Analytics — the data console.
@@ -129,6 +130,7 @@ function AnalyticsSkeleton() {
 }
 
 export default function Analytics() {
+  const t = useT();
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
@@ -310,14 +312,14 @@ export default function Analytics() {
                 icon="cloud-offline"
                 title="Portfolio figures did not load"
                 subtitle="The server could not be reached, so nothing here is confirmed. Pull down to try the request again."
-                action={{ label: 'Try again', onPress: reload }}
+                action={{ label: t('common.tryAgain'), onPress: reload }}
               />
             ) : (
               <EmptyState
                 icon="stats-chart"
                 title="No live portfolio yet"
                 subtitle="These figures are read from your CGPE account. Sign in and the whole book is measured here."
-                action={{ label: 'Try again', onPress: reload }}
+                action={{ label: t('common.tryAgain'), onPress: reload }}
               />
             )}
           </Card>
@@ -414,7 +416,7 @@ export default function Analytics() {
                   tone="warning"
                   title="Campaign counters did not load"
                   message="The campaign aggregate did not answer, so reach and this month's counts are not shown. The portfolio totals above are unaffected."
-                  action={{ label: 'Try again', onPress: reload }}
+                  action={{ label: t('common.tryAgain'), onPress: reload }}
                 />
               ) : totalClients === 0 ? (
                 <Card>

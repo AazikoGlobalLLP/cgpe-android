@@ -172,7 +172,7 @@ export default function LeadDetail() {
             // refuses). Naming both beats guessing one, which is what "it may have been
             // reassigned or removed" was doing.
             : 'The server would not open it. A lead can only be opened by the advisor it belongs to, and this one may belong to someone else or have been removed.'}
-          action={{ label: 'Try again', onPress: retry }}
+          action={{ label: t('common.tryAgain'), onPress: retry }}
         />
       </Screen>
     );
@@ -195,7 +195,7 @@ export default function LeadDetail() {
   // One tap moves one step, and only while that step is reversible. Closing out always
   // goes through the picker.
   const oneTap = next && next !== 'policy_issued' ? next : null;
-  const primaryLabel = saving ? 'Saving'
+  const primaryLabel = saving ? t('common.saving')
     : oneTap ? `Move to ${t(STAGE_META[oneTap].labelKey)}`
       : next === 'policy_issued' ? 'Close this lead'
         : 'Change stage';
@@ -229,7 +229,7 @@ export default function LeadDetail() {
             tone="danger"
             title="Stage was not changed"
             message={notice}
-            action={{ label: 'Try again', onPress: openPicker }}
+            action={{ label: t('common.tryAgain'), onPress: openPicker }}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
@@ -301,7 +301,7 @@ export default function LeadDetail() {
             ) : null}
             {lead.phone ? (
               <DataRow
-                label="Mobile"
+                label={t('common.mobile')}
                 value={lead.phone}
                 icon="call-outline"
                 numeric
@@ -370,7 +370,7 @@ export default function LeadDetail() {
           color={c.primary}
           disabled={!lead.phone}
           onPress={() => { haptics.tap(); call(lead.phone); }}
-          accessibilityLabel={`Call ${lead.name}`}
+          accessibilityLabel={t('common.a11yCall', { name: lead.name })}
         />
         <IconBtn
           icon="logo-whatsapp"
@@ -379,7 +379,7 @@ export default function LeadDetail() {
           color={c.whatsapp}
           disabled={!lead.phone}
           onPress={() => { haptics.tap(); whatsapp(lead.phone, `Namaste ${lead.name}`); }}
-          accessibilityLabel={`Open WhatsApp chat with ${lead.name}`}
+          accessibilityLabel={t('common.a11yWhatsapp', { name: lead.name })}
         />
         <Button
           label={primaryLabel}

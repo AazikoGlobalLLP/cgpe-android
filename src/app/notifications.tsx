@@ -18,6 +18,7 @@ import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import type { AppNotification } from '@/data/types';
 import { fmtDay } from '@/lib/format';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Notifications — the feed, on the date spine.
@@ -105,6 +106,7 @@ type DayGroup = {
 
 export default function Notifications() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
 
@@ -319,7 +321,7 @@ export default function Notifications() {
               icon="cloud-offline-outline"
               title="The feed did not load"
               subtitle="Your notifications could not be fetched, so this is not a confirmed empty inbox. Try again once you are back on a signal."
-              action={{ label: 'Try again', onPress: retry }}
+              action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           ) : (
             <EmptyState
