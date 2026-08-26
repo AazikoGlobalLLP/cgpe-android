@@ -44,7 +44,7 @@ import * as offlineStore from './offlineStore';
 import { decideRead, mergeById } from '@/lib/offlineCache';
 // POINT 11 (Document picker) — the pure upload decision seam: classify a failure by status,
 // spot the ephemeral-disk "vanishes" URL. Copy + client-side precheck live there too.
-import { classifyUploadStatus, isEphemeralUrl, type UploadFailure } from '@/lib/fileUpload';
+import { classifyUploadFailureBody, isEphemeralUrl, type UploadFailure } from '@/lib/fileUpload';
 // PHASE 57b — the safe offline write queue. Pure decisions in `lib/writeQueue`; the reactive
 // in-memory mirror the UI renders from is `data/pendingWrites`.
 import {
@@ -3492,7 +3492,17 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
     });
     // An upload failure is screen-specific (a bad file type is not a server outage), so it does
     // NOT flip the global health banner — the screen shows the named reason instead.
-    if (!res.ok) return { ok: false, reason: classifyUploadStatus(res.status) };
+    //
+    // Read the SERVER'S OWN message before falling back to the status. A rejected file type is
+    // thrown from multer's fileFilter and surfaces as a bare 500, which on status alone is
+    // indistinguishable from a real outage — so the user was told "try again in a moment" for a
+    // condition that can never succeed. The body says `File type video/mp4 is not allowed`.
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => null);
+      const serverMsg = typeof errJson?.error === 'string' ? errJson.error
+        : typeof errJson?.message === 'string' ? errJson.message : undefined;
+      return { ok: false, reason: classifyUploadFailureBody(res.status, serverMsg, mimeType) };
+    }
     const json = await res.json().catch(() => null);
     const data = json?.data ?? json;
     if (!data?.url) return { ok: false, reason: 'server' };

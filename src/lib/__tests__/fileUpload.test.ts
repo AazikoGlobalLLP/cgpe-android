@@ -10,6 +10,7 @@ import {
   isEphemeralUrl,
   describeUploadFailure,
   MAX_VIDEO_UPLOAD_BYTES,
+  classifyUploadFailureBody,
   type UploadFailure,
 } from '@/lib/fileUpload';
 
@@ -111,7 +112,10 @@ describe('precheckUpload — the client-side gate', () => {
   });
 
   it('checks size before type (a huge unsupported file reads as too_large first)', () => {
-    expect(precheckUpload({ name: 'huge.mp4', mimeType: 'video/mp4', size: MAX_UPLOAD_BYTES + 1 }))
+    // Was written with `video/mp4`, which became an ACCEPTED type when evidence video shipped —
+    // leaving the test green but vacuous, since it no longer contained an unsupported type at all.
+    // `application/zip` restores the thing it was actually asserting.
+    expect(precheckUpload({ name: 'huge.zip', mimeType: 'application/zip', size: MAX_UPLOAD_BYTES + 1 }))
       .toBe('too_large');
   });
 });
@@ -184,5 +188,44 @@ describe('describeUploadFailure', () => {
     expect(describeUploadFailure('network').tone).toBe('danger');
     expect(describeUploadFailure('server').tone).toBe('danger');
     expect(describeUploadFailure('timeout').tone).toBe('danger');
+  });
+});
+
+describe('classifyUploadFailureBody — reading the server own words, not guessing', () => {
+  it('names a rejected VIDEO type from the message the backend actually emits', () => {
+    // routes/upload.js fileFilter throws `File type ${mimetype} is not allowed`, and
+    // middleware/errorHandler.js turns that into a bare 500 — indistinguishable from a real
+    // outage on status alone. This is the whole reason the body is read.
+    expect(classifyUploadFailureBody(500, 'File type video/mp4 is not allowed', 'video/mp4'))
+      .toBe('video_not_accepted');
+  });
+
+  it('names a rejected NON-video type as type_rejected, not video_not_accepted', () => {
+    expect(classifyUploadFailureBody(500, 'File type application/zip is not allowed', 'application/zip'))
+      .toBe('type_rejected');
+  });
+
+  it('reads multer LIMIT_FILE_SIZE, which the backend reports as 400 "File too large"', () => {
+    expect(classifyUploadFailureBody(400, 'File too large', 'video/mp4')).toBe('too_large');
+  });
+
+  it('NEVER relabels a genuine server fault as a content problem', () => {
+    // The conservative half: an unrecognised body must fall through to the status, so a real
+    // outage is still reported as an outage.
+    expect(classifyUploadFailureBody(500, 'Server Error', 'video/mp4')).toBe('server');
+    expect(classifyUploadFailureBody(503, undefined, 'image/jpeg')).toBe('server');
+    expect(classifyUploadFailureBody(401, 'Not authorised', 'image/jpeg')).toBe('unauthorized');
+    expect(classifyUploadFailureBody(413, undefined, 'video/mp4')).toBe('too_large');
+  });
+
+  it('is case-insensitive about the server message', () => {
+    expect(classifyUploadFailureBody(500, 'FILE TYPE VIDEO/MP4 IS NOT ALLOWED', 'video/mp4'))
+      .toBe('video_not_accepted');
+  });
+
+  it('the video-rejection copy does NOT tell the user to try again — it can never succeed', () => {
+    const d = describeUploadFailure('video_not_accepted');
+    expect(d.message.toLowerCase()).not.toContain('try again');
+    expect(d.title.length).toBeGreaterThan(0);
   });
 });

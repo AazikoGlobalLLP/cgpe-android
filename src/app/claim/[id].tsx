@@ -153,6 +153,8 @@ export default function ClaimDetail() {
   // clip takes 10-20 seconds. Without its own state the button would sit on "Uploading" during a
   // step that is not an upload, so a stalled encode would read as a stalled network.
   const [preparing, setPreparing] = useState(false);
+  /** 0..1 during the transcode, so a 10-20 s encode shows movement instead of a frozen button. */
+  const [prepPct, setPrepPct] = useState(0);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
   /** Bumped to re-run the focus effect after a retry. */
@@ -219,8 +221,8 @@ export default function ClaimDetail() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: source === 'camera' ? 'Camera access is off' : 'Photo access is off',
-        message: source === 'camera'
+        title: (source === 'camera' || source === 'video') ? 'Camera access is off' : 'Photo access is off',
+        message: (source === 'camera' || source === 'video')
           ? 'Allow camera access in your device settings, or choose a file or a photo from your gallery instead.'
           : 'Allow photo access in your device settings, or take a photo or choose a file instead.',
       });
@@ -233,10 +235,25 @@ export default function ClaimDetail() {
     // Fails open: if the transcoder is unavailable or throws, the original file comes back and
     // the precheck below decides on its real size, which is what would have happened anyway.
     setPreparing(true);
-    const prepared = await compressIfNeeded(out.file);
+    setPrepPct(0);
+    let prepared;
+    try {
+      prepared = await compressIfNeeded(out.file, (f) => {
+        if (mounted.current) setPrepPct(Math.max(0, Math.min(1, f)));
+      });
+    } finally {
+      // try/finally, not a bare await: if compressIfNeeded ever throws despite its own
+      // catch-all, the screen must not be left stuck on "Preparing video…" with a dead button.
+      if (mounted.current) setPreparing(false);
+    }
     if (!mounted.current) return;
-    setPreparing(false);
     const file = prepared.file;
+
+    // The transcode ran and STILL could not get it under the cap (a very long clip hits the
+    // quality floor). Say so now rather than spending a doomed upload on it — precheckUpload
+    // would only catch this when the output size is readable, and it is not always.
+    if (prepared.stillTooLarge) { showUploadFailure('too_large'); return; }
+
     const pre = precheckUpload(file);
     if (pre) { showUploadFailure(pre); return; }
 
@@ -486,7 +503,8 @@ export default function ClaimDetail() {
             )}
 
             <Button
-              label={preparing ? 'Preparing video…' : uploading ? t('common.uploading') : 'Capture or upload a document'}
+              label={preparing ? `Preparing video… ${Math.round(prepPct * 100)}%` : uploading ? t('common.uploading') : 'Capture or upload a document'}
+              disabled={preparing || uploading}
               icon="camera"
               variant="outline"
               full

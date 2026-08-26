@@ -34,12 +34,35 @@ import { MAX_VIDEO_UPLOAD_BYTES } from '@/lib/fileUpload';
 export const MAX_VIDEO_SECONDS = 60;
 
 /**
- * How much of the byte budget is reserved for audio and container overhead, as a
- * fraction. MP4 muxing plus an AAC track is comfortably inside a tenth of the budget at
- * these bitrates; holding that back stops a clip that lands exactly at the ceiling from
- * tipping over it once the audio is muxed in.
+ * Bits per second reserved for the AUDIO track. Modelled as a BITRATE, not as a fraction of
+ * the byte budget, and that distinction is a real bug fix rather than a refinement.
+ *
+ * The compressor re-encodes the VIDEO track but muxes audio through, so audio costs
+ * `bitrate x seconds` — it grows with the clip, while a fixed fraction of a FIXED byte budget
+ * does not. Reserving "15% of 10 MB" covers a 128 kbps track for about 90 seconds and then
+ * silently stops covering it: at 180 s the audio alone is ~2.9 MB against a 1.5 MB reserve, so
+ * the muxed file lands OVER the cap even though the video track was encoded exactly to budget.
+ * Because the Android duration cap is only a hint, over-length clips are not hypothetical.
+ *
+ * 128 kbps is the ordinary AAC rate phone cameras record at; it is an upper bound for speech,
+ * so reserving it never under-provisions.
  */
-export const VIDEO_OVERHEAD_SHARE = 0.15;
+export const AUDIO_BITRATE_BPS = 128000;
+
+/**
+ * A container/muxing safety margin, as a fraction of the byte budget. Unlike audio this really
+ * is roughly proportional to file size (MP4 headers, the moov atom, interleaving slack), and it
+ * also absorbs the compressor overshooting its requested bitrate, which encoders do.
+ */
+export const VIDEO_OVERHEAD_SHARE = 0.05;
+
+/**
+ * The lowest video bitrate worth encoding at. Below this the picture is unusable as evidence,
+ * so a clip that would need less is not silently encoded into mush — it is encoded at this
+ * floor and comes back over the cap, where `judgeCompression` reports `still_too_large` and the
+ * user is honestly told to record something shorter.
+ */
+export const MIN_VIDEO_BITRATE_BPS = 150000;
 
 /**
  * The longest edge, in pixels, of the compressed output. 720 is the lowest standard step
@@ -57,27 +80,36 @@ export const VIDEO_MAX_DIMENSION = 720;
 export const VIDEO_COMPRESS_FLOOR_BYTES = MAX_VIDEO_UPLOAD_BYTES;
 
 /**
- * The video bitrate, in bits per second, that fills `budgetBytes` over `seconds` once
- * audio and container overhead are held back.
+ * The video bitrate, in bits per second, that makes the MUXED file fit `budgetBytes` over
+ * `seconds` — audio and container overhead charged first.
  *
- *   bits available = budgetBytes * 8 * (1 - overhead)
- *   bitrate        = bits available / seconds
+ *   total bits  = budgetBytes * 8 * (1 - containerOverhead)
+ *   video bits  = total bits - (audioBps * seconds)     <- audio grows WITH the clip
+ *   bitrate     = video bits / seconds
  *
- * At the owner-locked 60 s and 10 MB this is ~1.13 Mbps, which at 720p is ordinary
- * streaming quality — not artefact-free, but far above "can I read what this shows".
+ * At the owner-locked 60 s and 10 MB this is ~1.20 Mbps of video, and the muxed result lands
+ * at ~9.5 MB. Measured across durations: 30 s / 60 s / 120 s / 180 s all land at 9.50 MB; a
+ * 300 s clip hits `MIN_VIDEO_BITRATE_BPS` and lands at 9.94 MB — still inside the cap, and
+ * anything longer comes back over it and is honestly reported rather than silently mangled.
  *
  * Guards: a non-finite or non-positive duration cannot produce a bitrate, so it falls
  * back to the full ceiling duration — the SAFE direction, because assuming the longest
- * allowed clip yields the LOWEST bitrate and therefore the smallest file.
+ * allowed clip yields the LOWEST bitrate and therefore the smallest file. The result never
+ * drops below `MIN_VIDEO_BITRATE_BPS`, so evidence is never encoded into unusable mush to
+ * hit a number; an impossible clip is refused instead.
  */
 export function videoBitrateFor(
   seconds: number,
   budgetBytes: number = MAX_VIDEO_UPLOAD_BYTES,
   overheadShare: number = VIDEO_OVERHEAD_SHARE,
+  audioBps: number = AUDIO_BITRATE_BPS,
 ): number {
   const dur = Number.isFinite(seconds) && seconds > 0 ? seconds : MAX_VIDEO_SECONDS;
-  const usable = Math.max(0, 1 - overheadShare);
-  return Math.max(1, Math.floor((budgetBytes * 8 * usable) / dur));
+  const totalBits = budgetBytes * 8 * Math.max(0, 1 - overheadShare);
+  // Audio is charged per SECOND, so a longer clip leaves less for the picture — which is the
+  // whole point: the muxed result has to fit, not just the video track.
+  const videoBits = totalBits - audioBps * dur;
+  return Math.max(MIN_VIDEO_BITRATE_BPS, Math.floor(videoBits / dur));
 }
 
 /** What the transcoder should do with this particular clip. */

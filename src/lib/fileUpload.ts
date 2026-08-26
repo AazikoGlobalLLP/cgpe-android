@@ -129,7 +129,8 @@ export type UploadFailure =
   | 'server'         // reached the server, was not stored (5xx / no url)
   | 'unauthorized'   // 401/403 — role or session
   | 'not_signed_in'  // no real session on this handset
-  | 'not_stored';    // uploaded, but to ephemeral disk (cloud storage not configured)
+  | 'not_stored'     // uploaded, but to ephemeral disk (cloud storage not configured)
+  | 'video_not_accepted'; // the SERVER said it does not accept this video type (yet)
 
 /**
  * Resolve a file's MIME. Prefer the picker's own `mimeType`; fall back to the extension
@@ -159,6 +160,36 @@ export function precheckUpload(file: { name?: string; mimeType?: string; size?: 
   if (typeof file.size === 'number' && file.size > cap) return 'too_large';
   if (mime && !ALL_UPLOAD_MIME.includes(mime)) return 'type_rejected';
   return null;
+}
+
+/**
+ * Refine a failed `/upload` response using the SERVER'S OWN WORDS, falling back to the status.
+ *
+ * WHY THIS EXISTS. `routes/upload.js` rejects a disallowed type by throwing from multer's
+ * `fileFilter`, and `middleware/errorHandler.js` turns anything without an explicit statusCode
+ * into a plain **500** with `{ success:false, error:'File type video/mp4 is not allowed' }`. On
+ * status alone that is indistinguishable from a real server fault, so the user was told "try
+ * again in a moment" for something that can NEVER succeed — they would re-record, re-compress
+ * and re-upload over mobile data, forever. Reading the message is not guesswork: it is the
+ * server stating the reason.
+ *
+ * This is deliberately CONSERVATIVE. It only overrides the status when the body matches a
+ * phrase the backend actually emits; anything else falls through to `classifyUploadStatus`, so
+ * a genuine 5xx is never relabelled as a content problem.
+ */
+export function classifyUploadFailureBody(
+  status: number,
+  serverMessage: string | undefined,
+  mime?: string,
+): UploadFailure {
+  const msg = (serverMessage || '').toLowerCase();
+  // `routes/upload.js` fileFilter: `File type ${mimetype} is not allowed`
+  if (/file type .* is not allowed/.test(msg)) {
+    return isVideoMime(mime || '') ? 'video_not_accepted' : 'type_rejected';
+  }
+  // `middleware/errorHandler.js` LIMIT_FILE_SIZE -> 400 'File too large'
+  if (msg.includes('file too large')) return 'too_large';
+  return classifyUploadStatus(status);
 }
 
 /** Map a non-ok HTTP status from `/upload` to a reason. Coarser than the precheck by
@@ -253,6 +284,15 @@ export function describeUploadFailure(reason: UploadFailure): {
         tone: 'warning',
         title: "Uploaded, but the server won't keep it",
         message: "Document storage isn't switched on for this server, so this file won't be saved. Ask your admin to enable it before relying on it.",
+      };
+    case 'video_not_accepted':
+      // A PERMANENT condition, so the copy must not say "try again" — the server told us it
+      // does not accept this type, and it will keep saying so until an admin enables video.
+      // Retrying costs the user another transcode and another upload over mobile data.
+      return {
+        tone: 'warning',
+        title: 'This server does not accept videos yet',
+        message: 'Your photos and documents still work. Ask your admin to switch on video uploads — until then, take photos of the damage instead.',
       };
   }
 }

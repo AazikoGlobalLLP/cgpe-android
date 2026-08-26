@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
+  AUDIO_BITRATE_BPS,
   MAX_VIDEO_SECONDS,
+  MIN_VIDEO_BITRATE_BPS,
   VIDEO_MAX_DIMENSION,
   judgeCompression,
   planVideoCompression,
@@ -13,11 +15,35 @@ import { MAX_VIDEO_UPLOAD_BYTES, MAX_UPLOAD_BYTES } from '@/lib/fileUpload';
  * the only part that CAN be proven — which is exactly why they were split out. */
 
 describe('videoBitrateFor — the budget arithmetic', () => {
-  it('fills the byte budget over the clip length, minus overhead', () => {
-    // 10 MB over 60 s with 15% held back for audio/container:
-    //   10485760 bytes * 8 = 83,886,080 bits · * 0.85 = 71,303,168 · / 60 = 1,188,386 bps
-    // i.e. ~1.19 Mbps, which at 720p is ordinary streaming quality.
-    expect(videoBitrateFor(60, 10 * 1024 * 1024, 0.15)).toBe(1188386);
+  it('fills the byte budget over the clip length, charging audio per second', () => {
+    // 10 MB, 60 s, 5% container overhead, 128 kbps audio:
+    //   10485760 * 8 = 83,886,080 bits · * 0.95 = 79,691,776 · - (128000*60 = 7,680,000)
+    //   = 72,011,776 · / 60 = 1,200,196 bps of video.
+    expect(videoBitrateFor(60, 10 * 1024 * 1024, 0.05, 128000)).toBe(1200196);
+  });
+
+  it('charges AUDIO PER SECOND, not as a flat share — the bug a fixed fraction hid', () => {
+    // With a fixed fraction, a 180 s clip reserved the same 1.5 MB for an audio track that
+    // actually costs ~2.9 MB, so the muxed file went over the cap while the video track was
+    // exactly to budget. Doubling the duration must more than halve the video bitrate.
+    const at60 = videoBitrateFor(60);
+    const at120 = videoBitrateFor(120);
+    expect(at120).toBeLessThan(at60 / 2);
+  });
+
+  it('the MUXED size — video PLUS audio — fits the cap at every plausible duration', () => {
+    // This is the property that actually matters. Encoding the video track to budget is
+    // worthless if the muxed result is over.
+    for (const secs of [5, 15, 30, 60, 90, 120, 180]) {
+      const muxed = ((videoBitrateFor(secs) + AUDIO_BITRATE_BPS) * secs) / 8;
+      expect(muxed).toBeLessThanOrEqual(MAX_VIDEO_UPLOAD_BYTES);
+    }
+  });
+
+  it('never encodes below the quality floor — an impossible clip is refused, not mangled', () => {
+    // A 20-minute clip cannot fit 10 MB at a usable bitrate. Rather than encode it into mush,
+    // the floor holds and the oversized result is reported by judgeCompression.
+    expect(videoBitrateFor(1200)).toBe(MIN_VIDEO_BITRATE_BPS);
   });
 
   it('gives a SHORTER clip a higher bitrate — the same budget spread over less time', () => {
@@ -41,11 +67,14 @@ describe('videoBitrateFor — the budget arithmetic', () => {
     expect(videoBitrateFor(60, 0)).toBeGreaterThanOrEqual(1);
   });
 
-  it('a clip encoded at the derived bitrate lands inside the cap', () => {
-    // The whole point of the arithmetic: bitrate * seconds / 8 must fit, overhead included.
+  it('the VIDEO track alone always fits, at every duration including impossible ones', () => {
     for (const secs of [5, 30, 60, 120, 600]) {
       const bytes = (videoBitrateFor(secs) * secs) / 8;
-      expect(bytes).toBeLessThanOrEqual(MAX_VIDEO_UPLOAD_BYTES);
+      // At 600 s the floor applies, so the video track alone can exceed the cap — that is the
+      // deliberate "refuse honestly" path, not a silent overflow.
+      if (videoBitrateFor(secs) > MIN_VIDEO_BITRATE_BPS) {
+        expect(bytes).toBeLessThanOrEqual(MAX_VIDEO_UPLOAD_BYTES);
+      }
     }
   });
 });

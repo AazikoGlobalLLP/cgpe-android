@@ -1,5 +1,4 @@
 import { File } from 'expo-file-system';
-import { Video } from 'react-native-compressor';
 
 import { judgeCompression, planVideoCompression, type CompressOutcome } from '@/lib/videoCompress';
 import { MAX_VIDEO_UPLOAD_BYTES, type PickedFile } from '@/lib/fileUpload';
@@ -10,9 +9,12 @@ import { MAX_VIDEO_UPLOAD_BYTES, type PickedFile } from '@/lib/fileUpload';
  * ⚠️ THIS MODULE MUST STAY OUT OF THE VITEST GRAPH. It imports `react-native-compressor`
  * and `expo-file-system`, and a native module reached from a test breaks Node with
  * `ReferenceError: __DEV__ is not defined` (via expo-modules-core) — the trap documented in
- * CLAUDE.md. Its only importer is `ui/DocumentSource.tsx`, which is itself deliberately
- * unreachable from tests for exactly this reason. Every DECISION it makes lives in the pure,
- * tested `lib/videoCompress.ts`; what is left here is the call and the file stat.
+ * CLAUDE.md. Its importers are the two claim SCREENS (`app/claim/[id].tsx`, `app/claim-new.tsx`),
+ * which own picking-to-upload; no test reaches a screen. (An earlier draft of this comment named
+ * `ui/DocumentSource.tsx`, which is wrong — compression was deliberately moved OUT of the sheet,
+ * because the sheet is dismissed before the OS picker returns and so could never show progress.)
+ * Every DECISION it makes lives in the pure, tested `lib/videoCompress.ts`; what is left here is
+ * the call and the file stat.
  *
  * IT FAILS OPEN, ALWAYS. Compression is an optimisation, not a gate. If the native module is
  * missing (an older build), the transcode throws, or the device runs out of space mid-encode,
@@ -20,7 +22,34 @@ import { MAX_VIDEO_UPLOAD_BYTES, type PickedFile } from '@/lib/fileUpload';
  * the backstop. The one thing it must never do is lose the user's evidence because a
  * convenience step failed — that clip may be the only record of what a damaged vehicle looked
  * like, and it cannot be re-taken later.
+ *
+ * 🔴 WHICH IS WHY `react-native-compressor` IS REQUIRED LAZILY, INSIDE THE try — NEVER AS A
+ * TOP-LEVEL `import`. Its `Main.js` runs `const Compressor = createCompressor();` at MODULE
+ * SCOPE and throws `LINKING_ERROR` when the native side is not linked, so a static import
+ * throws while the MODULE is being evaluated — long before any try/catch in a function body
+ * can see it. That is not a theoretical risk here: in development expo-router imports routes
+ * synchronously (`asyncRoutes` is not enabled) and `getRoutesCore.js` calls
+ * `validateRouteTreeExports` → an UNGUARDED `node.loadRoute()` on EVERY route file. The two
+ * claim screens import this module, so a static import took the whole app down at boot in
+ * `expo start --go`, `expo start --web` and the `npm run e2e` harness — and it took the
+ * everyday photo/PDF path down with it, in exactly the environments a production APK cannot
+ * be built for right now. Caught by adversarial review, 2026-08-26. Do not "tidy" this back
+ * into an import statement.
  * ------------------------------------------------------------------ */
+
+/** The slice of `react-native-compressor` used here, so the lazy require stays typed. */
+type VideoCompressor = {
+  compress: (
+    fileUrl: string,
+    options: {
+      compressionMethod: 'auto' | 'manual';
+      bitrate?: number;
+      maxSize?: number;
+      minimumFileSizeForCompress?: number;
+    },
+    onProgress?: (progress: number) => void,
+  ) => Promise<string>;
+};
 
 /** What the caller needs back: a file to upload, plus what happened, for honest copy. */
 export type TranscodeResult = {
@@ -78,6 +107,10 @@ export async function compressIfNeeded(
   }
 
   try {
+    // Required HERE, not at the top of the file — see the header. A missing native module
+    // throws from this line, inside the try, and is caught as a normal compression failure.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { Video } = require('react-native-compressor') as { Video: VideoCompressor };
     const outUri = await Video.compress(
       file.uri,
       {
