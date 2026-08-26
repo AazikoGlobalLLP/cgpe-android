@@ -1,5 +1,12 @@
 # Voice assistant — research + recommendation (2026-08-26)
 
+> ⚠️ **SUPERSEDED (same day) by [`VOICE-ARCHITECTURE-DECISION-2026-08-26.md`](VOICE-ARCHITECTURE-DECISION-2026-08-26.md).**
+> That document is the authoritative one: it answers the owner's n8n-vs-direct question, was produced by an
+> 11-agent workflow with **adversarial verification of every price and language claim**, and it CHANGES two
+> recommendations made below — TTS moves from `expo-speech`/ElevenLabs to **Sarvam Bulbul v3**, and STT gains
+> the decisive **`mode=translit`** (Latin-script output) requirement. Read that one. This file is kept only
+> as the first-pass survey.
+
 **Owner ask:** "research and recommend a voice assistant" for CGPE Connect.
 **Status:** research done; **no code written yet.** This is a recommendation + a set of decisions
 the owner must lock before any build (voice is a big feature — it goes through spec-lock first).
