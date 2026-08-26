@@ -22,6 +22,7 @@ import { radius, spacing, useTheme } from '@/theme/theme';
 import { timeAgo } from '@/lib/format';
 import { FreshnessEntry, getFreshness, subscribeFreshness } from '@/data/freshness';
 import { Txt } from './base';
+import { useT } from '@/i18n';
 
 export function useDataFreshness(key: string): FreshnessEntry | null {
   const [entry, setEntry] = useState<FreshnessEntry | null>(() => getFreshness(key));
@@ -35,6 +36,7 @@ export function useDataFreshness(key: string): FreshnessEntry | null {
 
 export function SyncChip({ endpointKey }: { endpointKey: string }) {
   const c = useTheme();
+  const t = useT();
   const fresh = useDataFreshness(endpointKey);
   if (!fresh?.stale) return null;
   return (
@@ -56,7 +58,7 @@ export function SyncChip({ endpointKey }: { endpointKey: string }) {
     >
       <Ionicons name="cloud-offline-outline" size={13} color={c.warning} />
       <Txt size={12} weight="500" color={c.muted}>
-        {`Synced ${timeAgo(new Date(fresh.syncedAt))} · may be out of date`}
+        {t('sync.syncedAt', { time: timeAgo(new Date(fresh.syncedAt)) })}
       </Txt>
     </View>
   );

@@ -12,6 +12,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { motion, shadow, tnum, type, useTheme } from '@/theme/theme';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * sheet — the app's one modal surface.
@@ -75,6 +76,7 @@ export function Sheet({
   footer?: React.ReactNode;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, radius, font } = c;
   const insets = useSafeAreaInsets();
   const win = useWindowDimensions();
@@ -184,7 +186,7 @@ export function Sheet({
             <Pressable
               onPress={onClose}
               accessibilityRole="button"
-              accessibilityLabel="Close"
+              accessibilityLabel={t('common.close')}
               style={{ flex: 1 }}
             />
           </Animated.View>
@@ -234,7 +236,7 @@ export function Sheet({
                       onPress={onClose}
                       hitSlop={12}
                       accessibilityRole="button"
-                      accessibilityLabel="Close"
+                      accessibilityLabel={t('common.close')}
                       style={({ pressed }) => [{
                         width: 34, height: 34, borderRadius: 17, marginTop: -2,
                         alignItems: 'center', justifyContent: 'center',
@@ -397,7 +399,7 @@ function BarBtn({ label, onPress, tone, disabled, flex, style }: {
  * cannot leave. Callers who want an explicit All should pass it as an option.
  */
 export function FilterSheet({
-  visible, onClose, groups, value, onChange, onReset, title = 'Filters', applyLabel = 'Show results',
+  visible, onClose, groups, value, onChange, onReset, title, applyLabel,
 }: {
   visible: boolean;
   onClose: () => void;
@@ -409,6 +411,7 @@ export function FilterSheet({
   applyLabel?: string;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, font } = c;
 
   const active = groups.reduce((n, g) => n + (value[g.key]?.length ?? 0), 0);
@@ -426,14 +429,14 @@ export function FilterSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={title}
-      subtitle={active > 0 ? `${active} filter${active === 1 ? '' : 's'} applied` : 'Showing everything'}
+      title={title ?? t('filter.title')}
+      subtitle={active > 0 ? t('filter.applied', { n: active }) : t('filter.showingAll')}
       footer={
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
           {onReset ? (
-            <BarBtn label="Reset" tone="outline" flex={1} disabled={active === 0} onPress={onReset} />
+            <BarBtn label={t('filter.reset')} tone="outline" flex={1} disabled={active === 0} onPress={onReset} />
           ) : null}
-          <BarBtn label={applyLabel} tone="solid" flex={1.5} onPress={onClose} />
+          <BarBtn label={applyLabel ?? t('common.showResults')} tone="solid" flex={1.5} onPress={onClose} />
         </View>
       }
     >

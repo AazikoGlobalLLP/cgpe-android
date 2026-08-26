@@ -29,6 +29,7 @@ import type { FailureKind } from '@/lib/netResilience';
 import { radius, shadow, spacing, type, useTheme } from '@/theme/theme';
 import { Txt } from './base';
 import { haptics } from '@/lib/haptics';
+import { useT } from '@/i18n';
 
 /**
  * PHASE 55 — name the failure so the user reacts correctly. The old banner said one generic line
@@ -37,10 +38,10 @@ import { haptics } from '@/lib/haptics';
  * kind) falls back to the generic title. The "blank values are unconfirmed" line stays regardless —
  * that honesty is the whole point of this banner.
  */
-const KIND_TITLE: Record<FailureKind, string> = {
-  timeout: 'The server is responding slowly',
-  network: "Can't reach the network",
-  server: 'The server had a problem',
+const KIND_TITLE: Record<FailureKind, 'health.slow' | 'health.offline' | 'health.server'> = {
+  timeout: 'health.slow',
+  network: 'health.offline',
+  server: 'health.server',
 };
 
 /** Subscribe a screen to outage state, for screens that want to tailor their empty copy. */
@@ -52,6 +53,7 @@ export function useDataHealth(): HealthState {
 
 export function HealthBanner() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const [dismissed, setDismissed] = useState(false);
@@ -75,12 +77,13 @@ export function HealthBanner() {
   if (!health.degraded || dismissed) return null;
 
   const count = health.failures.length;
-  const title = (health.kind && KIND_TITLE[health.kind]) || 'Some data could not load';
+  const titleKey = (health.kind && KIND_TITLE[health.kind]) || 'health.someData';
+  const title = t(titleKey);
 
   return (
     <View
       accessibilityRole="alert"
-      accessibilityLabel={`${count} request${count === 1 ? '' : 's'} could not be completed. Blank values are unconfirmed.`}
+      accessibilityLabel={t('health.a11yUnconfirmed', { n: count })}
       style={{
         position: 'absolute',
         left: spacing.lg,
@@ -109,16 +112,14 @@ export function HealthBanner() {
             but STALE rows on a failed refetch, so a list can be wrong without being blank — the
             per-screen SyncChip stamps those (audit 2026-08-21, #9). */}
         <Txt size={11.5} color={c.muted} style={{ marginTop: 1 }} numberOfLines={2}>
-          {count === 1
-            ? 'One request could not be completed. Some values may be missing or out of date.'
-            : `${count} requests could not be completed. Some values may be missing or out of date.`}
+          {count === 1 ? t('health.oneRequest') : t('health.manyRequests', { n: count })}
         </Txt>
       </View>
       <Pressable
         onPress={() => { haptics.tap(); setDismissed(true); }}
         hitSlop={12}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss"
+        accessibilityLabel={t('common.dismiss')}
         style={({ pressed }) => [{ opacity: pressed ? 0.6 : 1, padding: 2 }]}
       >
         <Ionicons name="close" size={17} color={c.muted} />

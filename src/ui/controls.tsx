@@ -11,6 +11,7 @@ import Animated, {
 import { motion, shadow, tnum, type, useTheme } from '@/theme/theme';
 import type { Font } from '@/theme/theme';
 import { Metric, noOutline, type IconName } from './base';
+import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Controls — everything the finger lands on.
@@ -212,6 +213,7 @@ export function Fab({ icon, onPress, label, style, disabled }: {
   style?: StyleProp<ViewStyle>; disabled?: boolean;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
   const { p, onPressIn, onPressOut } = usePress();
@@ -238,7 +240,7 @@ export function Fab({ icon, onPress, label, style, disabled }: {
         onPressOut={onPressOut}
         disabled={disabled}
         accessibilityRole="button"
-        accessibilityLabel={label ?? 'Add'}
+        accessibilityLabel={label ?? t('common.add')}
         style={{
           height: FAB_H, width: label ? undefined : FAB_H,
           paddingHorizontal: label ? spacing.xxl : 0,
@@ -426,6 +428,7 @@ export function Stepper({ value, onChange, min = 0, max = 99, step = 1, style, f
   disabled?: boolean;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
 
@@ -466,7 +469,7 @@ export function Stepper({ value, onChange, min = 0, max = 99, step = 1, style, f
       onPressOut={stop}
       disabled={disabled || off}
       accessibilityRole="button"
-      accessibilityLabel={dir > 0 ? 'Increase' : 'Decrease'}
+      accessibilityLabel={dir > 0 ? t('common.increase') : t('common.decrease')}
       accessibilityState={{ disabled: disabled || off }}
       style={({ pressed }) => [{
         width: STEP_BTN, height: STEP_BTN, borderRadius: radius.pill,
@@ -517,6 +520,7 @@ export const SearchBar = React.forwardRef(function SearchBar({ value, onChange, 
   onSubmit?: () => void; style?: StyleProp<ViewStyle>;
 }, ref: React.ForwardedRef<TextInput>) {
   const c = useTheme();
+  const t = useT();
   const { spacing, radius, font } = c;
   const [focused, setFocused] = useState(false);
   return (
@@ -548,7 +552,7 @@ export const SearchBar = React.forwardRef(function SearchBar({ value, onChange, 
       {/* hitSlop 13, not 12: an 18pt glyph reaches only 42pt at 12 and the floor is 44. */}
       {value.length > 0 && (
         <Pressable onPress={() => onChange('')} hitSlop={13}
-          accessibilityRole="button" accessibilityLabel="Clear search"
+          accessibilityRole="button" accessibilityLabel={t('common.clearSearch')}
           style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}>
           <Ionicons name="close-circle" size={18} color={c.faint} />
         </Pressable>
@@ -577,6 +581,7 @@ export const Field = React.forwardRef(function Field({
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
 }, ref: React.ForwardedRef<TextInput>) {
   const c = useTheme();
+  const t = useT();
   const { spacing, radius, font } = c;
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
@@ -638,7 +643,7 @@ export const Field = React.forwardRef(function Field({
         {secure ? (
           <Pressable onPress={() => setRevealed((r) => !r)} hitSlop={13}
             accessibilityRole="button"
-            accessibilityLabel={revealed ? 'Hide password' : 'Show password'}
+            accessibilityLabel={revealed ? t('common.hidePassword') : t('common.showPassword')}
             style={({ pressed }) => [{ opacity: pressed ? 0.5 : 1 }]}>
             <Ionicons name={revealed ? 'eye-off' : 'eye'} size={19} color={c.faint} />
           </Pressable>

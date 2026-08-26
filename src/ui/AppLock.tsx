@@ -6,6 +6,7 @@ import { useTheme, radius, shadow, type } from '@/theme/theme';
 import { Grad } from '@/ui/base';
 import { storage } from '@/lib/storage';
 import { parseLastActive, shouldRelock } from '@/lib/appLock';
+import { useT } from '@/i18n';
 
 // The wall-clock moment the app was last sent to the background, persisted so a COLD start can
 // also honour the grace window (an OS kill during a brief trip must not demand a fingerprint).
@@ -20,6 +21,7 @@ const LAST_ACTIVE_KEY = 'applock.lastActive';
  */
 export function AppLock() {
   const c = useTheme();
+  const t = useT();
   const { ready, user, restoredSession, biometricAvailable, biometricEnabled, authenticateBiometric } = useAuth();
   const [locked, setLocked] = useState(false);
   const [trying, setTrying] = useState(false);
@@ -138,7 +140,7 @@ export function AppLock() {
   return (
     <View
       accessibilityViewIsModal
-      accessibilityLabel="App locked. Unlock to continue."
+      accessibilityLabel={t('lock.title')}
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 60, backgroundColor: c.gradientHero[c.scheme === 'dark' ? 2 : 1], alignItems: 'center', justifyContent: 'center', padding: 32 }}
     >
       <View style={{ width: 96, height: 96, borderRadius: 30, overflow: 'hidden', ...shadow(c, 2) }}>
@@ -149,16 +151,16 @@ export function AppLock() {
           <Ionicons name="lock-closed" size={44} color={c.onPrimary} />
         </Grad>
       </View>
-      <Text style={{ color: '#fff', ...type('800', 22), marginTop: 24 }}>App locked</Text>
+      <Text style={{ color: '#fff', ...type('800', 22), marginTop: 24 }}>{t('lock.title')}</Text>
       <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 14, marginTop: 8, textAlign: 'center', lineHeight: 20 }}>
-        Unlock CGPE Connect with your fingerprint, Face ID, or device passcode.
+        {t('lock.body')}
       </Text>
       <Pressable onPress={attempt} disabled={trying} style={{ marginTop: 28, borderRadius: radius.md, overflow: 'hidden', width: '100%', maxWidth: 320 }}>
         <Grad colors={c.gradientBrand} style={{ height: 54, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
           {/* onPrimary on the accent gradient — the only visible affordance on the lock screen must
               not disappear under a light accent (round 4). */}
           <Ionicons name="finger-print" size={22} color={c.onPrimary} />
-          <Text style={{ color: c.onPrimary, ...type('800', 16) }}>{trying ? 'Verifying…' : 'Unlock'}</Text>
+          <Text style={{ color: c.onPrimary, ...type('800', 16) }}>{trying ? t('lock.verifying') : t('lock.unlock')}</Text>
         </Grad>
       </Pressable>
     </View>

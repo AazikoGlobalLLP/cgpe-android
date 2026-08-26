@@ -16,6 +16,7 @@ import { radius, spacing, useTheme } from '@/theme/theme';
 import { getPendingByKind, getDropNotice, subscribePending } from '@/data/pendingWrites';
 import type { QueuedWrite, QueueKind } from '@/lib/writeQueue';
 import { Txt } from './base';
+import { useT } from '@/i18n';
 
 export function usePendingWrites(kind: QueueKind): QueuedWrite[] {
   const [list, setList] = useState<QueuedWrite[]>(() => getPendingByKind(kind));
@@ -40,6 +41,7 @@ export function useDropNotice(): string | null {
 
 export function PendingBadge() {
   const c = useTheme();
+  const t = useT();
   return (
     <View
       accessibilityRole="text"
@@ -57,7 +59,7 @@ export function PendingBadge() {
       }}
     >
       <Ionicons name="time-outline" size={12} color={c.warning} />
-      <Txt size={11} weight="600" color={c.warning}>Pending sync</Txt>
+      <Txt size={11} weight="600" color={c.warning}>{t('sync.pending')}</Txt>
     </View>
   );
 }

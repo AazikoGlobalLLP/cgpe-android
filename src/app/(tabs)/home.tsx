@@ -122,10 +122,20 @@ function dayLabel(d: string): string {
   return isNaN(dt.getTime()) ? '' : fmtDay(dt);
 }
 
-function clockedInLine(iso: string | undefined, fallback: string): string {
+/**
+ * PHASE 77 — this used to hardcode `Clocked in ${time}` in English on the ONLY path that normally
+ * runs, so the translated `home.clockedIn` was reachable only when the timestamp was unreadable. It
+ * now takes the parameterised translator, and `fallback` stays exactly what it always was: the
+ * no-time form for when there is no usable timestamp.
+ */
+function clockedInLine(
+  iso: string | undefined,
+  fallback: string,
+  atTime: (time: string) => string,
+): string {
   if (!iso) return fallback;
   const dt = new Date(iso);
-  return isNaN(dt.getTime()) ? fallback : `Clocked in ${fmtTime(dt)}`;
+  return isNaN(dt.getTime()) ? fallback : atTime(fmtTime(dt));
 }
 
 /** Resolve `p`, or reject after `ms`. A local copy of `tracker.ts`'s helper — importing it here
@@ -2249,7 +2259,7 @@ export default function Home() {
                         <View style={{ flex: 1 }}>
                           <Eyebrow>Attendance</Eyebrow>
                           <Txt size={font.h3} weight="800" style={{ marginTop: 4 }} numberOfLines={2}>
-                            {clock.in ? clockedInLine(clock.time, t('home.clockedIn')) : t('home.markAttendance')}
+                            {clock.in ? clockedInLine(clock.time, t('home.clockedIn'), (time) => t('home.clockedInAt', { time })) : t('home.markAttendance')}
                           </Txt>
                           <Txt size={font.sub} color={clock.in ? c.success : c.muted} style={{ marginTop: 3 }} numberOfLines={2}>
                             {dutyLine}
@@ -2265,7 +2275,7 @@ export default function Home() {
                           <View style={{ flex: 1 }}>
                             <Txt size={font.body} weight="700" numberOfLines={1}>
                               {clock.in
-                                ? clockedInLine(clock.time, t('home.clockedIn'))
+                                ? clockedInLine(clock.time, t('home.clockedIn'), (time) => t('home.clockedInAt', { time }))
                                 : t('home.markAttendance')}
                             </Txt>
                             <Txt

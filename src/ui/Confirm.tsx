@@ -3,6 +3,7 @@ import { View, Text, Modal, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme, spacing, radius, shadow } from '@/theme/theme';
+import { useT } from '@/i18n';
 
 /**
  * Cross-platform confirm + action-sheet. React Native Web's Alert.alert does NOT
@@ -24,6 +25,7 @@ export const useConfirm = () => useContext(ConfirmContext);
 
 export function ConfirmProvider({ children }: { children: React.ReactNode }) {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const [state, setState] = useState<any>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -60,13 +62,13 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
               {state.message ? <Text style={{ color: c.muted, fontSize: 14, marginTop: 8, lineHeight: 20 }}>{state.message}</Text> : null}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 22 }}>
                 <Pressable onPress={() => finish(false)} style={{ flex: 1, height: 48, borderRadius: radius.md, borderWidth: 1, borderColor: c.border, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ color: c.text, fontFamily: 'Geist_700Bold', fontWeight: '700', fontSize: 15 }}>{state.cancelText || 'Cancel'}</Text>
+                  <Text style={{ color: c.text, fontFamily: 'Geist_700Bold', fontWeight: '700', fontSize: 15 }}>{state.cancelText || t('common.cancel')}</Text>
                 </Pressable>
                 <Pressable onPress={() => finish(true)} style={{ flex: 1, height: 48, borderRadius: radius.md, backgroundColor: state.destructive ? c.danger : c.primary, alignItems: 'center', justifyContent: 'center' }}>
                   {/* danger is always red → white reads; the non-destructive button sits on the brand
                       accent, so use the computed onPrimary (dark ink under a light department accent)
                       instead of hardcoded white, which would vanish on a pale accent (round 4). */}
-                  <Text style={{ color: state.destructive ? '#fff' : c.onPrimary, fontFamily: 'Geist_800ExtraBold', fontWeight: '800', fontSize: 15 }}>{state.confirmText || 'Confirm'}</Text>
+                  <Text style={{ color: state.destructive ? '#fff' : c.onPrimary, fontFamily: 'Geist_800ExtraBold', fontWeight: '800', fontSize: 15 }}>{state.confirmText || t('common.confirm')}</Text>
                 </Pressable>
               </View>
             </Pressable>
@@ -83,7 +85,7 @@ export function ConfirmProvider({ children }: { children: React.ReactNode }) {
                 </Pressable>
               ))}
               <Pressable onPress={() => finish(null)} style={{ paddingVertical: 16, marginTop: 6, marginHorizontal: spacing.lg, borderRadius: radius.md, backgroundColor: c.cardAlt, alignItems: 'center' }}>
-                <Text style={{ color: c.muted, fontFamily: 'Geist_700Bold', fontWeight: '700', fontSize: 15 }}>Cancel</Text>
+                <Text style={{ color: c.muted, fontFamily: 'Geist_700Bold', fontWeight: '700', fontSize: 15 }}>{t('common.cancel')}</Text>
               </Pressable>
             </Pressable>
           )}

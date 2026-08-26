@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useT } from '@/i18n';
 import {
   shadow, tnum, type, useTheme, Weight,
 } from '@/theme/theme';
@@ -114,6 +115,7 @@ export function Header({ title, subtitle, back, right }: {
   title: string; subtitle?: string; back?: boolean; right?: React.ReactNode;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, font } = c;
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -149,7 +151,7 @@ export function Header({ title, subtitle, back, right }: {
       {back && (
         <Pressable onPress={goBack} hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Go back"
+          accessibilityLabel={t('common.goBack')}
           style={({ pressed }) => [{ width: 38, height: 38, borderRadius: 12, backgroundColor: c.card, alignItems: 'center', justifyContent: 'center', marginRight: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: c.border, opacity: pressed ? 0.7 : 1 }]}>
           <Ionicons name="chevron-back" size={22} color={c.text} />
         </Pressable>

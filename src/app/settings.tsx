@@ -442,7 +442,13 @@ export default function Settings() {
                 what it cannot: the install size is not a cache and no in-app button can shrink it.
                 No megabyte figure is shown because nothing underneath reports one, and a guessed
                 number would be exactly the fabrication convention 4 exists to stop. */}
-            <ListSection title={t('storage.title')} footer={t('storage.description')}>
+            {/* The install-size sentence is a SEPARATE key, not folded into `storage.description`:
+                the owner supplied the description first and the caveat afterwards, and keeping them
+                apart means either can be reworded without invalidating the other's translations. */}
+            <ListSection
+              title={t('storage.title')}
+              footer={`${t('storage.description')} ${t('storage.installNote')}`}
+            >
               <Appear index={0}>
                 <DataRow
                   icon="trash-outline"

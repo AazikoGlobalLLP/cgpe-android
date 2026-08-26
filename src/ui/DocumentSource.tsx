@@ -4,6 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 
 import { useTheme } from '@/theme/theme';
+import { useT } from '@/i18n';
 import { Txt } from '@/ui/base';
 import { Button } from '@/ui/controls';
 import { Sheet } from '@/ui/sheet';
@@ -85,6 +86,7 @@ export function DocumentSourceSheet({ visible, onClose, onResult }: {
   onResult: (source: PickSource, out: PickOutcome) => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing } = c;
   // Guards against a double-tap launching two OS pickers while the first is presenting.
   const [busy, setBusy] = useState<PickSource | null>(null);
@@ -109,13 +111,13 @@ export function DocumentSourceSheet({ visible, onClose, onResult }: {
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Attach a document"
-      subtitle="Take a new photo, or pick something already on your phone"
+      title={t('doc.attachTitle')}
+      subtitle={t('doc.attachSubtitle')}
     >
       <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
-        <Button label="Take a photo" icon="camera-outline" variant="outline" full onPress={() => choose('camera')} />
-        <Button label="Choose from gallery" icon="images-outline" variant="outline" full onPress={() => choose('gallery')} />
-        <Button label="Choose a file" icon="document-outline" variant="outline" full onPress={() => choose('document')} />
+        <Button label={t('doc.takePhoto')} icon="camera-outline" variant="outline" full onPress={() => choose('camera')} />
+        <Button label={t('doc.gallery')} icon="images-outline" variant="outline" full onPress={() => choose('gallery')} />
+        <Button label={t('doc.file')} icon="document-outline" variant="outline" full onPress={() => choose('document')} />
         <Txt size={c.font.cap} color={c.faint} numberOfLines={2} style={{ textAlign: 'center', lineHeight: 17, marginTop: spacing.xs }}>
           You can attach {ALLOWED_UPLOAD_LABEL}, up to {MAX_UPLOAD_MB} MB.
         </Txt>

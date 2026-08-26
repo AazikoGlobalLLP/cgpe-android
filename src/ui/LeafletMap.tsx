@@ -6,6 +6,7 @@ import type { AgentPin } from '@/data/api';
 import { fmtDay, fmtTime } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
 import { Txt } from './base';
+import { useT } from '@/i18n';
 import { IconBtn } from './controls';
 import { Banner, EmptyState, Skeleton } from './feedback';
 import { useDataHealth } from './health-banner';
@@ -428,7 +429,7 @@ const HOME: [number, number] = [21.2088, 72.8393];
 /** Pixel radius inside which two markers are considered the same place. */
 const CLUSTER_PX = 34;
 
-function buildHtml(c: Palette): string {
+function buildHtml(c: Palette, t: (k: any, p?: any) => string): string {
   const dark = c.scheme === 'dark';
 
   const cfg = safeJson({
@@ -452,6 +453,9 @@ function buildHtml(c: Palette): string {
     clusterHalo: rgba(c.primary, 0.32),
     clusterInk: ink(c.primary),
     radius: CLUSTER_PX,
+    // Strings the injected page renders. Built HERE and passed in already
+    // translated, the same rule the file's header states for dates and times.
+    i18n: { pointsHere: t('map.pointsHere', { n: '{n}' }), andMore: t('map.andMore', { n: '{n}' }) },
   });
 
   const css = [
@@ -583,13 +587,13 @@ function buildHtml(c: Palette): string {
     "    dx = g[i].p.x - g[j].p.x; dy = g[i].p.y - g[j].p.y; d = dx*dx + dy*dy; if (d > spread) spread = d;",
     "  }",
     "  spread = Math.sqrt(spread);",
-    "  var list = '<div class=\"pop\"><div class=\"pt\">' + n + ' points here</div>';",
+    "  var list = '<div class=\"pop\"><div class=\"pt\">' + CFG.i18n.pointsHere.replace('{n}', n) + '</div>';",
     "  var shown = Math.min(n, 8);",
     "  for (i = 0; i < shown; i++) {",
     "    list += '<div class=\"pr\"><span class=\"dot\" style=\"background:' + g[i].m.bg + '\"></span>'",
     "      + '<span class=\"pn\">' + g[i].m.name + '</span><span class=\"pm\">' + g[i].m.line1 + '</span></div>';",
     "  }",
-    "  if (n > shown) list += '<div class=\"pm more\">and ' + (n - shown) + ' more</div>';",
+    "  if (n > shown) list += '<div class=\"pm more\">' + CFG.i18n.andMore.replace('{n}', n - shown) + '</div>';",
     "  list += '</div>';",
     // Zooming only helps when the points are actually apart. Stacked records, or a map
     // already at the tile ceiling, get the list instead of a zoom that changes nothing.
@@ -831,6 +835,7 @@ function MapCanvas({
   satellite, pointsShown, onToggleSatellite, onTogglePoints,
 }: CanvasProps) {
   const c = useTheme();
+  const t = useT();
 
   const webRef = useRef<WebView>(null);
   const readyRef = useRef(false);
@@ -1034,7 +1039,7 @@ function MapCanvas({
         <View style={[StyleSheet.absoluteFill, { backgroundColor: c.cardAlt }]} pointerEvents="none">
           <Skeleton width="100%" height={height} radius={0} />
           <View style={{ position: 'absolute', left: 0, right: 0, bottom: spacing.lg, alignItems: 'center' }}>
-            <Txt size={font.cap} color={c.faint}>Loading map</Txt>
+            <Txt size={font.cap} color={c.faint}>{t('map.loading')}</Txt>
           </View>
         </View>
       ) : (
@@ -1104,6 +1109,7 @@ export function LeafletMap({
   onInteracting,
 }: LeafletMapProps) {
   const c = useTheme();
+  const t = useT();
   const reduced = useReducedMotion();
   const health = useDataHealth();
 
@@ -1115,7 +1121,7 @@ export function LeafletMap({
   const toggleSatellite = useCallback(() => { haptics.select(); setSatellite((v) => !v); }, []);
   const togglePoints = useCallback(() => { haptics.select(); setPointsShown((v) => !v); }, []);
 
-  const html = useMemo(() => buildHtml(c), [c]);
+  const html = useMemo(() => buildHtml(c, t), [c, t]);
   const payload = useMemo(
     () => buildPayload(pins, path, pathName, c, cluster, reduced, breaks),
     [pins, path, pathName, c, cluster, reduced, breaks],

@@ -10,6 +10,7 @@ import Animated, {
 import { eyebrow, motion, tnum, type, useTheme } from '@/theme/theme';
 import type { Font, Palette } from '@/theme/theme';
 import { Card, Metric, Txt } from './base';
+import { useT } from '@/i18n';
 import type { IconName } from './base';
 
 /* ------------------------------------------------------------------ *
@@ -376,6 +377,7 @@ export function DataRow({
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, font } = c;
   const [copied, setCopied] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -449,7 +451,7 @@ export function DataRow({
           onPress={copy}
           hitSlop={COPY_HIT}
           accessibilityRole="button"
-          accessibilityLabel={`Copy ${label}`}
+          accessibilityLabel={t('common.copyLabel', { label })}
           style={({ pressed }) => [{
             width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center',
             backgroundColor: pressed ? c.cardAlt : 'transparent', opacity: pressed ? 0.7 : 1,

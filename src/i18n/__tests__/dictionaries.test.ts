@@ -63,7 +63,12 @@ describe('i18n dictionaries — parity and value quality', () => {
     // Bumped 133 → 143 for the 10 Phase 77 `storage.*` keys (2026-08-26) — Settings › Storage and
     // the clear-cache flow. Owner human copy in all 5 languages, supplied in-chat, NOT machine-
     // translated. `Cancel` reuses the existing `common.cancel` rather than adding an 11th key.
-    expect(EN_KEYS.length).toBe(143);
+    // Bumped 143 → 226 for the Phase 77 copy drop (2026-08-26): Batch 2 the shared-word layer (19),
+    // Batch 3 the shared components (38), Batch 4 the status words (24), plus `storage.installNote`
+    // and `home.clockedInAt`. Owner human copy in all 5 languages, supplied in one batch, NOT
+    // machine-translated. Adding a key is inert until a screen calls it, so the copy is captured
+    // here first and the ~170 hardcoded call sites are replaced in stages.
+    expect(EN_KEYS.length).toBe(226);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });
