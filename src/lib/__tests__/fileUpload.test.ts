@@ -9,6 +9,7 @@ import {
   classifyUploadStatus,
   isEphemeralUrl,
   describeUploadFailure,
+  MAX_VIDEO_UPLOAD_BYTES,
   type UploadFailure,
 } from '@/lib/fileUpload';
 
@@ -71,8 +72,31 @@ describe('precheckUpload — the client-side gate', () => {
   });
 
   it('rejects an unsupported type by mimeType', () => {
-    expect(precheckUpload({ name: 'clip.mp4', mimeType: 'video/mp4', size: 500 })).toBe('type_rejected');
+    // NOTE: `video/mp4` USED to be asserted here as rejected, and that assertion was deliberately
+    // flipped when evidence video was added (owner request, 2026-08-26). Video is now a supported
+    // kind on the client; `.zip` and friends are still refused.
     expect(precheckUpload({ name: 'a.zip', mimeType: 'application/zip', size: 500 })).toBe('type_rejected');
+    expect(precheckUpload({ name: 'a.exe', mimeType: 'application/x-msdownload', size: 500 })).toBe('type_rejected');
+  });
+
+  it('ACCEPTS the four evidence-video types (owner request 2026-08-26)', () => {
+    for (const mime of ['video/mp4', 'video/quicktime', 'video/3gpp', 'video/x-matroska']) {
+      expect(precheckUpload({ name: `clip.${mime.split('/')[1]}`, mimeType: mime, size: 500 })).toBeNull();
+    }
+  });
+
+  it('still rejects an OVERSIZED video — compression happens before this gate, not instead of it', () => {
+    expect(precheckUpload({ name: 'clip.mp4', mimeType: 'video/mp4', size: MAX_VIDEO_UPLOAD_BYTES + 1 }))
+      .toBe('too_large');
+  });
+
+  it('resolves the video extensions when the picker gives no mimeType', () => {
+    // A gallery pick sometimes arrives with only a filename; without these the type would be
+    // unresolvable and the file would fail open into a wasted upload.
+    expect(resolveMime({ name: 'a.mp4' })).toBe('video/mp4');
+    expect(resolveMime({ name: 'a.mov' })).toBe('video/quicktime');
+    expect(resolveMime({ name: 'a.3gp' })).toBe('video/3gpp');
+    expect(resolveMime({ name: 'a.mkv' })).toBe('video/x-matroska');
   });
 
   it('FAILS OPEN on a disallowed extension when no mimeType is given — the extension map only knows accepted types, so an unresolvable type is left for the server to reject', () => {

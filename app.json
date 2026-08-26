@@ -66,10 +66,12 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "CGPE Connect needs access to your photos to attach claim documents.",
-          "cameraPermission": "CGPE Connect needs camera access to capture claim and KYC documents."
+          "photosPermission": "CGPE Connect needs access to your photos and videos to attach claim documents and evidence.",
+          "cameraPermission": "CGPE Connect needs camera access to capture claim and KYC documents, and to record claim evidence.",
+          "microphonePermission": "CGPE Connect needs the microphone to record sound with claim evidence videos."
         }
       ],
+      "react-native-compressor",
       [
         "expo-local-authentication",
         {

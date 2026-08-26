@@ -47,8 +47,53 @@ export const ALLOWED_UPLOAD_MIME: readonly string[] = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
 
+/**
+ * VIDEO — claim evidence. Kept as its OWN list rather than folded into
+ * `ALLOWED_UPLOAD_MIME`, because the two are not interchangeable: the document list is a
+ * mirror of what the server accepts TODAY, while this list is what it must be taught to
+ * accept. Keeping them apart means the document path cannot be disturbed by the video
+ * work, and `DocumentPicker` can be handed either set independently.
+ *
+ * ⚠️ THE BACKEND DOES NOT ACCEPT ANY OF THESE YET. `routes/upload.js` `fileFilter` has no
+ * `video/*` entry, so until it is taught these exact strings a video upload comes back as
+ * a plain 500. That is the ONE backend change this feature needs (the size cap does NOT
+ * change — the owner chose on 2026-08-26 to compress to fit the existing 10 MB instead).
+ *
+ * The four types are what Android and iOS actually produce or hold: `video/mp4` is what the
+ * compressor emits and what nearly every Android camera records; `video/quicktime` is the
+ * `.mov` an iPhone-recorded clip arrives as; `video/3gpp` is what some older/low-end Android
+ * cameras still write; `video/x-matroska` is the `.mkv` a few OEM camera apps produce.
+ */
+export const VIDEO_UPLOAD_MIME: readonly string[] = [
+  'video/mp4',
+  'video/quicktime',
+  'video/3gpp',
+  'video/x-matroska',
+];
+
+/**
+ * Every type a user may attach — documents AND video. This is what the precheck tests
+ * against; `ALLOWED_UPLOAD_MIME` on its own is deliberately left meaning "the document
+ * types the server takes today" so nothing that reads it changes meaning.
+ */
+export const ALL_UPLOAD_MIME: readonly string[] = [...ALLOWED_UPLOAD_MIME, ...VIDEO_UPLOAD_MIME];
+
+/**
+ * The upload cap for VIDEO, as its own constant so it can move without touching the
+ * document cap. Owner decision 2026-08-26: it is the SAME 10 MB — rather than raising the
+ * server limit, evidence video is compressed on the phone until it fits
+ * (`lib/videoCompress.ts`). That choice is why the backend needs no size change, and why
+ * nginx needs no `client_max_body_size` change either.
+ *
+ * If this is ever raised, `routes/upload.js` `limits.fileSize` must be raised in the SAME
+ * change, and the proxy's body limit checked — otherwise the phone sends a file the server
+ * or the proxy refuses, and the user sees a 413 that looks like a broken app.
+ */
+export const MAX_VIDEO_UPLOAD_BYTES = MAX_UPLOAD_BYTES;
+export const MAX_VIDEO_UPLOAD_MB = Math.round(MAX_VIDEO_UPLOAD_BYTES / (1024 * 1024));
+
 /** Plain-language version of the allowlist, for a hint/error line. */
-export const ALLOWED_UPLOAD_LABEL = 'a photo (JPG, PNG, GIF, WebP), a PDF, or a Word or Excel document';
+export const ALLOWED_UPLOAD_LABEL = 'a photo (JPG, PNG, GIF, WebP), a video, a PDF, or a Word or Excel document';
 
 /** File extension → MIME, used only to resolve a type when the picker gives us no `mimeType`. */
 const EXT_TO_MIME: Record<string, string> = {
@@ -57,10 +102,23 @@ const EXT_TO_MIME: Record<string, string> = {
   docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   xls: 'application/vnd.ms-excel',
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  // Video. `mov`/`3gp`/`mkv` are here for the same reason as the document extensions: a
+  // gallery pick occasionally arrives with no `mimeType` and only a filename to go on.
+  mp4: 'video/mp4', mov: 'video/quicktime', '3gp': 'video/3gpp', mkv: 'video/x-matroska',
 };
 
-/** A picked file, normalised across `expo-image-picker` and `expo-document-picker`. */
-export type PickedFile = { uri: string; name: string; mimeType?: string; size?: number };
+/** True when a resolved MIME is a video. One place, so the rule cannot drift. */
+export function isVideoMime(mime: string): boolean {
+  return (mime || '').toLowerCase().startsWith('video/');
+}
+
+/**
+ * A picked file, normalised across `expo-image-picker` and `expo-document-picker`.
+ * `durationMs` is only ever present for video (the image picker reports it on the asset)
+ * and is what lets the compressor size its bitrate to the real clip length instead of
+ * assuming the 60-second ceiling.
+ */
+export type PickedFile = { uri: string; name: string; mimeType?: string; size?: number; durationMs?: number };
 
 /** Every way an upload can honestly not-succeed. */
 export type UploadFailure =
@@ -91,9 +149,15 @@ export function resolveMime(file: { mimeType?: string; name?: string }): string 
  * unresolvable type is never blocked here — only a KNOWN violation is.
  */
 export function precheckUpload(file: { name?: string; mimeType?: string; size?: number }): UploadFailure | null {
-  if (typeof file.size === 'number' && file.size > MAX_UPLOAD_BYTES) return 'too_large';
   const mime = resolveMime(file);
-  if (mime && !ALLOWED_UPLOAD_MIME.includes(mime)) return 'type_rejected';
+  // The cap is per-KIND. Today both caps are 10 MB, so this is behaviour-identical for
+  // documents and images; it exists so raising the video cap later cannot silently raise
+  // the document one too. Note the ORDER changed from "size then type": the size test now
+  // needs to know the kind, so the MIME is resolved first. Resolution is pure and cannot
+  // fail, so nothing else about the outcome moves.
+  const cap = isVideoMime(mime) ? MAX_VIDEO_UPLOAD_BYTES : MAX_UPLOAD_BYTES;
+  if (typeof file.size === 'number' && file.size > cap) return 'too_large';
+  if (mime && !ALL_UPLOAD_MIME.includes(mime)) return 'type_rejected';
   return null;
 }
 

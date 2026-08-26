@@ -17,6 +17,7 @@ import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
 import { precheckUpload, describeUploadFailure, resolveMime, type UploadFailure } from '@/lib/fileUpload';
+import { compressIfNeeded } from '@/lib/videoTranscode';
 import { useAuth } from '@/store/auth';
 import { canViewOwnClients } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
@@ -154,6 +155,10 @@ function ClaimNewScreen() {
   const [docs, setDocs] = useState<ClaimDoc[]>([]);
 
   const [uploading, setUploading] = useState(false);
+  // Video is transcoded on the phone before it is sent, and on a mid-range handset a 60-second
+  // clip takes 10-20 seconds. Without its own state the button would sit on "Uploading" during a
+  // step that is not an upload, so a stalled encode would read as a stalled network.
+  const [preparing, setPreparing] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
@@ -232,7 +237,16 @@ function ClaimNewScreen() {
       return;
     }
 
-    const file = out.file;
+    // Shrink an oversized evidence video BEFORE the precheck, so a 60 MB clip is made to fit
+    // rather than rejected. Anything that is not an oversized video — every photo, PDF and Word
+    // document — is returned untouched, so those paths behave exactly as they did before.
+    // Fails open: if the transcoder is unavailable or throws, the original file comes back and
+    // the precheck below decides on its real size, which is what would have happened anyway.
+    setPreparing(true);
+    const prepared = await compressIfNeeded(out.file);
+    if (!mounted.current) return;
+    setPreparing(false);
+    const file = prepared.file;
     // Catch the two commonest mistakes (too big / wrong type) before wasting an upload — the
     // reason is precise because the check uses the server's own limits.
     const pre = precheckUpload(file);
@@ -247,6 +261,22 @@ function ClaimNewScreen() {
     // Reached the server but landed on throwaway disk (cloud storage not configured): it will be
     // wiped on the next redeploy, so it is NOT listed as an attached document — say so instead.
     if (up.ephemeral) { showUploadFailure('not_stored'); return; }
+
+    // Record the file's metadata so the returned URL is not discarded. Fire-and-forget: the
+    // binary is already on the server, so a failure here must not read as a failed upload.
+    // The claim does not exist yet on this screen, so there is no id to carry — another reason
+    // the missing `entity_id` on that endpoint is what actually needs fixing.
+    void api.recordFileAttachment({
+      filename: file.name,
+      fileUrl: up.url,
+      fileSize: file.size,
+      fileType: resolveMime(file) || '',
+      category: 'claim',
+      // `uploaded_by` is deliberately left to the server's default. The signed-in user lives in
+      // the outer access-gate wrapper, not in this screen, and threading it down just to label a
+      // record would mean touching the gate — a security surface — for a cosmetic field.
+      description: 'Attached while creating a claim',
+    });
 
     haptics.success();
     setDocs((prev) => [...prev, { id: `d${Date.now()}`, name: file.name, received: true }]);
@@ -496,7 +526,7 @@ function ClaimNewScreen() {
               ) : null}
 
               <Button
-                label={uploading ? t('common.uploading') : 'Capture or upload a document'}
+                label={preparing ? 'Preparing video…' : uploading ? t('common.uploading') : 'Capture or upload a document'}
                 icon="camera"
                 variant="outline"
                 full

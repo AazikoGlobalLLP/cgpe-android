@@ -16,6 +16,7 @@ import { useDataHealth } from '@/ui/health-banner';
 import { DocumentSourceSheet, type PickSource, type PickOutcome } from '@/ui/DocumentSource';
 import { haptics } from '@/lib/haptics';
 import { precheckUpload, describeUploadFailure, resolveMime, type UploadFailure } from '@/lib/fileUpload';
+import { compressIfNeeded } from '@/lib/videoTranscode';
 
 import * as api from '@/data/api';
 import type { Claim, ClaimStatus } from '@/data/types';
@@ -148,6 +149,10 @@ export default function ClaimDetail() {
   const [claim, setClaim] = useState<Claim | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  // Video is transcoded on the phone before it is sent, and on a mid-range handset a 60-second
+  // clip takes 10-20 seconds. Without its own state the button would sit on "Uploading" during a
+  // step that is not an upload, so a stalled encode would read as a stalled network.
+  const [preparing, setPreparing] = useState(false);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
   /** Bumped to re-run the focus effect after a retry. */
@@ -222,7 +227,16 @@ export default function ClaimDetail() {
       return;
     }
 
-    const file = out.file;
+    // Shrink an oversized evidence video BEFORE the precheck, so a 60 MB clip is made to fit
+    // rather than rejected. Anything that is not an oversized video — every photo, PDF and Word
+    // document — is returned untouched, so those paths behave exactly as they did before.
+    // Fails open: if the transcoder is unavailable or throws, the original file comes back and
+    // the precheck below decides on its real size, which is what would have happened anyway.
+    setPreparing(true);
+    const prepared = await compressIfNeeded(out.file);
+    if (!mounted.current) return;
+    setPreparing(false);
+    const file = prepared.file;
     const pre = precheckUpload(file);
     if (pre) { showUploadFailure(pre); return; }
 
@@ -238,11 +252,29 @@ export default function ClaimDetail() {
     // wiped on redeploy, so the checklist is NOT ticked; the warning says why.
     if (up.ephemeral) { showUploadFailure('not_stored'); return; }
 
-    // The file is on the server. The register has no endpoint that links a file to a claim,
-    // so the ONLY thing recorded here is the local checklist tick, and the group footer and
-    // the caption under this button both say so. No timeline entry is fabricated: the
-    // register did not log this, and inventing an entry signed with the user's name would
-    // put a record on screen that no system anywhere is holding.
+    // The file is on the server. Record its metadata so the URL is no longer thrown away —
+    // `POST /file-attachments` is live (verified 2026-08-26). Deliberately NOT awaited for
+    // correctness: the binary is already stored, so a failure here must not tell the user the
+    // upload failed. It is fire-and-forget and returns null quietly.
+    //
+    // ⚠️ THIS IS A RECORD, NOT A LINK. That endpoint's whitelist has no `entity_id`, so nothing
+    // ties this file to THIS claim; the claim id travels in `description` as human text only,
+    // which is honest but not queryable. The checklist tick below therefore stays local, exactly
+    // as before. Adding `entity_id` is the one backend change that would close it, and it is
+    // filed as an `[api]` ask rather than faked by overloading a field that means something else.
+    void api.recordFileAttachment({
+      filename: file.name,
+      fileUrl: up.url,
+      fileSize: file.size,
+      fileType: resolveMime(file) || '',
+      category: 'claim',
+      description: `Claim ${claim.id}`,
+    });
+
+    // The register has no endpoint that links a file to a claim, so the ONLY thing recorded
+    // here is the local checklist tick, and the group footer and the caption under this button
+    // both say so. No timeline entry is fabricated: the register did not log this, and inventing
+    // an entry signed with the user's name would put a record on screen that no system is holding.
     const firstPending = claim.docs.find((d) => !d.received);
     if (firstPending) {
       setClaim({
@@ -454,7 +486,7 @@ export default function ClaimDetail() {
             )}
 
             <Button
-              label={uploading ? t('common.uploading') : 'Capture or upload a document'}
+              label={preparing ? 'Preparing video…' : uploading ? t('common.uploading') : 'Capture or upload a document'}
               icon="camera"
               variant="outline"
               full

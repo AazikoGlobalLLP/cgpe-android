@@ -3502,6 +3502,58 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
   } finally { clearTimeout(timer); }
 }
 
+/**
+ * Record the metadata of a file that `uploadFile` has already put on the server, so the upload
+ * is not just a URL the screen throws away. Backed by `POST /api/file-attachments`, which is
+ * live on prod (verified 2026-08-26: the mount is on `origin/main` at `app.js:466` and the
+ * endpoint answers 401 without a token, i.e. deployed and protected).
+ *
+ * ⚠️ THIS IS A RECORD, NOT A LINK, AND THE DIFFERENCE MATTERS. The endpoint's field whitelist
+ * (`routes/fileAttachments.js`) is filename / file_url / file_size / file_type / category /
+ * uploaded_by / description — there is NO `entity_id`, so there is no way to say "this file
+ * belongs to claim X". Anything else sent is silently dropped. So a file recorded here is
+ * findable (and shows up in the admin panel's file manager) but is NOT durably attached to the
+ * claim; the claim's own checklist tick remains local, exactly as before. Adding `entity_id` +
+ * `entity_ref` to that whitelist is the ONE backend change needed to close that gap, and it is
+ * filed as an `[api]` ask rather than faked here by stuffing an id into `description`.
+ *
+ * FAILS QUIETLY ON PURPOSE. The binary is already safely on the server by the time this runs, so
+ * a failure here must not tell the user their upload failed — that would be a lie that makes them
+ * upload it again. It reports nothing and returns null.
+ */
+export type FileAttachmentInput = {
+  filename: string;
+  fileUrl: string;
+  fileSize?: number;
+  fileType?: string;
+  /** Coarse grouping the endpoint also echoes back as `entity_type` — e.g. 'claim'. */
+  category?: string;
+  uploadedBy?: string;
+  description?: string;
+};
+export async function recordFileAttachment(input: FileAttachmentInput): Promise<{ id: string } | null> {
+  if (!sessionReal || FORCE_DEMO) return null;
+  try {
+    // An explicit method means ONE attempt, never retried — a create must not double-fire.
+    const { ok, json } = await req('/file-attachments', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: input.filename,
+        file_url: input.fileUrl,
+        file_size: input.fileSize ?? null,
+        file_type: input.fileType || '',
+        category: input.category || '',
+        uploaded_by: input.uploadedBy || '',
+        description: input.description || '',
+      }),
+    });
+    const id = ok ? json?.data?.id : null;
+    return typeof id === 'string' && id ? { id } : null;
+  } catch {
+    return null;
+  }
+}
+
 /* -------------------------------------------------------------- Campaigns */
 export type CampaignSummary = {
   total_clients: number; opted_in: number; birthday_today: number; birthday_month: number;
