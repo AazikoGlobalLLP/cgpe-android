@@ -37,8 +37,18 @@ const TAB_META: Record<string, { icon: IconName; active: IconName }> = {
   clients: { icon: 'people-outline', active: 'people' },
   leads: { icon: 'funnel-outline', active: 'funnel' },
   claims: { icon: 'shield-outline', active: 'shield' },
+  // Owner ask (2026-08-26): the client book moved off the bar into More (it is master/admin-only
+  // now — Point 9), and Search takes its slot as the one destination every tier uses to reach any
+  // record. It is rendered a touch larger than the other glyphs (see SEARCH_ICON_SIZE) so it reads
+  // as the bar's primary "find anything" action rather than as just another tab.
+  search: { icon: 'search-outline', active: 'search' },
   more: { icon: 'ellipsis-horizontal', active: 'ellipsis-horizontal' },
 };
+
+/** The Search tab's glyph is intentionally bigger than the rest — the owner asked for a prominent
+ *  search icon in the bar. Everything else stays at the uniform 21 so the bar still reads as a row. */
+const TAB_ICON_SIZE = 21;
+const SEARCH_ICON_SIZE = 26;
 
 /** Indicator height. The icon is centred inside it, the label sits under it. */
 const PILL_H = 32;
@@ -159,7 +169,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
               <View style={{ height: PILL_H, alignItems: 'center', justifyContent: 'center' }}>
                 <Ionicons
                   name={focused ? meta.active : meta.icon}
-                  size={21}
+                  size={route.name === 'search' ? SEARCH_ICON_SIZE : TAB_ICON_SIZE}
                   // onPrimary, not white: in dark mode the ramp lifts and deep ink is the
                   // legible ink on it.
                   color={focused ? c.onPrimary : c.faint}
@@ -191,11 +201,13 @@ export default function TabsLayout() {
     <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false }}>
       <Tabs.Screen name="home" />
       <Tabs.Screen name="tasks" />
-      <Tabs.Screen name="clients" />
+      <Tabs.Screen name="search" />
       <Tabs.Screen name="claims" />
       <Tabs.Screen name="more" />
-      {/* In the bar only when the server config's nav.tabs names it; otherwise reachable
-          from More, same as clients/claims etc. would be if their tab slot were reassigned. */}
+      {/* Registered so they stay reachable (from More, or when a server config's nav.tabs names
+          one), but off the default bar: clients is master/admin-only (Point 9) and now lives in
+          More; leads can take a bar slot when configured. */}
+      <Tabs.Screen name="clients" />
       <Tabs.Screen name="leads" />
     </Tabs>
   );

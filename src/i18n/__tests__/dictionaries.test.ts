@@ -56,7 +56,11 @@ describe('i18n dictionaries — parity and value quality', () => {
     // Bumped 111 → 132 for the 21 D4 `tasks.view*`/`tasks.empty*`/`tasks.tomorrow`/`tasks.yesterday` +
     // D6b `guide.*` keys (2026-08-22) — owner human copy in all 5 languages (supplied in-chat), not
     // machine-translated.
-    expect(EN_KEYS.length).toBe(132);
+    // Bumped 132 → 133 for `tab.search` (2026-08-26) — the new bottom-tab label. Shipped as the
+    // English trade-vocab word 'Search' in ALL five (the same sanctioned fallback as 'WhatsApp'
+    // etc.; it is also the natural word in Hinglish/Roman-Gujarati). Native gu/hi script copy is
+    // owner-owed if desired — NOT machine-translated here.
+    expect(EN_KEYS.length).toBe(133);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

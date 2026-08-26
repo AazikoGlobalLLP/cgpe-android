@@ -153,7 +153,12 @@ export const DEFAULT_UI: AppUiConfig = {
     ],
   },
   nav: {
-    tabs: ['home', 'tasks', 'clients', 'claims', 'more'],
+    // Owner ask (2026-08-26): Search replaces Clients in the default bar. The client book is
+    // master/admin-only (Point 9) so Clients moved into More (it stays in more_sections below and
+    // in more.tsx's catalogue, gated there); Search is the one "find any record" destination every
+    // tier gets on the bar. A seeded department document can still name `clients` in its own
+    // nav.tabs — resolveTabs honours that, and the team-tier filter in _layout still drops it.
+    tabs: ['home', 'tasks', 'search', 'claims', 'more'],
     // Since Phase 26 this array is actually RENDERED (see arrangeMoreSections + more.tsx), not just
     // a placeholder: it is the resolved layout for a config outage AND for every role whose document
     // omits more_sections (admin/master samples do, and any unseeded department). So it must be a
@@ -328,8 +333,11 @@ function visibleWidgetsOf(config: AppUiConfig): UiWidget[] {
  * `tickets` — those live outside the `(tabs)` route group today, so a config naming them still
  * reaches the user, just through the More tab rather than the bar (same as `leads` did before
  * this phase). Moving them into the tab group is a bigger, separate change.
+ *
+ * `search` joined this list on 2026-08-26 (owner ask): the global-search screen moved into the
+ * `(tabs)` group so it can take a bar slot, replacing `clients` in the default bar.
  */
-const KNOWN_TAB_ROUTES = ['home', 'tasks', 'clients', 'leads', 'claims'] as const;
+const KNOWN_TAB_ROUTES = ['home', 'tasks', 'clients', 'leads', 'claims', 'search'] as const;
 
 /**
  * Ordered, de-duplicated bottom-tab routes for this config: `nav.tabs` filtered to routes this

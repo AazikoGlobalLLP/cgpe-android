@@ -217,7 +217,7 @@ describe('normalizeUiConfig — features', () => {
 describe('normalizeUiConfig — nav', () => {
   it('falls back to DEFAULT_UI tabs and sections when nav is missing, with a fresh hidden', () => {
     const r = normalizeUiConfig({ role_key: 'ops' })!;
-    expect(r.nav.tabs).toEqual(['home', 'tasks', 'clients', 'claims', 'more']);
+    expect(r.nav.tabs).toEqual(['home', 'tasks', 'search', 'claims', 'more']);
     expect(r.nav.more_sections).toBe(DEFAULT_UI.nav.more_sections);
     expect(r.nav.hidden).toEqual([]);
   });
@@ -301,7 +301,7 @@ describe('normalizeUiConfig — theme', () => {
 
 describe('resolveTabs — PHASE 10, the nav layer that decides what makes the bar', () => {
   it('reproduces the current hard-coded order for the default config', () => {
-    expect(resolveTabs(DEFAULT_UI)).toEqual(['home', 'tasks', 'clients', 'claims', 'more']);
+    expect(resolveTabs(DEFAULT_UI)).toEqual(['home', 'tasks', 'search', 'claims', 'more']);
   });
 
   it('follows nav.tabs order, and lets leads take a bar slot', () => {
@@ -338,7 +338,7 @@ describe('resolveTabs — PHASE 10, the nav layer that decides what makes the ba
   it('falls back to the DEFAULT_UI order, filtered the same way, when nothing in nav.tabs survives', () => {
     // All junk -> falls back to DEFAULT_UI.nav.tabs, which itself gets hidden filtered too.
     expect(resolveTabs(withNav(['prospects', 'made_up'], ['claims'])))
-      .toEqual(['home', 'tasks', 'clients', 'more']);
+      .toEqual(['home', 'tasks', 'search', 'more']);
   });
 });
 
