@@ -88,6 +88,7 @@ async function commitStage(id: string, stage: LeadStage): Promise<Lead | null> {
 
 export default function Leads() {
   const c = useTheme();
+  const t = useT();
   // Phase 30: layout scale comes off the theme so `theme.density` can tighten it per department.
   const { spacing, font } = c;
   const router = useRouter();
@@ -172,10 +173,10 @@ export default function Leads() {
     { key: 'all' as StageFilter, label: 'All', count: loading ? undefined : leads.length },
     ...STAGE_ORDER.map((s) => ({
       key: s as StageFilter,
-      label: STAGE_META[s].label,
+      label: t(STAGE_META[s].labelKey),
       count: loading ? undefined : byStage[s].count,
     })),
-  ]), [loading, leads.length, byStage]);
+  ]), [loading, leads.length, byStage, t]);
 
   const query = q.trim().toLowerCase();
   const shown = useMemo(() => leads.filter((l) => {
@@ -207,7 +208,7 @@ export default function Leads() {
     if (confirmed) {
       setLeads((prev) => prev.map((l) => (l.id === lead.id ? confirmed : l)));
       haptics.success();
-      toast(`${lead.name} moved to ${STAGE_META[next].label}`, 'success');
+      toast(`${lead.name} moved to ${t(STAGE_META[next].labelKey)}`, 'success');
       return;
     }
 
@@ -215,9 +216,9 @@ export default function Leads() {
     haptics.error();
     setNotice({
       title: 'That move was not saved',
-      message: `${lead.name} could not be moved to ${STAGE_META[next].label}. The server did not confirm the change, so the lead is still at ${STAGE_META[from].label}.`,
+      message: `${lead.name} could not be moved to ${t(STAGE_META[next].labelKey)}. The server did not confirm the change, so the lead is still at ${t(STAGE_META[from].labelKey)}.`,
     });
-  }, [busyId, toast]);
+  }, [busyId, toast, t]);
 
   /** Reversible steps go straight through; closing out asks first. */
   const requestAdvance = useCallback((lead: Lead) => {
@@ -293,7 +294,7 @@ export default function Leads() {
       }
       title={
         emptyKind === 'search' ? `No lead matches "${q.trim()}"`
-          : emptyKind === 'filter' ? `Nothing at ${filter === 'all' ? 'this stage' : STAGE_META[filter].label} right now`
+          : emptyKind === 'filter' ? `Nothing at ${filter === 'all' ? 'this stage' : t(STAGE_META[filter].labelKey)} right now`
             : emptyKind === 'outage' ? 'Your pipeline could not load'
               : 'No leads in your pipeline yet'
       }
@@ -506,7 +507,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
       icon: next === 'policy_issued' ? 'trophy' : 'arrow-forward',
       // "Close as won" rather than "Mark won": this one opens a confirmation, and a label
       // promising an immediate write would misdescribe what the swipe does.
-      label: next === 'policy_issued' ? 'Close as won' : `To ${STAGE_META[next].label}`,
+      label: next === 'policy_issued' ? 'Close as won' : `To ${t(STAGE_META[next].labelKey)}`,
       tone: next === 'policy_issued' ? 'success' : 'primary',
       onPress: onAdvance,
     });
@@ -543,7 +544,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
         right={
           <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 118 }}>
             {lead.potential > 0 ? <Metric value={inrShort(lead.potential)} size={font.sub} /> : null}
-            <Pill label={st.label} tone={st.tone} small />
+            <Pill label={t(st.labelKey)} tone={st.tone} small />
           </View>
         }
       />
@@ -635,6 +636,7 @@ function PipelineSheet({
   onPickStage: (s: StageFilter) => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, font } = c;
 
   return (
@@ -667,7 +669,7 @@ function PipelineSheet({
             return (
               <DataRow
                 key={s}
-                label={meta.label}
+                label={t(meta.labelKey)}
                 value={b.count === 0 ? 'None' : b.value > 0 ? inrShort(b.value) : `${b.count}`}
                 onPress={() => onPickStage(s)}
                 right={b.count > 0 ? <Pill label={String(b.count)} tone={meta.tone} small numeric /> : undefined}
@@ -692,6 +694,7 @@ function CloseOutSheet({ visible, lead, onClose, onConfirm }: {
   onConfirm: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, font } = c;
   if (!lead) return null;
 
@@ -715,8 +718,8 @@ function CloseOutSheet({ visible, lead, onClose, onConfirm }: {
       <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
         <ListSection title="What moves">
           <DataRow label="Lead" value={lead.name} icon="person-outline" />
-          <DataRow label="From" value={STAGE_META[lead.stage].label} icon="flag-outline" />
-          <DataRow label="To" value={STAGE_META.policy_issued.label} tone="success" icon="trophy-outline" />
+          <DataRow label="From" value={t(STAGE_META[lead.stage].labelKey)} icon="flag-outline" />
+          <DataRow label="To" value={t(STAGE_META.policy_issued.labelKey)} tone="success" icon="trophy-outline" />
           {lead.potential > 0 ? (
             <DataRow label="Premium potential" value={inr(lead.potential)} icon="cash-outline" numeric />
           ) : null}

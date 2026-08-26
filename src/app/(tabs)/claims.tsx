@@ -19,6 +19,7 @@ import * as api from '@/data/api';
 import type { ClaimsSummary } from '@/data/api';
 import type { Claim, ClaimStatus } from '@/data/types';
 import { CLAIM_STATUS } from '@/data/labels';
+import { useT } from '@/i18n';
 import { inrShort } from '@/lib/format';
 import { useAppUi } from '@/store/appUi';
 
@@ -363,6 +364,7 @@ function ClaimRow({ claim, index, onOpen }: { claim: Claim; index: number; onOpe
   const c = useTheme();
   const { spacing, font } = c;
   const st = CLAIM_STATUS[claim.status] ?? CLAIM_STATUS.intake;
+  const t = useT();
   const hasAmount = claim.amount > 0;
 
   // The paperwork counter is the register's real triage signal: a claim sits still because
@@ -396,7 +398,7 @@ function ClaimRow({ claim, index, onOpen }: { claim: Claim; index: number; onOpe
                   <Txt size={font.tiny} weight="700" color={docTone} numeric>{received}/{total}</Txt>
                 </View>
               ) : null}
-              <Pill label={st.label} tone={st.tone} small />
+              <Pill label={t(st.labelKey)} tone={st.tone} small />
             </View>
           }
           onPress={onOpen}

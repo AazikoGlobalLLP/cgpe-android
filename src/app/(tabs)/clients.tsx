@@ -80,6 +80,7 @@ export default function Clients() {
 
 function ClientsScreen() {
   const c = useTheme();
+  const t = useT();
   // Phase 29: layout scale comes off the theme so `theme.density` can tighten it per department.
   const { spacing, radius, font } = c;
   const router = useRouter();
@@ -136,7 +137,7 @@ function ClientsScreen() {
       mode: 'multi',
       options: SEG_KEYS.map((k) => ({
         key: k,
-        label: SEG_META[k]?.label ?? k,
+        label: SEG_META[k] ? t(SEG_META[k].labelKey) : k,
         count: countBy(items, (cl) => cl.segment.includes(k)),
       })),
     },
@@ -159,7 +160,7 @@ function ClientsScreen() {
         { key: 'no_phone', label: 'Missing phone', count: countBy(items, (cl) => !cl.phone) },
       ],
     },
-  ], [items]);
+  ], [items, t]);
 
   const activeCount = useMemo(
     () => groups.reduce((n, g) => n + (filters[g.key]?.length ?? 0), 0),

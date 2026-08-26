@@ -263,7 +263,7 @@ const LEAD_STATUS: Record<LeadStage, true> = {
  *
  * A `Map`, not an object literal: a lookup by an arbitrary server string must not be able to
  * reach `Object.prototype`. `{}['constructor']` is truthy, and a stage of `Object` crashes every
- * `STAGE_META[stage].label` in the app.
+ * `t(STAGE_META[stage].labelKey)` in the app.
  */
 const LEAD_STATUS_ALIAS = new Map<string, LeadStage>([
   ['new', 'new_lead'],

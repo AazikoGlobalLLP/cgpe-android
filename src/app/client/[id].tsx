@@ -16,6 +16,7 @@ import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import type { Client, Policy } from '@/data/types';
 import { SEG_META } from '@/data/labels';
+import { useT } from '@/i18n';
 import { daysUntil, fmtDate, inr, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { renewalMessage } from '@/lib/messages';
@@ -104,6 +105,7 @@ export default function ClientDetail() {
 
 function ClientDetailScreen() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -241,7 +243,7 @@ function ClientDetailScreen() {
             {segments.length > 0 ? (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.md }}>
                 {segments.map((m, i) => (
-                  <Pill key={`${m.label}_${i}`} label={m.label} tone={m.tone} icon={m.icon} small />
+                  <Pill key={`${m.labelKey}_${i}`} label={t(m.labelKey)} tone={m.tone} icon={m.icon} small />
                 ))}
               </View>
             ) : null}

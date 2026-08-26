@@ -975,8 +975,8 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
             </View>
 
             <Row style={{ gap: 6, flexWrap: 'wrap' }}>
-              {isPending ? <PendingBadge /> : <Pill label={st.label} tone={st.tone} small />}
-              <Pill label={pr.label} tone={pr.tone} small />
+              {isPending ? <PendingBadge /> : <Pill label={t(st.labelKey)} tone={st.tone} small />}
+              <Pill label={t(pr.labelKey)} tone={pr.tone} small />
               <Pill label={task.category} tone="neutral" small />
             </Row>
 

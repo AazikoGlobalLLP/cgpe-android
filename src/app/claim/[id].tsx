@@ -20,6 +20,7 @@ import { precheckUpload, describeUploadFailure, resolveMime, type UploadFailure 
 import * as api from '@/data/api';
 import type { Claim, ClaimStatus } from '@/data/types';
 import { CLAIM_STATUS } from '@/data/labels';
+import { useT } from '@/i18n';
 import { fmtDate, fmtDay, fmtTime, inr } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 
@@ -137,6 +138,7 @@ function DetailSkeleton() {
 
 export default function ClaimDetail() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -333,7 +335,7 @@ export default function ClaimDetail() {
                   {`Opened ${opened} · ${claim.ageDays} day${claim.ageDays === 1 ? '' : 's'} in progress`}
                 </Txt>
               </View>
-              <Pill label={st.label} tone={st.tone} />
+              <Pill label={t(st.labelKey)} tone={st.tone} />
             </Row>
 
             {!phone ? (
@@ -474,7 +476,7 @@ export default function ClaimDetail() {
           <Appear index={4}>
             <View style={{ gap: spacing.sm }}>
               <Button
-                label={`Move to ${CLAIM_STATUS[nextStatus].label.toLowerCase()}`}
+                label={`Move to ${t(CLAIM_STATUS[nextStatus].labelKey).toLowerCase()}`}
                 icon="lock-closed"
                 size="lg"
                 full

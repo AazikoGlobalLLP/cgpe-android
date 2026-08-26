@@ -1361,9 +1361,9 @@ export default function Home() {
     // The open stages, in the server's enum order — `lost` and `policy_issued` are the exits.
     const keys = ['new_lead', 'meeting_scheduled', 'docs_shared'] as const;
     return keys
-      .map((k) => ({ key: k, label: STAGE_META[k].label, tone: STAGE_META[k].tone as Tone, n: leads.filter((l) => l.stage === k).length }))
+      .map((k) => ({ key: k, label: t(STAGE_META[k].labelKey), tone: STAGE_META[k].tone as Tone, n: leads.filter((l) => l.stage === k).length }))
       .filter((s) => s.n > 0);
-  }, [leads]);
+  }, [leads, t]);
 
   const sortedNotes = useMemo(
     () => [...notes].sort((a, b) => {
@@ -1773,7 +1773,7 @@ export default function Home() {
                           right={
                             <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 112 }}>
                               {l.potential > 0 ? <Metric value={inrShort(l.potential)} size={font.sub} /> : null}
-                              <Pill label={STAGE_META[l.stage].label} tone={STAGE_META[l.stage].tone} small />
+                              <Pill label={t(STAGE_META[l.stage].labelKey)} tone={STAGE_META[l.stage].tone} small />
                             </View>
                           }
                         />
@@ -1877,7 +1877,7 @@ export default function Home() {
                         right={
                           <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 118 }}>
                             {cl.amount > 0 ? <Metric value={inrShort(cl.amount)} size={font.sub} /> : null}
-                            <Pill label={CLAIM_STATUS[cl.status].label} tone={CLAIM_STATUS[cl.status].tone} small />
+                            <Pill label={t(CLAIM_STATUS[cl.status].labelKey)} tone={CLAIM_STATUS[cl.status].tone} small />
                           </View>
                         }
                       />

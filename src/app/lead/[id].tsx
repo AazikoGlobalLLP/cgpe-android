@@ -15,6 +15,7 @@ import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
 import type { Lead, LeadNote, LeadStage } from '@/data/types';
 import { PRIORITY_TONE, STAGE_META } from '@/data/labels';
+import { useT } from '@/i18n';
 import { fmtDate, inr, inrShort, timeAgo } from '@/lib/format';
 import { call, sms, whatsapp } from '@/lib/actions';
 
@@ -83,6 +84,7 @@ async function commitStage(id: string, stage: LeadStage): Promise<Lead | null> {
 
 export default function LeadDetail() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const health = useDataHealth();
@@ -142,14 +144,14 @@ export default function LeadDetail() {
     if (confirmed) {
       setLead(confirmed);
       haptics.success();
-      toast(`Moved to ${STAGE_META[stage].label}`, 'success');
+      toast(`Moved to ${t(STAGE_META[stage].labelKey)}`, 'success');
       return;
     }
 
     setLead((cur) => (cur ? { ...cur, stage: from } : cur));
     haptics.error();
-    setNotice(`The server did not confirm the move to ${STAGE_META[stage].label}, so this lead is still at ${STAGE_META[from].label}. Nothing was saved.`);
-  }, [lead, saving, toast]);
+    setNotice(`The server did not confirm the move to ${t(STAGE_META[stage].labelKey)}, so this lead is still at ${t(STAGE_META[from].labelKey)}. Nothing was saved.`);
+  }, [lead, saving, toast, t]);
 
   const openPicker = useCallback(() => { setPickerOpen(true); }, []);
 
@@ -194,7 +196,7 @@ export default function LeadDetail() {
   // goes through the picker.
   const oneTap = next && next !== 'policy_issued' ? next : null;
   const primaryLabel = saving ? 'Saving'
-    : oneTap ? `Move to ${STAGE_META[oneTap].label}`
+    : oneTap ? `Move to ${t(STAGE_META[oneTap].labelKey)}`
       : next === 'policy_issued' ? 'Close this lead'
         : 'Change stage';
 
@@ -252,7 +254,7 @@ export default function LeadDetail() {
             />
 
             <Row style={{ gap: 6, marginTop: spacing.md, flexWrap: 'wrap' }}>
-              <Pill label={st.label} tone={st.tone} dot />
+              <Pill label={t(st.labelKey)} tone={st.tone} dot />
               <Pill
                 label={PRIORITY_LABEL[lead.priority]}
                 tone={PRIORITY_TONE[lead.priority]}
@@ -278,13 +280,13 @@ export default function LeadDetail() {
               <Meter
                 label={lost ? 'Closed as lost' : won ? 'Policy issued' : 'Pipeline progress'}
                 value={lost ? 0 : step >= 0 ? (step + 1) / FLOW.length : 0}
-                valueLabel={lost ? 'Not proceeding' : step >= 0 ? `${step + 1} of ${FLOW.length}` : st.label}
+                valueLabel={lost ? 'Not proceeding' : step >= 0 ? `${step + 1} of ${FLOW.length}` : t(st.labelKey)}
                 tone={lost ? 'danger' : won ? 'success' : 'primary'}
                 style={{ marginTop: spacing.lg }}
               />
               {!lost && !won && next ? (
                 <Txt size={font.cap} color={c.faint} style={{ marginTop: spacing.sm }}>
-                  {`Next step: ${STAGE_META[next].label}.`}
+                  {`Next step: ${t(STAGE_META[next].labelKey)}.`}
                 </Txt>
               ) : null}
             </View>
@@ -427,6 +429,7 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
   onPick: (s: LeadStage) => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const at = FLOW.indexOf(current);
 
   const pick = (s: LeadStage) => {
@@ -440,7 +443,7 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
       visible={visible}
       onClose={onClose}
       title="Move this lead"
-      subtitle={`Currently at ${STAGE_META[current].label}`}
+      subtitle={`Currently at ${t(STAGE_META[current].labelKey)}`}
     >
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
         <ListSection title="Pipeline">
@@ -451,7 +454,7 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
               <DataRow
                 key={s}
                 label={`Step ${i + 1}`}
-                value={STAGE_META[s].label}
+                value={t(STAGE_META[s].labelKey)}
                 onPress={isCurrent ? undefined : () => pick(s)}
                 right={
                   isCurrent ? <Pill label="Current" tone="primary" small dot />
@@ -470,7 +473,7 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
         >
           <DataRow
             label="Not proceeding"
-            value={STAGE_META.lost.label}
+            value={t(STAGE_META.lost.labelKey)}
             tone="danger"
             onPress={current === 'lost' ? undefined : () => pick('lost')}
             right={current === 'lost' ? <Pill label="Current" tone="danger" small dot /> : undefined}

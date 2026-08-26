@@ -261,7 +261,12 @@ const en = {
 };
 
 /** Every dictionary carries exactly the English key set. */
-type TKey = keyof typeof en;
+/**
+ * Every key the dictionaries carry. EXPORTED (Phase 77) so a module that stores a key rather than a
+ * sentence — `data/labels.ts`'s status maps — can be typed against the real key set instead of a
+ * bare `string`, which would let a typo ship as visible text.
+ */
+export type TKey = keyof typeof en;
 type Dict = Record<TKey, string>;
 
 const gu: Dict = {

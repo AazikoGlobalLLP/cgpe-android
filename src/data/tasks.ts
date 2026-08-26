@@ -1,6 +1,7 @@
 /** Tasks — the app's primary domain for team members. Types and label maps only; the
  *  fabricated seed array was removed (see the note below) and no sample data remains. */
 import { buildQuery, matchesFields, W_ID, W_SECOND, W_TEXT, type Field } from '@/lib/searchScore';
+import type { TKey } from '@/i18n';
 
 export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
 export type TaskPriority = 'high' | 'medium' | 'low';
@@ -24,16 +25,21 @@ export type Task = {
   pending?: boolean;
 };
 
-export const TASK_STATUS: Record<TaskStatus, { label: string; tone: any }> = {
-  todo: { label: 'To do', tone: 'neutral' },
-  in_progress: { label: 'In progress', tone: 'info' },
-  blocked: { label: 'Blocked', tone: 'danger' },
-  done: { label: 'Done', tone: 'success' },
+/**
+ * PHASE 77 — `labelKey`, not `label`: these hold an i18n key so the status words translate with
+ * the rest of the app. Renaming the field (rather than swapping the value in place) is what
+ * turned every call site into a compile error, so none could be left rendering a raw key.
+ */
+export const TASK_STATUS: Record<TaskStatus, { labelKey: TKey; tone: any }> = {
+  todo: { labelKey: 'taskStatus.todo', tone: 'neutral' },
+  in_progress: { labelKey: 'taskStatus.inProgress', tone: 'info' },
+  blocked: { labelKey: 'taskStatus.blocked', tone: 'danger' },
+  done: { labelKey: 'taskStatus.done', tone: 'success' },
 };
-export const TASK_PRIORITY: Record<TaskPriority, { label: string; tone: any }> = {
-  high: { label: 'High', tone: 'danger' },
-  medium: { label: 'Medium', tone: 'warning' },
-  low: { label: 'Low', tone: 'neutral' },
+export const TASK_PRIORITY: Record<TaskPriority, { labelKey: TKey; tone: any }> = {
+  high: { labelKey: 'priority.high', tone: 'danger' },
+  medium: { labelKey: 'priority.medium', tone: 'warning' },
+  low: { labelKey: 'priority.low', tone: 'neutral' },
 };
 export const CATEGORY_ICON: Record<string, string> = {
   Claim: 'shield-half', Renewal: 'refresh-circle', Documentation: 'document-text',

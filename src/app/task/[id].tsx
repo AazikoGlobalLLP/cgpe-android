@@ -403,8 +403,8 @@ export default function TaskDetail() {
               <View style={{ flex: 1 }}>
                 <Txt size={18} weight="800" style={{ lineHeight: 24 }}>{task.title}</Txt>
                 <Row style={{ gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
-                  <Pill label={st.label} tone={st.tone} small />
-                  <Pill label={`${pr.label} priority`} tone={pr.tone} small />
+                  <Pill label={t(st.labelKey)} tone={st.tone} small />
+                  <Pill label={`${t(pr.labelKey)} priority`} tone={pr.tone} small />
                 </Row>
               </View>
             </Row>
@@ -478,7 +478,7 @@ export default function TaskDetail() {
               icon="flag-outline"
               label="Status"
               value=""
-              right={<Pill label={st.label} tone={st.tone} small />}
+              right={<Pill label={t(st.labelKey)} tone={st.tone} small />}
               onPress={() => setStatusOpen(true)}
             />
           </ListSection>
@@ -567,7 +567,7 @@ export default function TaskDetail() {
         visible={statusOpen}
         onClose={() => setStatusOpen(false)}
         title="Move this task"
-        subtitle={`Currently ${st.label.toLowerCase()}`}
+        subtitle={`Currently ${t(st.labelKey).toLowerCase()}`}
       >
         <View style={{ paddingTop: spacing.xs }}>
           {FLOW.map((s, i) => {
@@ -583,7 +583,7 @@ export default function TaskDetail() {
                   disabled={active}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active, disabled: active }}
-                  accessibilityLabel={`${meta.label}. ${STATUS_NOTE[s]}`}
+                  accessibilityLabel={`${t(meta.labelKey)}. ${STATUS_NOTE[s]}`}
                   style={({ pressed }) => [{
                     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                     minHeight: 56, paddingVertical: spacing.md, paddingHorizontal: spacing.sm,
@@ -592,7 +592,7 @@ export default function TaskDetail() {
                     opacity: active ? 0.55 : 1,
                   }]}
                 >
-                  <Pill label={meta.label} tone={meta.tone} />
+                  <Pill label={t(meta.labelKey)} tone={meta.tone} />
                   <Txt size={font.sub} color={c.muted} numberOfLines={2} style={{ flex: 1 }}>
                     {STATUS_NOTE[s]}
                   </Txt>

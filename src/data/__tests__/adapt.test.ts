@@ -412,7 +412,7 @@ describe('adaptLead', () => {
   it('cannot be walked into Object.prototype by a hostile stage string', () => {
     // The raw `stage` key is written by non-Mongoose paths (the Excel bulk import, the bot), so
     // its contents are arbitrary. A bare `TABLE[x]` lookup returns the Object constructor for
-    // 'constructor', and a stage that is a function crashes every STAGE_META[stage].label.
+    // 'constructor', and a stage that is a function crashes every STAGE_META[stage].labelKey.
     expect(adaptLead({ _id: 'p1', stage: 'constructor' }).stage).toBe('new_lead');
     expect(adaptLead({ _id: 'p2', stage: '__proto__' }).stage).toBe('new_lead');
     expect(adaptLead({ _id: 'p3', stage: 'toString' }).stage).toBe('new_lead');

@@ -23,6 +23,7 @@ import type { Claim, Client, Lead } from '@/data/types';
 import type { Task } from '@/data/tasks';
 import { TASK_STATUS, taskSearchFields } from '@/data/tasks';
 import { CLAIM_STATUS, STAGE_META } from '@/data/labels';
+import { useT } from '@/i18n';
 import { inrShort } from '@/lib/format';
 import {
   buildQuery, rank, GROUP_CAP, W_ID, W_SECOND, W_TEXT,
@@ -209,6 +210,7 @@ function ticketTone(t: api.Ticket): Tone {
 
 export default function Search() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
@@ -495,7 +497,7 @@ export default function Search() {
             icon: 'person-add-outline',
             label: item.name || 'Unnamed lead',
             value: detailFor(hit, item.interest || item.source || item.city || ''),
-            pill: { label: st.label, tone: st.tone as Tone },
+            pill: { label: t(st.labelKey), tone: st.tone as Tone },
             onPress: () => router.push({ pathname: '/lead/[id]', params: { id: item.id } }),
           };
         }),
@@ -515,7 +517,7 @@ export default function Search() {
             icon: 'shield-half-outline',
             label: item.clientName || item.ref || 'Claim',
             value: detailFor(hit, item.ref || (item.amount > 0 ? inrShort(item.amount) : '')),
-            pill: { label: st.label, tone: st.tone as Tone },
+            pill: { label: t(st.labelKey), tone: st.tone as Tone },
             onPress: () => router.push({ pathname: '/claim/[id]', params: { id: item.id } }),
           };
         }),
@@ -552,7 +554,7 @@ export default function Search() {
             icon: TASK_ICON[item.category] ?? 'checkbox-outline',
             label: item.title || 'Task',
             value: detailFor(hit, item.client || item.category || ''),
-            pill: { label: st.label, tone: st.tone as Tone },
+            pill: { label: t(st.labelKey), tone: st.tone as Tone },
             onPress: () => router.push({ pathname: '/task/[id]', params: { id: item.id } }),
           };
         }),
@@ -563,7 +565,7 @@ export default function Search() {
     // Clients there. Equal strength falls back to the canonical order.
     out.sort((a, b) => (b.top - a.top) || (a.order - b.order));
     return out;
-  }, [res, router]);
+  }, [res, router, t]);
 
   const total = groups.reduce((n, g) => n + g.rows.length, 0);
   const blank = total === 0;
