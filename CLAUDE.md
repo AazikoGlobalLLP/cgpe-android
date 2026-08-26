@@ -454,10 +454,19 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   `npm install --package-lock-only` (no re-install, one-line diff), and commit it with the change.
 - **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** **143 keys** exist (was 75 when this line was written; bumped as phases added copy); ~6 files use `t()`
   substantially and — as of **Phase 21 P1 (2026-08-12)** — **16 more screens** wire a handful of shared
-  `common.*` labels (`Call`/`Cancel`/`Delete`/`WhatsApp`/`Today`); ~40 screens are still ~100% hardcoded
-  English (the full worklist + plan is scoped in `docs/i18n/`). **All net-new `common.*` keys (`tryAgain`
-  ×34, `clearSearch`, `refresh`, the outage body, the a11y labels) still need human copy — do NOT wire them
-  until gu/hi/hi-en/gu-en are supplied (PHASE-19 §4).** When wiring a shared label, reuse an existing key;
+  `common.*` labels (`Call`/`Cancel`/`Delete`/`WhatsApp`/`Today`). **RECOUNTED Phase 77: it is ~49 of the
+  53 route files that are ~100% hardcoded English, not "~40"** — 32 have ZERO `t()` calls and only 4 have
+  five or more (`home` 57, `tasks` 28, `consent` 14, `settings` 8). `claims.tsx` and `search.tsx` are
+  permanent bottom tabs with zero. **All net-new `common.*` keys (`tryAgain` — **55 occurrences across 37
+  files**, not the 34 this line used to say — `clearSearch` ×15, `refresh` ×6, the outage body (**60
+  occurrences in 39 near-identical variants**), the a11y labels) still need human copy — do NOT wire them
+  until gu/hi/hi-en/gu-en are supplied (PHASE-19 §4).** The consolidated, batched, fillable ask lives in
+  **`docs/i18n/COPY-REQUEST-2026-08-26.md`** — hand the owner that file rather than re-deriving the list.
+  ⚠️ **Four ALREADY-WIRED keys are wrong today and the parity test cannot see it** (it rejects only
+  `value === key`, never `value === English`): `tab.search` is untranslated in gu+hi, `consent.agree/
+  declineButton` are English in hi-en, `tasks.tomorrow`/`tasks.yesterday` are BOTH `कल`/`Kal` in hi+hi-en
+  (an overdue header reads identically to an upcoming one), and `tasks.emptyCalendarBody` still says
+  "strip" in all four after the day-rail became a month grid. When wiring a shared label, reuse an existing key;
   add a new one only by lifting existing human copy (as `common.today` did from `tab.home`) or with supplied
   copy — never a machine guess. Some screens bind the translator to `tr` (not `t`) where a local `t` already
   exists (`tickets/index.tsx`, `notes.tsx`). (1) `t()` is now `t(key, params?)` (Phase 21 P0, 2026-08-11, `a7a0979`):
