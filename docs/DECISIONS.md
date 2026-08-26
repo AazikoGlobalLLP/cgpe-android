@@ -4367,3 +4367,82 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   because `ACCESS_BACKGROUND_LOCATION` forces a manual review with a justification video, and a
   personal account created after Nov 2023 needs 12 testers for 14 days first. The complete word-by-word
   Apple guide is still scheduled (Phase 79) so nothing is unknown when an account exists.
+
+## 2026-08-26 — Phase 77: three of four owner bugs fixed, the fourth REOPENED (`ff31376`, `877c689`)
+
+- **A recorded prime suspect was disproved rather than shipped.** `docs/PHASES.md`, `HANDOFF.md` and
+  the plan doc all named `Appear`'s `cancelAnimation(progress)` cleanup (`ui/motion.tsx`) as the cause
+  of the More→Today blank screen. It cannot be: `Appear`'s effect deps are **constants at every Home
+  call site**, so the cleanup runs only at unmount — there is no third occasion on a tab switch.
+  react-freeze is off (`react-native-screens` ships `ENABLE_FREEZE = false` and nothing calls
+  `enableFreeze()`), there is no `unmountOnBlur`, `BottomTabView` only appends to `loaded`, and
+  reanimated 4.5's `FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS` pushes a settled `opacity: 1` into
+  React's own committed props within ~1 s, which also closes the "re-attach repaints from
+  `PropsFilter._initialPropsMap`" branch. **#8 is undiagnosed, not fixed.** The hardening was kept —
+  an interrupted entrance ending invisible is a real latent bug — but it is labelled in the code as
+  explicitly NOT the fix, and its per-instance `setTimeout` watchdog was dropped as a proven no-op on
+  the happy path that would have cost one timer per mount across ~193 call sites. Shipping it as "the
+  fix" would have spent an APK and handed the owner another confident-but-wrong "fixed".
+- **The LIC fallback was written twice, because the first version was dead code.** `plan_name` is
+  `null` for **11** rows (not the 8 reported — also 5, 836, 904) in `lic_plans_library.json`, but the
+  app NEVER SEES that null: `services/productIngestion.js:121` substitutes
+  `String(d.plan_name || 'Unnamed plan')` on ingest and `:146` hands the placeholder back out, so the
+  wire carries a truthy STRING and `lic-plans.tsx`'s own `|| 'Unnamed plan'` has never once fired.
+  Verified against **deployed `origin/main` (990c660)**, not just the local checkout. `adaptLicPlan`
+  now matches the sentinel and labels those rows from their real LIC table number ("LIC Plan 102").
+  Fixed in the ADAPTER, not the screen, so every consumer benefits. Expect **11** rows to change on
+  device; if only 8 do, the prod DB has diverged from the seed and that is a separate data finding.
+- **App-size: the obvious suspect was the smaller half.** Map tiles do grow unbounded, but BOTH
+  `LeafletMap` mounts sit behind `canSeeLiveLocation`, so an ordinary advisor never downloads a single
+  tile. The **every-user** leak is the picked-file copies — `ui/DocumentSource.tsx` passes
+  `copyToCacheDirectory: true`, so every attached document/photo (≤10 MB each) is copied into
+  `<cache>/DocumentPicker` / `<cache>/ImagePicker` and nothing has ever deleted them. A third slice —
+  the APK, extracted native libs and ART/dex profiles — is **not a cache and not recoverable by any
+  in-app button**, which the copy says out loud so clearing does not look broken when 125 MB fails to
+  fall back to 63 MB.
+- **`expo-file-system` was promoted from a transitive package to a declared dependency**, because the
+  picker-cache deletion needs it and relying on a transitive resolve is fragile. `package-lock.json`
+  had to be synced in the same breath or EAS's `npm ci` fails "not in sync" — the package was present
+  in the tree but never as a root dependency.
+- **The clear-cache control refuses to report a number.** None of the three underlying calls reports
+  bytes (`Image.clearDiskCache()` → boolean, WebView `clearCache(true)` → void, `Directory.delete()` →
+  void), so a "48 MB freed" toast would be exactly the fabrication convention 4 exists to prevent.
+  The copy points at Settings › Apps › CGPE Connect › Storage, which does show the real split.
+  `describeCacheClear` returns an i18n **key**, never a sentence, so the module cannot drift back to
+  English; a test rejects any returned key containing whitespace.
+- **The splash was made a continuation of the native one rather than a second splash.** The plugin
+  fits the 827×975 logo into an `imageWidth:190` **square**, so the native mark renders 161×190 dp
+  while the JS splash redrew it at ~242 dp and scaled it in from 0.9 — a ~50% pop. It now renders at
+  the native size and does not animate, and the logo is centred on the **screen** (the rule and
+  tagline hang off the midpoint) because `SplashScreenManager` cross-fades the native view over
+  400 ms — centring a logo-plus-tagline column would have sat the mark ~27 dp high and double-imaged
+  it. Tagline lifted from a measured **3.92:1** (below WCAG AA at 13 px) to **14.42:1** using the
+  logo's own ink `#252357`, and deliberately left free to WRAP: a one-line clamp would ellipsise the
+  brand line at Android's 1.3× font scale, and truncated is no better than faint.
+- **The splash background is fixed white in BOTH schemes, and `app.json` was deliberately not
+  touched.** `cgpe-logo.png` is dark-ink artwork — 70% transparent, and of its opaque pixels **zero**
+  are lighter than 0.75 luminance — so the old dark-mode `#070c14` ground turned the wordmark to mud
+  on top of a hard white→black flash between the two splashes. A light-on-dark variant would mean
+  inventing brand colours, which is the owner's call. And `imageWidth` was left at 190: the ink's
+  minimal enclosing circle measures **193 dp** against Android's 192 dp splash-icon guidance, i.e.
+  already at the limit, so any change needs an ADB screenshot measurement, not arithmetic from a
+  figure that lives in a Gradle AAR nobody here can read.
+- **A 12-agent adversarial review was run over all four diagnoses before any of them was trusted, and
+  it earned its keep twice** — it caught the dead-code LIC fallback and it refuted the `Appear` fix.
+  Two of its own findings were in turn rejected after checking: an investigator's proposed splash
+  patch `require()`d an asset that does not exist, and its "the Android 12 circular mask is clipping
+  the logo" theory was disproved by measuring the ink's enclosing circle at 193 dp vs the 192 dp
+  guidance — essentially nothing is clipped.
+- **The owner supplied 5-language copy for the whole Storage flow in-chat, so none of Phase 77's new
+  English ships untranslated** (133 → 143 keys). Two departures from the supplied table were stated
+  rather than silently applied: `nothing_to_clear_*` is NOT wired because no code path produces it
+  (`temp` reports TRUE when the picker directories are simply absent — having nothing to delete is a
+  success), and the Storage footer now uses the owner's shorter description, which drops the sentence
+  explaining that the app's own INSTALL size is unaffected. That caveat is listed back to the owner as
+  extra copy to supply rather than machine-translated in.
+- **🔴 The batched APK is blocked on BILLING, not code.** `eas build -p android` was attempted and
+  refused: the EAS **free plan's monthly Android build quota is exhausted**, resetting **1 Sep 2026**,
+  and **no build was created** (`eas build:list` still tops out at `093a3b33`, 2026-08-25). It is not
+  the Windows fingerprint trap, and it only reports the refusal AFTER uploading a ~317 MB archive.
+  Owner's decision: wait for the reset or `eas billing:subscribe starter`. There is no OTA, so nothing
+  from this phase reaches a phone until a build runs.

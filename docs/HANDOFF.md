@@ -1,96 +1,96 @@
-# HANDOFF — CGPE Connect (Android) — Phase 76 close / Phase 77 open — 2026-08-26
+# HANDOFF — CGPE Connect (Android) — Phase 77 — 2026-08-26
 
 ## Done
-- **Search replaced Clients in the bottom tab bar** (owner ask). The bar is now
-  **Today · Tasks · 🔍 Search · Claims · More**, with the Search glyph rendered larger (26 vs 21) as the
-  bar's primary "find anything" action. Clients left the bar and is reached from **More**, where it was
-  already gated master/admin-only (Point 9). Shipped `ba622af`, gates green (`tsc` 0 · `npm test` **993** ·
-  `eslint` 0 errors / 12 warnings baseline). **Not on any APK yet** — no OTA exists.
-- **Voice assistant researched and decided, twice.** First a general survey (`2c1b21a`), then — after the
-  owner proposed a concrete n8n + ElevenLabs + character architecture — a **full 11-agent workflow with
-  adversarial verification of every price and language claim** (`952cf59`). Verdict recorded: the voice
-  round-trip belongs in Express, not n8n, because n8n holds direct Mongo credentials and bypasses
-  `protect`/`visibilityScope`; Sarvam `saaras:v3` `mode=translit` for STT (only engine emitting Latin
-  script, which the app's char-level matcher requires); Claude for verb-only NLU with the app writing the
-  spoken sentence; Sarvam Bulbul v3 TTS; ≈₹6,055/mo for 21 staff at expected use.
-- **Owner then chose the n8n route anyway, for speed — that decision is recorded and the plan now follows
-  it**, carrying exactly one mitigation forward (n8n must call the REST API with the user's JWT, never
-  Mongo directly). See `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md` (`2db724f`).
-- **The owner's 9 reported problems were triaged with root causes verified in the real code**, not guessed:
-  - LIC "Unnamed" is **data, not a bug** — `plan_name` is literally `null` in
-    `cgpe-backend-main/data/lic_plans_library.json` for plans 102/113/122/165/172/180/181/195.
-  - The **admin-must-not-see-location gate is already correct on mobile** (`canSeeLiveLocation()` is real
-    `super_admin` only, `roles.ts:72-74`, 20 tests) — if an admin sees it, that is the **admin panel**.
-  - The **upload endpoint is live** (`POST /upload` → **401**, probed), so "couldn't reach the server" is
-    not a missing route; the candidates are an unset `BACKEND_URL` (returns a `localhost:3001` URL the
-    phone can never load), the NAT64/MTU stall on multipart, or the 10 MB / MIME rejection.
-  - **App size growth is the WebView map-tile cache** (CartoDB + Esri satellite tiles, uncapped).
-  - **Splash text exists** in `ui/Splash.tsx`; the *native* splash is logo-only by design.
-  - **More → Today going blank**: prime suspect is `Appear`'s cleanup `cancelAnimation(progress)`
-    (`ui/motion.tsx:104`) freezing opacity at 0.
-  - **Role-wise Operations/Sales views are already supported** by `nav.tabs`/`nav.hidden`/`more_sections` —
-    mostly a config-seeding job, with two genuinely new app pieces.
-- **The full n8n contract is specified** — exact URL, request fields, headers, the strict JSON response
-  shape, timing budget, and failure semantics — so the workflow can be built without another round trip.
+
+Three of the owner's four Phase-77 bugs are fixed. The fourth was **reopened**, because its recorded
+cause turned out to be provably wrong and shipping the "fix" would have burned an APK on a no-op.
+
+- **The splash no longer jumps or hides its text.** The logo used to grow ~50% the instant the JS
+  splash took over — the plugin fits the 827×975 logo into an `imageWidth:190` **square**, so the
+  native mark is 161×190 dp, while `ui/Splash.tsx` redrew it at ~242 dp and scaled it in from 0.9. It
+  now renders at the native size, does not animate, and is centred on the **screen** rather than as
+  part of a column, so it does not shift during the native view's 400 ms cross-fade. The tagline went
+  from a measured **3.92:1** (below WCAG AA at 13 px) to **14.42:1**. In dark mode the whole thing was
+  worse — the logo is dark-ink artwork on what became a near-black ground, after a hard white→black
+  flash — so both splashes are now white in both schemes.
+- **LIC plans no longer read as a wall of identical "Unnamed".** Affected rows now show their real LIC
+  table number, e.g. **"LIC Plan 102"**. It is **11 rows, not the 8 reported** (also 5, 836, 904).
+- **Settings › Storage › "Clear cached downloads" exists and actually frees space.** It clears the
+  WebView map-tile cache, expo-image's disk cache, and — the part that matters for everyone — the
+  picked-file copies the document/photo pickers have been leaving in the cache directory forever. It
+  reports a partial clear as partial, and never claims a number of megabytes.
+- **All of Phase 77's new English is translated.** The owner supplied gu / hi / hi-en / gu-en copy for
+  the entire Storage flow in-chat; 133 → **143** keys, none machine-translated.
+- **The record was corrected where this session proved it wrong** — four triage rows in
+  `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md` said things that do not survive reading the code.
+
+Gates: `tsc` **0** · `npm test` **1005** (was 993) · `eslint` **0 errors / 12 warnings** (the
+documented baseline, unchanged). Everything below is **device-unverified**.
 
 ## Files changed
-- `src/app/(tabs)/search.tsx` — moved from `src/app/search.tsx` so `/search` can be a real bottom tab; the
-  route path is unchanged, so both existing callers still work and no typed-routes regen was needed. Header
-  `back` chevron dropped (it is a tab root now).
-- `src/app/(tabs)/_layout.tsx` — `search` added to `TAB_META` + `<Tabs.Screen>`; Search glyph rendered at
-  `SEARCH_ICON_SIZE` 26 vs `TAB_ICON_SIZE` 21; `clients`/`leads` still registered but off the default bar.
-- `src/store/appUi.tsx` — `DEFAULT_UI.nav.tabs` is now `home/tasks/search/claims/more`; `search` added to
-  `KNOWN_TAB_ROUTES` so `resolveTabs` can place it.
-- `src/i18n/index.tsx` — new `tab.search` key in all 5 dictionaries.
-- `src/i18n/__tests__/dictionaries.test.ts` — parity count 132 → **133**.
-- `src/store/__tests__/appUi.test.ts` — three tab-set assertions updated.
-- `docs/VOICE-ASSISTANT-RESEARCH-2026-08-26.md` — first-pass survey; now marked **superseded**.
-- `docs/VOICE-ARCHITECTURE-DECISION-2026-08-26.md` — **the authoritative voice document** (875 lines):
-  architecture verdict, STT/TTS/NLU choices, verified cost tables, RBAC design, 16 owner decisions.
-- `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md` — **the current working plan**: n8n contract, ElevenLabs
-  asks, character + Assistant Mode spec, the 9 bugs with verified root causes, phases 77–83.
+
+- `src/ui/Splash.tsx` — rewritten as a continuation of the native splash: native-size static logo,
+  screen-centred, fixed white ground, tagline at the logo's own ink `#252357` 15 px/600, free to wrap.
+- `src/data/adapt.ts` — `adaptLicPlan` recognises the backend's `'Unnamed plan'` **sentinel** (not a
+  falsy name) and derives "LIC Plan <table>". Fixed in the adapter so every consumer benefits.
+- `src/ui/motion.tsx` — `Appear`'s cleanup settles at 1 instead of freezing wherever it stood. Latent
+  hardening; the comment states at length that this is **not** the fix for the blank screen, and why.
+- `src/lib/appCache.ts` *(new)* — the pure outcome logic; returns an i18n **key**, never a sentence,
+  and documents which of the three growth sources affects whom.
+- `src/ui/CacheCleaner.tsx` *(new)* — the native clearing. Mounts a throwaway 1×1 WebView only while
+  clearing, because `clearCache` exists **only** as an instance method (the cache is per-application,
+  so any instance clears everything), then deletes `<cache>/DocumentPicker` and `<cache>/ImagePicker`.
+- `src/app/settings.tsx` — the Storage section, confirm and toasts, all through `t()`.
+- `src/i18n/index.tsx` + `src/i18n/__tests__/dictionaries.test.ts` — 10 `storage.*` keys × 5 languages;
+  parity assertion 133 → 143. `Cancel` reuses the existing `common.cancel`.
+- `src/lib/__tests__/appCache.test.ts` *(new)*, `src/data/__tests__/adapt.test.ts` — +12 tests net.
+- `package.json` + `package-lock.json` — `expo-file-system` promoted to a **declared** dependency; the
+  lock had to be synced in the same commit or EAS's `npm ci` fails "not in sync".
+- `docs/PHASES.md`, `docs/PLAN-2026-08-26-VOICE-N8N-AND-BUGS.md`, `docs/DECISIONS.md`, `CLAUDE.md`.
 
 ## Decisions made
-- **Search takes the Clients bar slot.** The client book is master/admin-only, so it no longer earns a
-  permanent tab; Search is the one destination every tier uses. Clients stays reachable in More.
-- **`tab.search` ships as the English word "Search" in all five languages** — the same sanctioned
-  trade-vocab fallback as "WhatsApp", and the natural word in Hinglish/Roman-Gujarati. Native gu/hi script
-  copy is owner-owed. Not machine-translated.
-- **Owner chose the n8n voice route over the recommended Express route, for speed.** Recorded as the
-  owner's call after they read the full analysis. The plan follows it.
-- **One mitigation is non-negotiable and was not dropped:** the n8n voice workflow must call
-  `https://cgpe.in/internal/api/...` with the user's `X-CGPE-Token` JWT, never Mongo directly — otherwise a
-  team advisor can voice-read the whole ~9,000-client book, defeating the Point 9 gate.
-- **Character: half-body (shoulders-up), not full body** — on a phone the face is where the personality is,
-  and half-body leaves room for the transcript and answer. Two personas (male/female) behind one
-  `<VoiceAvatar>` interface. **Ship the coded Reanimated version first** (zero new native deps) with Lottie
-  able to drop in behind the same interface later.
-- **ElevenLabs: buy Creator ($22, $11 first month) only** — enough for all development plus a pilot. Pro /
-  Scale / Business are premature until real usage is measured.
-- **Assistant Mode is a UX lock, not a kiosk** — stated plainly rather than oversold; a normal Android app
-  cannot prevent force-quit.
+
+- **Disproving a diagnosis beats shipping a fix for it.** A 12-agent adversarial review ran over all
+  four root causes before any was trusted. It caught the LIC fallback being **dead code** and refuted
+  the `Appear` fix outright. Two of its own findings were then rejected after checking — one proposed
+  patch `require()`d an asset that does not exist, and its "Android's circular splash mask is clipping
+  the logo" theory died when the ink's enclosing circle measured 193 dp against 192 dp guidance.
+- **Fix data mappings in the adapter, not the screen** — one edit, every consumer.
+- **`app.json` was deliberately left alone.** `imageWidth: 190` already puts the ink at the edge of
+  Android's splash-icon guidance; changing it needs an ADB measurement, not arithmetic off a number
+  that lives in a Gradle AAR nobody here can read.
+- **No megabyte figure, in any language.** None of the three clearing calls reports bytes, so the copy
+  points at Settings › Apps › CGPE Connect › Storage instead of inventing one.
+- **Two supplied strings were not wired, and that was stated rather than done silently:**
+  `nothing_to_clear_*` has no state to attach to (an absent picker directory counts as success), and
+  the Storage footer now uses the owner's shorter description, which drops the "install size is not
+  affected" sentence. That caveat is listed back to the owner rather than machine-translated in.
 
 ## Known broken / deliberately skipped
-- **The tab-bar change is device-unverified and on no APK.** There is no OTA, so it reaches phones only via
-  a new build. Deliberately not built yet, to batch it with Phase 77's fixes rather than rebuild twice.
-- **Apple App Store submission is not possible** — no Apple Developer account ($99/yr), and the recorded
-  2026-08-21 decision is that the owner cannot buy one. There is no free route. The owner asked to submit
-  "today"; that was answered honestly rather than attempted.
-- **Play Store approval is not same-day either** — a new account plus `ACCESS_BACKGROUND_LOCATION` triggers
-  a manual review with a mandatory justification video, and a *personal* account created after Nov 2023
-  needs 12 testers for 14 days before production.
-- **Nothing from the 9 problems was fixed this session** — the session produced verified triage and a phase
-  plan, by design. Phase 77 is where the fixing starts.
-- **The `[admin]` items are in a different repo** — the "Assign Task" label and the admin-panel location
-  gate live in `cgpe-front-main-RECOVERED`, untouched here.
+
+- 🔴 **The APK is blocked on BILLING, not code.** The batched build was attempted and refused: the EAS
+  free plan's **monthly Android quota is exhausted, resetting 1 Sep 2026**, and no build was created.
+  The newest APK is still `093a3b33` (2026-08-25), which carries **none** of this — nor the Search tab.
+  There is no OTA. Owner's call: wait, or `eas billing:subscribe starter --account shivam-bhadoriya`.
+  It only reports the refusal *after* uploading a ~317 MB archive, so do not retry casually.
+- ❌ **More→Today blank screen (#8) is UNDIAGNOSED.** The prime suspect is ruled out (see below). Two
+  zero-build device tests decide it in a minute and **run on the APK already installed** — see
+  `docs/PHASES.md` § "Phase 77 leftovers".
+- **Owner owes the 11 real LIC plan names** for `cgpe-backend-main/data/lic_plans_library.json`.
+  "LIC Plan 102" is honest, but it is not a name.
+- **Everything here is device-unverified** — the `Directory.delete()` path, the splash timing against
+  the real native cross-fade, and the throwaway-WebView `clearCache` all need a phone.
+- **The `[admin]` items are untouched** — a different repo (`cgpe-front-main-RECOVERED`).
 
 ## Next session starts here
-- **Phase 77 — Quick visible fixes** (no owner input needed, so it cannot stall): the More→Today blank
-  screen, the splash redesign, the LIC "Unnamed" fallback, and the app-size cache cap + a "Clear cache"
-  control in Settings. Batch them and build **one** APK carrying the Search tab too.
+
+- **Phase 77 leftover then Phase 78.** First close #8 with the two zero-build ADB tests (they need no
+  build); then Phase 78 — Voice v1 on the n8n route — which is blocked on the owner for the webhook
+  URL, the ElevenLabs key + two voice IDs, and the avatar asset decision.
 - First command: `/boot`
-- Watch out for: **the More→Today blank screen is a strong hypothesis, not a confirmed diagnosis.**
-  `Appear`'s `cancelAnimation(progress)` cleanup freezing opacity at 0 fits the symptom exactly ("kuch
-  dikhta hai, baaki empty"), but it must be reproduced on a device before the fix is trusted — `tsc`,
-  `npm test` and lint cannot see it. And do **not** tell the owner any of this session's triage is "fixed";
-  it is diagnosed.
+- **Watch out for: do not re-file `Appear`/`cancelAnimation` as the cause of the blank screen.** It is
+  written into `src/ui/motion.tsx`, `docs/PHASES.md` and the plan doc that it is ruled out, with the
+  evidence: `Appear`'s effect deps are constants at every Home call site so its cleanup runs only at
+  unmount; react-freeze is off; there is no `unmountOnBlur`; and reanimated bakes a settled
+  `opacity: 1` into React's committed props within ~1 s. Second trap: **check the EAS build quota
+  before promising anyone an APK.**

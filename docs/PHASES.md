@@ -14,7 +14,33 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**🗣️ 2026-08-26 — SEARCH TAB SHIPPED · VOICE ARCHITECTURE DECIDED (owner chose n8n) · 9 OWNER PROBLEMS TRIAGED.**
+**🔧 2026-08-26 (later) — PHASE 77: 3 OF 4 OWNER BUGS FIXED · #8 REOPENED · APK BLOCKED ON EAS BILLING.**
+Commits `ff31376` · `c32e29f` · `ea7b8bf` · `877c689`, pushed to `aaziko/Shivam`.
+Gates: `tsc` 0 · `npm test` **1005** (was 993) · `eslint` 0 errors / 12 warnings (baseline). Device-unverified.
+- **✅ Splash (#5)** — the mark used to grow ~50% at the handover (the plugin fits the 827×975 logo into an
+  `imageWidth:190` **square** → native 161×190 dp, while the JS splash redrew it at ~242 dp and scaled it in).
+  Now native-size, static, and centred on the **screen** so it does not shift during the native 400 ms
+  cross-fade. Tagline 3.92:1 → **14.42:1** (`#252357`, the logo's own ink), free to wrap. White in both
+  schemes: the logo is dark-ink art (0% of opaque pixels above 0.75 luminance), so dark mode was mud plus a
+  white→black flash. **`app.json` deliberately untouched** — the ink's enclosing circle is 193 dp vs Android's
+  192 dp guidance, already at the limit; changing `imageWidth` needs an ADB measurement.
+- **✅ LIC "Unnamed" (#6)** — the first fix was **dead code**: the app never sees the null, because
+  `productIngestion.js:121` substitutes the literal `'Unnamed plan'` (verified on deployed `origin/main`
+  990c660). Now keyed on the sentinel → "LIC Plan 102", fixed in `adaptLicPlan` so every consumer benefits.
+  **11 rows, not 8** (also 5, 836, 904). Owner owes the 11 real names.
+- **✅ App size (#4)** — Settings › Storage › "Clear cached downloads". The obvious suspect was the smaller
+  half: both `LeafletMap` mounts are behind `canSeeLiveLocation`, so an advisor never downloads a tile. The
+  **every-user** leak is the picker copies (`copyToCacheDirectory: true` → `<cache>/DocumentPicker` +
+  `/ImagePicker`, never deleted). Clears all three legs; reports partial as partial; **never claims a
+  megabyte figure** — nothing underneath reports one. `expo-file-system` promoted to a declared dependency
+  (lockfile synced, or EAS `npm ci` fails).
+- **✅ i18n** — owner supplied gu/hi/hi-en/gu-en for the whole Storage flow in-chat; **133 → 143** keys, none
+  machine-translated. `describeCacheClear` returns a KEY, not a sentence, so it cannot drift back to English.
+- **❌ #8 More→Today blank — REOPENED, prime suspect RULED OUT.** See "Phase 77 leftovers" below.
+- **🔴 APK blocked on billing** — EAS free-plan monthly Android quota exhausted, resets **1 Sep 2026**; no
+  build was created. Newest APK is still `093a3b33` (2026-08-25) and carries none of this, nor the Search tab.
+
+**🗣️ 2026-08-26 (earlier) — SEARCH TAB SHIPPED · VOICE ARCHITECTURE DECIDED (owner chose n8n) · 9 OWNER PROBLEMS TRIAGED.**
 Three things happened this session, none of them a bug-fix phase.
 (1) **Search replaced Clients in the bottom bar** (`ba622af`) — bar is now Today · Tasks · 🔍 Search · Claims · More,
 Search glyph enlarged to 26 px, Clients moved into More where it is already master/admin-gated (Point 9). Route path

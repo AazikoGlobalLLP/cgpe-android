@@ -332,6 +332,32 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
    ScrollView props. The Tasks-tab search shipped missing it and an adversarial review caught it; don't
    repeat the miss.
 
+## Diagnosis discipline (Phase 77, 2026-08-26 — this cost a near-miss)
+- ⚠️ **A root cause recorded in `docs/` is a HYPOTHESIS until someone re-reads the code.** Phase 77
+  inherited three documents all naming `Appear`'s `cancelAnimation` as the More→Today blank screen,
+  and it is **wrong**: `Appear`'s effect deps are constants at every Home call site so its cleanup
+  runs only at unmount; react-freeze is OFF (`react-native-screens` ships `ENABLE_FREEZE = false`
+  and nothing calls `enableFreeze()`); there is no `unmountOnBlur` and `BottomTabView` only appends
+  to `loaded`; and reanimated 4.5's `FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS` bakes a settled
+  `opacity: 1` into React's committed props within ~1 s. **Shipping the "fix" would have spent an
+  APK on a no-op and handed the owner another confident-but-wrong "fixed".** Do not re-file it.
+- ⚠️ **A `|| fallback` on a field the BACKEND already defaults is DEAD CODE — check the producer.**
+  The LIC "Unnamed" fix was written twice for this reason: `plan_name` is `null` in the seed file,
+  but `services/productIngestion.js:121` substitutes `String(d.plan_name || 'Unnamed plan')` on
+  ingest, so the wire carries a truthy STRING and `lic-plans.tsx`'s own `|| 'Unnamed plan'` had
+  never fired. `tsc` and `npm test` were green on the dead version. **Before writing a fallback for
+  "missing" data, grep the sibling backend for what it actually sends** — and verify on deployed
+  `origin/main`, not the local checkout.
+- **Measure before you believe a size/geometry claim.** Two plausible splash theories died to a
+  measurement this session: the "Android 12 circular mask is clipping the logo" theory (the ink's
+  minimal enclosing circle is **193 dp** against 192 dp guidance — essentially nothing is clipped),
+  and an agent's pixel statistics that did not reproduce. Decoding a PNG is cheap — there is no
+  ImageMagick/sharp, but `zlib.inflateSync` in plain node works, and jimp lives in a scratchpad.
+- **When a diagnosis cannot be reproduced here, ship the DISCRIMINATOR, not a guess.** For the blank
+  screen the deliverable became two zero-build ADB tests that run on the APK already installed
+  (`docs/PHASES.md` §"Phase 77 leftovers") — Android's reduce-motion switch takes `Appear` out of
+  the picture entirely, and a `uiautomator dump` separates "invisible" from "not rendered".
+
 ## Danger zones
 - `src/data/api.ts` (1744 lines, 56 importers) — `state` is a write buffer, not seed data.
   `setAuthToken` silently disables all network calls for a token starting `demo-`.
@@ -421,7 +447,12 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 - `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no
   longer describe an offline demo mode or a hand-editable localhost default. Keep them honest
   when `src/constants/config.ts`'s base-URL logic or the login path changes again.
-- **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** **133 keys** exist (was 75 when this line was written; bumped as phases added copy); ~6 files use `t()`
+- **⚠️ ADDING A DEPENDENCY MEANS SYNCING `package-lock.json` IN THE SAME COMMIT (Phase 77).** EAS runs
+  `npm ci`, which HARD-FAILS on "package.json and package-lock.json are not in sync" — and a package
+  already present in `node_modules` as a *transitive* dep (as `expo-file-system` was) does NOT count:
+  the lock needs it under the ROOT `packages[""].dependencies`. Fix with
+  `npm install --package-lock-only` (no re-install, one-line diff), and commit it with the change.
+- **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** **143 keys** exist (was 75 when this line was written; bumped as phases added copy); ~6 files use `t()`
   substantially and — as of **Phase 21 P1 (2026-08-12)** — **16 more screens** wire a handful of shared
   `common.*` labels (`Call`/`Cancel`/`Delete`/`WhatsApp`/`Today`); ~40 screens are still ~100% hardcoded
   English (the full worklist + plan is scoped in `docs/i18n/`). **All net-new `common.*` keys (`tryAgain`
@@ -434,7 +465,8 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   falls back to base key). Use `t(key, {name})` / `t(key, {count})` for dynamic strings — **never string
   concatenation** (Hindi/Gujarati word order). Single-arg `t(key)` is unchanged. Pure seams
   `pluralCategory`/`interpolate`/`translate(…,lookup?)` are exported and tested in `__tests__/format.test.ts`.
-  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes `EN_KEYS.length === 75` (bump
+  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes the key count — **143 as of
+  Phase 77**, not the 75 this line originally said (bump
   it deliberately when adding keys) **and** its leak check rejects only `value === key`, **not**
   `value === English` — so a Gujarati entry left as the English string **passes the suite green**. The
   test cannot certify translation happened; human copy is load-bearing and machine translation is
