@@ -184,6 +184,16 @@ profile emits an APK**; get the **direct `.apk` download URL** with
 URL only shows an Install button when opened ON the Android phone). So when the owner asks for an APK,
 you can deliver one — do not tell them shipping is blocked. (`--non-interactive` is required — stdin is
 EOF here — and `build:view` does NOT accept `--non-interactive`, only `--json`.)
+⚠️ **WINDOWS FINGERPRINT TRAP (2026-08-25, build `093a3b33` v1.10.0):** the build can fail **locally**, BEFORE
+queueing, at "Computing project fingerprint" with `UNKNOWN: unknown error, open '…node_modules\react-native-reanimated\
+…\index.d.ts.map'` (a Windows file-read error — the build itself is fine, nothing wrong with the code). **Fix:
+relaunch with `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build …`** — the fingerprint is an OPTIONAL local step for
+OTA/update matching, which this project does NOT use (no `expo-updates`), so skipping it is safe and the build queues
+normally. Also note: **a session teardown kills the local `--non-interactive` "Waiting for build to complete" process,
+but NOT the remote build** — it keeps compiling on EAS. On resume, don't relaunch; just `build:view <id> --json` to get
+the `status` (`FINISHED`) + the `.apk` URL. **OTA is NOT set up here** — no `expo-updates`/`runtimeVersion`/channel, so
+every JS change needs a full APK rebuild; adding EAS Update (baked into a build) is the standing recommendation to end
+the rebuild-per-fix cycle.
 
 **ANDROID PUSH / FCM (Phase 74, 2026-08-21) — do not re-derive.** `expo-notifications` is wired; `app.json` has
 `android.googleServicesFile: "./google-services.json"` (committed — client config, safe) and the Firebase project is

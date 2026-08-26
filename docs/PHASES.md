@@ -24,7 +24,11 @@ self-contained app-side item is shipped and the remainder is 100% owner-owned (d
 relays / human i18n copy). **Verdict: nothing app-side to finish; built as-is.** Discovered + flagged that **OTA
 (`expo-updates`) is NOT set up** — offered to bake EAS Update into this build (ends the rebuild-per-JS-fix cycle);
 **owner chose "build now ASAP" without OTA.** Launched `eas-cli build -p android --profile preview --non-interactive`
-(headless; archives the local `eb6e9c6` tree). Build ID + direct `.apk` URL land in `docs/HANDOFF.md` on completion.
+(headless; archives the local tree at `4be1c26` = source-identical to `eb6e9c6` + these docs). **✅ Build FINISHED**
+(`093a3b33-5703-4e33-9206-a92f89ffe2e0`; `.apk`: https://expo.dev/artifacts/eas/1HlyVKZFsch8CSTGDqaeJWsPkMKuvxEN8Tw50Fk0PdA.apk;
+v1.10.0 / versionCode 1). **Build trap:** first launch failed LOCALLY at "Computing project fingerprint" (Windows
+`UNKNOWN … react-native-reanimated … index.d.ts.map`) — relaunched with **`EAS_SKIP_AUTO_FINGERPRINT=1`** and it queued
+fine (fingerprint is an optional OTA-matching step we don't use). Full build details + trap in `docs/HANDOFF.md`;
 DECISIONS 2026-08-25. **No code changed; device-unverified as ever.**
 
 **✅ 2026-08-25 — LOOPHOLE HUNT ROUND 4 SHIPPED: 5 fixes over the previously-unaudited surfaces (`6736ede`, pushed aaziko Shivam).**

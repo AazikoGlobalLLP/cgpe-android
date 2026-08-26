@@ -56,7 +56,20 @@
   another full rebuild until `expo-updates` is added — mention that if the owner asks for a quick fix
   after installing.
 
-<!-- APK build (2026-08-25) — updated when the background build completes:
-     Build ID: <pending>
-     Direct .apk URL: <pending — from `eas-cli build:view <id> --json` → .artifacts.applicationArchiveUrl>
-     Source commit built: eb6e9c6 (local working tree; EAS archives the local tree, not origin) -->
+## APK build (2026-08-25) — ✅ FINISHED
+- **Status:** `FINISHED` (EAS, platform ANDROID, `preview` profile, distribution INTERNAL).
+- **Build ID:** `093a3b33-5703-4e33-9206-a92f89ffe2e0`
+- **Direct `.apk` download:**
+  https://expo.dev/artifacts/eas/1HlyVKZFsch8CSTGDqaeJWsPkMKuvxEN8Tw50Fk0PdA.apk
+- **Build page:** https://expo.dev/accounts/shivam-bhadoriya/projects/ANDROID/builds/093a3b33-5703-4e33-9206-a92f89ffe2e0
+- **Source built:** commit `4be1c26` (EAS archives the local working tree; source is identical to `eb6e9c6`
+  — `4be1c26` only adds these docs). `appVersion` 1.10.0 · `versionCode` 1 · `com.cgpe.connect` · SDK 57 ·
+  build duration ~10 min.
+- **⚠️ Build trap hit + fix (record for next time):** the FIRST launch **failed locally** at "Computing
+  project fingerprint" with `UNKNOWN: unknown error, open '…react-native-reanimated…index.d.ts.map'` (a
+  Windows file-read error, before the build was even queued). The build itself was fine. Fix: relaunch
+  with **`EAS_SKIP_AUTO_FINGERPRINT=1`** (the fingerprint is an optional local step for OTA/update
+  matching, which this project doesn't use) — it then skipped the step and queued normally. Use that env
+  var on Windows if the fingerprint step errors again.
+- **Every `preview` build is `v1.10.0` / `versionCode 1`** — version strings can't distinguish builds; if
+  you need to confirm a phone is running THIS APK, match the APK SHA-256 (per CLAUDE.md's ADB note).
