@@ -12,15 +12,25 @@
 >   offline/sync, attach-document, filters, controls, map) now reads its copy through `t()`.
 > - **Batch 4 — done and wired.** All 24 status words render translated on Home, Leads, Claims,
 >   Tasks and Search.
-> - **Batch 2 — keys ARE in the dictionary, call sites are NOT yet replaced.** The 19 shared words
->   exist in all five languages, but the ~170 hardcoded English copies across 37 screen files still
->   need the mechanical sweep. That is the next i18n job and needs **no further copy from you**.
+> - **Batch 2 — DONE TOO, as of 2026-08-26 (`48b3509`).** *(This line used to say the call sites
+>   were still to do; that was true when it was written and is not any more.)* The sweep replaced
+>   **118** hardcoded English strings across **43** files. `common.tryAgain` alone now has 55 call
+>   sites in 37 files. **One part was deliberately NOT swept** — `common.offlineBody`. The request
+>   described it as one canonical replacement for all 39 outage sentences, but no site matches it
+>   word for word and each of the 39 names *what* failed ("an empty inbox here is not confirmed").
+>   Collapsing them would throw that away, so they need per-screen copy in a later batch.
 > - **`storage.installNote`** is wired, restoring the install-size caveat.
 > - **`nothing_to_clear_*` was deliberately not wired** — no code path produces that state.
 >
-> **Nothing below Batch 4 has been supplied yet.** Batch 5 onward (sign-in, then the screens) still
-> needs copy, and the exact English source strings have to be extracted for you first — see the
-> note at the end.
+> ## 📋 STATUS 2026-08-27 — BATCH 5 IS NOW EXTRACTED AND READY FOR YOU
+>
+> **Batch 5 (the sign-in screen) below is filled in with the real English strings**, taken from the
+> source character for character on 2026-08-27, so it can be translated without anyone guessing at
+> what the app actually says. It is **47 strings**, not the ~44 previously estimated. A new
+> **Batch 5b** (4 strings) covers the crash screen added the same day.
+>
+> Batches 6–9 (the screens themselves) still have only counts, not strings; they get the same
+> verbatim treatment before they are asked for.
 
 Everything in the app that still needs **human** Hindi / Hinglish / Gujarati / Roman-Gujarati copy,
 in one place, ordered so the earliest batches remove the most visible English for the least work.
@@ -181,11 +191,157 @@ Until these land, those screens cannot look translated no matter what else is do
 
 ---
 
-## Batch 5 — the sign-in screen (~44 strings)
+## Batch 5 — the sign-in screen (47 strings) ⭐ READY TO FILL IN
 
-The first screen anyone ever sees, and it is currently **0% translated**. Self-contained, so it can be
-done as one clean unit. Includes the mode tabs (Password / OTP), the field labels and placeholders, the
-biometric-unlock prompt, the OTP flow, and the eight distinct error and session-expiry messages.
+The first screen anyone ever sees, and it is **0% translated** apart from two shared words. It is
+self-contained, so it can be done as one clean unit.
+
+**The strings below were extracted verbatim from the source on 2026-08-27** — character for
+character, including the full stops and the spacing. Copy the English cell as it stands; if a cell
+looks odd (two spaces, three dots) that is what is really on screen, and the translation should
+follow the same shape.
+
+**Three things to know before you start.**
+
+1. **Trade vocabulary stays English inside your sentence** — this is the project's existing rule
+   (`src/i18n/index.tsx:20-24`), already used in the shipped copy. On this screen that means
+   **OTP**, **WhatsApp**, **Face ID**, **CGPE** and **CGPE Connect** are left as they are; translate
+   around them.
+2. **Nothing here needs a `{placeholder}`.** Unusually for a screen this size, there is not one
+   composed string — every message is a whole sentence chosen by the code, never glued together. So
+   you never have to worry about word order around a value. Please do not introduce one.
+3. **Two strings are already done and are NOT in the tables.** The plain `Sign in` button now uses
+   the existing `common.signIn`, and the banner's close button uses `common.dismiss`. The app-lock
+   overlay (`lock.*`) and the consent screen are already fully translated too.
+
+### 5a. Buttons, labels and headings (13)
+
+| key | English | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| `login.modePassword` | Password | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.modeOtp` | OTP | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.eyebrow` | Secure sign in | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.welcome` | Welcome back | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.unlockWithFingerprint` | Unlock with fingerprint | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.orSignIn` | or sign in | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.identifierLabel` | Email or mobile number | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.passwordLabel` | Password | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.unlockAndSignIn` | Unlock and sign in | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.otpLabel` | Enter code | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.verifyAndSignIn` | Verify and sign in | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.resendCode` | Send a new code | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.sendCode` | Send code | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(`login.modePassword` and `login.passwordLabel` are the same English word in two places — the mode
+tab and the field label. They are separate keys on purpose, because a language may want a different
+word for a tab than for a field label. Put the same word in both if that reads best.)*
+
+### 5b. Placeholder and hint text (5)
+
+| key | English | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| `login.identifierPlaceholder` | you@cgpe.in or 98250 ... | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.identifierPlaceholderOtp` | you@cgpe.in  or  98250 00000 | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.passwordPlaceholder` | Your CGPE password | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.otpPlaceholder` | 6 digit code | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.otpChannelHint` | Email gets the code by mail. A mobile number gets it on WhatsApp. | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(The two identifier placeholders really are different strings: the password one ends in three dots,
+the OTP one has double spaces around "or" and shows a full example number. The email address and the
+number are examples — leave them as they are.)*
+
+### 5c. Errors shown under a field (5)
+
+These appear in red directly beneath the box the person is typing in, so they should be short.
+
+| key | English | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| `login.errIdentifierRequired` | Enter your email or mobile number. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.errPasswordRequired` | Enter your password. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.errIdentifierShape` | Enter your work email, or a 10 digit mobile number. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.errEmailShape` | That email address does not look right. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.errOtpRequired` | Enter the code from your WhatsApp message. | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### 5d. Banner headings (8)
+
+The bold line at the top of the coloured box. Each is a whole heading chosen by the code — they are
+never combined.
+
+| key | English | when it shows | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| `login.bannerTimeout` | The server is taking too long | the request gave up waiting | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.bannerPasswordNotSent` | Your details were not sent | password mode, never reached the server | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.bannerCodeNotChecked` | Your code was not checked | code entered, never reached the server | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.bannerCodeRequestNotSent` | The code request was not sent | asking for a code, never reached the server | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.bannerSignInRefused` | Sign in refused | the server said no | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.bannerCodeNotAccepted` | Code not accepted | wrong or expired code | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.bannerCodeNotSent` | Code not sent | the server declined to send one | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.bannerSessionEnded` | Your session ended | shown after an automatic sign-out | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### 5e. Banner message bodies (6)
+
+The smaller line under the heading.
+
+| key | English | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| `login.msgUnlockNotConfirmed` | Unlock was not confirmed on this device. Try again. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.msgCodeNotAccepted` | That code was not accepted. It may have expired, so request a new one. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.msgQuickUnlockGone` | Quick unlock is no longer available. Please sign in with your password or OTP. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.msgUnlockFailed` | Could not unlock right now. Check your connection and try again. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.msgDetailsRefused` | Those details were not accepted. Check them and try again. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.msgCodeCheckFailed` | That code could not be checked. Please try again. | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(The last two are safety nets — the server almost always sends its own wording instead, so they are
+rarely seen. Please still translate them; "rarely" is not "never".)*
+
+### 5f. The footer line (1)
+
+| key | English | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| `login.footerHint` | Sign in with your CGPE account. Next time you can unlock with fingerprint or Face ID. | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### 5g. Strings that reach this screen from elsewhere (9)
+
+These render **on** the sign-in surface but are written in files that are not React screens, so they
+need a small code change as well as copy. That work is ours, not yours — please just supply the copy.
+
+| key | English | where it shows | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| `login.restoringSession` | Restoring your session | full-screen loader before the login screen appears | ⬜ | ⬜ | ⬜ | ⬜ |
+| `session.expired` | Your session timed out. Please sign in again. | banner after an automatic sign-out | ⬜ | ⬜ | ⬜ | ⬜ |
+| `session.revoked` | You were signed out because your access changed. Please sign in again. | banner after an admin changes your access | ⬜ | ⬜ | ⬜ | ⬜ |
+| `session.forbidden` | Your permissions changed. Please sign in again. | banner after a role change | ⬜ | ⬜ | ⬜ | ⬜ |
+| `net.timeout` | The CGPE server is taking too long to respond. It may be busy, or the connection is slow — please try again. | banner body when a request times out | ⬜ | ⬜ | ⬜ | ⬜ |
+| `net.unreachable` | Could not reach the CGPE server. Check your connection and try again. | banner body when nothing left the phone | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.invalidCredentials` | Invalid credentials. Please check and try again. | last-resort banner body when the server sends no reason | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.codeSentWhatsapp` | Code sent to your WhatsApp number. | green toast after a code goes out by WhatsApp | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.codeSentEmail` | Code sent to your email. | green toast after a code goes out by email | ⬜ | ⬜ | ⬜ | ⬜ |
+| `biometric.prompt` | Unlock CGPE Connect | the fingerprint / Face ID sheet the phone itself shows | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(That is 10 rows for 9 unique strings — `biometric.prompt` appears at three call sites but is one
+string. `login.codeSentEmail` is **new as of 2026-08-27**: the toast used to say "WhatsApp" even when
+the code was emailed, which is now fixed, so it needs its own wording.)*
+
+---
+
+## Batch 5b — the crash screen (4 strings, NEW 2026-08-27)
+
+The app now has an error screen for the first time. Before this, when a screen failed to draw, the
+whole app went blank with nothing on it. Now it shows a card explaining what to do. It is **English
+today on purpose** — the keys do not exist yet, and an unwired key prints its own name.
+
+This screen is deliberately plain: it is the last thing standing when everything else has failed, so
+it cannot use the app's colours, fonts or translations the normal way.
+
+| key | English | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| `crash.title` | This screen stopped working | ⬜ | ⬜ | ⬜ | ⬜ |
+| `crash.body` | Nothing you entered has been lost from the server. Try the screen again — if it keeps failing, close the app completely and reopen it, then tell your branch admin what you were doing. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `crash.detailHeading` | WHAT WENT WRONG | ⬜ | ⬜ | ⬜ | ⬜ |
+| `crash.retry` | Try this screen again | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(`crash.detailHeading` is shown in capitals above the technical error text. The technical text
+itself is never translated — it comes from the phone.)*
 
 ---
 
@@ -247,12 +403,18 @@ in the number. Do not translate the braces or what is inside them.)*
 
 ## What to send next, and what has to happen first
 
-**Batch 5 (sign-in, ~44 strings) is the next copy ask, but the exact English source strings are not
-listed in this document** — only counts and screen groups. Asking for translations of strings that
-have not been quoted would invite guesswork, so the next session extracts the sign-in screen's
-literals verbatim, appends them here as a fillable table, and only then asks for the four languages.
-The same applies to Batches 6–9.
+**Batch 5 (sign-in, 47 strings) and Batch 5b (the crash screen, 4 strings) are the next copy ask,
+and both are now fully written out above** — every English string quoted exactly as it appears in
+the app, checked character by character on 2026-08-27. Nothing in them needs a `{placeholder}`.
+That is what to fill in and send back.
 
-**No copy is needed to finish Batch 2.** Its 19 keys are already translated and sitting in the
-dictionary; what remains is replacing ~170 hardcoded English strings in 37 screen files with calls to
-them. That is mechanical app work.
+**Batch 4b (the 4 video strings) is still outstanding** from 2026-08-26 and is quick — send it in
+the same reply if you can.
+
+**Batches 6–9 still have only counts, not strings.** They get the same verbatim extraction before
+they are asked for, one batch at a time, because asking for translations of strings nobody has
+quoted invites guesswork.
+
+**Batch 2 is finished** (`48b3509`, 2026-08-26) — no copy is owed. The one part left out on purpose
+is `common.offlineBody`; see the status note at the top. Those 39 outage sentences each say what
+could not load, and they will be asked for individually rather than collapsed into one.
