@@ -34,6 +34,19 @@
 >
 > Batches 6–9 (the screens themselves) still have only counts, not strings; they get the same
 > verbatim treatment before they are asked for.
+>
+> ## 🔁 STATUS 2026-08-27 (later) — 73 SITES WIRED FROM COPY YOU ALREADY SENT, AND BATCH 6 EXTRACTED
+>
+> A scan compared every hardcoded English string in the app against the dictionary and found **117
+> places whose text already matched a key you had translated** — copy supplied weeks earlier that no
+> screen ever read. **73 are now wired** across 42 keys. The most useful: **seven failure messages in
+> the clock-in / clock-out / break flow**, the part of the app every advisor touches every day, which
+> until now answered a failed punch in English no matter what language they had chosen.
+>
+> **This has a visible side effect, and Batch 6a exists to fix it.** Several groups are now *half*
+> translated — a stat strip with two translated tiles and one English one. **Batch 6 (111 quoted strings, plus 6c's tables) is
+> written out in full below**, and **6a (70 strings) is exactly the copy that closes those gaps.**
+> After Batch 5, it is the highest-value thing you can send.
 
 Everything in the app that still needs **human** Hindi / Hinglish / Gujarati / Roman-Gujarati copy,
 in one place, ordered so the earliest batches remove the most visible English for the least work.
@@ -359,21 +372,24 @@ itself is never translated — it comes from the phone.)*
 
 ---
 
-## Batch 6 onwards — the screens themselves
+## Batch 7 onwards — the rest of the screens
 
-After Batches 2–4 absorb the shared words, roughly this much English remains. Ordered by how often a
-field advisor sees it.
+**Batch 6 is no longer a count — it is written out in full further down**, so this table now covers
+only what comes after it. Ordered by how often a field advisor sees it.
 
 | batch | screens | approx. strings left |
 |---|---|---|
-| 6a | Home — hero, day strip, clock in/out flow (seen every single day) | ~55 |
-| 6b | Home — widget empty and error states | ~130 |
-| 7 | Tasks · Claims · Search · More · Settings (**Claims and Search are 0% translated today**) | ~250 |
+| 7 | Tasks · Claims · Search · More · Settings | ~250 |
 | 8 | Client / Lead / Task / Claim / Ticket detail screens, notes, WhatsApp, calendar | ~613 |
 | 9 | Segments, prospects, payroll, performance, analytics, team, KB and other occasional screens | ~869 |
 
-**Whole-app total still in English: roughly 1,800–2,400 strings.** Batches 1–4 are **95 strings** and
-remove far more visible English than their size suggests.
+*(The old row saying "Claims and Search are 0% translated today" was true when written and is not
+any more — both call the translator now, as do all but six route files.)*
+
+**Whole-app total still in English: roughly 1,800–2,400 strings.** Batches 1–4 were **95 strings**
+and removed far more visible English than their size suggested; Batch 6 quotes **111** strings
+outright (6a 70 + 6b 41) and adds roughly **70** more as whole tables in 6c — and it does the same
+job for the screens people use daily.
 
 ---
 
@@ -396,6 +412,233 @@ like `policy` and `premium` do. What is needed is the surrounding words.
 
 *(`{seconds}` is a placeholder — leave it exactly as `{seconds}` in your translation; the app fills
 in the number. Do not translate the braces or what is inside them.)*
+
+---
+
+## Batch 6 — extracted 2026-08-27 ⭐ THE NEXT REAL ASK
+
+**Why this batch exists now.** On 2026-08-27 a scan compared every hardcoded English string in
+the app against the dictionary and found **117 places whose text already matched a key you had
+translated** — copy supplied weeks earlier that no screen ever read. **73 of them are now wired.**
+That is good news, but it has a side effect you will see immediately on a Gujarati or Hindi phone:
+several groups are now **half translated**. A stat strip with two translated tiles and one English
+one looks broken in a way that all-English did not.
+
+**Batch 6a below is exactly the copy that closes those gaps** — nothing else. It is the highest
+value per word in the whole document, because every string in it sits directly beside a string
+that is already in your language.
+
+### 6a — Finish the half-translated groups (70 strings) ⭐ START HERE
+
+Each row names the group it belongs to, so you can see the words it will sit next to. Where the
+same English appears in two groups it is listed twice on purpose — the context differs and the
+right word may differ too.
+
+| # | English (exact) | which group it completes | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 1 | In the register | Claims — the register stats and the filter chips | ⬜ | ⬜ | ⬜ | ⬜ |
+| 2 | Paid out | Claims — the register stats and the filter chips | ⬜ | ⬜ | ⬜ | ⬜ |
+| 3 | Pending | Claims — the register stats and the filter chips | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4 | Your claims | Claims — the register stats and the filter chips | ⬜ | ⬜ | ⬜ | ⬜ |
+| 5 | Still in progress | Claims — the register stats and the filter chips | ⬜ | ⬜ | ⬜ | ⬜ |
+| 6 | Review | Claims — the register stats and the filter chips | ⬜ | ⬜ | ⬜ | ⬜ |
+| 7 | Segment | Clients — the filter sheet groups | ⬜ | ⬜ | ⬜ | ⬜ |
+| 8 | Next 30 days | Clients — the filter sheet groups | ⬜ | ⬜ | ⬜ | ⬜ |
+| 9 | Later | Clients — the filter sheet groups | ⬜ | ⬜ | ⬜ | ⬜ |
+| 10 | Contact | Clients — the filter sheet groups | ⬜ | ⬜ | ⬜ | ⬜ |
+| 11 | Phone on file | Clients — the filter sheet groups | ⬜ | ⬜ | ⬜ | ⬜ |
+| 12 | Missing phone | Clients — the filter sheet groups | ⬜ | ⬜ | ⬜ | ⬜ |
+| 13 | Due today | Clients — the status token on a row | ⬜ | ⬜ | ⬜ | ⬜ |
+| 14 | Due today | Home — the "needs attention" strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 15 | Follow-ups | Home — the "needs attention" strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 16 | Open tickets | Home — the "needs attention" strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 17 | Active leads | Home — the "needs attention" strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 18 | Search | More — the four quick-action tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 19 | Reminders | More — the four quick-action tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 20 | Tickets | More — the four quick-action tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 21 | WhatsApp | More — the four quick-action tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 22 | Where it looks | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 23 | Clients and tickets are matched on the server, so the whole book is searched, not only what this device has loaded. Four digits or more will match a mobile number by its last digits. | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 24 | Tickets are matched on the server. Four digits or more will match a mobile number by its last digits. | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 25 | Clients | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 26 | Name, mobile, policy, email | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 27 | Leads | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 28 | Name, mobile, interest | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 29 | Claims | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 30 | Reference, name, policy | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 31 | Tickets | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 32 | Reference, name, request | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 33 | Tasks | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 34 | Title, client, details | Search — the "Where it looks" table | ⬜ | ⬜ | ⬜ | ⬜ |
+| 35 | Birthdays today | Analytics — the campaign stat tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 36 | Not clocked in | Attendance — the clocked-in caption | ⬜ | ⬜ | ⬜ | ⬜ |
+| 37 | Renewals due | Campaigns — the six stat tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 38 | Reachable | Campaigns — the six stat tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 39 | In the book | Campaigns — the six stat tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 40 | Annual premium | Client 360 — the KPI strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 41 | Policies | Client 360 — the KPI strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 42 | Maturity | Client 360 — the KPI strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 43 | Generating report | Client 360 — the report button | ⬜ | ⬜ | ⬜ | ⬜ |
+| 44 | Closed as lost | Lead — the pipeline progress caption | ⬜ | ⬜ | ⬜ | ⬜ |
+| 45 | Pipeline progress | Lead — the pipeline progress caption | ⬜ | ⬜ | ⬜ | ⬜ |
+| 46 | Not proceeding | Lead — the pipeline progress caption | ⬜ | ⬜ | ⬜ | ⬜ |
+| 47 | Due | Edit task — the Due and Priority controls | ⬜ | ⬜ | ⬜ | ⬜ |
+| 48 | Keep | Edit task — the Due and Priority controls | ⬜ | ⬜ | ⬜ | ⬜ |
+| 49 | In a week | Edit task — the Due and Priority controls | ⬜ | ⬜ | ⬜ | ⬜ |
+| 50 | Priority | Edit task — the Due and Priority controls | ⬜ | ⬜ | ⬜ | ⬜ |
+| 51 | Due | New task — the Due and Priority controls | ⬜ | ⬜ | ⬜ | ⬜ |
+| 52 | In a week | New task — the Due and Priority controls | ⬜ | ⬜ | ⬜ | ⬜ |
+| 53 | Priority | New task — the Due and Priority controls | ⬜ | ⬜ | ⬜ | ⬜ |
+| 54 | Premium (MTD) | Team member — the stat strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 55 | Done (MTD) | Team member — the stat strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 56 | Completion | Team member — the stat strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 57 | Open work | Team member — the stat strip | ⬜ | ⬜ | ⬜ | ⬜ |
+| 58 | Online | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 59 | Open tasks | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 60 | 0 clients in process | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 61 | Client book | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 62 | Claims in process | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 63 | Open tickets | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 64 | Admin actions | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 65 | Agent map | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 66 | Assign task | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 67 | Send renewals | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 68 | Team | Admin dashboard — the mini stats and section headers | ⬜ | ⬜ | ⬜ | ⬜ |
+| 69 | Live activity | Master dashboard — the live-activity header | ⬜ | ⬜ | ⬜ | ⬜ |
+| 70 | All | Master dashboard — the live-activity header | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### 6b — The outage sentences (41 distinct, 54 places)
+
+**These are the sentences the app shows when it could not reach the server.** They have been
+deferred for four sessions, and the reason is worth stating: an earlier request proposed replacing
+all of them with one line. That was refused, deliberately, and it is still the right call — each of
+these names *what* could not load ("an empty **inbox** here is not confirmed", "an empty **register**
+here is not confirmed"). Collapsing them into one sentence would tell a user their inbox is empty
+when the truth is nobody knows. **The app never fabricates data and never implies an empty screen is
+confirmed** — that is the single most important convention in this codebase, and these 41 sentences
+are how it reaches the user.
+
+So they need 41 individual translations rather than one. Where several screens share a sentence
+word for word, it is listed once.
+
+⚠️ **Rows 6-9 are not empty-state copy** — they are failure messages from the sign-in and sync
+paths. They are included because they were found by the same scan, but if you are short of time,
+**rows 1-5 cover 20 of the 54 places** and are the ones a field advisor actually meets.
+
+| # | English (exact) | where it shows | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 1 | The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again. | agent-track, contests, monitor, team (5 places) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 2 | The server did not answer, so nothing here is confirmed. Check your connection and try again. | client/[id], lead/[id], team/[id], tickets/[id] (4 places) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 3 | The server did not answer, so nothing here is confirmed. Pull down to try again. | families, kb, lic-plans, segments (4 places) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4 | The server did not answer, so nothing here is confirmed. Check your connection and pull to refresh. | clients, leads, whatsapp (3 places) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 5 | The salary service could not be reached, so this is blank rather than empty. Pull down or retry. | earnings, payroll-detail (2 places) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 6 | Account deletion was not confirmed | store/auth | ⬜ | ⬜ | ⬜ | ⬜ |
+| 7 | Could not reach the CGPE server. Check your connection and try again. | data/api | ⬜ | ⬜ | ⬜ | ⬜ |
+| 8 | Could not reach the server. Check your connection. | data/api | ⬜ | ⬜ | ⬜ | ⬜ |
+| 9 | Could not unlock right now. Check your connection and try again. | (auth)/login | ⬜ | ⬜ | ⬜ | ⬜ |
+| 10 | Some tasks could not be loaded, so this may be incomplete. Pull down to refresh, then search again. | tasks | ⬜ | ⬜ | ⬜ | ⬜ |
+| 11 | The activity report could not be reached, so this is blank rather than empty — not that this member did nothing. Pull down to try again. | payroll-detail | ⬜ | ⬜ | ⬜ | ⬜ |
+| 12 | The bank & shift details could not be reached, so this is blank rather than empty. Pull down to try again. | payroll-detail | ⬜ | ⬜ | ⬜ | ⬜ |
+| 13 | The change could not be sent. Check your connection and try again. | task-edit | ⬜ | ⬜ | ⬜ | ⬜ |
+| 14 | The file did not leave your phone, so nothing was attached. Check your connection and try again. | lib/fileUpload | ⬜ | ⬜ | ⬜ | ⬜ |
+| 15 | The report service could not be reached, so this is blank rather than empty. Pull down or retry. | performance | ⬜ | ⬜ | ⬜ | ⬜ |
+| 16 | The report service did not answer, so nothing was generated. No figures are shown. | client/[id] | ⬜ | ⬜ | ⬜ | ⬜ |
+| 17 | The roster could not be loaded from the server. Pull back and try again. | notify | ⬜ | ⬜ | ⬜ | ⬜ |
+| 18 | The salary service could not be reached, so this is blank rather than empty. Pull down to try again. | payroll | ⬜ | ⬜ | ⬜ | ⬜ |
+| 19 | The server could not be reached, so this is not a confirmed empty day. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 20 | The server could not be reached, so this is not a confirmed empty result. Try the search again in a moment. | claim-new | ⬜ | ⬜ | ⬜ | ⬜ |
+| 21 | The server could not be reached, so this list is not confirmed. The task can still be created unassigned. | task-new | ⬜ | ⬜ | ⬜ | ⬜ |
+| 22 | The server did not accept the reassignment. Check your connection and try again. | task/[id] | ⬜ | ⬜ | ⬜ | ⬜ |
+| 23 | The server did not answer in time | settings | ⬜ | ⬜ | ⬜ | ⬜ |
+| 24 | The server did not answer, so an empty board here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 25 | The server did not answer, so an empty inbox here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 26 | The server did not answer, so an empty list here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 27 | The server did not answer, so an empty log here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 28 | The server did not answer, so an empty map here is unconfirmed rather than quiet. | ui/LeafletMap | ⬜ | ⬜ | ⬜ | ⬜ |
+| 29 | The server did not answer, so an empty map here is unconfirmed rather than quiet. Check your connection and try again. | agent-map | ⬜ | ⬜ | ⬜ | ⬜ |
+| 30 | The server did not answer, so an empty pipeline here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 31 | The server did not answer, so an empty pool here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 32 | The server did not answer, so an empty register here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 33 | The server did not answer, so an empty roster here is not confirmed. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 34 | The server did not answer, so no message history is confirmed. Check your connection and try again. | whatsapp/[id] | ⬜ | ⬜ | ⬜ | ⬜ |
+| 35 | The server did not answer, so this is not a confirmed empty day. Pull down to refresh. | home | ⬜ | ⬜ | ⬜ | ⬜ |
+| 36 | The server did not answer, so this is not a confirmed empty pool. Check your connection and pull to refresh. | prospects | ⬜ | ⬜ | ⬜ | ⬜ |
+| 37 | The server did not answer. Nothing is missing from your book, it just could not be read right now. | families | ⬜ | ⬜ | ⬜ | ⬜ |
+| 38 | The server did not answer. Try again once you have a signal. | kb | ⬜ | ⬜ | ⬜ | ⬜ |
+| 39 | The server did not confirm the deletion, so your account is unchanged. Check your connection and try again. | account | ⬜ | ⬜ | ⬜ | ⬜ |
+| 40 | The team roster could not be loaded, so this list is not confirmed. Close this and try again. | task/[id] | ⬜ | ⬜ | ⬜ | ⬜ |
+| 41 | Unlock was not confirmed on this device. Try again. | (auth)/login | ⬜ | ⬜ | ⬜ | ⬜ |
+
+### 6c — The menu and label tables (must be translated whole, not piecemeal)
+
+These are **module-scope tables**: one list in the code supplies every row of a menu or every
+status chip on a screen. A few of their entries already have translated copy, but wiring only
+those would produce a **navigation menu in two languages**, which is worse than one. So they were
+deliberately left alone, and they need translating as complete units.
+
+**The More menu (`MORE_CATALOGUE`) — 22 rows, each with a title and a one-word subtitle.** This is
+the app's main menu; it is the single most valuable table here.
+
+| title | subtitle | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| Leads and pipeline | Stages | ⬜ | ⬜ | ⬜ | ⬜ |
+| Clients | Directory | ⬜ | ⬜ | ⬜ | ⬜ |
+| Segments | Smart lists | ⬜ | ⬜ | ⬜ | ⬜ |
+| Families | Households | ⬜ | ⬜ | ⬜ | ⬜ |
+| Premium and greetings | Renewals | ⬜ | ⬜ | ⬜ | ⬜ |
+| Prospects | Recruitment | ⬜ | ⬜ | ⬜ | ⬜ |
+| LIC plans | Products | ⬜ | ⬜ | ⬜ | ⬜ |
+| Claims | Register | ⬜ | ⬜ | ⬜ | ⬜ |
+| Tickets | Requests | ⬜ | ⬜ | ⬜ | ⬜ |
+| Reminders and follow-ups | Due dates | ⬜ | ⬜ | ⬜ | ⬜ |
+| Calendar | Meetings | ⬜ | ⬜ | ⬜ | ⬜ |
+| My attendance | GPS log | ⬜ | ⬜ | ⬜ | ⬜ |
+| WhatsApp Hub | Chats | ⬜ | ⬜ | ⬜ | ⬜ |
+| Commissions | Earnings | ⬜ | ⬜ | ⬜ | ⬜ |
+| Notice Board | From the firm | ⬜ | ⬜ | ⬜ | ⬜ |
+| Notes | Private | ⬜ | ⬜ | ⬜ | ⬜ |
+| Knowledge Base | Field guide | ⬜ | ⬜ | ⬜ | ⬜ |
+| Global search | Everything | ⬜ | ⬜ | ⬜ | ⬜ |
+| Contests | Leaderboards | ⬜ | ⬜ | ⬜ | ⬜ |
+| My profile | *(no subtitle)* | ⬜ | ⬜ | ⬜ | ⬜ |
+| Settings | Security, language | ⬜ | ⬜ | ⬜ | ⬜ |
+| Account and privacy | Data and deletion | ⬜ | ⬜ | ⬜ | ⬜ |
+
+**The prospect stages (`prospects.tsx` STAGE_META) — 12 rows.** Two of these (Meeting, Lost) already
+have copy from the leads pipeline; the other ten do not, so the whole table waits.
+
+Prospect · Target · Contacted · Responded · Lead · Meeting · Quotation · Documents · Policy login ·
+Won · Hold · Lost
+
+**The notice-board categories (`notice-board.tsx`) — 5 rows, each a chip label plus a section
+heading.** Event/Events · Meeting/Meetings · Announcement/Announcements · Policy/Policy updates ·
+Holiday/Holidays
+
+**The notify priorities (`notify.tsx`) — Low · Normal · Urgent**, and the audiences —
+Whole team · Choose people. (Note "Normal" and "Urgent" are *not* the same words as the task
+priorities Medium and High, and should not be assumed to share a translation.)
+
+⚠️ **`segments.tsx`'s flag list is a FALLBACK, not the live labels.** Those eleven names (Hot lead,
+Underinsured, Well insured, No cover on file, Birthday soon, Birthday today, Renewal due, Maturing
+soon, High value, Large family, Inactive) are only used when the server sends none. The real ones
+come from the backend, so translating the fallback alone would not change what most users see —
+this one needs a decision about where segment names should live before it is worth your time.
+
+### What is deliberately NOT in Batch 6, and why
+
+- **Task categories** (Follow-up, Claim, Renewal, Meeting, Documentation, Collection, Training,
+  General) are **sent to the server as data**, not shown as labels only. Translating them would
+  write Gujarati into the database and break every existing filter. They need a display-name layer
+  first — a code change, not a copy job.
+- **Month and weekday names** on the calendar remain English by the earlier decision. Say the word
+  if you want them.
+- **The date words in four screens' own formatters** (Today / Tomorrow / Yesterday / "4 days ago"
+  on calendar, notifications, reminders and the WhatsApp thread) sit inside plain functions that
+  cannot reach the translator. They need a small code change first; the copy for Today, Tomorrow
+  and Yesterday already exists.
+- **Four strings the app shows outside React** — the background-location notification, the device
+  calendar name, and two sync messages — cannot be translated until the app grows a way to read the
+  chosen language outside a screen. That is a code change and it is on our side, not yours.
 
 ---
 
@@ -425,10 +668,19 @@ That is what to fill in and send back.
 **Batch 4b (the 4 video strings) is still outstanding** from 2026-08-26 and is quick — send it in
 the same reply if you can.
 
-**Batches 6–9 still have only counts, not strings.** They get the same verbatim extraction before
+**Batch 6 is now extracted too, and it is the one to prioritise after Batch 5** — 111 quoted
+strings plus about 70 more inside 6c's tables, in three parts: **6a** (70) closes the groups that went half-translated on 2026-08-27 and are visibly
+mixed on a phone today, **6b** (41) is the outage sentences, **6c** is the More menu and the other
+label tables that have to be done as whole units. If you only have time for one thing, **6a is the
+one people will notice**, because every string in it sits next to a word that is already in their
+language.
+
+**Batches 7–9 still have only counts, not strings.** They get the same verbatim extraction before
 they are asked for, one batch at a time, because asking for translations of strings nobody has
 quoted invites guesswork.
 
 **Batch 2 is finished** (`48b3509`, 2026-08-26) — no copy is owed. The one part left out on purpose
-is `common.offlineBody`; see the status note at the top. Those 39 outage sentences each say what
-could not load, and they will be asked for individually rather than collapsed into one.
+was `common.offlineBody`, and that decision still stands for the empty-state sentences: they are now
+Batch 6b, asked for individually rather than collapsed into one. *(Seven **write-failure** notices in
+the clock-in flow did match it word for word and were wired on 2026-08-27 — that is a different set
+of strings from the 41 empty-state ones, which is why both statements are true.)*
