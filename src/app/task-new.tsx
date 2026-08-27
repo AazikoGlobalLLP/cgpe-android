@@ -311,13 +311,13 @@ export default function TaskNew() {
 
         {/* WHEN. Closed set, and the choice resolves to a real date underneath. */}
         <Appear index={2}>
-          <Group label="Due" hint={`${fmtDate(due)} at ${fmtTime(due)}`}>
+          <Group label={t('task.due')} hint={`${fmtDate(due)} at ${fmtTime(due)}`}>
             <Segmented<When>
               full
               options={[
                 { key: 'today', label: t('common.today') },
                 { key: 'tomorrow', label: t('tasks.tomorrow') },
-                { key: 'week', label: 'In a week' },
+                { key: 'week', label: t('task.inAWeek') },
               ]}
               value={when}
               onChange={pick<When>(setWhen)}
@@ -326,7 +326,7 @@ export default function TaskNew() {
         </Appear>
 
         <Appear index={3}>
-          <Group label="Priority">
+          <Group label={t('task.priority')}>
             <Segmented<TaskPriority>
               full
               options={[

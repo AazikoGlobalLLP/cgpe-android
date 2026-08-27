@@ -167,14 +167,14 @@ function ClientDetailScreen() {
     if (!client) return [];
     const p = client.policies[0];
     const out: KpiItem[] = [
-      { label: 'Annual premium', value: inrShort(client.totalPremium), icon: 'cash-outline', tone: 'success' },
-      { label: 'Policies', value: String(client.policies.length), icon: 'documents-outline', tone: 'primary' },
+      { label: t('client.annualPremium'), value: inrShort(client.totalPremium), icon: 'cash-outline', tone: 'success' },
+      { label: t('client.policies'), value: String(client.policies.length), icon: 'documents-outline', tone: 'primary' },
     ];
     // A matured policy has run its full term — no premium is due, so don't raise a "days late" alarm on it.
     const due = p && p.status !== 'matured' ? dueToken(p.nextRenewal) : null;
     if (due) out.push({ label: t('act.premiumDue'), value: due.label, icon: 'time-outline', tone: due.tone });
     const mat = monthYear(p?.maturityDate);
-    if (mat) out.push({ label: 'Maturity', value: mat, icon: 'flag-outline', tone: 'accent' });
+    if (mat) out.push({ label: t('client.maturity'), value: mat, icon: 'flag-outline', tone: 'accent' });
     return out;
   }, [client, t]);
 

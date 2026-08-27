@@ -482,12 +482,12 @@ function CampaignsScreen() {
     if (!summary) return [];
     const pick = (k: Kind) => () => changeKind(k);
     return [
-      { label: 'Renewals due', value: num(summary.renewal_due), tone: 'warning', icon: 'refresh-circle', onPress: pick('renewal') },
+      { label: t('premium.renewalsDue'), value: num(summary.renewal_due), tone: 'warning', icon: 'refresh-circle', onPress: pick('renewal') },
       { label: t('act.birthdays'), value: num(summary.birthday_month), tone: 'accent', icon: 'gift', onPress: pick('birthday') },
       { label: t('premium.maturitySoon'), value: num(summary.maturity_soon), tone: 'info', icon: 'cash', onPress: pick('maturity') },
       { label: t('premium.anniversaries'), value: num(summary.anniversary_month), tone: 'danger', icon: 'heart', onPress: pick('anniversary') },
-      { label: 'Reachable', value: num(summary.opted_in), tone: 'success', icon: 'logo-whatsapp' },
-      { label: 'In the book', value: num(summary.total_clients), tone: 'neutral', icon: 'people' },
+      { label: t('premium.reachable'), value: num(summary.opted_in), tone: 'success', icon: 'logo-whatsapp' },
+      { label: t('common.inTheBook'), value: num(summary.total_clients), tone: 'neutral', icon: 'people' },
     ];
   }, [summary, changeKind, t]);
 

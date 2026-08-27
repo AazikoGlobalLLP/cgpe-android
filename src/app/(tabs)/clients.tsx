@@ -133,7 +133,7 @@ function ClientsScreen() {
   const groups: FilterGroup[] = useMemo(() => [
     {
       key: 'segment',
-      label: 'Segment',
+      label: t('filter.segment'),
       mode: 'multi',
       options: SEG_KEYS.map((k) => ({
         key: k,
@@ -147,17 +147,17 @@ function ClientsScreen() {
       mode: 'single',
       options: [
         { key: 'overdue', label: t('tasks.overdue'), count: countBy(items, (cl) => renewalBucket(cl) === 'overdue') },
-        { key: 'due30', label: 'Next 30 days', count: countBy(items, (cl) => renewalBucket(cl) === 'due30') },
-        { key: 'later', label: 'Later', count: countBy(items, (cl) => renewalBucket(cl) === 'later') },
+        { key: 'due30', label: t('filter.next30'), count: countBy(items, (cl) => renewalBucket(cl) === 'due30') },
+        { key: 'later', label: t('filter.later'), count: countBy(items, (cl) => renewalBucket(cl) === 'later') },
       ],
     },
     {
       key: 'contact',
-      label: 'Contact',
+      label: t('filter.contact'),
       mode: 'single',
       options: [
-        { key: 'has_phone', label: 'Phone on file', count: countBy(items, (cl) => !!cl.phone) },
-        { key: 'no_phone', label: 'Missing phone', count: countBy(items, (cl) => !cl.phone) },
+        { key: 'has_phone', label: t('filter.hasPhone'), count: countBy(items, (cl) => !!cl.phone) },
+        { key: 'no_phone', label: t('filter.noPhone'), count: countBy(items, (cl) => !cl.phone) },
       ],
     },
   ], [items, t]);
@@ -223,7 +223,7 @@ function ClientsScreen() {
         right={total != null && total > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={total.toLocaleString('en-IN')} size={font.h3} />
-            <Eyebrow>In the book</Eyebrow>
+            <Eyebrow>{t('common.inTheBook')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -341,7 +341,7 @@ function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
 
   // One status token per row, ranked by urgency: money first, then the courtesy touch.
   const pill = hasDue && due < 0 ? { label: t('tasks.overdue'), tone: 'danger' as const }
-    : hasDue && due === 0 ? { label: 'Due today', tone: 'danger' as const }
+    : hasDue && due === 0 ? { label: t('common.dueToday'), tone: 'danger' as const }
       : hasDue && due <= 30 ? { label: `Due ${fmtDay(p!.nextRenewal)}`, tone: 'warning' as const }
         : client.segment.includes('birthday') ? { label: t('seg.birthday'), tone: 'accent' as const }
           : null;

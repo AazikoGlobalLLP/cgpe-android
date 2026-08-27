@@ -68,7 +68,15 @@ describe('i18n dictionaries — parity and value quality', () => {
     // and `home.clockedInAt`. Owner human copy in all 5 languages, supplied in one batch, NOT
     // machine-translated. Adding a key is inert until a screen calls it, so the copy is captured
     // here first and the ~170 hardcoded call sites are replaced in stages.
-    expect(EN_KEYS.length).toBe(226);
+    // Bumped 226 → 284 for the Batch 6a drop (2026-08-27): the 70 strings that CLOSE the groups
+    // Phase 80's sweep left half translated. Owner human copy in all 5 languages, NOT machine-
+    // translated; the table is recorded verbatim in `docs/i18n/BATCH-6A-RECEIVED-2026-08-27.md`.
+    // 70 supplied rows → 58 keys, because six rows resolved to copy already here
+    // (`tab.search`, `common.whatsapp`, `common.all`, `report.generating`), one key is read by two
+    // screens (`home.openTickets`), rows 13/14 and 47–53 share keys, and one supplied row —
+    // `0 clients in process` — was extracted from a source COMMENT and has NO call site, so it
+    // deliberately got no key rather than a zero-consumer one.
+    expect(EN_KEYS.length).toBe(284);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

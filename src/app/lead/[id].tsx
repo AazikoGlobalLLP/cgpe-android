@@ -278,9 +278,9 @@ export default function LeadDetail() {
               )}
 
               <Meter
-                label={lost ? 'Closed as lost' : won ? t('stage.policyIssued') : 'Pipeline progress'}
+                label={lost ? t('lead.closedAsLost') : won ? t('stage.policyIssued') : t('lead.pipelineProgress')}
                 value={lost ? 0 : step >= 0 ? (step + 1) / FLOW.length : 0}
-                valueLabel={lost ? 'Not proceeding' : step >= 0 ? `${step + 1} of ${FLOW.length}` : t(st.labelKey)}
+                valueLabel={lost ? t('lead.notProceeding') : step >= 0 ? `${step + 1} of ${FLOW.length}` : t(st.labelKey)}
                 tone={lost ? 'danger' : won ? 'success' : 'primary'}
                 style={{ marginTop: spacing.lg }}
               />

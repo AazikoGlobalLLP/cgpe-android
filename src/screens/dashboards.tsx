@@ -267,8 +267,8 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
         </View>
         <View style={{ flexDirection: 'row', gap: 20, marginTop: 14 }}>
           <Mini label={t('home.clockedIn')} value={`${clockedIn}/${team.length}`} tint={th.accent} />
-          <Mini label="Online" value={String(online)} tint="#7cc7ff" />
-          <Mini label="Open tasks" value={String(open)} tint="#ffd48a" />
+          <Mini label={t('dash.online')} value={String(online)} tint="#7cc7ff" />
+          <Mini label={t('dash.openTasks')} value={String(open)} tint="#ffd48a" />
         </View>
       </TierHero>
 
@@ -280,19 +280,19 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
         the hero sub already say which; a tile only has to stop asserting a zero it cannot back.
       */}
       <KpiGrid items={[
-        { label: 'Client book', value: snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE, icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
-        { label: 'Claims in process', value: snapshot ? String(snapshot.claims.under_process) : NO_VALUE, icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'Open tickets', value: snapshot ? String(snapshot.tickets) : NO_VALUE, icon: 'chatbox-ellipses', tint: c.info, onPress: () => router.push('/tickets') },
+        { label: t('dash.clientBook'), value: snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE, icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
+        { label: t('dash.claimsInProcess'), value: snapshot ? String(snapshot.claims.under_process) : NO_VALUE, icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
+        { label: t('home.openTickets'), value: snapshot ? String(snapshot.tickets) : NO_VALUE, icon: 'chatbox-ellipses', tint: c.info, onPress: () => router.push('/tickets') },
       ]} />
 
       <View>
-        <SectionHeader title="Admin actions" />
+        <SectionHeader title={t('dash.adminActions')} />
         {/* No "Agent map" here: live agent locations are Master-only (Phase 40). The Admin tier
             (which folds in leaders) monitors duty status via the team roster, not the map. */}
         <QuickRow actions={[
-          ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: 'Assign task', tint: c.primary, onPress: () => router.push('/task-new') }] : []),
-          { icon: 'paper-plane', label: 'Send renewals', tint: c.warning, onPress: () => router.push('/campaigns') },
-          { icon: 'people-circle', label: 'Team', tint: th.accent, onPress: () => router.push('/team') },
+          ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: t('dash.assignTask'), tint: c.primary, onPress: () => router.push('/task-new') }] : []),
+          { icon: 'paper-plane', label: t('dash.sendRenewals'), tint: c.warning, onPress: () => router.push('/campaigns') },
+          { icon: 'people-circle', label: t('dash.team'), tint: th.accent, onPress: () => router.push('/team') },
           { icon: 'shield-half', label: t('tab.claims'), tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
         ]} />
       </View>
@@ -438,7 +438,7 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
 
       {notifications.length > 0 && (
         <View>
-          <SectionHeader title="Live activity" action="All" onAction={() => router.push('/notifications')} />
+          <SectionHeader title={t('dash.liveActivity')} action={t('common.all')} onAction={() => router.push('/notifications')} />
           <Card padded={false} style={{ padding: 4 }}>
             {notifications.slice(0, 5).map((n, i) => (
               <View

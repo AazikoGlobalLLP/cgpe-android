@@ -291,7 +291,7 @@ export default function Attendance() {
                       <Metric value={clockedAt} size={font.h2} style={{ marginTop: 2 }} />
                     ) : (
                       <Txt size={font.h3} weight="700" style={{ marginTop: 3 }} numberOfLines={1}>
-                        {today?.in ? t('home.clockedIn') : 'Not clocked in'}
+                        {today?.in ? t('home.clockedIn') : t('home.notClockedIn')}
                       </Txt>
                     )}
                     <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>

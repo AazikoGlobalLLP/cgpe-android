@@ -241,7 +241,7 @@ export default function Reminders() {
 
   return (
     <Screen>
-      <Header title="Reminders" subtitle={subtitle} back />
+      <Header title={t('common.reminders')} subtitle={subtitle} back />
 
       <ScrollView
         contentContainerStyle={{

@@ -205,14 +205,14 @@ export default function TaskEdit() {
 
         {/* WHEN. Defaults to Keep so an unrelated edit never moves the due date. */}
         <Appear index={1}>
-          <Group label="Due" hint={dueHint}>
+          <Group label={t('task.due')} hint={dueHint}>
             <Segmented<DueChoice>
               full
               options={[
-                { key: 'keep', label: 'Keep' },
+                { key: 'keep', label: t('task.keep') },
                 { key: 'today', label: t('common.today') },
                 { key: 'tomorrow', label: t('tasks.tomorrow') },
-                { key: 'week', label: 'In a week' },
+                { key: 'week', label: t('task.inAWeek') },
               ]}
               value={dueChoice}
               onChange={pick<DueChoice>(setDueChoice)}
@@ -221,7 +221,7 @@ export default function TaskEdit() {
         </Appear>
 
         <Appear index={2}>
-          <Group label="Priority">
+          <Group label={t('task.priority')}>
             <Segmented<TaskPriority>
               full
               options={[

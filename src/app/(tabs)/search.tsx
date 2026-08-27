@@ -693,6 +693,7 @@ function Resting({ recent, onPick, onClearRecent, canClients }: {
   canClients: boolean;
 }) {
   const c = useTheme();
+  const t = useT();
   return (
     <View style={{ gap: spacing.lg }}>
       <Appear index={0}>
@@ -720,16 +721,16 @@ function Resting({ recent, onPick, onClearRecent, canClients }: {
 
       <Appear index={recent.length > 0 ? 2 : 1}>
         <ListSection
-          title="Where it looks"
+          title={t('search.whereItLooks')}
           footer={canClients
-            ? 'Clients and tickets are matched on the server, so the whole book is searched, not only what this device has loaded. Four digits or more will match a mobile number by its last digits.'
-            : 'Tickets are matched on the server. Four digits or more will match a mobile number by its last digits.'}
+            ? t('search.whereFooterClients')
+            : t('search.whereFooterTickets')}
         >
-          {canClients ? <DataRow icon="person-outline" label="Clients" value="Name, mobile, policy, email" /> : null}
-          <DataRow icon="person-add-outline" label="Leads" value="Name, mobile, interest" />
-          <DataRow icon="shield-half-outline" label="Claims" value="Reference, name, policy" />
-          <DataRow icon="ticket-outline" label="Tickets" value="Reference, name, request" />
-          <DataRow icon="checkbox-outline" label="Tasks" value="Title, client, details" />
+          {canClients ? <DataRow icon="person-outline" label={t('search.rowClients')} value={t('search.rowClientsHint')} /> : null}
+          <DataRow icon="person-add-outline" label={t('search.rowLeads')} value={t('search.rowLeadsHint')} />
+          <DataRow icon="shield-half-outline" label={t('search.rowClaims')} value={t('search.rowClaimsHint')} />
+          <DataRow icon="ticket-outline" label={t('common.tickets')} value={t('search.rowTicketsHint')} />
+          <DataRow icon="checkbox-outline" label={t('search.rowTasks')} value={t('search.rowTasksHint')} />
         </ListSection>
       </Appear>
     </View>

@@ -669,6 +669,66 @@ is good and the app simply cannot use it in the shape it was supplied:
 the parity test only proves the five languages agree, and the compiler only sees a valid string. The
 same defect shipped twice before — supplied copy sitting unread while the screen showed English.
 
+### 6f — WHAT BATCH 6a ITSELF CREATED (2026-08-27, after wiring — 21 strings) ⭐ NEXT
+
+**Batch 6a is wired and shipped.** 68 of its 70 rows now render on a phone. This section is the
+short, honest list of what wiring it left behind — the same "half-translated group" arithmetic that
+created 6a in the first place, now one level down. It is small, and it closes real screens.
+
+**First, two rows of 6a that did NOT get used, and why:**
+
+- **`0 clients in process` has no call site.** The scan that built this document pulled it out of a
+  code **comment**, not a screen. There is no tile anywhere that says it. Nothing is owed — your
+  translation is simply not needed. *(No key was added for it, deliberately: an unread key is the
+  exact defect this whole exercise exists to remove.)*
+- **`Agent map` is supplied but cannot be used yet.** Its only screen is the Master dashboard's
+  controls row, and the other five buttons beside it have no copy. Wiring one of six would look
+  broken. It is unblocked by the Master-dashboard rows below.
+
+**Then, three questions only you can answer:**
+
+1. **`Generating report` now exists twice, in two different Gujarati forms.** The earlier drop gave
+   `રિપોર્ટ બની રહી છે…` / `Report bani rahi chhe…`; this drop gave `રિપોર્ટ બની રહ્યો છે` /
+   `Report bani rahyo chhe`. The verb agreement differs. **The app is still using the earlier one** —
+   it was already live and we do not overwrite human copy on a guess. Which is right?
+2. **The app now says two different Gujarati words for the same noun**, because you filled the
+   Search-table cells fresh and they differ from the bottom tab bar: **Clients** is `ગ્રાહકો` on the
+   tab bar and `ક્લાયન્ટ્સ` in the Search table; **Claims** is `ક્લેમ` vs `ક્લેમ્સ`; **Tasks** is
+   `કાર્યો` vs `ટાસ્ક્સ`. We shipped what you wrote for each place. Deliberate, or should one word
+   win everywhere?
+3. **Home's follow-ups widget** — still waiting on the wording decision from 6e item 3.
+
+**And the 21 strings themselves:**
+
+| # | English (exact) | which group it completes | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 1 | Assign to | New task — the form's other two field labels, now that Due and Priority are translated | ⬜ | ⬜ | ⬜ | ⬜ |
+| 2 | Nobody is assigned yet. The task stays on your own list. | New task — the hint under Assign to | ⬜ | ⬜ | ⬜ | ⬜ |
+| 3 | Category | New task — the form's other two field labels | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4 | Total policies | Client report — the summary rows beside the translated "Annual premium" | ⬜ | ⬜ | ⬜ | ⬜ |
+| 5 | Total life cover | Client report — the summary rows | ⬜ | ⬜ | ⬜ | ⬜ |
+| 6 | Family members | Client report — the summary rows | ⬜ | ⬜ | ⬜ | ⬜ |
+| 7 | Search your whole book | Clients — the header subtitle under the translated title | ⬜ | ⬜ | ⬜ | ⬜ |
+| 8 | Close out | Lead — the closing section, whose "Not proceeding" row is still English for this reason | ⬜ | ⬜ | ⬜ | ⬜ |
+| 9 | A closed lead stays in the pipeline list under its own stage, so nothing is lost. | Lead — the closing section footer | ⬜ | ⬜ | ⬜ | ⬜ |
+| 10 | Current | Lead — the tag on the stage the lead is on now | ⬜ | ⬜ | ⬜ | ⬜ |
+| 11 | Master controls | Master dashboard — the controls row (this is what unblocks "Agent map") | ⬜ | ⬜ | ⬜ | ⬜ |
+| 12 | All teams | Master dashboard — the controls row | ⬜ | ⬜ | ⬜ | ⬜ |
+| 13 | Movement | Master dashboard — the controls row | ⬜ | ⬜ | ⬜ | ⬜ |
+| 14 | Analytics | Master dashboard — the controls row | ⬜ | ⬜ | ⬜ | ⬜ |
+| 15 | Campaigns | Master dashboard — the controls row | ⬜ | ⬜ | ⬜ | ⬜ |
+| 16 | Total clients | Master dashboard — the six org tiles (Admin's three are already translated) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 17 | Claims total | Master dashboard — the six org tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 18 | In process | Master dashboard — the six org tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 19 | Claims paid | Master dashboard — the six org tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+
+**Plus two that need a `{placeholder}`, like 6e:**
+
+| # | Where it appears | What is needed | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 20 | Clients list — a renewal row reads **"Due 14 Mar"** | The date has to sit inside the phrase. Please translate **`Due {date}`** | ⬜ | ⬜ | ⬜ | ⬜ |
+| 21 | Client 360 — a follow-up tag reads **"3 days late"** and **"In 12 days"** | Two phrases, number inside: **`{n} days late`** and **`In {n} days`**. Until these arrive, "Due today" stays English on that one tag, so the three read as one set | ⬜ | ⬜ | ⬜ | ⬜ |
+
 ### What is deliberately NOT in Batch 6, and why
 
 - **Task categories** (Follow-up, Claim, Renewal, Meeting, Documentation, Collection, Training,

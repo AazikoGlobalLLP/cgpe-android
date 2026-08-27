@@ -250,7 +250,7 @@ export default function Analytics() {
    * numbers would read as a bug rather than as two measurements.
    */
   const campItems: KpiItem[] = camp ? [
-    { label: 'Birthdays today', value: num(camp.birthday_today), tone: 'accent', icon: 'gift' },
+    { label: t('premium.birthdaysToday'), value: num(camp.birthday_today), tone: 'accent', icon: 'gift' },
     { label: t('premium.anniversaries'), value: num(camp.anniversary_month), tone: 'danger', icon: 'heart' },
     { label: t('premium.maturitySoon'), value: num(camp.maturity_soon), tone: 'info', icon: 'cash' },
   ] : [];
@@ -383,7 +383,7 @@ export default function Analytics() {
                     on this screen. The Banner below says why it is missing. */}
                 {camp ? (
                   <MetricTile
-                    label="Renewals due"
+                    label={t('premium.renewalsDue')}
                     value={num(camp.renewal_due)}
                     icon="refresh-circle"
                     tone="warning"

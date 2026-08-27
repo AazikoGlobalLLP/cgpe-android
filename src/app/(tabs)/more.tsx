@@ -320,10 +320,10 @@ export default function More() {
   // Fixed tileIndex per module (it selects the tile's colour), so hiding one tile does not
   // shift the colour of the ones next to it.
   const quickActions = ([
-    { icon: 'search', label: 'Search', href: '/search', navKey: 'search', tileIndex: 0 },
-    { icon: 'notifications', label: 'Reminders', href: '/reminders', navKey: 'reminders', tileIndex: 1 },
-    { icon: 'ticket', label: 'Tickets', href: '/tickets', navKey: 'tickets', tileIndex: 2 },
-    { icon: 'logo-whatsapp', label: 'WhatsApp', href: '/whatsapp', navKey: 'whatsapp', tileIndex: 3 },
+    { icon: 'search', label: t('tab.search'), href: '/search', navKey: 'search', tileIndex: 0 },
+    { icon: 'notifications', label: t('common.reminders'), href: '/reminders', navKey: 'reminders', tileIndex: 1 },
+    { icon: 'ticket', label: t('common.tickets'), href: '/tickets', navKey: 'tickets', tileIndex: 2 },
+    { icon: 'logo-whatsapp', label: t('common.whatsapp'), href: '/whatsapp', navKey: 'whatsapp', tileIndex: 3 },
   ] as { icon: IconName; label: string; href: Href; navKey: string; tileIndex: number }[])
     .filter((qa) => !isHidden(qa.navKey));
 
@@ -389,7 +389,7 @@ export default function More() {
             "removed" module would make that setting dishonest. */}
         {quickActions.length ? (
           <View style={{ gap: spacing.md }}>
-            <Eyebrow style={{ marginLeft: spacing.xs }}>Quick actions</Eyebrow>
+            <Eyebrow style={{ marginLeft: spacing.xs }}>{t('home.quickActions')}</Eyebrow>
             <Row style={{ justifyContent: 'space-between' }}>
               {quickActions.map((qa, i) => (
                 <Appear key={qa.navKey} index={i}>

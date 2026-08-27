@@ -85,11 +85,11 @@ export default function TeamMemberDetail() {
     if (!m) return [];
     const s = m.stats;
     const out: KpiItem[] = [];
-    if (s.premiumMtd > 0) out.push({ label: 'Premium (MTD)', value: inrShort(s.premiumMtd), icon: 'cash-outline', tone: 'success' });
+    if (s.premiumMtd > 0) out.push({ label: t('team.premiumMtd'), value: inrShort(s.premiumMtd), icon: 'cash-outline', tone: 'success' });
     if (s.clients > 0) out.push({ label: t('tab.clients'), value: String(s.clients), icon: 'people-outline', tone: 'primary' });
-    if (s.policiesMtd > 0) out.push({ label: 'Done (MTD)', value: String(s.policiesMtd), icon: 'documents-outline', tone: 'accent' });
-    if (s.renewalPct > 0) out.push({ label: 'Completion', value: `${s.renewalPct}%`, icon: 'refresh-outline', tone: 'info' });
-    if (s.leads > 0) out.push({ label: 'Open work', value: String(s.leads), icon: 'flame-outline', tone: 'warning' });
+    if (s.policiesMtd > 0) out.push({ label: t('team.doneMtd'), value: String(s.policiesMtd), icon: 'documents-outline', tone: 'accent' });
+    if (s.renewalPct > 0) out.push({ label: t('team.completion'), value: `${s.renewalPct}%`, icon: 'refresh-outline', tone: 'info' });
+    if (s.leads > 0) out.push({ label: t('team.openWork'), value: String(s.leads), icon: 'flame-outline', tone: 'warning' });
     if (s.openClaims > 0) out.push({ label: t('home.openClaims'), value: String(s.openClaims), icon: 'shield-half-outline', tone: 'danger' });
     return out;
   }, [m, t]);

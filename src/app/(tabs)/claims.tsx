@@ -205,14 +205,14 @@ export default function Claims() {
 
   const kpis: KpiItem[] = sum
     ? [
-      { label: 'In the register', value: String(shownTotal), icon: 'shield-checkmark-outline', tone: 'primary' },
-      { label: 'Paid out', value: inrShort(sum.paid_amount), icon: 'checkmark-circle', tone: 'success' },
-      { label: 'Pending', value: inrShort(sum.pending_amount), icon: 'hourglass-outline', tone: 'warning' },
+      { label: t('claims.inRegister'), value: String(shownTotal), icon: 'shield-checkmark-outline', tone: 'primary' },
+      { label: t('claims.paidOut'), value: inrShort(sum.paid_amount), icon: 'checkmark-circle', tone: 'success' },
+      { label: t('claims.pending'), value: inrShort(sum.pending_amount), icon: 'hourglass-outline', tone: 'warning' },
     ]
     : claims.length > 0
       ? [
-        { label: 'Your claims', value: String(shownTotal), icon: 'shield-checkmark-outline', tone: 'primary' },
-        { label: 'Still in progress', value: inrShort(activeValue), icon: 'hourglass-outline', tone: 'warning' },
+        { label: t('claims.yours'), value: String(shownTotal), icon: 'shield-checkmark-outline', tone: 'primary' },
+        { label: t('claims.stillInProgress'), value: inrShort(activeValue), icon: 'hourglass-outline', tone: 'warning' },
         { label: t('claimStatus.settled'), value: String(counts.settled ?? 0), icon: 'checkmark-circle', tone: 'success' },
       ]
       : [];
@@ -222,7 +222,7 @@ export default function Claims() {
       { key: 'all', label: t('common.all'), count: counts.all },
       { key: 'intake', label: t('claimStatus.intake'), count: counts.intake },
       { key: 'docs_pending', label: t('claimStatus.docsPending'), count: counts.docs_pending },
-      { key: 'under_review', label: 'Review', count: counts.under_review },
+      { key: 'under_review', label: t('claims.filterReview'), count: counts.under_review },
       { key: 'submitted', label: t('claimStatus.submitted'), count: counts.submitted },
       { key: 'settled', label: t('claimStatus.settled'), count: counts.settled },
     ];

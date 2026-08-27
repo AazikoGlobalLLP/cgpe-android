@@ -1410,19 +1410,19 @@ export default function Home() {
     const items: KpiItem[] = [
       { label: t('tasks.overdue'), value: String(day.overdue.length), tone: day.overdue.length ? 'danger' : 'neutral', icon: 'alert-circle', onPress: () => router.push('/(tabs)/tasks') },
       { label: t('tasks.inProgress'), value: String(day.inProgress.length), tone: 'info', icon: 'ellipsis-horizontal-circle', onPress: () => router.push('/(tabs)/tasks') },
-      { label: 'Due today', value: String(day.dueToday.length), tone: 'warning', icon: 'today', onPress: () => router.push('/(tabs)/tasks') },
+      { label: t('common.dueToday'), value: String(day.dueToday.length), tone: 'warning', icon: 'today', onPress: () => router.push('/(tabs)/tasks') },
     ];
     if (need.reminders) {
-      items.push({ label: 'Follow-ups', value: String(pendingReminders.length), tone: 'accent', icon: 'call', onPress: () => router.push('/reminders') });
+      items.push({ label: t('common.followUps'), value: String(pendingReminders.length), tone: 'accent', icon: 'call', onPress: () => router.push('/reminders') });
     }
     if (need.claims) {
       items.push({ label: t('home.openClaims'), value: String(openClaims.length), tone: 'primary', icon: 'shield-half', onPress: () => router.push('/(tabs)/claims') });
     }
     if (need.tickets) {
-      items.push({ label: 'Open tickets', value: String(activeTickets.length), tone: 'info', icon: 'ticket', onPress: () => router.push('/tickets') });
+      items.push({ label: t('home.openTickets'), value: String(activeTickets.length), tone: 'info', icon: 'ticket', onPress: () => router.push('/tickets') });
     }
     if (need.leads) {
-      items.push({ label: 'Active leads', value: String(activeLeads.length), tone: 'accent', icon: 'funnel', onPress: () => router.push('/(tabs)/leads') });
+      items.push({ label: t('home.activeLeads'), value: String(activeLeads.length), tone: 'accent', icon: 'funnel', onPress: () => router.push('/(tabs)/leads') });
     }
     return items;
   }, [t, router, day.overdue.length, day.inProgress.length, day.dueToday.length, need, pendingReminders.length, openClaims.length, activeTickets.length, activeLeads.length]);
@@ -1964,7 +1964,7 @@ export default function Home() {
                     : 'Requests raised by policyholders land here as tickets you can claim and work.'}
                 action={unsure(tickets.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
-                  : { label: 'Open tickets', onPress: () => router.push('/tickets') }}
+                  : { label: t('home.openTickets'), onPress: () => router.push('/tickets') }}
               />
             ) : (
               <ListSection>
