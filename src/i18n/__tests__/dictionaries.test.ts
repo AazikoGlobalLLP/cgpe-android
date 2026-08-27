@@ -76,7 +76,7 @@ describe('i18n dictionaries — parity and value quality', () => {
     // screens (`home.openTickets`), rows 13/14 and 47–53 share keys, and one supplied row —
     // `0 clients in process` — was extracted from a source COMMENT and has NO call site, so it
     // deliberately got no key rather than a zero-consumer one.
-    expect(EN_KEYS.length).toBe(324);
+    expect(EN_KEYS.length).toBe(362);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

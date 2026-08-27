@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -56,10 +56,8 @@ type Mode = 'password' | 'otp';
  */
 type Failure = { kind: 'network' | 'timeout' | 'refused'; message: string };
 
-const MODES: { key: Mode; label: string }[] = [
-  { key: 'password', label: 'Password' },
-  { key: 'otp', label: 'OTP' },
-];
+/** Built inside the screen (see `modes`) so the two labels can reach the translator. */
+const MODE_KEYS: Mode[] = ['password', 'otp'];
 
 /** Ink on the fixed dark hero. These are not palette tokens because the ground behind them
  *  is the same deep azure in both schemes, so a scheme-aware colour would be wrong here. */
@@ -77,6 +75,12 @@ function describe(e: unknown, fallback: string): Failure {
 export default function Login() {
   const c = useTheme();
   const t = useT();
+  // The two sign-in modes. Built here rather than at module scope so the labels can be
+  // translated; `t` is in the dep array because a language switch must relabel them.
+  const modes = useMemo(
+    () => MODE_KEYS.map((key) => ({ key, label: key === 'password' ? t('login.modePassword') : t('login.modeOtp') })),
+    [t],
+  );
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const toast = useToast();
@@ -143,8 +147,8 @@ export default function Login() {
 
   const doPassword = useCallback(async () => {
     setFailure(null);
-    const nextId = id.trim() ? '' : 'Enter your email or mobile number.';
-    const nextPw = pw ? '' : 'Enter your password.';
+    const nextId = id.trim() ? '' : t('login.errIdentifierRequired');
+    const nextPw = pw ? '' : t('login.errPasswordRequired');
     setIdErr(nextId);
     setPwErr(nextPw);
     if (nextId || nextPw) { haptics.warn(); return; }
@@ -158,7 +162,7 @@ export default function Login() {
         if (!ok) {
           setLoading(false);
           haptics.warn();
-          setFailure({ kind: 'refused', message: 'Unlock was not confirmed on this device. Try again.' });
+          setFailure({ kind: 'refused', message: t('login.msgUnlockNotConfirmed') });
           return;
         }
       }
@@ -166,7 +170,7 @@ export default function Login() {
     } catch (e) {
       if (!alive.current) return;
       haptics.error();
-      setFailure(describe(e, 'Those details were not accepted. Check them and try again.'));
+      setFailure(describe(e, t('login.msgDetailsRefused')));
       setLoading(false);
       return;
     }
@@ -175,7 +179,7 @@ export default function Login() {
     // is not fenced by `alive` the way the state writes above are.
     haptics.success();
     router.replace('/(tabs)/home');
-  }, [id, pw, useBio, authenticateBiometric, login, router]);
+  }, [id, pw, useBio, authenticateBiometric, login, router, t]);
 
   const doSendOtp = useCallback(async () => {
     setFailure(null);
@@ -186,12 +190,12 @@ export default function Login() {
     const looksEmail = raw.includes('@');
     const digits = raw.replace(/\D/g, '');
     if (!looksEmail && digits.length < 10) {
-      setPhoneErr('Enter your work email, or a 10 digit mobile number.');
+      setPhoneErr(t('login.errIdentifierShape'));
       haptics.warn();
       return;
     }
     if (looksEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
-      setPhoneErr('That email address does not look right.');
+      setPhoneErr(t('login.errEmailShape'));
       haptics.warn();
       return;
     }
@@ -224,9 +228,9 @@ export default function Login() {
       if (!alive.current) return;
       setLoading(false);
       haptics.error();
-      setFailure(describe(e, 'Could not send the code. Please try again.'));
+      setFailure(describe(e, t('login.msgCodeSendFailed')));
     }
-  }, [phone, toast]);
+  }, [phone, toast, t]);
 
   const doVerifyOtp = useCallback(async () => {
     setFailure(null);
@@ -235,8 +239,8 @@ export default function Login() {
       // with their email sends them looking in an app where nothing was ever delivered —
       // and it appeared directly under a toast that had just said "Code sent to your email".
       setOtpErr(otpChannel === 'email'
-        ? 'Enter the code from your email.'
-        : 'Enter the code from your WhatsApp message.');
+        ? t('login.errOtpRequiredEmail')
+        : t('login.errOtpRequired'));
       haptics.warn();
       return;
     }
@@ -251,7 +255,7 @@ export default function Login() {
       if (!alive.current) return;
       setLoading(false);
       haptics.error();
-      setFailure(describe(e, 'That code could not be checked. Please try again.'));
+      setFailure(describe(e, t('login.msgCodeCheckFailed')));
       return;
     }
     if (!ok) {
@@ -260,14 +264,14 @@ export default function Login() {
       haptics.error();
       setFailure({
         kind: 'refused',
-        message: 'That code was not accepted. It may have expired, so request a new one.',
+        message: t('login.msgCodeNotAccepted'),
       });
       return;
     }
     // Session issued. Outside the try for the same reason as the password path above.
     haptics.success();
     router.replace('/(tabs)/home');
-  }, [otp, phone, otpChannel, loginOtp, router]);
+  }, [otp, phone, otpChannel, loginOtp, router, t]);
 
   /** Phase 48: fingerprint-only restore. One biometric prompt → exchange the sealed refresh
    *  credential for a fresh session, no id/password/OTP. Every non-'ok' path routes to manual
@@ -294,7 +298,7 @@ export default function Login() {
       haptics.warn();
       setFailure({
         kind: 'refused',
-        message: 'Quick unlock is no longer available. Please sign in with your password or OTP.',
+        message: t('login.msgQuickUnlockGone'),
       });
       return;
     }
@@ -307,9 +311,9 @@ export default function Login() {
     haptics.error();
     setFailure({
       kind: 'network',
-      message: 'Could not unlock right now. Check your connection and try again.',
+      message: t('login.msgUnlockFailed'),
     });
-  }, [restoring, expiredNotice, clearExpiredNotice, restoreBiometricSession, router]);
+  }, [restoring, expiredNotice, clearExpiredNotice, restoreBiometricSession, router, t]);
 
   /** Retry re-runs whatever the user was actually doing, so the Banner's action is never
    *  a dead end that just dismisses itself. */
@@ -331,10 +335,10 @@ export default function Login() {
         // and copy that never tells the user to "check your connection" (theirs is up).
         icon={failure.kind === 'timeout' ? 'time-outline' : 'cloud-offline'}
         title={
-          failure.kind === 'timeout' ? 'The server is taking too long'
-            : mode === 'password' ? 'Your details were not sent'
-              : otpSent ? 'Your code was not checked'
-                : 'The code request was not sent'
+          failure.kind === 'timeout' ? t('login.bannerTimeout')
+            : mode === 'password' ? t('login.bannerPasswordNotSent')
+              : otpSent ? t('login.bannerCodeNotChecked')
+                : t('login.bannerCodeRequestNotSent')
         }
         message={failure.message}
         action={{ label: t('common.tryAgain'), onPress: retry }}
@@ -344,9 +348,9 @@ export default function Login() {
       <Banner
         tone="danger"
         title={
-          mode === 'password' ? 'Sign in refused'
-            : otpSent ? 'Code not accepted'
-              : 'Code not sent'
+          mode === 'password' ? t('login.bannerSignInRefused')
+            : otpSent ? t('login.bannerCodeNotAccepted')
+              : t('login.bannerCodeNotSent')
         }
         message={failure.message}
         onDismiss={() => setFailure(null)}
@@ -407,14 +411,14 @@ export default function Login() {
               gap: spacing.md, ...shadow(c, 2),
             }}>
               <View style={{ gap: 2 }}>
-                <Eyebrow>Secure sign in</Eyebrow>
-                <Txt size={20} weight="800" style={{ letterSpacing: -0.3 }}>Welcome back</Txt>
+                <Eyebrow>{t('login.eyebrow')}</Eyebrow>
+                <Txt size={20} weight="800" style={{ letterSpacing: -0.3 }}>{t('login.welcome')}</Txt>
               </View>
 
               {expiredNotice ? (
                 <Banner
                   tone="info"
-                  title="Your session ended"
+                  title={t('login.bannerSessionEnded')}
                   message={expiredNotice}
                   onDismiss={clearExpiredNotice}
                 />
@@ -423,7 +427,7 @@ export default function Login() {
               {canRestore ? (
                 <>
                   <Button
-                    label="Unlock with fingerprint"
+                    label={t('login.unlockWithFingerprint')}
                     icon="finger-print"
                     onPress={onBiometricRestore}
                     loading={restoring}
@@ -432,18 +436,18 @@ export default function Login() {
                   />
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
                     <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
-                    <Txt size={font.cap} color={c.muted}>or sign in</Txt>
+                    <Txt size={font.cap} color={c.muted}>{t('login.orSignIn')}</Txt>
                     <View style={{ flex: 1, height: 1, backgroundColor: c.border }} />
                   </View>
                 </>
               ) : null}
 
-              <Segmented options={MODES} value={mode} onChange={pickMode} full />
+              <Segmented options={modes} value={mode} onChange={pickMode} full />
 
               {mode === 'password' ? (
                 <>
                   <Field
-                    label="Email or mobile number"
+                    label={t('login.identifierLabel')}
                     value={id}
                     onChange={(v) => { setId(v); if (idErr) setIdErr(''); touch(); }}
                     placeholder="you@cgpe.in or 98250 ..."
@@ -452,10 +456,10 @@ export default function Login() {
                     error={idErr || undefined}
                   />
                   <Field
-                    label="Password"
+                    label={t('login.passwordLabel')}
                     value={pw}
                     onChange={(v) => { setPw(v); if (pwErr) setPwErr(''); touch(); }}
-                    placeholder="Your CGPE password"
+                    placeholder={t('login.passwordPlaceholder')}
                     secure
                     icon="lock-closed-outline"
                     error={pwErr || undefined}
@@ -466,7 +470,7 @@ export default function Login() {
                     // human copy in all five languages. "Unlock and sign in" has no key
                     // yet and is listed in the Batch 5 copy request — wiring it now would
                     // print the key itself on screen.
-                    label={useBio ? 'Unlock and sign in' : t('common.signIn')}
+                    label={useBio ? t('login.unlockAndSignIn') : t('common.signIn')}
                     icon={useBio ? 'finger-print' : 'arrow-forward'}
                     onPress={doPassword}
                     loading={loading}
@@ -484,7 +488,7 @@ export default function Login() {
                       through the n8n WhatsApp webhook. Where that webhook is unconfigured,
                       mobile OTP could never succeed while web OTP (via email) worked fine. */}
                   <Field
-                    label="Email or mobile number"
+                    label={t('login.identifierLabel')}
                     value={phone}
                     onChange={(v) => {
                       setPhone(v);
@@ -497,23 +501,23 @@ export default function Login() {
                     autoCapitalize="none"
                     icon="at-outline"
                     error={phoneErr || undefined}
-                    hint="Email gets the code by mail. A mobile number gets it on WhatsApp."
+                    hint={t('login.otpChannelHint')}
                   />
 
                   {otpSent ? (
                     <>
                       <Field
-                        label="Enter code"
+                        label={t('login.otpLabel')}
                         value={otp}
                         onChange={(v) => { setOtp(v); if (otpErr) setOtpErr(''); touch(); }}
-                        placeholder="6 digit code"
+                        placeholder={t('login.otpPlaceholder')}
                         keyboardType="numeric"
                         icon="keypad-outline"
                         error={otpErr || undefined}
                       />
                       {failureBanner}
                       <Button
-                        label="Verify and sign in"
+                        label={t('login.verifyAndSignIn')}
                         icon="checkmark-circle"
                         onPress={doVerifyOtp}
                         loading={loading}
@@ -522,7 +526,7 @@ export default function Login() {
                         style={{ marginTop: 2 }}
                       />
                       <Button
-                        label="Send a new code"
+                        label={t('login.resendCode')}
                         icon="refresh"
                         variant="ghost"
                         onPress={doSendOtp}
@@ -534,7 +538,7 @@ export default function Login() {
                     <>
                       {failureBanner}
                       <Button
-                        label="Send code"
+                        label={t('login.sendCode')}
                         icon="paper-plane"
                         onPress={doSendOtp}
                         loading={loading}
@@ -553,7 +557,7 @@ export default function Login() {
               }}>
                 <Ionicons name="lock-closed" size={15} color={c.muted} />
                 <Txt size={font.cap} color={c.muted} style={{ flex: 1, lineHeight: 17 }}>
-                  Sign in with your CGPE account. Next time you can unlock with fingerprint or Face ID.
+                  {t('login.footerHint')}
                 </Txt>
               </View>
             </View>
