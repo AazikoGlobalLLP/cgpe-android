@@ -3,6 +3,7 @@
  *
  *   node scripts/i18n-freewins-scan.mjs            # near-miss + exact, multi-word only
  *   node scripts/i18n-freewins-scan.mjs --all      # include single-word near-misses (noisy)
+ *   node scripts/i18n-freewins-scan.mjs --orphans  # the OTHER direction: keys no screen reads
  *
  * WHY THIS EXISTS. Nothing else in the toolchain can see this class of gap:
  *   - the i18n parity test only proves a key EXISTS in all five languages;
@@ -39,6 +40,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const WIDE = process.argv.includes('--all');
+const ORPHANS = process.argv.includes('--orphans');
 
 const dictSrc = fs.readFileSync(path.join(ROOT, 'src/i18n/index.tsx'), 'utf8');
 const lines = dictSrc.split(/\r?\n/);
@@ -148,6 +150,40 @@ function walk(dir, acc) {
 }
 
 const files = walk(path.join(ROOT, 'src'), []).filter((p) => !p.includes(path.join('src', 'i18n')));
+
+/**
+ * --orphans: the audit run in the OTHER direction. For every key, does any file reference
+ * it? A key with no consumer is copy the owner paid for that the app cannot show. This
+ * direction is a superset of the literal scans and has NO template-literal blind spot.
+ *
+ * ⚠️ ONE FALSE-POSITIVE CLASS, AND IT IS REAL: a key assembled at runtime is invisible
+ * here. `(tabs)/_layout.tsx:151` does `t('tab.' + route.name)`, so EVERY `tab.*` key looks
+ * orphaned and none is. Before believing an orphan, grep for the key's PREFIX too.
+ *
+ * Phase 81 ran this over all 226 keys: 20 orphans, and after triage NONE was a free win —
+ * 2 were the tab.* false positives, 3 blocked (api.ts has no non-React translator; task
+ * categories are backend data), 3 are composed strings whose `{placeholder}` key was never
+ * supplied, and the rest is dead copy for surfaces that no longer exist (there is no
+ * `src/app/premium.tsx` any more). Recorded so nobody re-derives it.
+ */
+if (ORPHANS) {
+  const blob = files.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+  const orphans = entries.filter(([key]) => {
+    const base = key.replace(/_(one|other)$/, '');          // t(x,{count}) resolves x_one/x_other
+    const seen = (k) => blob.includes(`'${k}'`) || blob.includes(`"${k}"`);
+    const prefix = key.includes('.') ? `${key.slice(0, key.indexOf('.'))}.` : null;
+    return !seen(key) && !(base !== key && seen(base)) && !(prefix && blob.includes(`'${prefix}' +`));
+  });
+  console.log(`keys in the English dictionary : ${entries.length}`);
+  console.log(`files searched                 : ${files.length}`);
+  console.log(`KEYS NO SCREEN CAN SHOW        : ${orphans.length}`);
+  console.log('');
+  for (const [key, en] of orphans) console.log(`  ${key}\n      = ${JSON.stringify(en)}`);
+  console.log('');
+  console.log('An orphan is not automatically a gap. Check for a runtime-assembled key first,');
+  console.log('then whether the surface still exists at all.');
+  process.exit(0);
+}
 
 const hits = [];
 for (const file of files) {

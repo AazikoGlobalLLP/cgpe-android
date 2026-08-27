@@ -53,6 +53,26 @@ with `npx eslint src`). Device-unverified.
   `onAdded` are both `useCallback`s, so `tr` / `t` had to join their dep arrays. **`tsc` and all
   1069 tests were green without them**; only cache-free `npx eslint <file>` catches it.
   `notes.tsx` binds the translator as **`tr`** — a local `t` is a `setState` accumulator there.
+- **✅ THE QUESTION IS NOW CLOSED, NOT JUST ADVANCED — `--orphans` AUDITS THE OTHER DIRECTION.**
+  The literal scans can only find copy whose English a screen happens to hand-write, and they are
+  blind to template literals. So the audit was re-run **from the dictionary**: for each of the 226
+  keys, does any file under `src/` reference it? **18 have no consumer, and after triage NOT ONE is
+  a free win.** Two were `tab.home`/`tab.tasks`, which are **false positives** — `(tabs)/_layout.tsx:151`
+  does `t('tab.' + route.name)`, so a runtime-assembled key looks orphaned and is not (the script
+  now guards on the prefix). Three are blocked (`sync.droppedOne`/`droppedMany` in `api.ts`, which
+  has no non-React translator; `task.followUp`, backend data). Three are composed strings whose
+  `{placeholder}` key was never supplied. **The rest is dead copy for surfaces that no longer
+  exist — there is no `src/app/premium.tsx` any more**, so all four `premium.*` keys are for a
+  screen that was consolidated into `campaigns`. **So: there are no more free wins. Do not re-run
+  this hunt hoping for more; run it after the next COPY DROP.**
+- **THE THREE THAT ARE OWED WENT TO THE OWNER AS BATCH 6e** — `home.vsLast` and `premium.sendAll`
+  need `{pct}`/`{n}` variants (Commissions reads "+12% vs last month", Campaigns "Send to all 42",
+  and gluing words onto a number breaks Hindi/Gujarati word order), and Home's follow-ups empty
+  state needs only a **wording decision** — `home.noFollowups` says the same thing as the screen's
+  `'No follow-up is pending'` in different words, so no new translation is required. **That widget
+  was NOT wired**: its title, See-all and Try-again already translate, but its subtitle and its
+  `'Open follow-ups'` button have no keys, so swapping the empty title alone would half-translate
+  it again — and adopting differently-worded English is the owner's call, not ours.
 - **THE SCAN IS WORTH KEEPING.** Re-run the near-miss variant (not just the exact one) after every
   copy drop. Two traps carried over from Phase 80 and both still bite: parse the dictionary with a
   **tokenizer** (a line-anchored regex read 124 of 226 keys), and use a **2-character floor**. New

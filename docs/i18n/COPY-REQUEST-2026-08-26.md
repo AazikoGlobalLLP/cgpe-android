@@ -652,6 +652,23 @@ next to them that have no key, and so would have left the group half-translated.
 **Nothing here is urgent.** Each row is a group that is currently **all English**, which reads fine.
 They are listed so that the four newly-wired strings do not create new half-translated groups later.
 
+### 6e — Three you have ALREADY paid for that the app still cannot use (2026-08-27, later)
+
+We audited this from the other end: for each of the 226 keys, does any screen actually read it?
+**18 do not.** Almost all are dead copy for surfaces that no longer exist — nothing owed, and we
+have recorded them so nobody asks you about them again. **Three are different**, because the copy
+is good and the app simply cannot use it in the shape it was supplied:
+
+| # | You supplied | Where it should appear | What is needed | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|---|
+| 1 | `vs last month` | Commissions — the growth line, which reads **"+12% vs last month"** | The number has to sit **inside** the sentence, and it does not sit in the same place in Gujarati or Hindi as it does in English. Gluing the words onto the number would produce broken word order. Please translate this instead, keeping `{pct}` where the number belongs: **`{pct}% vs last month`** | ⬜ | ⬜ | ⬜ | ⬜ |
+| 2 | `Send to all` | Campaigns — the send button, which reads **"Send to all 42"** | Same reason. Please translate: **`Send to all {n}`** | ⬜ | ⬜ | ⬜ | ⬜ |
+| 3 | `No pending follow-ups right now.` and `All caught up!` | Home — the follow-ups widget when nothing is due | The screen currently says **"No follow-up is pending"** — the same thing in different words. **Just tell us which wording you prefer** and we wire yours; no new translation needed. Its two neighbours (`Birthdays, renewals and callbacks land here on the day they are due.` and the button `Open follow-ups`) do need copy, and are in 6a's family. | — | — | — | — |
+
+**Why this matters more than it looks.** A key with no reader is invisible to every check we have:
+the parity test only proves the five languages agree, and the compiler only sees a valid string. The
+same defect shipped twice before — supplied copy sitting unread while the screen showed English.
+
 ### What is deliberately NOT in Batch 6, and why
 
 - **Task categories** (Follow-up, Claim, Renewal, Meeting, Documentation, Collection, Training,
