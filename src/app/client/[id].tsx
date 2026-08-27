@@ -281,7 +281,7 @@ function ClientDetailScreen() {
 
         <Appear index={3 + client.policies.length}>
           <Button
-            label={reporting ? 'Generating report' : t('report.generate')}
+            label={reporting ? t('report.generating') : t('report.generate')}
             icon="document-text-outline"
             variant="outline"
             full

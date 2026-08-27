@@ -223,7 +223,7 @@ export default function Notes() {
       haptics.tap();   // a neutral acknowledgement, never the success buzz — it isn't on the server yet
       setDraft('');
       setComposing(false);
-      toast("Saved on this device — it'll sync when you're back online.", 'offline');
+      toast(tr('sync.savedLocal'), 'offline');
       return;
     }
 
@@ -248,7 +248,7 @@ export default function Notes() {
     } else {
       toast(`Note saved under ${catMeta(created.category).label}.`, 'success');
     }
-  }, [draft, draftCat, cat, q, toast]);
+  }, [draft, draftCat, cat, q, toast, tr]);
 
   const togglePin = useCallback(async (note: BoardNote) => {
     // No tap here: SwipeRow already buzzes when the action panel snaps open, so a second

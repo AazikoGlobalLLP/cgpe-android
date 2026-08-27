@@ -248,7 +248,7 @@ export default function Leads() {
     // add it again" — the draft is safe and will retry itself, so a neutral acknowledgement is honest.
     if (reason === 'network') {
       haptics.tap();
-      toast(`${lead.name} saved on this device — it will sync when you're back online`, 'info');
+      toast(t('sync.savedLocalNamed', { name: lead.name }), 'info');
       return;
     }
     haptics.warn();
@@ -265,7 +265,7 @@ export default function Leads() {
         ? `The server refused to create ${lead.name}: this account does not have access to Leads. Nothing was saved, on this device or on the server.`
         : `The server has nowhere to create ${lead.name} — it answered that the leads endpoint is not there. Nothing was saved, on this device or on the server.`,
     });
-  }, [refresh, toast]);
+  }, [refresh, toast, t]);
 
   const pickStage = useCallback((s: StageFilter) => {
     haptics.select();

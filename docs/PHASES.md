@@ -14,6 +14,51 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🔎 2026-08-27 (later still) — PHASE 81: THE NEAR-MISS SCAN — THREE SUPPLIED KEYS HAD *ZERO*
+CONSUMERS WHILE FOUR SCREENS HAND-WROTE THE ENGLISH.** Gates: `tsc` **0** · `npm test` **1069**
+(unchanged — no logic added) · `eslint` **0 errors / 12 warnings** (baseline, verified cache-free
+with `npx eslint src`). Device-unverified.
+- **WHY THERE WAS ANYTHING LEFT TO FIND.** Phase 80's scan matched hardcoded literals against
+  dictionary **values** with **exact** string equality. This one **normalises both sides first** —
+  case, trailing full stops, and **curly-vs-straight apostrophes** — and that last one alone hid
+  three keys. `'Saved on this device — it'll sync…'` in the source uses a straight `'`; the
+  dictionary entry uses a curly `’`. Byte-unequal, same sentence, invisible to Phase 80.
+- **THE FIND: `sync.savedLocal`, `sync.savedLocalNamed` and `report.generating` existed in all five
+  languages with NOT ONE consumer** — the exact defect family as Phase 79's zero-consumer `channel`
+  field and Phase 77's dead `||` fallback. Four call sites rendered the English by hand:
+  `notes.tsx:226`, `task-new.tsx:201` (offline-save toasts), `(tabs)/leads.tsx:251` (the **named**
+  variant) and `client/[id].tsx:284`.
+- **⚠️ `leads.tsx` DISPROVES A STANDING EXCLUSION, NARROWLY.** Phase 80 excluded composed strings
+  because "they need placeholder keys that do not exist". For this one **the placeholder key DOES
+  exist** — `sync.savedLocalNamed` is `'{name} saved on this device — …'`, built for exactly this
+  site. So the composed-string rule holds **only where no `{placeholder}` key was supplied**;
+  before excluding a composed string, **grep the dictionary for a `…Named` variant first.**
+- **`client/[id].tsx:284` was half-translated INSIDE ONE TERNARY** —
+  `label={reporting ? 'Generating report' : t('report.generate')}`. The idle state spoke Gujarati
+  and the loading state spoke English, on the same button. Wiring it closes the pair; there is no
+  half-translation risk because both branches now have copy.
+- **Two further sites wired by key reuse:** `commissions.tsx:224` (`tasks.viewMonth` — "This month"
+  is adverbial in gu/hi, so it carries to a period heading unchanged) and `notifications.tsx:360`
+  (`stage.new` on the unread Pill — **the same UI element** as the lead-stage Pill it was written
+  for, and the dictionary already uses the standalone form `नया`/`નવું` there rather than agreeing
+  with `लीड`, so this is consistency, not a new guess).
+- **✋ WHAT WAS FOUND AND DELIBERATELY *NOT* WIRED — the half-translated-group rule doing its job.**
+  Home's Portfolio-analytics tile row has **four** peer Eyebrows and only **two** have keys
+  ("Claims open" and "Tickets" do not), so wiring two of four would have produced exactly the
+  broken-looking strip Phase 80 warned about. Same call for `more.tsx:392` ("Quick actions" over
+  tiles that are 6c menu tables), `lic-plans.tsx:163`, `clients.tsx:71`'s restricted notice,
+  `job/[id].tsx`, `dashboards.tsx:441` and `notify.tsx:321`. **All 13 are now written out as
+  Batch 6d** in `docs/i18n/COPY-REQUEST-2026-08-26.md` — they are the peers, not the wins.
+- **DEP-ARRAY TRAP HIT TWICE AGAIN**, as predicted: `notes.tsx`'s `saveNote` and `leads.tsx`'s
+  `onAdded` are both `useCallback`s, so `tr` / `t` had to join their dep arrays. **`tsc` and all
+  1069 tests were green without them**; only cache-free `npx eslint <file>` catches it.
+  `notes.tsx` binds the translator as **`tr`** — a local `t` is a `setState` accumulator there.
+- **THE SCAN IS WORTH KEEPING.** Re-run the near-miss variant (not just the exact one) after every
+  copy drop. Two traps carried over from Phase 80 and both still bite: parse the dictionary with a
+  **tokenizer** (a line-anchored regex read 124 of 226 keys), and use a **2-character floor**. New
+  third trap: matching **case-insensitively on single words** produces ~500 hits of pure identifier
+  noise — **filter to multi-word strings** to read the near-miss list at all.
+
 **🌍 2026-08-27 (later) — PHASE 80: 73 CALL SITES WIRED FROM COPY THE OWNER HAD ALREADY SUPPLIED · BATCH 6 EXTRACTED · THE OWNER RELAY SHEET.**
 Commits `9074d08` · `d746d39`, pushed to `aaziko/Shivam`. Gates: `tsc` 0 · `npm test` **1069**
 (unchanged — this phase adds no logic) · `eslint` **0 errors / 12 warnings** (baseline, verified

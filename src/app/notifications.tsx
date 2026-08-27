@@ -357,7 +357,7 @@ export default function Notifications() {
                       // Read items fall back to the neutral node, so the rail itself reports
                       // how much is still new.
                       tone={n.read ? 'neutral' : (KIND_TONE[n.kind] ?? 'primary')}
-                      right={!n.read ? <Pill label="New" tone="primary" small /> : undefined}
+                      right={!n.read ? <Pill label={t('stage.new')} tone="primary" small /> : undefined}
                       // Only an unread row has anything to do; tapping it clears that one item.
                       // A read row takes no press, so its lack of feedback reads as "nothing here".
                       onPress={!n.read ? () => markOne(n) : undefined}

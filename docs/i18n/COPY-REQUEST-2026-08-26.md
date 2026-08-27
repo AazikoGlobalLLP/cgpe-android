@@ -624,6 +624,34 @@ soon, High value, Large family, Inactive) are only used when the server sends no
 come from the backend, so translating the fallback alone would not change what most users see —
 this one needs a decision about where segment names should live before it is worth your time.
 
+### 6d — Six more groups, found 2026-08-27 (later) by the NEAR-MISS scan (13 strings)
+
+**How these were found, and why they were invisible before.** The 2026-08-27 scan matched hardcoded
+English against your dictionary **exactly**. This second scan normalised both sides first — case,
+trailing full stops, and curly-vs-straight apostrophes — and found four more places where **copy you
+had already supplied in all five languages was being rendered as a hand-written English string**.
+Those four are now wired at zero copy cost. The rows below are the *peers* of those strings: the ones
+next to them that have no key, and so would have left the group half-translated.
+
+| # | English (exact) | which group it completes | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 1 | Claims open | Home — the Portfolio-analytics tile row (Clients / Leads / **Claims open** / **Tickets**) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 2 | Tickets | Home — the Portfolio-analytics tile row | ⬜ | ⬜ | ⬜ | ⬜ |
+| 3 | Portfolio analytics | Home — that tile row's own heading | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4 | Organisation-wide totals. Open analytics for the full breakdown. | Home — the footer under that tile row | ⬜ | ⬜ | ⬜ | ⬜ |
+| 5 | Clients are master and admin only | Clients — the notice a team member sees instead of the directory | ⬜ | ⬜ | ⬜ | ⬜ |
+| 6 | The client directory is available to administrators and the master account. Ask an administrator if you need a client's details. | Clients — the same notice | ⬜ | ⬜ | ⬜ | ⬜ |
+| 7 | This job is no longer running | Background job — the whole screen is English | ⬜ | ⬜ | ⬜ | ⬜ |
+| 8 | Background jobs are kept only while the app is open. It has finished and been cleared. | Background job — the same screen | ⬜ | ⬜ | ⬜ | ⬜ |
+| 9 | Keep working, this runs in the background | Background job — the button's other state (its "Done" state already has copy) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 10 | Added | Notify — the button's other state (its "Add" state already has copy) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 11 | Live activity | Master dashboard — the heading over the activity list (its "All" link already has copy) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 12 | LIC Plans | LIC plans — the screen heading. **Note:** you already supplied `LIC plans` (small p) for the menu. If the heading may use that same wording, say so and no new copy is needed. | ⬜ | ⬜ | ⬜ | ⬜ |
+| 13 | Quick actions *(no new copy needed — see note)* | More — the heading is already translated in your dictionary, but the **tiles under it** are part of the 6c menu tables. Wiring the heading alone would leave one translated word over English tiles, so it waits for 6c. | — | — | — | — |
+
+**Nothing here is urgent.** Each row is a group that is currently **all English**, which reads fine.
+They are listed so that the four newly-wired strings do not create new half-translated groups later.
+
 ### What is deliberately NOT in Batch 6, and why
 
 - **Task categories** (Follow-up, Claim, Renewal, Meeting, Documentation, Collection, Training,

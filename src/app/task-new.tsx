@@ -198,7 +198,7 @@ export default function TaskNew() {
 
     if (created.status === 'queued') {
       haptics.tap();   // a neutral acknowledgement, never the success buzz — it isn't on the server yet
-      toast("Saved on this device — it'll sync when you're back online.", 'offline');
+      toast(t('sync.savedLocal'), 'offline');
       router.replace('/(tabs)/tasks');   // the Tasks tab shows it with a "Pending sync" badge
       return;
     }

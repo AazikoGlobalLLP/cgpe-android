@@ -221,7 +221,7 @@ export default function Commissions() {
             {/* ---------------- This month ---------------- */}
             <Appear index={0}>
               <Card>
-                <Eyebrow>This month</Eyebrow>
+                <Eyebrow>{t('tasks.viewMonth')}</Eyebrow>
                 <Metric value={inr(shownMonth)} size={font.display} style={{ marginTop: 4 }} />
 
                 <View style={{ marginTop: spacing.md }}>
