@@ -26,7 +26,10 @@
 >
 > **Batch 5 (the sign-in screen) below is filled in with the real English strings**, taken from the
 > source character for character on 2026-08-27, so it can be translated without anyone guessing at
-> what the app actually says. It is **47 strings**, not the ~44 previously estimated. A new
+> what the app actually says. It is **49 strings**. *(First published as 47 and corrected the same
+> day: a review found one banner message missing from the extraction, and a second string was added
+> when the OTP error was fixed to name the right channel. If you already started on the 47, only two
+> rows are new — `login.errOtpRequiredEmail` and `login.msgCodeSendFailed`.)* A new
 > **Batch 5b** (4 strings) covers the crash screen added the same day.
 >
 > Batches 6–9 (the screens themselves) still have only counts, not strings; they get the same
@@ -42,7 +45,10 @@ supplies it. The `storage.*` keys supplied on 2026-08-26 are **done** and are no
 - The dictionary parity test can only prove a key *exists* in all five languages. It **cannot** see a
   value left as the English string, which is exactly how the gaps in Batch 1 survived.
 - Counts below were produced by scripted extraction and hand-checked on the daily-driver screens;
-  treat them as ±10%. The per-string lists are exact.
+  treat them as ±10%. The per-string lists are quoted from the source rather than estimated — but
+  "quoted exactly" is not the same as "complete": the first Batch 5 extraction missed a banner
+  message and had to be corrected the same day. If you spot English in the app that is not in a
+  table here, that is worth telling us, not a mistake on your part.
 
 ---
 
@@ -191,12 +197,14 @@ Until these land, those screens cannot look translated no matter what else is do
 
 ---
 
-## Batch 5 — the sign-in screen (47 strings) ⭐ READY TO FILL IN
+## Batch 5 — the sign-in screen (49 strings) ⭐ READY TO FILL IN
 
 The first screen anyone ever sees, and it is **0% translated** apart from two shared words. It is
 self-contained, so it can be done as one clean unit.
 
-**The strings below were extracted verbatim from the source on 2026-08-27** — character for
+**The strings below were extracted verbatim from the source on 2026-08-27** (and corrected the same
+day — an adversarial review found one missing and two changed; the count is **49**, not the 47 first
+published) — character for
 character, including the full stops and the spacing. Copy the English cell as it stands; if a cell
 looks odd (two spaces, three dots) that is what is really on screen, and the translation should
 follow the same shape.
@@ -250,7 +258,7 @@ word for a tab than for a field label. Put the same word in both if that reads b
 the OTP one has double spaces around "or" and shows a full example number. The email address and the
 number are examples — leave them as they are.)*
 
-### 5c. Errors shown under a field (5)
+### 5c. Errors shown under a field (6)
 
 These appear in red directly beneath the box the person is typing in, so they should be short.
 
@@ -261,6 +269,11 @@ These appear in red directly beneath the box the person is typing in, so they sh
 | `login.errIdentifierShape` | Enter your work email, or a 10 digit mobile number. | ⬜ | ⬜ | ⬜ | ⬜ |
 | `login.errEmailShape` | That email address does not look right. | ⬜ | ⬜ | ⬜ | ⬜ |
 | `login.errOtpRequired` | Enter the code from your WhatsApp message. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.errOtpRequiredEmail` | Enter the code from your email. | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(These two are the SAME message for two different people: the code goes to WhatsApp or to email
+depending on what the person typed to sign in, and the app now says the right one. Added
+2026-08-27 — previously everyone was told to check WhatsApp.)*
 
 ### 5d. Banner headings (8)
 
@@ -278,7 +291,7 @@ never combined.
 | `login.bannerCodeNotSent` | Code not sent | the server declined to send one | ⬜ | ⬜ | ⬜ | ⬜ |
 | `login.bannerSessionEnded` | Your session ended | shown after an automatic sign-out | ⬜ | ⬜ | ⬜ | ⬜ |
 
-### 5e. Banner message bodies (6)
+### 5e. Banner message bodies (7)
 
 The smaller line under the heading.
 
@@ -290,6 +303,7 @@ The smaller line under the heading.
 | `login.msgUnlockFailed` | Could not unlock right now. Check your connection and try again. | ⬜ | ⬜ | ⬜ | ⬜ |
 | `login.msgDetailsRefused` | Those details were not accepted. Check them and try again. | ⬜ | ⬜ | ⬜ | ⬜ |
 | `login.msgCodeCheckFailed` | That code could not be checked. Please try again. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `login.msgCodeSendFailed` | Could not send the code. Please try again. | ⬜ | ⬜ | ⬜ | ⬜ |
 
 *(The last two are safety nets — the server almost always sends its own wording instead, so they are
 rarely seen. Please still translate them; "rarely" is not "never".)*
@@ -336,9 +350,9 @@ it cannot use the app's colours, fonts or translations the normal way.
 | key | English | gu | hi | hi-en | gu-en |
 |---|---|---|---|---|---|
 | `crash.title` | This screen stopped working | ⬜ | ⬜ | ⬜ | ⬜ |
-| `crash.body` | Nothing you entered has been lost from the server. Try the screen again — if it keeps failing, close the app completely and reopen it, then tell your branch admin what you were doing. | ⬜ | ⬜ | ⬜ | ⬜ |
+| `crash.body` | Reloading starts the app again from the beginning, so anything you had typed on this screen and not yet saved will be lost. Work already saved is not affected. If this keeps happening, tell your branch admin what you were doing when it went wrong. | ⬜ | ⬜ | ⬜ | ⬜ |
 | `crash.detailHeading` | WHAT WENT WRONG | ⬜ | ⬜ | ⬜ | ⬜ |
-| `crash.retry` | Try this screen again | ⬜ | ⬜ | ⬜ | ⬜ |
+| `crash.retry` | Reload the app | ⬜ | ⬜ | ⬜ | ⬜ |
 
 *(`crash.detailHeading` is shown in capitals above the technical error text. The technical text
 itself is never translated — it comes from the phone.)*
@@ -403,7 +417,7 @@ in the number. Do not translate the braces or what is inside them.)*
 
 ## What to send next, and what has to happen first
 
-**Batch 5 (sign-in, 47 strings) and Batch 5b (the crash screen, 4 strings) are the next copy ask,
+**Batch 5 (sign-in, 49 strings) and Batch 5b (the crash screen, 4 strings) are the next copy ask,
 and both are now fully written out above** — every English string quoted exactly as it appears in
 the app, checked character by character on 2026-08-27. Nothing in them needs a `{placeholder}`.
 That is what to fill in and send back.

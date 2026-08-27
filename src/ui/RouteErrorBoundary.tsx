@@ -40,6 +40,11 @@ import { describeCrash } from '@/lib/crashReport';
  * the key — so a crash screen would read "crash.title" to a Gujarati user, which is worse than
  * English. The four strings are listed in `docs/i18n/COPY-REQUEST-2026-08-26.md`; wire them when
  * human copy arrives. (`t()` is unavailable here anyway — see the constraint above.)
+ *
+ * ⚠️ THE BUTTON LABEL COMES FROM `describeCrash`, NOT FROM A LITERAL HERE. It says "Reload the
+ * app" because that is what `Try.retry()` actually does — it re-mounts the ROOT and navigation
+ * falls back to its initial route. It is NOT a retry of the screen that failed. The reasoning
+ * is written at `CrashReport.retryLabel`; read it before changing the wording.
  * ------------------------------------------------------------------ */
 
 // Copied verbatim from `theme/theme.tsx` `light` (:108-124) and `dark` (:162-178). `action` is
@@ -52,7 +57,7 @@ const DARK = { bg: '#070c14', card: '#0f1724', text: '#e9eff7', muted: '#8fa0b6'
 export function RouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const scheme = useColorScheme();
   const c = scheme === 'dark' ? DARK : LIGHT;
-  const { title, message, detail } = describeCrash(error);
+  const { title, message, retryLabel, detail } = describeCrash(error);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -88,7 +93,7 @@ export function RouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
           <Pressable
             onPress={() => { void retry(); }}
             accessibilityRole="button"
-            accessibilityLabel="Try this screen again"
+            accessibilityLabel={retryLabel}
             style={({ pressed }) => ({
               backgroundColor: c.action,
               borderRadius: 14,
@@ -97,7 +102,7 @@ export function RouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
               opacity: pressed ? 0.85 : 1,
             })}
           >
-            <Text style={{ color: '#ffffff', ...textType('700', 15) }}>Try this screen again</Text>
+            <Text style={{ color: '#ffffff', ...textType('700', 15) }}>{retryLabel}</Text>
           </Pressable>
         </View>
       </ScrollView>

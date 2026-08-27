@@ -59,11 +59,27 @@ describe('describeCrash', () => {
     expect(all).not.toContain('offline');
   });
 
-  it('gives a recovery path in cost order and does not promise it will work', () => {
+  it('does NOT promise to retry the failed screen — the button reloads the whole app', () => {
+    // THE DEFECT THIS PINS. The first draft labelled the button "Try this screen again".
+    // `Try.retry()` only clears the boundary's error state, and the boundary is armed on the ROOT
+    // layout — so the app re-mounts and navigation falls back to its initial route
+    // (`app/index.tsx` → Home or login). The crashed screen never comes back. An adversarial
+    // review caught the promise before it shipped; these assertions stop it being written again.
+    const { retryLabel, message } = describeCrash(new Error('boom'));
+    expect(retryLabel.toLowerCase()).not.toContain('this screen');
+    expect(retryLabel.toLowerCase()).not.toContain('again');
+    expect(retryLabel).toBe('Reload the app');
+    expect(message.toLowerCase()).not.toContain('try the screen again');
+  });
+
+  it('warns that unsaved work on the screen is lost, before telling anyone to reload', () => {
+    // The earlier copy opened with "Nothing you entered has been lost from the server" and then
+    // told the user to close the app. Technically defensible, read as a blanket reassurance, and
+    // immediately followed by the instruction that discards unsaved work. Say the cost first.
     const { message } = describeCrash(new Error('boom'));
-    expect(message.indexOf('Try the screen again')).toBeLessThan(message.indexOf('close the app'));
-    expect(message.indexOf('close the app')).toBeLessThan(message.indexOf('branch admin'));
-    expect(message.toLowerCase()).not.toContain('will work');
+    expect(message).toContain('not yet saved will be lost');
+    expect(message.toLowerCase()).not.toContain('nothing you entered has been lost');
+    expect(message.indexOf('will be lost')).toBeLessThan(message.indexOf('branch admin'));
   });
 
   it('carries the error text through for a screenshot', () => {
@@ -74,6 +90,7 @@ describe('describeCrash', () => {
     const r = describeCrash(undefined);
     expect(r.title).toBeTruthy();
     expect(r.message).toBeTruthy();
+    expect(r.retryLabel).toBeTruthy();
     expect(r.detail).toBe('');
   });
 });

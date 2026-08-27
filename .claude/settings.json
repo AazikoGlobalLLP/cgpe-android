@@ -1,5 +1,11 @@
 {
+  "model": "claude-opus-4-8",
   "enabledPlugins": {
     "expo@claude-plugins-official": true
+  },
+  "permissions": {
+    "allow": [
+      "Read(//f/Shivam-Aaziko-Dev-MERN/CGPE-CURRENT-PROJECT/contracts/**)"
+    ]
   }
 }

@@ -1023,7 +1023,14 @@ export async function sendOtp(
     return { ok: false, channel, message: humanApiMessage(json, 'Could not send the code. Please try again.') };
   } catch (e: any) {
     if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
-    return { ok: false, message: 'Could not send the code. Please try again.' };
+    // `channel` is returned here too, even though the caller only reads it on success today.
+    // Leaving it off made `res.channel === 'email'` silently fall to the WhatsApp branch for
+    // anyone who wires this path later — a trap, for no saving.
+    return {
+      ok: false,
+      channel: phone.includes('@') ? 'email' : 'whatsapp',
+      message: 'Could not send the code. Please try again.',
+    };
   }
 }
 

@@ -94,6 +94,14 @@ export default function Login() {
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
+  /**
+   * WHERE THE CODE WAS ACTUALLY SENT, as the SERVER reports it (`sendOtp` returns its
+   * `channel`). The identifier field accepts an email OR a mobile number and the backend
+   * routes on which one you typed, so a fixed "check WhatsApp" message is wrong for half
+   * the people who use it. Defaults to 'whatsapp' only because that is the branch taken
+   * for anything without an '@' — it is overwritten the moment a code is actually sent.
+   */
+  const [otpChannel, setOtpChannel] = useState<'email' | 'whatsapp'>('whatsapp');
   const [loading, setLoading] = useState(false);
   /** Phase 48: whether to offer fingerprint-only restore, and whether one is in flight. */
   const [canRestore, setCanRestore] = useState(false);
@@ -196,6 +204,10 @@ export default function Login() {
       if (!alive.current) return;
       setLoading(false);
       if (res.ok) {
+        // Remember the channel the SERVER used, so the code-entry copy points at the right
+        // place. `res.channel` is absent only if an older backend omitted it, in which case
+        // the api layer has already derived it with the backend's own rule.
+        setOtpChannel(res.channel ?? 'whatsapp');
         // A fresh code invalidates the old one, so the box must not keep offering it.
         setOtp('');
         setOtpErr('');
@@ -219,7 +231,12 @@ export default function Login() {
   const doVerifyOtp = useCallback(async () => {
     setFailure(null);
     if (otp.trim().length < 4) {
-      setOtpErr('Enter the code from your WhatsApp message.');
+      // Name the place the code really went. Saying "WhatsApp" to someone who signed in
+      // with their email sends them looking in an app where nothing was ever delivered —
+      // and it appeared directly under a toast that had just said "Code sent to your email".
+      setOtpErr(otpChannel === 'email'
+        ? 'Enter the code from your email.'
+        : 'Enter the code from your WhatsApp message.');
       haptics.warn();
       return;
     }
@@ -250,7 +267,7 @@ export default function Login() {
     // Session issued. Outside the try for the same reason as the password path above.
     haptics.success();
     router.replace('/(tabs)/home');
-  }, [otp, phone, loginOtp, router]);
+  }, [otp, phone, otpChannel, loginOtp, router]);
 
   /** Phase 48: fingerprint-only restore. One biometric prompt → exchange the sealed refresh
    *  credential for a fresh session, no id/password/OTP. Every non-'ok' path routes to manual

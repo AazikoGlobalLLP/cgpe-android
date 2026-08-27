@@ -28,6 +28,23 @@ export type CrashReport = {
   /** What to do next, in the order a person should try it. */
   message: string;
   /**
+   * The button label. It is NOT "try this screen again", and the difference is the whole reason
+   * this field exists rather than a literal in the component.
+   *
+   * `Try.retry()` only does `setState({ error: undefined })`
+   * (`expo-router/build/views/Try.js:54-60`), and the boundary is armed on the ROOT layout — so what
+   * re-mounts is the entire app, not the screen that failed. Worse, when the boundary caught, the
+   * root `Stack` unmounted and `useNavigationBuilder`'s cleanup erased the stored navigation state
+   * (`react-navigation/core/useNavigationBuilder.js:496-502`), so the fresh Stack falls back to its
+   * initial route: `app/index.tsx`, which redirects to Home or to the login screen. The crashed
+   * screen and the whole back stack are gone.
+   *
+   * The first draft of this file labelled the button "Try this screen again", which promised
+   * something the code does not do — an adversarial review caught it before it shipped. Do not
+   * reword this back into a promise about the failed screen.
+   */
+  retryLabel: string;
+  /**
    * The error's own words, trimmed for the screen. Empty string when nothing was thrown that
    * carries a message — in which case the UI must show no detail block at all rather than an
    * empty box, because an empty box reads like a bug in the error screen itself.
@@ -60,17 +77,20 @@ export function crashDetail(error: unknown): string {
 /**
  * The full screen contents for a crash.
  *
- * The copy is deliberately about RECOVERY, in cost order: try the screen again (cheap, and it
- * works whenever the throw was caused by transient state), then restart the app, then report it.
- * It does not promise the retry will work, because it often will not.
+ * The copy says what the button DOES and what it COSTS, in that order, and makes no claim about
+ * anything being safe. The earlier draft opened with "Nothing you entered has been lost from the
+ * server" — technically defensible, because unsaved work was never on the server, but a field
+ * advisor reads it as "nothing was lost" and it is immediately followed by an instruction that
+ * throws unsaved work away. In this project a comforting non-answer is a defect, so it is gone.
  */
 export function describeCrash(error: unknown): CrashReport {
   return {
     title: 'This screen stopped working',
     message:
-      'Nothing you entered has been lost from the server. Try the screen again — if it keeps '
-      + 'failing, close the app completely and reopen it, then tell your branch admin what you '
-      + 'were doing.',
+      'Reloading starts the app again from the beginning, so anything you had typed on this '
+      + 'screen and not yet saved will be lost. Work already saved is not affected. If this keeps '
+      + 'happening, tell your branch admin what you were doing when it went wrong.',
+    retryLabel: 'Reload the app',
     detail: crashDetail(error),
   };
 }
