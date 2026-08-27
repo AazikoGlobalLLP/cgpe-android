@@ -293,6 +293,19 @@ function RootNav() {
   );
 }
 
+/**
+ * ARMS THE APP'S ONLY ERROR BOUNDARY. This export is the whole mechanism — expo-router wraps a
+ * route in its `Try` boundary ONLY when the route module exports `ErrorBoundary`
+ * (`expo-router/build/useScreens.js:141-158`), and the ROOT route node is resolved through that
+ * same path (`global-state/useStore.js:55`), so exporting it HERE covers every screen below.
+ *
+ * Before this, a render-time throw anywhere in the app unmounted the entire React root, and a
+ * release build has no LogBox — so the user got a dead screen with nothing on it and we got a
+ * bug report saying "it went blank". Do not remove the export to "clean up": the component being
+ * imported is not enough, the named export is what expo-router looks for.
+ */
+export { RouteErrorBoundary as ErrorBoundary } from '@/ui/RouteErrorBoundary';
+
 export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
