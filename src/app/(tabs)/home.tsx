@@ -1046,7 +1046,7 @@ export default function Home() {
           setNotice({
             tone: 'danger',
             title: 'Attendance could not be recorded',
-            message: 'The server could not be reached. Check your connection and try again.',
+            message: t('common.offlineBody'),
           });
           return;
         }
@@ -1106,7 +1106,7 @@ export default function Home() {
         setNotice({
           tone: 'danger',
           title: 'Attendance could not be recorded',
-          message: 'The server could not be reached. Check your connection and try again.',
+          message: t('common.offlineBody'),
         });
         return;
       }
@@ -1142,7 +1142,7 @@ export default function Home() {
       setNotice({
         tone: 'danger',
         title: 'Attendance could not be recorded',
-        message: 'The server could not be reached. Check your connection and try again.',
+        message: t('common.offlineBody'),
       });
     } finally {
       if (mounted.current) setClocking(false);
@@ -1218,7 +1218,7 @@ export default function Home() {
       if (!res.ok && !webDemo) {
         haptics.error();
         setBreakSheet(false);
-        setNotice({ tone: 'danger', title: 'Break could not be recorded', message: res.message || 'The server could not be reached. Check your connection and try again.' });
+        setNotice({ tone: 'danger', title: 'Break could not be recorded', message: res.message || t('common.offlineBody') });
         return;
       }
       const next: ClockState = { ...clock, onBreak: true };
@@ -1231,11 +1231,11 @@ export default function Home() {
       if (!mounted.current) return;
       haptics.error();
       setBreakSheet(false);
-      setNotice({ tone: 'danger', title: 'Break could not be recorded', message: 'The server could not be reached. Check your connection and try again.' });
+      setNotice({ tone: 'danger', title: 'Break could not be recorded', message: t('common.offlineBody') });
     } finally {
       if (mounted.current) setBreaking(false);
     }
-  }, [breaking, breakReason, clock, clockKey]);
+  }, [breaking, breakReason, clock, clockKey, t]);
 
   /** End an in-progress break. */
   const pressEndBreak = useCallback(async () => {
@@ -1256,7 +1256,7 @@ export default function Home() {
       }
       if (!res.ok && !webDemo) {
         haptics.error();
-        setNotice({ tone: 'danger', title: 'Could not end break', message: res.message || 'The server could not be reached. Check your connection and try again.' });
+        setNotice({ tone: 'danger', title: 'Could not end break', message: res.message || t('common.offlineBody') });
         return;
       }
       const next: ClockState = { ...clock, onBreak: false };
@@ -1266,11 +1266,11 @@ export default function Home() {
     } catch {
       if (!mounted.current) return;
       haptics.error();
-      setNotice({ tone: 'danger', title: 'Could not end break', message: 'The server could not be reached. Check your connection and try again.' });
+      setNotice({ tone: 'danger', title: 'Could not end break', message: t('common.offlineBody') });
     } finally {
       if (mounted.current) setBreaking(false);
     }
-  }, [breaking, clocking, clock, clockKey]);
+  }, [breaking, clocking, clock, clockKey, t]);
 
   const completeTask = useCallback(async (task: Task) => {
     // Optimistic: the row has to clear on the same frame as the tap. No haptic yet —
@@ -1416,7 +1416,7 @@ export default function Home() {
       items.push({ label: 'Follow-ups', value: String(pendingReminders.length), tone: 'accent', icon: 'call', onPress: () => router.push('/reminders') });
     }
     if (need.claims) {
-      items.push({ label: 'Open claims', value: String(openClaims.length), tone: 'primary', icon: 'shield-half', onPress: () => router.push('/(tabs)/claims') });
+      items.push({ label: t('home.openClaims'), value: String(openClaims.length), tone: 'primary', icon: 'shield-half', onPress: () => router.push('/(tabs)/claims') });
     }
     if (need.tickets) {
       items.push({ label: 'Open tickets', value: String(activeTickets.length), tone: 'info', icon: 'ticket', onPress: () => router.push('/tickets') });
@@ -1869,7 +1869,7 @@ export default function Home() {
                     : 'Claims raised by your policyholders appear here from intake to settlement.'}
                 action={unsure(claims.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
-                  : { label: 'Open claims', onPress: () => router.push('/(tabs)/claims') }}
+                  : { label: t('home.openClaims'), onPress: () => router.push('/(tabs)/claims') }}
               />
             ) : (
               <ListSection>

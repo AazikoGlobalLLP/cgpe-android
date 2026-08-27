@@ -72,7 +72,7 @@ export default function Contests() {
   return (
     <Screen>
       <Header
-        title="Contests"
+        title={t('act.contests')}
         subtitle={loading ? 'Loading your qualifications' : live > 0 ? `${live} running` : 'Leaderboards and rewards'}
         back
       />

@@ -107,10 +107,11 @@ function firstPolicy(cl: Client): string {
  */
 export default function ClaimNew() {
   const { user, viewAs, ready } = useAuth();
+  const t = useT();
   if (ready && !canViewOwnClients(user, viewAs)) {
     return (
       <RestrictedNotice
-        title="New claim"
+        title={t('act.newClaim')}
         heading="Filing a claim needs client-book access"
         subtitle="A claim is filed against a client from the book, which is available to administrators, the master account, and sales advisors for their own clients. Ask an administrator to register this claim for you."
       />
@@ -405,7 +406,7 @@ function ClaimNewScreen() {
 
   return (
     <Screen keyboard>
-      <Header title="New claim" back subtitle="File against a client already in the book" />
+      <Header title={t('act.newClaim')} back subtitle="File against a client already in the book" />
 
       <KeyboardScroll
         contentStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xl }}

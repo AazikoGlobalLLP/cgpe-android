@@ -91,7 +91,7 @@ export default function Profile() {
           <IconBtn
             icon="settings-outline"
             onPress={() => router.push('/settings')}
-            accessibilityLabel="Open settings"
+            accessibilityLabel={t('consent.blockedAction')}
           />
         }
       />

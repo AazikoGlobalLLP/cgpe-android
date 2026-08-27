@@ -213,23 +213,23 @@ export default function Claims() {
       ? [
         { label: 'Your claims', value: String(shownTotal), icon: 'shield-checkmark-outline', tone: 'primary' },
         { label: 'Still in progress', value: inrShort(activeValue), icon: 'hourglass-outline', tone: 'warning' },
-        { label: 'Settled', value: String(counts.settled ?? 0), icon: 'checkmark-circle', tone: 'success' },
+        { label: t('claimStatus.settled'), value: String(counts.settled ?? 0), icon: 'checkmark-circle', tone: 'success' },
       ]
       : [];
 
   const options = useMemo(() => {
     const list: { key: Filter; label: string; count?: number }[] = [
       { key: 'all', label: t('common.all'), count: counts.all },
-      { key: 'intake', label: 'Intake', count: counts.intake },
-      { key: 'docs_pending', label: 'Docs pending', count: counts.docs_pending },
+      { key: 'intake', label: t('claimStatus.intake'), count: counts.intake },
+      { key: 'docs_pending', label: t('claimStatus.docsPending'), count: counts.docs_pending },
       { key: 'under_review', label: 'Review', count: counts.under_review },
-      { key: 'submitted', label: 'Submitted', count: counts.submitted },
-      { key: 'settled', label: 'Settled', count: counts.settled },
+      { key: 'submitted', label: t('claimStatus.submitted'), count: counts.submitted },
+      { key: 'settled', label: t('claimStatus.settled'), count: counts.settled },
     ];
     // Rejected only earns a chip when there is one, but it must stay while it is selected,
     // otherwise a refresh that clears the last rejection strands the user in a dead filter.
     if ((counts.rejected ?? 0) > 0 || filter === 'rejected') {
-      list.push({ key: 'rejected', label: 'Rejected', count: counts.rejected });
+      list.push({ key: 'rejected', label: t('claimStatus.rejected'), count: counts.rejected });
     }
     return list;
   }, [counts, filter, t]);
@@ -291,7 +291,7 @@ export default function Claims() {
 
   return (
     <Screen>
-      <Header title="Claims" subtitle={subtitle} />
+      <Header title={t('tab.claims')} subtitle={subtitle} />
 
       {loading ? (
         <ClaimsSkeleton />
@@ -329,7 +329,7 @@ export default function Claims() {
                   title={empty.title}
                   subtitle={empty.subtitle}
                   action={empty.add && canCreateClaim
-                    ? { label: 'New claim', onPress: () => router.push('/claim-new') }
+                    ? { label: t('act.newClaim'), onPress: () => router.push('/claim-new') }
                     : { label: 'Show all claims', onPress: () => pickFilter('all') }}
                 />
               )}
@@ -348,7 +348,7 @@ export default function Claims() {
       {canCreateClaim ? (
         <Fab
           icon="add"
-          label="New claim"
+          label={t('act.newClaim')}
           onPress={() => router.push('/claim-new')}
           style={{ bottom: insets.bottom + 76 }}
         />

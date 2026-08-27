@@ -278,7 +278,7 @@ export default function LeadDetail() {
               )}
 
               <Meter
-                label={lost ? 'Closed as lost' : won ? 'Policy issued' : 'Pipeline progress'}
+                label={lost ? 'Closed as lost' : won ? t('stage.policyIssued') : 'Pipeline progress'}
                 value={lost ? 0 : step >= 0 ? (step + 1) / FLOW.length : 0}
                 valueLabel={lost ? 'Not proceeding' : step >= 0 ? `${step + 1} of ${FLOW.length}` : t(st.labelKey)}
                 tone={lost ? 'danger' : won ? 'success' : 'primary'}
@@ -446,7 +446,7 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
       subtitle={`Currently at ${t(STAGE_META[current].labelKey)}`}
     >
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
-        <ListSection title="Pipeline">
+        <ListSection title={t('common.pipeline')}>
           {FLOW.map((s, i) => {
             const isCurrent = s === current;
             const done = at >= 0 && i < at;

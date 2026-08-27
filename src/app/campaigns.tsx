@@ -192,6 +192,7 @@ const MSG_CLAMP = 4;
 
 function SampleRow({ rec, index, onSend }: { rec: Rec; index: number; onSend: (r: Rec) => void }) {
   const c = useTheme();
+  const t = useT();
   const [open, setOpen] = useState(false);
 
   return (
@@ -207,7 +208,7 @@ function SampleRow({ rec, index, onSend }: { rec: Rec; index: number; onSend: (r
               size="sm"
               variant="whatsapp"
               icon="logo-whatsapp"
-              label="Send"
+              label={t('common.send')}
               disabled={!rec.phone}
               onPress={() => onSend(rec)}
             />
@@ -482,13 +483,13 @@ function CampaignsScreen() {
     const pick = (k: Kind) => () => changeKind(k);
     return [
       { label: 'Renewals due', value: num(summary.renewal_due), tone: 'warning', icon: 'refresh-circle', onPress: pick('renewal') },
-      { label: 'Birthdays', value: num(summary.birthday_month), tone: 'accent', icon: 'gift', onPress: pick('birthday') },
-      { label: 'Maturity soon', value: num(summary.maturity_soon), tone: 'info', icon: 'cash', onPress: pick('maturity') },
-      { label: 'Anniversaries', value: num(summary.anniversary_month), tone: 'danger', icon: 'heart', onPress: pick('anniversary') },
+      { label: t('act.birthdays'), value: num(summary.birthday_month), tone: 'accent', icon: 'gift', onPress: pick('birthday') },
+      { label: t('premium.maturitySoon'), value: num(summary.maturity_soon), tone: 'info', icon: 'cash', onPress: pick('maturity') },
+      { label: t('premium.anniversaries'), value: num(summary.anniversary_month), tone: 'danger', icon: 'heart', onPress: pick('anniversary') },
       { label: 'Reachable', value: num(summary.opted_in), tone: 'success', icon: 'logo-whatsapp' },
       { label: 'In the book', value: num(summary.total_clients), tone: 'neutral', icon: 'people' },
     ];
-  }, [summary, changeKind]);
+  }, [summary, changeKind, t]);
 
   const reachShare = summary && summary.total_clients > 0
     ? summary.opted_in / summary.total_clients

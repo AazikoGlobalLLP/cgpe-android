@@ -63,6 +63,7 @@ function dayTitle(offset: number): string {
 
 export default function Calendar() {
   const health = useDataHealth();
+  const t = useT();
 
   const [items, setItems] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -131,7 +132,7 @@ export default function Calendar() {
 
   return (
     <Screen>
-      <Header title="Calendar" subtitle={subtitle} back />
+      <Header title={t('act.calendar')} subtitle={subtitle} back />
 
       {loading ? <StripSkeleton /> : (
         <ScrollView

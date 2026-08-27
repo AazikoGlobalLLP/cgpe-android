@@ -251,8 +251,8 @@ export default function Analytics() {
    */
   const campItems: KpiItem[] = camp ? [
     { label: 'Birthdays today', value: num(camp.birthday_today), tone: 'accent', icon: 'gift' },
-    { label: 'Anniversaries', value: num(camp.anniversary_month), tone: 'danger', icon: 'heart' },
-    { label: 'Maturity soon', value: num(camp.maturity_soon), tone: 'info', icon: 'cash' },
+    { label: t('premium.anniversaries'), value: num(camp.anniversary_month), tone: 'danger', icon: 'heart' },
+    { label: t('premium.maturitySoon'), value: num(camp.maturity_soon), tone: 'info', icon: 'cash' },
   ] : [];
 
   /**
@@ -358,7 +358,7 @@ export default function Analytics() {
             <Appear index={1}>
               <Row style={{ gap: 10, alignItems: 'stretch' }}>
                 <MetricTile
-                  label="Clients"
+                  label={t('tab.clients')}
                   value={num(stats.total_clients)}
                   icon="people"
                   tone="primary"
@@ -392,7 +392,7 @@ export default function Analytics() {
                   />
                 ) : null}
                 <MetricTile
-                  label="Birthdays this month"
+                  label={t('premium.birthdaysThisMonth')}
                   value={num(stats.birthdays_this_month)}
                   icon="gift"
                   tone="accent"
@@ -436,7 +436,7 @@ export default function Analytics() {
                   />
                   <View style={{ height: spacing.xl }} />
                   <Meter
-                    label="Premium due this month"
+                    label={t('premium.dueThisMonth')}
                     value={renewalShare}
                     valueLabel={`${num(camp.renewal_due)} of ${num(totalClients)}`}
                     tone="warning"
@@ -452,7 +452,7 @@ export default function Analytics() {
                 exists so the row is not misread as a screen that failed to fill in. */}
             {camp ? (
               <Appear index={4}>
-                <SectionHeader title="This month" />
+                <SectionHeader title={t('tasks.viewMonth')} />
                 <KpiStrip
                   items={campItems}
                   style={{ marginHorizontal: -spacing.lg }}

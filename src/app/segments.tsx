@@ -778,7 +778,7 @@ function DetailSheet({ row, defs, onClose }: {
             <ListSection title="Dates">
               {birthday ? (
                 <DataRow
-                  label={row.birthdayName ? `Birthday, ${row.birthdayName}` : 'Birthday'}
+                  label={row.birthdayName ? `Birthday, ${row.birthdayName}` : t('seg.birthday')}
                   value={birthday}
                   icon="gift-outline"
                   tone={row.birthdayIn === 0 ? 'accent' : 'neutral'}
@@ -786,7 +786,7 @@ function DetailSheet({ row, defs, onClose }: {
               ) : null}
               {renewal ? (
                 <DataRow
-                  label="Premium due"
+                  label={t('act.premiumDue')}
                   value={row.renewalDate ? `${fmtDay(row.renewalDate)}, ${renewal}` : renewal}
                   icon="calendar-outline"
                   tone={row.renewalIn != null && row.renewalIn <= 7 ? 'warning' : 'neutral'}

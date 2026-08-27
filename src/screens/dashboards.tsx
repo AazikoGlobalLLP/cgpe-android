@@ -18,6 +18,7 @@ import React from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useT } from '@/i18n';
 import { radius, shadow, spacing, type, useTheme } from '@/theme/theme';
 import { Card, Grad, IconName, Metric, SectionHeader, Txt } from '@/ui/base';
 import { Pill } from '@/ui/data';
@@ -179,6 +180,7 @@ function byDuty(list: TeamMember[]): TeamMember[] {
  */
 function MemberDetailRow({ member, onPress }: { member: TeamMember; onPress: () => void }) {
   const c = useTheme();
+  const t = useT();
   const s = member.stats;
   const meta = [member.role.replace(/_/g, ' '), member.branch].filter(Boolean).join(' · ');
   const figures: { label: string; tone: Tone; icon: IconName }[] = [];
@@ -204,7 +206,7 @@ function MemberDetailRow({ member, onPress }: { member: TeamMember; onPress: () 
           <Txt weight="700" size={14} numberOfLines={1}>{member.name}</Txt>
           <Txt size={12} color={c.muted} numberOfLines={1} style={{ marginTop: 1 }}>{meta || 'Team member'}</Txt>
         </View>
-        {member.clockedIn ? <Pill label="On duty" tone="success" small dot />
+        {member.clockedIn ? <Pill label={t('common.onDuty')} tone="success" small dot />
           : member.online ? <Pill label="Signed in" tone="info" small dot />
             : <Pill label="Off" tone="neutral" small />}
       </View>
@@ -230,6 +232,7 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
   canCreateTask?: boolean;
 }) {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const th = TIER_THEME.admin;
   const online = team.filter((m) => m.online).length;
@@ -263,7 +266,7 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
           <View style={{ height: '100%', width: `${pct * 100}%`, backgroundColor: th.accent, borderRadius: 4 }} />
         </View>
         <View style={{ flexDirection: 'row', gap: 20, marginTop: 14 }}>
-          <Mini label="Clocked in" value={`${clockedIn}/${team.length}`} tint={th.accent} />
+          <Mini label={t('home.clockedIn')} value={`${clockedIn}/${team.length}`} tint={th.accent} />
           <Mini label="Online" value={String(online)} tint="#7cc7ff" />
           <Mini label="Open tasks" value={String(open)} tint="#ffd48a" />
         </View>
@@ -290,12 +293,12 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
           ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: 'Assign task', tint: c.primary, onPress: () => router.push('/task-new') }] : []),
           { icon: 'paper-plane', label: 'Send renewals', tint: c.warning, onPress: () => router.push('/campaigns') },
           { icon: 'people-circle', label: 'Team', tint: th.accent, onPress: () => router.push('/team') },
-          { icon: 'shield-half', label: 'Claims', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
+          { icon: 'shield-half', label: t('tab.claims'), tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
         ]} />
       </View>
 
       <View>
-        <SectionHeader title={`Team (${team.length})`} action="View all" onAction={() => router.push('/team')} />
+        <SectionHeader title={`Team (${team.length})`} action={t('home.viewAll')} onAction={() => router.push('/team')} />
         <View style={{ gap: 10 }}>
           {team.slice(0, 4).map((m, i) => (
             <Appear key={m.id} index={i}>
@@ -304,7 +307,7 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
                 showDuty
                 onPress={() => router.push(`/team/${m.id}`)}
                 trailing={m.clockedIn
-                  ? <Pill label="On duty" tone="success" small />
+                  ? <Pill label={t('common.onDuty')} tone="success" small />
                   : <Pill label="Off" tone="neutral" small />}
               />
             </Appear>
@@ -325,6 +328,7 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
   canCreateTask?: boolean;
 }) {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const th = TIER_THEME.master;
   const admins = team.filter((m) => m.role === 'admin' || m.role === 'leader');
@@ -356,7 +360,7 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
         <View style={{ flexDirection: 'row', gap: 22, marginTop: 16 }}>
           <Mini label="Admins" value={String(admins.length)} tint={th.accent} />
           <Mini label="Agents" value={String(agents.length)} tint="#7cc7ff" />
-          <Mini label="On duty" value={String(clockedIn)} tint="#4ee6a6" />
+          <Mini label={t('common.onDuty')} value={String(clockedIn)} tint="#4ee6a6" />
         </View>
       </TierHero>
 

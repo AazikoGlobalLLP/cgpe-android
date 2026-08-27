@@ -316,7 +316,7 @@ export default function Leads() {
   return (
     <Screen>
       <Header
-        title="Leads"
+        title={t('tab.leads')}
         subtitle={loading ? 'Loading your pipeline' : `${leads.length} leads, ${openCount} still open`}
         right={!loading && openValue > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
@@ -820,7 +820,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
     <Sheet
       visible={visible}
       onClose={close}
-      title="New lead"
+      title={t('act.newLead')}
       subtitle="It starts at the New stage. You can move it on straight away."
       footer={
         <Button

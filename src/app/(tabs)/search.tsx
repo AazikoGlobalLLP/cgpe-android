@@ -585,7 +585,7 @@ export default function Search() {
   return (
     <Screen>
       {/* No back chevron: since 2026-08-26 Search is a bottom tab (a root), not a pushed screen. */}
-      <Header title="Search" subtitle={subtitle} />
+      <Header title={t('tab.search')} subtitle={subtitle} />
 
       <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md }}>
         <SearchBar

@@ -191,7 +191,7 @@ export default function More() {
   if (!ready || !user) {
     return (
       <Screen>
-        <Header title="More" />
+        <Header title={t('tab.more')} />
         <ScrollView
           contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.xl }}
           showsVerticalScrollIndicator={false}
@@ -359,7 +359,7 @@ export default function More() {
 
   return (
     <Screen>
-      <Header title="More" subtitle={`${caps.label} access`} />
+      <Header title={t('tab.more')} subtitle={`${caps.label} access`} />
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.xl }}

@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useT } from '@/i18n';
 import { font, spacing, useTheme } from '@/theme/theme';
 import { Header, KeyboardScroll, Screen, Txt } from '@/ui/base';
 import { Button, Field, Segmented } from '@/ui/controls';
@@ -63,6 +64,7 @@ function Group({ label, hint, children }: { label: string; hint?: string; childr
 
 export default function TaskEdit() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const toast = useToast();
@@ -208,8 +210,8 @@ export default function TaskEdit() {
               full
               options={[
                 { key: 'keep', label: 'Keep' },
-                { key: 'today', label: 'Today' },
-                { key: 'tomorrow', label: 'Tomorrow' },
+                { key: 'today', label: t('common.today') },
+                { key: 'tomorrow', label: t('tasks.tomorrow') },
                 { key: 'week', label: 'In a week' },
               ]}
               value={dueChoice}
@@ -223,9 +225,9 @@ export default function TaskEdit() {
             <Segmented<TaskPriority>
               full
               options={[
-                { key: 'high', label: 'High' },
-                { key: 'medium', label: 'Medium' },
-                { key: 'low', label: 'Low' },
+                { key: 'high', label: t('priority.high') },
+                { key: 'medium', label: t('priority.medium') },
+                { key: 'low', label: t('priority.low') },
               ]}
               value={priority}
               onChange={pick<TaskPriority>(setPriority)}

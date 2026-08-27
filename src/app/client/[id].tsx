@@ -172,11 +172,11 @@ function ClientDetailScreen() {
     ];
     // A matured policy has run its full term — no premium is due, so don't raise a "days late" alarm on it.
     const due = p && p.status !== 'matured' ? dueToken(p.nextRenewal) : null;
-    if (due) out.push({ label: 'Premium due', value: due.label, icon: 'time-outline', tone: due.tone });
+    if (due) out.push({ label: t('act.premiumDue'), value: due.label, icon: 'time-outline', tone: due.tone });
     const mat = monthYear(p?.maturityDate);
     if (mat) out.push({ label: 'Maturity', value: mat, icon: 'flag-outline', tone: 'accent' });
     return out;
-  }, [client]);
+  }, [client, t]);
 
   if (loading) return <DetailSkeleton />;
 
@@ -281,7 +281,7 @@ function ClientDetailScreen() {
 
         <Appear index={3 + client.policies.length}>
           <Button
-            label={reporting ? 'Generating report' : 'Generate client report'}
+            label={reporting ? 'Generating report' : t('report.generate')}
             icon="document-text-outline"
             variant="outline"
             full
@@ -317,7 +317,7 @@ function ClientDetailScreen() {
           accessibilityLabel={t('common.a11yWhatsapp', { name: client.name })}
         />
         <Button
-          label="Send reminder"
+          label={t('premium.sendReminder')}
           icon="paper-plane"
           full
           disabled={!client.phone}
@@ -382,6 +382,7 @@ function ReportSheet({ visible, report, onClose }: {
   visible: boolean; report: ReportPayload | null; onClose: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
   const s = report?.summary ?? {};
 
   const rows: { label: string; value: string }[] = [];
@@ -406,7 +407,7 @@ function ReportSheet({ visible, report, onClose }: {
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Client report"
+      title={t('report.title')}
       subtitle={report?.familyHead ?? undefined}
       footer={<Button label="Share report" icon="share-social" full onPress={share} />}
     >

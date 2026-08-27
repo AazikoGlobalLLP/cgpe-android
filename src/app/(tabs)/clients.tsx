@@ -143,10 +143,10 @@ function ClientsScreen() {
     },
     {
       key: 'renewal',
-      label: 'Premium due',
+      label: t('act.premiumDue'),
       mode: 'single',
       options: [
-        { key: 'overdue', label: 'Overdue', count: countBy(items, (cl) => renewalBucket(cl) === 'overdue') },
+        { key: 'overdue', label: t('tasks.overdue'), count: countBy(items, (cl) => renewalBucket(cl) === 'overdue') },
         { key: 'due30', label: 'Next 30 days', count: countBy(items, (cl) => renewalBucket(cl) === 'due30') },
         { key: 'later', label: 'Later', count: countBy(items, (cl) => renewalBucket(cl) === 'later') },
       ],
@@ -218,7 +218,7 @@ function ClientsScreen() {
   return (
     <Screen>
       <Header
-        title="Clients"
+        title={t('tab.clients')}
         subtitle="Search your whole book"
         right={total != null && total > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
@@ -340,10 +340,10 @@ function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
   const subtitleIcon = hasPolicyNo ? 'document-text-outline' : client.phone ? 'call-outline' : 'alert-circle-outline';
 
   // One status token per row, ranked by urgency: money first, then the courtesy touch.
-  const pill = hasDue && due < 0 ? { label: 'Overdue', tone: 'danger' as const }
+  const pill = hasDue && due < 0 ? { label: t('tasks.overdue'), tone: 'danger' as const }
     : hasDue && due === 0 ? { label: 'Due today', tone: 'danger' as const }
       : hasDue && due <= 30 ? { label: `Due ${fmtDay(p!.nextRenewal)}`, tone: 'warning' as const }
-        : client.segment.includes('birthday') ? { label: 'Birthday', tone: 'accent' as const }
+        : client.segment.includes('birthday') ? { label: t('seg.birthday'), tone: 'accent' as const }
           : null;
 
   const actions: SwipeAction[] = client.phone ? [

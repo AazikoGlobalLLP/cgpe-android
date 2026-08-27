@@ -200,7 +200,7 @@ export default function AgentMap() {
           <LeafletMap pins={pins} breaks={breakPoints} height={330} onInteracting={setMapBusy} />
           <Row style={{ justifyContent: 'center', gap: spacing.lg, marginTop: spacing.md, flexWrap: 'wrap' }}>
             <Legend color={c.success} label="Clock-in" />
-            <Legend color={c.warning} label="Break" />
+            <Legend color={c.warning} label={t('break.start')} />
             <Legend color={c.danger} label="Clock-out" />
           </Row>
           {/* Said once, here, rather than as a badge on the map: the map is small and its
@@ -233,7 +233,7 @@ export default function AgentMap() {
           <Appear index={3}>
             <ListSection title="My check-in" footer={mine.outTime ? undefined : 'Still on duty. Clock out from the Today tab.'}>
               <DataRow
-                label="Clocked in"
+                label={t('home.clockedIn')}
                 value={mine.time ? fmtTime(mine.time) : 'Time not recorded'}
                 icon="log-in-outline"
                 tone="success"

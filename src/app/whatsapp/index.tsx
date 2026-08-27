@@ -207,7 +207,7 @@ export default function WhatsAppHub() {
   return (
     <Screen>
       <Header
-        title="WhatsApp"
+        title={tr('act.whatsapp')}
         subtitle={subtitle}
         back
         right={!loading && unread > 0 ? (
