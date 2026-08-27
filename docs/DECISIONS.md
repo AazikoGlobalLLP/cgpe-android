@@ -4698,3 +4698,72 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   splits paint-from-render is still unmade** — a `uiautomator dump` while the screen is blank: widget
   text nodes present ⇒ a paint/opacity problem, absent ⇒ a render/data problem. **Do not ship
   `detachInactiveScreens={false}` on the strength of this one answer.**
+
+---
+
+## 2026-08-27 (later still) — Phase 81: the near-miss scan, and closing the free-wins hunt
+
+- **An EXACT-match scan is not enough, and the gap was apostrophes.** Phase 80 compared hardcoded
+  literals to dictionary values with exact string equality and found 117 hits. Normalising first —
+  case, trailing full stops, and **curly-vs-straight apostrophes** — found three more keys the owner
+  had supplied in all five languages that **no screen read at all**: `sync.savedLocal`,
+  `sync.savedLocalNamed`, `report.generating`. The source types `it'll`; the copy has `it’ll`.
+  Byte-unequal, same sentence. **Same defect family as Phase 79's zero-consumer `channel` field and
+  Phase 77's dead `||` fallback — a value with no reader is invisible to every gate we have.**
+
+- **"Composed strings stay English" is TRUE ONLY WHERE NO `{placeholder}` KEY WAS SUPPLIED.** Phase
+  80 excluded composed strings on the stated reasoning that "they need placeholder keys that do not
+  exist". For `(tabs)/leads.tsx:251` the key **does** exist — `sync.savedLocalNamed` is
+  `'{name} saved on this device — …'`, written for exactly that site. The exclusion is otherwise
+  sound (gluing `t()` into a template literal breaks Hindi/Gujarati word order), but it must be
+  checked, not assumed: **grep the dictionary for a `…Named` / `{placeholder}` variant first.**
+
+- **The hunt is CLOSED, and it was closed by proof rather than by a clean run.** The previous commit
+  could only say "a clean scan does not prove the absence of wins" — because the literal scans can
+  only see copy whose English a screen happens to hand-write, and they are blind to template
+  literals. So the audit was re-run **from the dictionary end**: for each of the 226 keys, does any
+  file under `src/` reference it? That direction is a **superset** with no blind spot. **18 keys
+  have no consumer and NOT ONE is a free win** — 2 false positives, 3 blocked, 3 composed without a
+  placeholder key, 10 dead copy for surfaces that no longer exist. **Do not re-run this hoping for
+  more; run it after the next COPY DROP.**
+
+- **⚠️ A RUNTIME-ASSEMBLED KEY LOOKS ORPHANED AND IS NOT.** `(tabs)/_layout.tsx:151` does
+  `t('tab.' + route.name)`, so **every** `tab.*` key reads as unused. Two of the twenty orphans were
+  this and would have been "fixed" as dead copy. The script now guards on the key prefix, and the
+  standing rule is: **check for an assembled key before believing an orphan.**
+
+- **Ten orphans are dead copy because the SURFACE is gone, not because the wiring was missed.**
+  There is no `src/app/premium.tsx` any more — the More entry `premium` points at `/campaigns` — so
+  all four `premium.*` keys were written for a screen that was consolidated away. Recorded so nobody
+  re-derives it or, worse, rebuilds a screen to justify the copy.
+
+- **SIX CANDIDATE SITES WERE DELIBERATELY NOT WIRED, and the half-translated-group rule is what
+  stopped them.** Home's Portfolio-analytics row has **four** peer Eyebrows and only two have keys
+  ("Claims open" and "Tickets" do not), so wiring two of four would have produced exactly the strip
+  Phase 80 warned about. Same call for `more.tsx:392`, `lic-plans.tsx:163`, the `clients.tsx`
+  restricted notice, `job/[id].tsx`, `dashboards.tsx:441` and `notify.tsx:321`. **The peers went to
+  the owner as Batch 6d (13 strings). A scan hit is a candidate, not a fix.**
+
+- **The Home follow-ups widget was left alone even though it reads as the most obvious win.** Its
+  title, See-all and Try-again already translate, so the English empty state stands out — but its
+  subtitle and its `'Open follow-ups'` button have no keys, and `home.noFollowups` says the same
+  thing as the screen's `'No follow-up is pending'` **in different words**. Wiring it would both
+  half-translate the widget again and change visible English wording unilaterally. It became a
+  one-line question in Batch 6e instead: *which wording do you prefer?* No new translation needed.
+
+- **Two keys reused across domains, deliberately, with the reasoning checked in the non-English
+  values rather than assumed.** `tasks.viewMonth` ("This month") is **adverbial** in gu/hi
+  (`આ મહિને` / `इस महीने`), so it carries from a task-view toggle to a commissions period heading
+  unchanged. `stage.new` on the unread-notification Pill is **the same UI element** the key was
+  written for, and the dictionary already uses the standalone form (`નવું` / `नया`) there rather
+  than agreeing with `लीड` — so this is consistency with the supplied copy, not a new guess.
+
+- **The dep-array trap hit twice more, exactly as predicted.** `notes.tsx`'s `saveNote` and
+  `leads.tsx`'s `onAdded` are `useCallback`s, so `tr` / `t` had to join their dep arrays. **`tsc`
+  and all 1069 tests were green without them**; only cache-free `npx eslint <file>` caught it.
+  `notes.tsx` binds the translator as **`tr`** because a local `t` is a `setState` accumulator.
+
+- **The scans are committed rather than left in a scratchpad** (`scripts/i18n-freewins-scan.mjs`),
+  with all three traps and the **template-literal blind spot** written at the top. That blind spot
+  is not theoretical: `leads.tsx:251` built its message as a template literal and was found by
+  grepping the dictionary's English, **not** by the script.

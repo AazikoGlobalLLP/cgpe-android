@@ -291,7 +291,36 @@ session by design** — Phase 77 is where fixing starts.
 
 **SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
 
-## Next 3 — as of 2026-08-27 (after Phase 80)
+## Next 3 — as of 2026-08-27 (after Phase 81)
+
+**Nothing has moved on the three blockers, and Phase 81 closed the last self-contained thread —
+this time with proof rather than an assumption.** The orphan audit enumerated all 226 dictionary
+keys and found no remaining free win. Hand the owner `docs/OWNER-ACTIONS-2026-08-27.md`.
+
+1. **Relay the two server asks** — unchanged, and both were re-verified live at Phase 80: prod
+   `origin/main` = `990c660`, `fda199c` is not an ancestor, `cloudStorageConfigured:false`.
+   **Re-verify before repeating either claim.** **Do not name the bucket `uploads`.**
+2. **Phase 82 — wire the copy the moment it lands.** Order: **6a** (70, closes the
+   half-translated groups) → **6d** (13, the peers Phase 81 found and deliberately did not wire) →
+   **5** (49, sign-in) → **6b** (41, outage) → **6c** (the menus) → **6e** (3 — two need `{pct}` /
+   `{n}` variants, one needs only a wording decision). All quoted verbatim in
+   `docs/i18n/COPY-REQUEST-2026-08-26.md`; hand over that file, do not re-derive the list. Wiring is
+   fast; the copy is the long pole. **After the drop, re-run
+   `node scripts/i18n-freewins-scan.mjs` and `--orphans`** — a new drop can introduce new
+   zero-consumer keys, which is the only thing that reopens this hunt.
+3. **Phase 83 — the APK, on or after 1 Sep 2026** (or `eas billing:subscribe starter --account
+   shivam-bhadoriya`). First build to carry the Search tab and Phases 77–81. Check the quota BEFORE
+   promising a date — a doomed attempt still uploads ~317 MB before refusing. **Strongly consider
+   adding EAS Update in that same build** to end the rebuild-per-fix cycle.
+
+⚠️ **There is NO self-contained app-side work left.** Phase 80 was the last of the sweeping and
+Phase 81 proved the residue is empty. **Say so plainly rather than inventing a phase.** Bug #8
+remains open and owner-deferred; it needs a plugged-in phone and about a minute
+(`bash scripts/diagnose-blank-screen.sh`), not more code reading.
+
+---
+
+## Superseded — Next 3 as of 2026-08-27 (after Phase 80)
 
 **Hand the owner `docs/OWNER-ACTIONS-2026-08-27.md` — that page IS items 1, 2 and 3 in plain
 language.** Every remaining item needs a merge, a cable, a decision or a payment. There is no

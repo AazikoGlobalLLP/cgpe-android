@@ -590,25 +590,53 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   sets — do not "correct" either one by deleting the other.**
   (b) **composed strings stay English** (`On duty (n)`, `${duration} on duty`, `withCount('All', n)`)
   — they need placeholder keys that do not exist, and gluing `t()` into a template literal breaks
-  Hindi/Gujarati word order. ✅ **Batch 5 (sign-in) is now EXTRACTED** (2026-08-27): all **47** strings
+  Hindi/Gujarati word order. ⚠️ **BUT THAT IS TRUE ONLY WHERE NO `{placeholder}` KEY WAS SUPPLIED —
+  CHECK, DO NOT ASSUME (Phase 81).** `(tabs)/leads.tsx:251` composed
+  `` `${lead.name} saved on this device — …` `` while **`sync.savedLocalNamed` = `'{name} saved on
+  this device — …'` sat unread in all five languages**, written for exactly that site. **Grep the
+  dictionary for a `…Named` / `{placeholder}` variant before excluding a composed string.** The two
+  that genuinely lack one (`{pct}% vs last month`, `Send to all {n}`) are now Batch 6e. ✅ **Batch 5 (sign-in) is now EXTRACTED** (2026-08-27): all **47** strings
   are quoted verbatim in `docs/i18n/COPY-REQUEST-2026-08-26.md`, along with a new Batch 5b (the crash
   screen, 4 strings). Nothing on the sign-in screen is a composed string, so it needs no placeholder
   keys — do not invent one. *(Published as 47, corrected to **49** the same day.)*
   ✅ **THE EXTRACTION BACKLOG IS NOW CLEAR (Phase 80, 2026-08-27).** **Batch 6** is written out:
   **6a** (70 — the copy that closes the groups Phase 80 left half-translated), **6b** (41 — the outage
   bodies, formerly "the 39"), **6c** (the More menu + the other module-scope label tables, listed as
-  whole units). Only Batches **7–9** remain as counts. **Hand the owner
-  `docs/i18n/COPY-REQUEST-2026-08-26.md`; do not re-derive any list.**
-  🔑 **RE-RUN THE FREE-WINS SCAN AFTER EVERY COPY DROP.** Compare every hardcoded literal in `src/`
-  against the **VALUES** of the English dictionary (not the keys): an exact match is copy the owner
-  already supplied, in all five languages, that no screen reads. It found **117** the first time and
-  **73 were wired at zero copy cost**. **Nothing else can see this class of gap** — the parity test
+  whole units). **Phase 81 added 6d** (13 — the peers of sites it deliberately refused to wire) and
+  **6e** (3 the owner has already paid for that the app still cannot use: two need `{pct}`/`{n}`
+  variants, one needs only a wording decision). Only Batches **7–9** remain as counts. **Hand the
+  owner `docs/i18n/COPY-REQUEST-2026-08-26.md`; do not re-derive any list.**
+  🔑 **THE FREE-WINS SCAN IS NOW A COMMITTED SCRIPT — `node scripts/i18n-freewins-scan.mjs`
+  (add `--all` for single-word noise, `--orphans` for the other direction). RE-RUN IT AFTER EVERY
+  COPY DROP, and only then.** It compares every hardcoded literal in `src/` against the **VALUES** of
+  the English dictionary (not the keys): a match is copy the owner already supplied, in all five
+  languages, that no screen reads. It found **117** the first time (**73 wired at zero copy cost**),
+  and the **near-miss** pass — which normalises case, trailing full stops and **curly-vs-straight
+  apostrophes** — found **three more keys with ZERO consumers** that exact matching could not see
+  (`it'll` vs `it’ll` is byte-unequal). **Nothing else can see this class of gap** — the parity test
   only proves a key EXISTS in five languages, `tsc` sees a well-typed literal, `npm test` covers pure
-  logic. Same defect family as Phase 79's `channel` field with zero consumers. Two scan traps: use a
-  **2-character floor** (a `<4` filter hid `priority.low` = "Low") and parse the dictionary with a
-  tokenizer, not a line-anchored regex (entries are several per line and mix `'` and `"` quoting — a
-  naive regex read 124 of 226 keys and silently under-reported). **Count swaps from the diff**, not by
-  hand: the first commit message said 61 when the diff said 73.
+  logic. Same defect family as Phase 79's `channel` field with zero consumers.
+  ✅ **THE HUNT IS CLOSED — do NOT re-run it hoping for more (Phase 81).** `--orphans` audits from
+  the dictionary end (for each of the 226 keys, does any file read it?) — a **superset** of the
+  literal scans with no template-literal blind spot. **18 keys have no consumer and NOT ONE is a free
+  win:** 2 false positives, 3 blocked, 3 composed without a placeholder key, 10 dead copy for
+  surfaces that no longer exist (**there is no `src/app/premium.tsx` any more**, so all four
+  `premium.*` keys are for a screen folded into `campaigns`). Only a **new copy drop** reopens this.
+  ⚠️ **A RUNTIME-ASSEMBLED KEY LOOKS ORPHANED AND IS NOT:** `(tabs)/_layout.tsx:151` does
+  `t('tab.' + route.name)`, so every `tab.*` key reads as unused. Check for an assembled key before
+  believing an orphan.
+  ⚠️ **The literal scan is BLIND TO TEMPLATE LITERALS** — `leads.tsx:251` was found by grepping the
+  dictionary's English, not by the script. A clean run does not by itself prove there are no wins.
+  Three scan traps, all still live: use a **2-character floor** (a `<4` filter hid `priority.low` =
+  "Low"); parse the dictionary with a **tokenizer**, not a line-anchored regex (entries are several
+  per line and mix `'` and `"` quoting — a naive regex read 124 of 226 keys and silently
+  under-reported); and **filter to multi-word strings** or single-word case-insensitive matching
+  buries the list in ~500 identifier hits. **Count swaps from the diff**, not by hand: the first
+  commit message said 61 when the diff said 73.
+  ⚠️ **A SCAN HIT IS A CANDIDATE, NOT A FIX.** Six sites were correctly refused in Phase 81 because
+  their on-screen PEERS have no keys — Home's Portfolio-analytics row has four peer Eyebrows and only
+  two have keys, so wiring two would rebuild the very half-translated strip the sweep rule forbids.
+  Those peers go to the owner (Batch 6d), not into the code.
   🚫 **SIX CATEGORIES MUST NOT BE SWEPT, and the reasons differ** (decided Phase 80, written into
   `docs/PHASES.md`; do not re-litigate): a value **persisted to AsyncStorage** (`home.tsx` `place`);
   strings that are **backend DATA** (task `CATEGORIES` are sent as `category`, icon-map keys are
