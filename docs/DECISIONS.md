@@ -4533,3 +4533,98 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   ENOENT → 500), and four `cloudStorage.js` behaviours are DigitalOcean-Spaces-specific and silently
   wrong against MinIO (`forcePathStyle`, the bucket missing from the returned URL, per-object ACLs,
   plus the fallback bug).
+
+## 2026-08-27 — Phase 79 (sign-in honesty · backend Phase 94 consumed · the app's first error boundary)
+
+- **The login screen was showing users machine tokens, and the fix is a RULE, not a field swap.**
+  Probed live on prod: `POST /auth/login` answers `{"error":"NO_ACCOUNT","message":"No account found
+  with that email or mobile number…"}`, and `BAD_PASSWORD` / `OTP_NOT_CONFIGURED` /
+  `OTP_DELIVERY_FAILED` are the same shape. The app read `json.error || json.message`, so the two
+  commonest failures in the product printed a bare machine word under the heading "Sign in refused".
+  **A blanket flip to `message`-first was rejected as a regression:** most routes on this backend
+  carry their only human copy in `error` (`'Your account is inactive…'`, `'The code has expired…'`)
+  and send no `message` at all. The rule shipped instead — `error` wins unless it is
+  SCREAMING_SNAKE_CASE, then `message`, then the caller's fallback; a token is never displayed
+  (`lib/apiMessage.ts`). The test file pins every real prose refusal so a future "simplification"
+  fails loudly rather than silently suppressing a reason.
+
+- **cgpe-api's advice to "map 415 → not accepted" was declined, with the reason sent back to them.**
+  Their Phase 94 tags the fileFilter rejection `statusCode = 415` carrying the SAME body as the old
+  bare 500. Our classifier reads the body BEFORE the status, so both shapes already resolve
+  identically and no change was needed. A status-only branch would have been actively worse: it
+  fires for a body-less 415 (a proxy's own) and prints "this server does not accept videos yet",
+  which is a stronger claim than a body-less 415 supports and becomes false the moment their change
+  deploys. A test now pins 415 and 500 producing the same outcome so the equivalence cannot rot.
+
+- **`isEphemeralUrl` was deliberately NOT narrowed, and this is the judgement call of the phase.**
+  Phase 94 makes storage path-style, so the bucket is the first path segment — a bucket named
+  `uploads` would make every durable MinIO object match the local-disk fallback signature and warn
+  users their evidence will not be kept. The obvious fix (only flag `/uploads/` when the host matches
+  the API host) trades a harmless false alarm for a false *reassurance*: if `BACKEND_URL` ever points
+  at a non-API host, the disk fallback starts reading as durable and a redeploy-wiped file is
+  reported as safely attached — the exact defect the 2026-08-25 audit fixed. **Over-warning is
+  recoverable; under-warning loses a claimant's evidence.** Filed as an ops constraint on the bucket
+  name instead, pinned by a test, with the reasoning written at the function.
+
+- **`entity_id` was wired BEFORE the backend that honours it is deployed, on purpose.** `fda199c` is
+  on `origin/Shivam` only and prod deploys `origin/main`. An unknown key is ignored by the old build
+  and stored by the new one, so sending it early is safe and starts working the moment the owner
+  merges — no second app change, and no APK dependency (there is no OTA). Every comment that touches
+  it names which backend state it describes.
+
+- **The app had no React error boundary at all, and the EXPORT is the mechanism.** expo-router wraps
+  a route in `Try` only if the module exports `ErrorBoundary` (`useScreens.js:141-158`), and no file
+  in `src/` did — so any render throw unmounted the whole React root, with no LogBox in a release
+  build. Exported from `_layout.tsx`, which covers every screen because the ROOT node resolves
+  through the same `getQualifiedRouteComponent` (`useStore.js:55`).
+  **It is NOT filed as the fix for bug #8** (More→Today blank): a root unmount kills the tab bar with
+  it, so it presents as a wholly dead app, while #8 is reported as still navigable. Claiming it would
+  have been the third confident-but-wrong answer to that bug.
+
+- **The boundary uses literal colours because `useTheme()` fails in the WORST way — quietly.**
+  `ThemeContext` is created with `light` as its default (`theme/theme.tsx:271`), so outside its
+  provider the hook does not throw; it returns the wrong scheme and flashes a dark-mode user a white
+  screen. `useColorScheme` (react-native) needs no provider. `type()` IS used — it is a pure
+  weight→family map with no context, and bare `fontWeight` does not render the Geist weights on
+  Android.
+
+- **A danger-zone change was verified by BOOTING, not by typechecking.** `_layout.tsx` is
+  load-bearing, so `npx expo start --web` was run: 1821 modules bundled and a rendered page served,
+  zero errors — which also exercises expo-router's dev-mode `validateRouteTreeExports` over every
+  route file. That is the check that would have caught last phase's boot-breaking import.
+
+- **An adversarial review caught three defects in this phase's own work, two of them untruths
+  written while fixing other untruths.** (1) The crash button said "Try this screen again";
+  `Try.retry()` only clears the boundary's error state, the ROOT re-mounts, and
+  `useNavigationBuilder`'s unmount cleanup has already erased the navigation state — so it falls back
+  to `app/index.tsx` and the crashed screen and back stack are gone. Now "Reload the app", with the
+  label on `CrashReport` so it cannot drift back to a literal, and two tests rejecting the old
+  wording. (2) The OTP channel fix was half-shipped: the toast said "Code sent to your email" and the
+  very next screen still said "Enter the code from your WhatsApp message" — the `channel` plumbed
+  through for exactly that had zero consumers, which `tsc` cannot see on an optional property.
+  (3) The Batch 5 extraction was missing a string while claiming to be complete.
+  **Lesson recorded: when a value is plumbed through for a copy fix, grep that every place saying the
+  wrong thing now reads it.**
+
+- **Crash copy states the COST before the action.** The first draft opened "Nothing you entered has
+  been lost from the server" and then told the user to close the app. Technically defensible — the
+  unsaved work was never on the server — but a field advisor reads it as a blanket reassurance
+  immediately before the instruction that discards their work. In this project a comforting
+  non-answer is a defect, so it now says what reloading loses, first.
+
+- **CLAUDE.md's own claims were treated as hypotheses and checked.** ~20 were wrong, and two were
+  actively blocking: it still instructed "do NOT wire the net-new `common.*` keys until copy is
+  supplied" (supplied and wired on 2026-08-26) and listed four already-corrected i18n keys as broken.
+  Real numbers recorded: 226 dictionary keys, 1069 tests over 66 files, `api.ts` 4332 lines,
+  `home.tsx` 2534, 11 `useAppUi()` consumers, 6 route files with zero `t()`, five of the six "dead"
+  files absent from disk, and no `ORDER` constant anywhere.
+
+- **A stale reply of OURS in `INBOX.md` was corrected rather than left to mislead.** The GPS item
+  still told `cgpe-api` that the two shift profiles were NOT changed and asked the owner two
+  questions they had already answered; all three profiles have been hourly since `97f2d13`. The box
+  is now ticked with a dated correction underneath. **An answered item whose reply was never updated
+  is indistinguishable from an unanswered one.**
+
+- **`.claude/settings.json` was committed by a careless `git add -u` and reverted forward.** It is the
+  owner's local machine config. Restored with a plain follow-up commit — no history rewrite, no force
+  push — and the owner's working copy was backed up first and put back untouched.

@@ -15,8 +15,9 @@ Each phase touches ≤8 files and produces one demoable thing.
 ## Now
 
 **🔑 2026-08-27 — PHASE 79: THE LOGIN SCREEN STOPS SHOWING MACHINE TOKENS · BACKEND PHASE 94 CONSUMED · THE APP GETS ITS FIRST ERROR BOUNDARY · CLAUDE.md CORRECTED.**
-Commits `0833707` · `3508d9f` · `2c04eb7` · `2d3cafc` · `dc589cd`, pushed to `aaziko/Shivam`.
-Gates: `tsc` 0 · `npm test` **1068** (was 1037) · `eslint` 0 errors. Device-unverified (EAS quota).
+Commits `0833707` · `3508d9f` · `2c04eb7` · `2d3cafc` · `dc589cd` · `fcd21aa` · `f768186` · `ddeaa9f`,
+pushed to `aaziko/Shivam`. Gates: `tsc` 0 · `npm test` **1069** (was 1037) · `eslint` 0 errors / 12
+warnings (baseline). Device-unverified (EAS quota until 1 Sep 2026).
 - **🔴 SIGN-IN WAS SHOWING USERS THE RAW WORDS `NO_ACCOUNT` AND `BAD_PASSWORD`, on production, today.**
   Probed live: `POST /auth/login` answers `{"error":"NO_ACCOUNT","message":"No account found with
   that email or mobile number…"}`. The app read `json.error || json.message`, so the two commonest
@@ -51,6 +52,22 @@ Gates: `tsc` 0 · `npm test` **1068** (was 1037) · `eslint` 0 errors. Device-un
   four already-fixed keys as still wrong. Also: 143 keys → **226**; 258 tests/9 files → **1068/66**;
   api.ts 1744 → **4332** lines; home.tsx "the only consumer of `useAppUi()`" → **11** files; a `ORDER`
   constant that does not exist; five "dead" files that are not on disk; and four wrong line anchors.
+- **🔍 A 15-AGENT ADVERSARIAL REVIEW CAUGHT 3 DEFECTS IN THIS PHASE'S OWN WORK** (`f768186`), all
+  invisible to the three gates, and **two of them were untruths written while fixing other untruths**.
+  (1) The crash button said "Try this screen again" — `Try.retry()` re-mounts the ROOT and the
+  navigation state has already been erased, so it lands on Home/login and the crashed screen and back
+  stack are gone; now "Reload the app", pinned by tests. (2) The OTP channel fix was HALF shipped —
+  the toast said "Code sent to your email" and the very next screen still said "Enter the code from
+  your WhatsApp message"; the `channel` plumbed through for exactly that had **zero consumers**, which
+  `tsc` cannot see on an optional property. (3) The Batch 5 extraction was missing a string while
+  claiming to be complete — it is **49**, not 47. Two further findings were reported and **killed on
+  inspection**, recorded so nobody re-files them: dropping `Claim <id>` from `description` loses
+  nothing today (that call is unreachable on prod — `up.ephemeral` returns first while
+  `cloudStorageConfigured:false`), and the claim checklist ticks are not held in the `api.ts` state
+  buffer that finding assumed.
+- **🧹 `.claude/settings.json` was swept into a commit by `git add -u` and reverted FORWARD**
+  (`ddeaa9f`) — it is the owner's local machine config. Backed up first, restored on disk untouched,
+  no history rewrite and no force push.
 - **📮 INBOX: a stale reply of OURS was correcting-worthy.** The GPS item still told `cgpe-api` the two
   shift profiles were NOT changed and asked the owner two questions they had already answered — all
   three profiles have been hourly since `97f2d13`. Corrected and ticked.

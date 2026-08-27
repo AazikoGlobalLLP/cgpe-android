@@ -338,6 +338,19 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
    repeat the miss.
 
 ## Diagnosis discipline (Phase 77, 2026-08-26 — this cost a near-miss)
+- ⚠️ **A COPY FIX IS NOT DONE UNTIL EVERY PLACE SAYING THE WRONG THING READS THE NEW VALUE (Phase 79).**
+  The OTP fix plumbed the server's `channel` through `api.ts` so an emailed code would stop claiming
+  it went to WhatsApp — and shipped with the toast fixed and **the very next screen still saying
+  "Enter the code from your WhatsApp message."** The new field had **zero consumers**, and `tsc`
+  cannot see an unread optional property. **After adding a value for a copy fix, grep the literal you
+  were fixing** (`grep -rn "WhatsApp" src/app/(auth)/`) and confirm every hit now branches on it.
+  Same class as the Phase-77 dead-`||`-fallback and the Phase-78 dead `common.onDuty` branch.
+- ⚠️ **Never write an emoji into a Python string as two `\uXXXX` escapes** — `"🔴"` is a
+  surrogate PAIR, and Python accepts it in a `str` then refuses to encode it (`UnicodeEncodeError:
+  surrogates not allowed`). This is the same defect that destroyed `INBOX.md` on 2026-08-26, and it
+  bit twice more in Phase 79 on `CLAUDE.md` and `PHASES.md` — harmlessly both times, because the
+  script wrote to a **temp file and asserted on size first**. Paste the literal emoji character, or
+  use the Edit tool. **The write-to-temp-then-assert rule is what makes this a non-event; keep it.**
 - ⚠️ **A root cause recorded in `docs/` is a HYPOTHESIS until someone re-reads the code.** Phase 77
   inherited three documents all naming `Appear`'s `cancelAnimation` as the More→Today blank screen,
   and it is **wrong**: `Appear`'s effect deps are constants at every Home call site so its cleanup
@@ -448,6 +461,12 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   there is that **`useTheme()` would NOT throw** outside its provider — `ThemeContext` is created with
   `light` as its default (`theme/theme.tsx:271`), so it silently returns the wrong scheme and a
   dark-mode user gets a white flash. `useColorScheme` (react-native) is the one to trust.
+  ⚠️ **The button says "Reload the app", and it must not be reworded into a promise about the failed
+  screen.** `Try.retry()` only clears the boundary's error state (`views/Try.js:54-60`); the ROOT
+  re-mounts, and `useNavigationBuilder`'s unmount cleanup has already erased the navigation state
+  (`react-navigation/core/useNavigationBuilder.js:496-502`), so it falls back to `app/index.tsx` →
+  Home or login. **The crashed screen and the whole back stack are gone.** Two tests reject the old
+  wording; the reasoning is at `CrashReport.retryLabel`.
 - `src/data/api.ts` (**4332 lines**, 56 importers — the line count said 1744 until 2026-08-27, which
   badly understated how much lives in here) — `state` is a write buffer, not seed data.
   `setAuthToken` silently disables all network calls for a token starting `demo-`.
