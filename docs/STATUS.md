@@ -2,32 +2,40 @@
 
 **Updated:** 27 August 2026
 
-**Working on right now:** Putting the Gujarati, Hindi, Hinglish and Roman-Gujarati words you sent
-into the app, so screens stop showing English to staff who chose another language.
+**Working on right now:** Making the app show each team only the things they actually use, and
+putting the app into Gujarati, Hindi and the two Roman spellings.
 
 **Done this week:**
-- You sent 70 translated words and phrases, and all of them that the app could use are now in it —
-  the same day they arrived. Eleven parts of the app that were showing a mix of English and Gujarati
-  side by side now read in one language: the claims list, the client filters, the home screen's
-  summary row, the More menu tiles, the search help panel, the campaign figures, the client summary,
-  the lead progress bar, both task forms, the team-member figures, and the manager dashboard.
-- Two of the 70 could not be used, and it is worth knowing why. One of them describes a screen that
-  does not exist — the word list was built by an automatic scan, and that scan had picked the phrase
-  out of a developer's note rather than off a screen. Nothing is broken; that one translation is
-  simply not needed. The other is waiting on five words next to it that have no translation yet.
-- Earlier in the week: 73 more places were switched to words you had already paid to translate but
-  which no screen was reading, and a check was written so this can never quietly build up again.
+- **The ops and sales teams now get their own, much shorter app.** You wrote out what each should
+  see; that is now exactly what they get. Ops sees claims, reminders, requests and their attendance;
+  sales sees leads, prospects and their attendance, five of each on the home screen. Everything else
+  is gone from their menus. Managers and admins are untouched, and so is every other department —
+  narrowing a team you did not describe is how people lose work they need.
+- Four things stayed visible even though you said "nothing else", each because it cannot be got back
+  from inside the app: Settings (that is where the language switch lives), profile, the privacy
+  screen, and the attendance record. One judgement call to check: **"processes/operations" is not a
+  module in the app** — you were asking what it was. The closest thing is Tickets, the requests
+  raised by policyholders, so ops gets that. Say the word and it comes out.
+- **Every staff member can now create a task for themselves.** One small server change is still
+  needed for it to work in the field; it has been written up and is ready for you to forward.
+- **The sign-in screen now speaks all five languages** — every label, every error, every message. It
+  is the first thing a new joiner sees and it was entirely English until today.
+- **135 phrases translated in all,** including everything that was left half-finished last week. You
+  asked us to do the translations ourselves rather than wait, so we did; they are marked in the code
+  as ours rather than yours, so a native speaker can review and change any line without a rebuild.
+- A check that runs after every batch caught three phrases we had translated but not actually
+  connected to a screen. All three were fixed the same day. The app now carries **less** unused
+  translation than it did at the start of the week, despite adding far more.
 
 **Blocked on:**
-- **The live server is still running an older version.** Video evidence and document-to-claim
-  linking are finished in the app but cannot work until the finished server work is put live.
-- **File storage is still switched off**, which is why captured documents sometimes will not open.
-- **New versions of the app cannot be built until 1 September**, when the monthly free allowance
-  resets — or sooner if you take the paid tier. Three sessions of finished work is waiting on this,
-  and none of it is on anyone's phone yet.
-- **A few more word lists** are ready for you to fill in; the sign-in screen is the most valuable.
-- **Three small wording choices** need your answer — including one where you sent two slightly
-  different Gujarati versions of the same sentence and we picked the newer one.
+- **The live server is still on an older version**, so video evidence and document-to-claim linking
+  still do not work in the field. **File storage is still switched off**, which is why captured
+  documents will not open. Both were re-checked today.
+- **New app versions cannot be built until 1 September.** Everything above is waiting on that, and
+  none of it is on anyone's phone yet. Switching to a different build account would get around the
+  date, but it would force every one of the 21 phones to uninstall and sign in again — not worth it
+  for five days.
+- **Two word lists are still to do:** the menus, and the "could not reach the server" messages.
 
-**Next:** Go through the 82 new places the app could now show translated words, wire the ones that
-will not leave a screen half-finished, and get the rest of the word lists ready for you.
+**Next:** Translate the main menu, then the connection messages, and get the first build out on
+1 September carrying everything from the last month.

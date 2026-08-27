@@ -462,6 +462,61 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   back to `message` when `error` is SCREAMING_SNAKE_CASE, and never shows a token. A blanket
   `message`-first flip is a REGRESSION — several routes send only `error`.
 
+## Machine translation: the ban, and the day it was waived (Phase 83, 2026-08-27)
+
+- **PHASE-19 §4 forbids machine translation, and the reason is mechanical, not stylistic:** the
+  parity test proves a value EXISTS in five languages, **never that it is CORRECT**. Four
+  wrong-but-green keys survived months that way. Assume the ban is ON.
+- ⚠️ **THE OWNER WAIVED IT ONCE, IN WRITING, FOR ONE BATCH** — *"translation aap abhi ke liye khud
+  se kar lijiye … agar [problem] aaye toh hum solve kar denge."* 135 keys were written by Claude on
+  2026-08-27 and are **labelled as such in a header inside `src/i18n/index.tsx`**. Do **NOT** treat
+  that as standing permission, and do **NOT** convert owner-supplied copy into that style. Anything
+  new needs the same explicit instruction.
+- **Three things a translated key still cannot reach**, all of which produce a ZERO-CONSUMER key
+  (the defect four phases were spent removing) rather than a translated screen:
+  (a) **outside every provider** — `ui/RouteErrorBoundary` renders there, so `useT()` resolves the
+  context default `t: (k) => k` and prints the literal key. The 4 `crash.*` keys were dropped for
+  this. (b) **non-React modules** — `store/auth`, `data/api`, `lib/biometrics`, `lib/tracker`,
+  `constants/config` have no translator at all. (c) **no call site** — a row in the copy request is
+  not proof a screen says it (`0 clients in process` came from a code COMMENT;
+  `doc.videoStillTooLarge` matched no screen at all).
+- 🔑 **RUN `node scripts/i18n-freewins-scan.mjs --orphans` BEFORE COMMITTING A COPY DROP, not after.**
+  On 2026-08-27 it caught **three keys the same session had just created** with no reader. Orphans
+  finished at **17**, down from 18, after adding 135 keys — that is the bar.
+- **A module-scope helper cannot call a hook — pass the translator in.** `dueToken`
+  (`client/[id].tsx`) takes it as an argument; `MODES` in `(auth)/login.tsx` moved inside the
+  component as a `useMemo` instead. Both are the pattern to copy for a module-scope label table.
+
+## Department layouts: the owner's ops/sales matrix lives in the APP (Phase 83, 2026-08-27)
+
+- `OPS_TEAM_UI` / `SALES_TEAM_UI` / `departmentFallbackUi` in `store/appUi.tsx` encode the owner's
+  two verbatim lists. They are consulted **only when the server returns NO config** — a seeded
+  `PUT /rbac/app-ui/:roleKey` document still wins — because the per-role docs have never been
+  seeded in prod (owner backlog Point 6).
+- ⚠️ **Narrowing applies to the TEAM tier only, and to the two NAMED departments only.** An admin in
+  Operations keeps everything, and so does every department the owner did not describe — including
+  the four live values `canonicalizeDepartment` returns `null` for. **Guessing a layout for an
+  undescribed department is how a field agent loses their own work.**
+- ⚠️ **"baki kuch bhi nahi" has four exceptions and they are load-bearing:** `settings` (the LANGUAGE
+  SWITCH — hiding it strands a user in a script they cannot read), `profile`/`account` (DPDP), and
+  `attendance` (the clock record the owner called mandatory). `tickets` for ops is an
+  **interpretation** of "processes/operations" — the owner was ASKING what that module is.
+- ⚠️ **Emit hidden widgets EXPLICITLY.** `normalizeUiConfig` falls back to the whole `DEFAULT_UI`
+  list when the widget array is empty, so "everything off" written by omission silently re-opens the
+  dashboard. A test pins the array length.
+
+## Task creation: open to everyone, and the workaround that does NOT work
+
+- **Owner decision 2026-08-27: every team member may create a task for THEMSELVES.** Create is gated
+  on `can_create_task` alone; assign-to-others stays on `caps.assignTasks` + `can_assign_task_to_others`,
+  and `task-new.tsx` LOCKS the assignee row so a team member's task is self-assigned by construction.
+- 🔴 **Do NOT "fix" this by posting to `/tasks`.** That route has no role gate and self-assigns
+  already (`routes/tasks.js:189, :210`) — but `GET /team/task-overview` reads **only**
+  `db().collection('team_tasks')` (`team.js:77`), and that overview is what the app's list PREFERS
+  (`api.ts:536`). A task written to the `tasks` collection is **invisible in the list that created
+  it**. The backend ask (allow a self-assigned `team_task` from any authenticated user) is filed at
+  the foot of `INBOX.md`. Until it ships, `POST /team/tasks` 403s and `addTask` reports it honestly.
+
 ## Danger zones
 - ⚠️ **`src/app/_layout.tsx` EXPORTS `ErrorBoundary`, and that export is the whole mechanism.**
   expo-router wraps a route in its `Try` boundary **only** if the route module exports
@@ -678,9 +733,10 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   convention — done for `agent-track` (`t`→`track`), `kb` (`t`→`tag`), `performance` (`t`→`task`);
   `notes.tsx` and `tickets/index.tsx` still bind the translator as `tr`.
 - **i18n (`src/i18n/index.tsx`) — the real numbers, recounted 2026-08-27 after Phase 82.**
-  **284 keys** exist (this line said 75, then 143, then 226; all were stale in turn — **recount, do
-  not quote this number**). **71** source files import the translator and there are **497**
-  `t()`/`tr()` call sites in `src/` — it said 68 files / 421 sites before the Batch 6a wiring. Only **4 of the 53 route files have ZERO `t()` calls**
+  **361 keys** exist (this line has said 75, 143, 226, 284 — every one of them stale within a
+  session or two; **recount, do not quote this number**). Only **2 of the 53 route files have ZERO
+  translator calls** now (`(auth)/_layout`, `index`) — `job/[id]` and `lic-plans` were wired in
+  Phase 83. Only **4 of the 53 route files have ZERO `t()` calls**
   (`(auth)/_layout`, `index`, `job/[id]`, `lic-plans`; `task-edit` and `task-new` were on this list
   until Phase 80 wired their Due/Priority controls) — this line used to say
   **32**, and used to claim `claims.tsx` and `search.tsx` were permanent bottom tabs with zero; **both
@@ -724,7 +780,7 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   key). Use `t(key, {name})` / `t(key, {count})` for dynamic strings — **never string concatenation**
   (Hindi/Gujarati word order). Pure seams `pluralCategory`/`interpolate`/`translate(…,lookup?)` are
   exported and tested in `__tests__/format.test.ts`.
-  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes the key count — **284**
+  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes the key count — **361**
   (bump it deliberately when adding keys; note its own `it(…)` title still says "94-key set" and is
   cosmetic) **and** its leak check rejects only `value === key`, **not**
   `value === English` — so a Gujarati entry left as the English string **passes the suite green**. The

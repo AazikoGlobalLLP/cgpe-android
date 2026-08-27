@@ -4828,3 +4828,74 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   six no-sweep categories and already-filed 6d/6f peers, but not verified one by one. That triage is
   Phase 83's first job. **Re-run `node scripts/i18n-freewins-scan.mjs` and `--orphans` after every
   copy drop, in that order, before concluding anything.**
+
+---
+
+## 2026-08-27 (Phase 83) — the owner cleared four of their own blockers in one message
+
+- **THE MACHINE-TRANSLATION BAN WAS WAIVED BY THE OWNER, IN WRITING, AND THE RISK IS LABELLED
+  RATHER THAN HIDDEN.** PHASE-19 §4 exists for one concrete reason: the parity test proves a value
+  EXISTS in five languages, never that it is CORRECT, so a wrong string ships green — four such
+  strings survived months before Phase 82 found them. The owner was told this and answered
+  *"translation aap abhi ke liye khud se kar lijiye … agar [problem] aaye toh hum solve kar denge."*
+  135 keys were therefore written here. The dictionary block carries a header saying they are
+  **Claude's, not the owner's**, that they are provisional, and what the waived rule was for. Owner
+  copy elsewhere in the file is untouched and must not be converted into this style.
+
+- **A "hide everything else" instruction has four exceptions, and they are not negotiable.**
+  `settings` stays because it holds the LANGUAGE SWITCH — hiding it strands a user in a script they
+  cannot read with no way back. `profile`/`account` stay because `account` is the DPDP data and
+  deletion screen. `attendance` stays because it IS the clock-in/out/break record the owner called
+  "sab se mandatory". Any of these could have been removed by reading "baki kuch bhi nahi"
+  literally; each removal would have been unrecoverable from inside the app.
+
+- **`tickets` for the ops team is an INTERPRETATION, recorded as one.** The owner's line was
+  "processees/ oprations kya hai abhi" — a QUESTION, not an instruction. No module of that name
+  exists; tickets (policyholder requests ops claim and work) is the closest. It is one entry in
+  `OPS_MODULES` and the comment at the code says how to remove it.
+
+- **Only the two named departments are narrowed, and only the team tier.** An admin in Operations
+  keeps their full surface; so does every department the owner did not describe — including the four
+  live values `canonicalizeDepartment` returns `null` for (`GENERAL INSURANCE`, `BANKING &
+  COLLECTION`, `DRIVER`, `IT`). Guessing a layout for an undescribed department is how a field agent
+  loses their own work, which is the one failure `DEFAULT_UI` exists to prevent.
+
+- **Hidden widgets are emitted EXPLICITLY, never by omission.** `normalizeUiConfig` falls back to the
+  entire `DEFAULT_UI` widget list when the array is empty, so an "everything off" layout expressed by
+  leaving widgets out would have silently re-opened the full dashboard. The layout emits every key
+  with `visible: false` instead, and a test pins the array length to `DEFAULT_UI`'s.
+
+- **Task creation: the obvious workaround was checked and REJECTED.** `POST /tasks` has no role gate
+  and already self-assigns (`routes/tasks.js:189, :210`), so routing team members there looked free.
+  But `GET /team/task-overview` reads **only** `db().collection('team_tasks')` (`team.js:77`) and
+  that overview is what the app's list PREFERS — so the workaround would have created tasks the user
+  could never see. Worse than the refusal it replaced. A backend change was filed instead.
+
+- **The 4 crash-screen keys were DROPPED, not deferred.** `ui/RouteErrorBoundary` renders outside
+  every provider — that is what makes it an error boundary — so `useT()` there resolves the context
+  default `t: (k) => k` and would print the literal text `crash.title` on the one screen a user sees
+  when everything else has already failed. Batch 5b is blocked by ARCHITECTURE, not copy. The same
+  reasoning excluded `session.*`, `net.*`, `biometric.prompt` and `login.codeSent*`, which live in
+  modules with no React translator.
+
+- **THE SCAN CAUGHT THE PERSON RUNNING IT.** Three of the 135 new keys had no reader —
+  `home.portfolioAnalytics`, `doc.preparingVideo`, `doc.videoStillTooLarge` — the exact
+  zero-consumer defect Phases 79/81/82 were spent removing, created by the phase removing it. Two
+  were wired; the third was dropped because **no screen says that sentence** and inventing a site to
+  justify a key is not wiring it. Orphans finished at **17**, down from 18, after adding 135 keys.
+  **Run `--orphans` before committing a copy drop, not after.**
+
+- **A module-scope helper cannot call a hook, so it takes the translator as an argument.**
+  `dueToken` in `client/[id].tsx` is the live example, and it is why "Due today" could not be wired
+  in Phase 82: its other three states are placeholder phrases, and wiring one of four would have made
+  the tag change language depending on the date.
+
+- **The dep-array trap hit FOUR times in one file** (`(auth)/login.tsx`), with `tsc` and all 1076
+  tests green. Only cache-free `npx eslint` caught it. Without those deps a language switch leaves
+  every sign-in error message in the previous language.
+
+- **The 92 exact-match scan hits were TRIAGED, not wired.** By file they are almost entirely the six
+  forbidden categories — backend data (`Maturity`/`Follow-up` in `adapt.ts`/`types.ts`/`tasks.ts`),
+  non-React modules (`api.ts`, `tracker.ts`, `calendar.ts`, `config.ts`), module-scope tables and
+  date formatters, and code comments. Roughly six single-word candidates remain and each needs its
+  on-screen peers checked first. A scan hit is a candidate, not a fix.

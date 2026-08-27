@@ -1,5 +1,34 @@
 # Translation copy request — 2026-08-26
 
+> ## ⚠️ STATUS AS OF 2026-08-27 (night) — READ THIS BEFORE SENDING ANYTHING
+>
+> **The owner instructed us to do the remaining translations ourselves** rather than wait
+> (*"translation aap abhi ke liye khud se kar lijiye … agar [problem] aaye toh hum solve kar
+> denge"*), which waives the machine-translation rule in PHASE-19 §4 for those batches. So the
+> table below is no longer a shopping list — most of it is **already in the app**, written by
+> Claude and **labelled as such** in `src/i18n/index.tsx`. A native reader can change any line
+> without a rebuild.
+>
+> | batch | what | state |
+> |---|---|---|
+> | 1, 2, 3, 4 | the early layers | ✅ owner copy, wired |
+> | **6a** (70) | the half-translated groups | ✅ **owner copy, wired** (Phase 82) |
+> | **6f** (23) | what wiring 6a created | ✅ **Claude-translated, wired** (Phase 83) |
+> | **5** (38 of ~49) | the sign-in screen | ✅ **Claude-translated, wired** (Phase 83) |
+> | **6d, 6e, 4b** | peers, `{pct}`/`{n}`, video | ✅ **Claude-translated, wired** (Phase 83) |
+> | **6b** (41) | the outage sentences | ⬜ **still to do** |
+> | **6c** (~70) | the More menu + label tables | ⬜ **still to do** — needs a small refactor first |
+> | 7, 8, 9 | the rest, ~1,700 | ⬜ not started |
+> | **5b** (4) | the crash screen | 🚫 **BLOCKED — not by copy.** The error boundary renders outside every provider, so the translator there returns the key name itself. It would print `crash.title` on screen. Architecture change first. |
+> | the rest of 5 | `session.*`, `net.*`, `biometric.prompt`, `login.codeSent*` | 🚫 **BLOCKED** — those live in modules with no React translator |
+>
+> **What we would still like from you, in one line each:** the three questions in §6f below
+> (the Gujarati verb on `Generating report`; whether one word should win for
+> Clients/Claims/Tasks across the tab bar and the Search table; the follow-ups wording), and a
+> native reader's eye over the Claude-written entries whenever you have one spare.
+
+
+
 > ## ✅ STATUS 2026-08-26 (later) — BATCHES 1–4 SUPPLIED BY THE OWNER AND FULLY WIRED
 >
 > The owner supplied Batches 1, 2, 3 and 4 in one batch and they are **in the app**

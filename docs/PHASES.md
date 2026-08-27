@@ -14,6 +14,43 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-27 (night) — PHASE 83: THE OWNER CLEARED FOUR OF THEIR OWN BLOCKERS IN ONE MESSAGE, AND
+ALL FOUR ARE BUILT.** Gates: `tsc` **0** · `npm test` **1076** (+7) · `eslint` **0 errors**
+cache-free on every touched file. Device-unverified; no APK before 1 Sep.
+- **THE OPS AND SALES LAYOUTS ARE REAL ON A HANDSET** — owner backlog Point 6 has read
+  "mechanism exists, nobody has filled it in" since 2026-08-24. `OPS_TEAM_UI` / `SALES_TEAM_UI` /
+  `departmentFallbackUi` in `store/appUi.tsx`, consulted **only when the server returns no config**
+  (a seeded panel document still wins), narrowing the **team tier only** in the **two named
+  departments only**. 7 tests pin it.
+- **⚠️ FOUR THINGS STAY VISIBLE AGAINST "baki kuch bhi nahi"**, each unrecoverable from inside the
+  app if removed: **Settings** (the language switch), profile/account (DPDP), attendance (the clock
+  record). And **`tickets` for ops is an INTERPRETATION** — the owner *asked* "processees/oprations
+  kya hai abhi"; no module of that name exists. One line to remove.
+- **EVERY TEAM MEMBER CAN CREATE THEIR OWN TASK.** The tier gate is gone from create; the assignee
+  row is LOCKED for anyone who may not assign, so it is self-assigned by construction. 🔴 **The
+  obvious workaround was checked and REJECTED:** `POST /tasks` self-assigns already, but
+  `/team/task-overview` reads ONLY `team_tasks`, so routing there would create tasks the user can
+  never see. Backend ask filed to `INBOX.md` with the owner's relay line.
+- **135 DICTIONARY KEYS, TRANSLATED HERE — the machine-translation ban was WAIVED by the owner in
+  writing**, and the dictionary header says so, says they are provisional, and says what the waived
+  rule was for. Batch **6f** (23), Batch **5** (38, the whole sign-in screen), **6d**, **6e**, **4b**.
+  `Agent map` (supplied in 6a, unusable for a phase) and Home's follow-ups widget (refused in three
+  consecutive phases) both went in whole because their peers finally exist. `job/[id]` and
+  `lic-plans` were 2 of the 4 route files that had NEVER called the translator.
+- **🔴 THE SCAN CAUGHT THE PERSON RUNNING IT.** Three of the 135 new keys had no reader — the exact
+  zero-consumer defect Phases 79/81/82 were spent removing, created by the phase removing it. Two
+  wired, `doc.videoStillTooLarge` **dropped** (no screen says that sentence). **Orphans 18 → 17:
+  135 keys added and LESS dead copy than we started with. Run `--orphans` BEFORE committing.**
+- **The 4 crash keys were DROPPED, not deferred** — the error boundary renders outside every
+  provider, so `useT()` there returns `t: (k) => k` and would print `crash.title` on the one screen
+  a user sees when everything else has failed. Batch 5b is blocked by ARCHITECTURE, not copy.
+- **The 92 exact-match hits were TRIAGED, not wired** — almost entirely the six forbidden categories.
+  ~6 single-word candidates remain, each needing its peers checked.
+
+---
+
+## Superseded — Now, as of 2026-08-27 (after Phase 82)
+
 **✅ 2026-08-27 (evening) — PHASE 82: THE COPY ARRIVED AND IS WIRED THE SAME DAY — ELEVEN
 HALF-TRANSLATED GROUPS ARE NOW WHOLE.** Gates: `tsc` **0** · `npm test` **1069** (unchanged — no new
 pure logic) · `eslint` **0 errors / 12 warnings** (baseline; the two on touched files were proven
@@ -333,7 +370,33 @@ session by design** — Phase 77 is where fixing starts.
 
 **SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
 
-## Next 3 — as of 2026-08-27 (after Phase 82)
+## Next 3 — as of 2026-08-27 (after Phase 83)
+
+1. **Phase 84 — Batch 6c, the More menu and the other label tables (~70).** The app's main
+   navigation and the highest-value block left. **It needs a small refactor first:**
+   `MORE_CATALOGUE` is module scope, so its 22 label/value pairs must move behind the translator the
+   way `MODES` did in `login.tsx` this session. Translate it WHOLE — a menu in two languages is
+   worse than one. **Then Batch 6b** (41, the outage sentences, 54 places). **Then** the ~6
+   single-word scan candidates, peers checked first.
+2. **Relay the server asks — now FOUR, all re-verified live at Phase 83:** backend Phase 94 not
+   deployed (`origin/main` = `990c660`); `cloudStorageConfigured:false`; `cgpe.in` has **no AAAA
+   record**; and the NEW one — **let any authenticated user create a `team_task` assigned to
+   themselves** (filed at the foot of `INBOX.md` with a plain-language relay line). Until that
+   ships, the create button is visible and refuses honestly at submit. **Do not name the bucket
+   `uploads`.**
+3. **Phase 85 — the APK, on or after 1 Sep 2026.** First build to carry Phases 77–84. **Carry EAS
+   Update in it.** ⚠️ An Expo account switch WOULD beat the quota but issues a NEW KEYSTORE — all 21
+   handsets would have to uninstall and lose their session. Not worth five days.
+
+**Still NOT built, and named so nobody reads them as done:** "tasks tab ke andar active claims"
+(ops) and "… leads and prospects" (sales) are net-new SCREEN features — a different record type
+inside the Tasks tab — not visibility config. The rest of request-Batch-5 (`session.*`, `net.*`,
+`biometric.prompt`, `login.codeSent*`) is blocked by architecture: those modules have no React
+translator. Voice is untouched and owner-blocked at its ₹0 ten-minute test.
+
+---
+
+## Superseded — Next 3 as of 2026-08-27 (after Phase 82)
 
 **One blocker moved: the copy arrived and is wired.** The other three did not — all re-verified
 live this session, not copied from notes. Hand the owner `docs/OWNER-ACTIONS-2026-08-27.md`.
