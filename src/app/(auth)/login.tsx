@@ -445,7 +445,11 @@ export default function Login() {
                   />
                   {failureBanner}
                   <Button
-                    label={useBio ? 'Unlock and sign in' : 'Sign in'}
+                    // Only the plain branch is translated: `common.signIn` already holds
+                    // human copy in all five languages. "Unlock and sign in" has no key
+                    // yet and is listed in the Batch 5 copy request — wiring it now would
+                    // print the key itself on screen.
+                    label={useBio ? 'Unlock and sign in' : t('common.signIn')}
                     icon={useBio ? 'finger-print' : 'arrow-forward'}
                     onPress={doPassword}
                     loading={loading}

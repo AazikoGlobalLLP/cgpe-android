@@ -11,6 +11,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { motion, shadow, useTheme } from '@/theme/theme';
 import type { Palette } from '@/theme/theme';
+import { useT } from '@/i18n';
 import { Card, Grad, Metric, Txt } from './base';
 import type { IconName } from './base';
 
@@ -424,6 +425,7 @@ export function Banner({ tone = 'info', title, message, action, onDismiss, icon,
   style?: StyleProp<ViewStyle>;
 }) {
   const c = useTheme();
+  const t = useT();
   const { spacing, radius, font } = c;
   const reduced = useReducedMotion();
   const s = toneSpec(c, tone);
@@ -454,7 +456,7 @@ export function Banner({ tone = 'info', title, message, action, onDismiss, icon,
             onPress={onDismiss}
             hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="Dismiss"
+            accessibilityLabel={t('common.dismiss')}
             style={({ pressed }) => [{
               width: 26, height: 26, borderRadius: 13, marginTop: -2, marginRight: -2,
               alignItems: 'center', justifyContent: 'center',

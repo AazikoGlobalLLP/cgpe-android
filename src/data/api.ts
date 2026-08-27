@@ -36,6 +36,7 @@ import { expireSession, resetSessionGuard } from '@/lib/session';
 // PHASE 7: one string in this file is read off a screen by somebody standing in a car park.
 // `nbsp` is the house guarantee that a value never wraps between its number and its unit.
 import { nbsp } from '@/lib/format';
+import { humanApiMessage } from '@/lib/apiMessage';
 import { reportFailure, reportSuccess } from './health';
 // PHASE 57a — offline read cache. The freshness bus drives the "Synced <time>" chip without
 // changing any read's return type; `offlineStore` is the device I/O over the pure `offlineCache`.
@@ -967,8 +968,14 @@ export async function login(
         refreshToken: typeof data.refresh_token === 'string' ? data.refresh_token : undefined,
       };
     }
-    // The server answered and refused. Surface its own wording where it gave one.
-    throw new Error(json?.error || json?.message || 'Invalid credentials. Please check and try again.');
+    // The server answered and refused. Surface its own wording where it gave one — but
+    // read the RIGHT field. `/auth/login` puts a machine token in `error` (`NO_ACCOUNT`,
+    // `BAD_PASSWORD`) and the human sentence in `message`, so the old `error || message`
+    // put the bare word "NO_ACCOUNT" on the login screen for the single commonest failure
+    // in the product: a typo in the address. Verified against live prod 2026-08-27.
+    // `humanApiMessage` still prefers a PROSE `error` (which most routes send), so no
+    // other refusal loses its wording. See `lib/apiMessage.ts`.
+    throw new Error(humanApiMessage(json, 'Invalid credentials. Please check and try again.'));
   } catch (e: any) {
     if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
     throw e;
@@ -980,16 +987,40 @@ export async function login(
  * A failure is reported truthfully: telling the user "OTP sent" when nothing was sent
  * strands them on a code-entry screen waiting for a message that will never arrive.
  */
-export async function sendOtp(phone: string): Promise<{ ok: boolean; message: string }> {
+export async function sendOtp(
+  phone: string,
+): Promise<{ ok: boolean; message: string; channel?: 'email' | 'whatsapp' }> {
   try {
     const { ok, json } = await req('/auth/request-otp', {
       method: 'POST',
       body: JSON.stringify({ email_or_phone: phone, phone }),
     }, LOGIN_TIMEOUT);
+    // WHERE THE CODE ACTUALLY WENT. The backend chooses the channel from what the user
+    // typed — `channelFor = identifier.includes('@') ? 'email' : 'whatsapp'` (routes/auth.js)
+    // — and echoes it back as `channel` on BOTH the success and the failure body. The old
+    // code ignored it and hard-coded "your WhatsApp number", so a user who signed in with
+    // their email address was told to check WhatsApp for a code that was mailed to them.
+    // The local derivation is the same rule, used only if an older build omits the field;
+    // it is not a guess — the screen already states it ("Email gets the code by mail").
+    const served = json?.channel === 'email' || json?.channel === 'whatsapp' ? json.channel : undefined;
+    const channel: 'email' | 'whatsapp' = served ?? (phone.includes('@') ? 'email' : 'whatsapp');
     if (ok && json?.success !== false) {
-      return { ok: true, message: json?.message || 'Code sent to your WhatsApp number.' };
+      return {
+        ok: true,
+        channel,
+        message:
+          (typeof json?.message === 'string' && json.message.trim())
+            ? json.message.trim()
+            // The success body carries no `message` at all (verified on deployed
+            // `origin/main`), so this is what the user actually reads.
+            : channel === 'email'
+              ? 'Code sent to your email.'
+              : 'Code sent to your WhatsApp number.',
+      };
     }
-    return { ok: false, message: json?.error || json?.message || 'Could not send the code. Please try again.' };
+    // `OTP_NOT_CONFIGURED` / `OTP_DELIVERY_FAILED` arrive as a TOKEN in `error` with the
+    // sentence in `message` — same inversion as `/auth/login`. See `lib/apiMessage.ts`.
+    return { ok: false, channel, message: humanApiMessage(json, 'Could not send the code. Please try again.') };
   } catch (e: any) {
     if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
     return { ok: false, message: 'Could not send the code. Please try again.' };
