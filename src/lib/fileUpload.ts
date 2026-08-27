@@ -10,8 +10,9 @@ import { UPLOAD_TIMEOUT } from '@/constants/config';
  *   1. WOULD THIS FILE BE REJECTED BEFORE IT EVEN LEAVES THE PHONE? The backend caps a
  *      file at 10 MB and only accepts a fixed list of types (`routes/upload.js`, multer
  *      config). A 30 MB video or a `.zip` is a wasted upload and, worse, comes back as an
- *      ambiguous 400/500 the client can't name (multer's `LIMIT_FILE_SIZE` → 400, a rejected
- *      type → a plain 500 — see `middleware/errorHandler.js`). `precheckUpload` catches those
+ *      ambiguous status the client can't name (multer's `LIMIT_FILE_SIZE` → 400; a rejected
+ *      type → a plain 500 on the DEPLOYED build, 415 once backend Phase 94 ships — see the
+ *      note on `classifyUploadStatus`). `precheckUpload` catches those
  *      two commonest mistakes up front using the server's OWN limits, so the user gets a
  *      precise reason ("too large" / "not supported") instead of a generic "didn't upload".
  *   2. WHEN A REQUEST DOES FAIL, WHAT DO WE HONESTLY TELL THE USER? `classifyUploadStatus`
@@ -30,9 +31,11 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
 
 /**
- * The exact `fileFilter` allowlist from `routes/upload.js`. A type NOT in this set is
- * rejected by the server, so we mirror it to reject it here first. `image/jpg` is a
- * non-standard alias some Android cameras emit; the backend accepts it, so we do too.
+ * The DOCUMENT half of `routes/upload.js`'s `fileFilter` allowlist — and, on the currently
+ * deployed backend, the whole of it. A type NOT in this set is rejected by the server, so we
+ * mirror it to reject it here first. `image/jpg` is a non-standard alias some Android cameras
+ * emit; the backend accepts it, so we do too. The video half lives in `VIDEO_UPLOAD_MIME`
+ * below; `ALL_UPLOAD_MIME` is the union and is what the precheck actually tests against.
  */
 export const ALLOWED_UPLOAD_MIME: readonly string[] = [
   'image/jpeg',
@@ -54,10 +57,14 @@ export const ALLOWED_UPLOAD_MIME: readonly string[] = [
  * accept. Keeping them apart means the document path cannot be disturbed by the video
  * work, and `DocumentPicker` can be handed either set independently.
  *
- * ⚠️ THE BACKEND DOES NOT ACCEPT ANY OF THESE YET. `routes/upload.js` `fileFilter` has no
- * `video/*` entry, so until it is taught these exact strings a video upload comes back as
- * a plain 500. That is the ONE backend change this feature needs (the size cap does NOT
- * change — the owner chose on 2026-08-26 to compress to fit the existing 10 MB instead).
+ * ⚠️ THE DEPLOYED BACKEND STILL ACCEPTS NONE OF THESE. `cgpe-api` added exactly these four
+ * strings to `routes/upload.js` `fileFilter` in their Phase 94 (`fda199c`, 2026-08-27) — the
+ * ONE backend change this feature needed, and the size cap did NOT change because the owner
+ * chose on 2026-08-26 to compress to fit the existing 10 MB. But that commit is on
+ * `origin/Shivam` only, and prod deploys `origin/main`, which was `990c660` when this was
+ * written and whose allowlist ends at the spreadsheet type. So a video upload on a real phone
+ * today still comes back rejected. Do not describe video evidence as working until the owner
+ * merges to `origin/main`, deploys and restarts `:3001`.
  *
  * The four types are what Android and iOS actually produce or hold: `video/mp4` is what the
  * compressor emits and what nearly every Android camera records; `video/quicktime` is the
@@ -166,12 +173,18 @@ export function precheckUpload(file: { name?: string; mimeType?: string; size?: 
  * Refine a failed `/upload` response using the SERVER'S OWN WORDS, falling back to the status.
  *
  * WHY THIS EXISTS. `routes/upload.js` rejects a disallowed type by throwing from multer's
- * `fileFilter`, and `middleware/errorHandler.js` turns anything without an explicit statusCode
- * into a plain **500** with `{ success:false, error:'File type video/mp4 is not allowed' }`. On
- * status alone that is indistinguishable from a real server fault, so the user was told "try
- * again in a moment" for something that can NEVER succeed — they would re-record, re-compress
- * and re-upload over mobile data, forever. Reading the message is not guesswork: it is the
- * server stating the reason.
+ * `fileFilter`. On the DEPLOYED build (`origin/main` 990c660) that error carries no statusCode,
+ * so `middleware/errorHandler.js` renders it as a plain **500** with
+ * `{ success:false, error:'File type video/mp4 is not allowed' }`. On status alone that is
+ * indistinguishable from a real server fault, so the user was told "try again in a moment" for
+ * something that can NEVER succeed — they would re-record, re-compress and re-upload over
+ * mobile data, forever. Reading the message is not guesswork: it is the server stating the reason.
+ *
+ * ⚠️ THE STATUS IS ABOUT TO CHANGE, AND THIS FUNCTION ALREADY COPES. Backend Phase 94
+ * (`fda199c`, not yet on `origin/main`) tags that same error `statusCode = 415`, so the
+ * rejection will arrive as a 415 carrying the SAME body. Because the body match below runs
+ * BEFORE the status fallback, both shapes resolve identically and no change is needed here —
+ * which is exactly why the body match is kept rather than replaced by a status branch.
  *
  * This is deliberately CONSERVATIVE. It only overrides the status when the body matches a
  * phrase the backend actually emits; anything else falls through to `classifyUploadStatus`, so
@@ -193,12 +206,19 @@ export function classifyUploadFailureBody(
 }
 
 /** Map a non-ok HTTP status from `/upload` to a reason. Coarser than the precheck by
- *  necessity — the server collapses too-large and no-file into 400, and a rejected type
- *  into a plain 500 — so the precheck above is what makes those two precise. */
+ *  necessity — the server collapses too-large and no-file into 400, and a rejected type into a
+ *  plain 500 on the deployed build (a 415 once Phase 94 ships) — so the precheck above and the
+ *  body match are what make those two precise. This is only ever the LAST resort: a rejection
+ *  that reaches here carried no readable body at all. */
 export function classifyUploadStatus(status: number): UploadFailure {
   if (status === 401 || status === 403) return 'unauthorized';
   if (status === 413) return 'too_large';      // some proxies enforce their own body cap
-  if (status === 415) return 'type_rejected';  // defensive; this backend uses 500 for it
+  // 415 reaches this line only for a body-less rejection — a proxy's own 415, or a truncated
+  // response. Both backend versions send a readable body, which `classifyUploadFailureBody`
+  // consumes first. Deliberately NOT made video-aware: `video_not_accepted`'s copy says the
+  // server takes no video at all, which is a strictly stronger claim than a body-less 415
+  // supports, and after Phase 94 deploys it would be false.
+  if (status === 415) return 'type_rejected';
   return 'server';                             // 400 (rejected/no-file) or 5xx (write failed)
 }
 
@@ -217,6 +237,23 @@ export function classifyUploadStatus(status: number): UploadFailure {
  * `${folder}/${file}`, host `*.digitaloceanspaces.com`, no `/uploads/` prefix). Detecting only the
  * loopback sub-case let a redeploy-wiped upload read as durably attached on prod (loophole audit
  * 2026-08-25).
+ *
+ * ⚠️ ONE KNOWN COLLISION, AND IT IS AN OPS CONSTRAINT, NOT A CODE FIX. Backend Phase 94 makes
+ * object storage MinIO-shaped and PATH-STYLE by default, so a stored object's URL is
+ * `${S3_ENDPOINT}/${S3_BUCKET_NAME}/${folder}/${file}` — the bucket name is the FIRST path
+ * segment. If the bucket is literally named `uploads`, a perfectly durable object arrives as
+ * `https://minio.example/uploads/general/x.jpg` and this function calls it ephemeral, so the
+ * user is warned their file will not be kept when in fact it will.
+ *
+ * The obvious narrowing — only treat `/uploads/` as ephemeral when the host matches the API
+ * host — is DELIBERATELY NOT DONE, because it trades a harmless false alarm for a dangerous
+ * false reassurance: if `BACKEND_URL` is ever set to a host other than the API's, the
+ * local-disk fallback would then read as durable, and a file wiped on the next redeploy would
+ * be reported as safely attached. That is the exact defect the 2026-08-25 audit fixed.
+ * Over-warning is recoverable; under-warning loses evidence.
+ *
+ * So the constraint is filed with OPS instead: do not name the bucket `uploads`, and do not
+ * serve MinIO from the API's own host under an `/uploads/` path. Pinned by a test.
  */
 export function isEphemeralUrl(url: string): boolean {
   const host = (url.match(/^https?:\/\/([^/:]+)/i)?.[1] || '').toLowerCase();
@@ -289,6 +326,13 @@ export function describeUploadFailure(reason: UploadFailure): {
       // A PERMANENT condition, so the copy must not say "try again" — the server told us it
       // does not accept this type, and it will keep saying so until an admin enables video.
       // Retrying costs the user another transcode and another upload over mobile data.
+      //
+      // This copy is accurate against the DEPLOYED backend, whose allowlist has no video entry
+      // at all, and the "ask your admin" step is the right one: the admin action is merging
+      // backend Phase 94 to `origin/main` and deploying. Once that lands this branch becomes
+      // effectively unreachable rather than wrong — `VIDEO_UPLOAD_MIME` is byte-identical to
+      // the server's new list, so `precheckUpload` stops any other container on the phone. Keep
+      // the branch as the safety net, and revisit the wording only if the two lists diverge.
       return {
         tone: 'warning',
         title: 'This server does not accept videos yet',

@@ -3549,14 +3549,18 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
  * live on prod (verified 2026-08-26: the mount is on `origin/main` at `app.js:466` and the
  * endpoint answers 401 without a token, i.e. deployed and protected).
  *
- * ⚠️ THIS IS A RECORD, NOT A LINK, AND THE DIFFERENCE MATTERS. The endpoint's field whitelist
- * (`routes/fileAttachments.js`) is filename / file_url / file_size / file_type / category /
- * uploaded_by / description — there is NO `entity_id`, so there is no way to say "this file
- * belongs to claim X". Anything else sent is silently dropped. So a file recorded here is
- * findable (and shows up in the admin panel's file manager) but is NOT durably attached to the
- * claim; the claim's own checklist tick remains local, exactly as before. Adding `entity_id` +
- * `entity_ref` to that whitelist is the ONE backend change needed to close that gap, and it is
- * filed as an `[api]` ask rather than faked here by stuffing an id into `description`.
+ * ⚠️ IT IS A REAL LINK NOW, BUT ONLY ONCE THE BACKEND FIX IS DEPLOYED. Until 2026-08-26 the
+ * endpoint's whitelist had no `entity_id`, so a file could be recorded but never tied to a
+ * claim, and the id had to travel as human text in `description`. `cgpe-api` answered that ask
+ * in their Phase 94 (`fda199c`): `routes/fileAttachments.js` now persists `entity_id` +
+ * `entity_type`, echoes both back from `toAttachment`, and filters on `?entity_id=`.
+ *
+ * 🔴 THAT COMMIT IS NOT ON PROD. It lives only on `origin/Shivam`; the deploy workflow ships
+ * `origin/main` only, and `origin/main` was `990c660` when this was written — so today the two
+ * fields are still dropped on the floor. Sending them is SAFE either way (an unknown key is
+ * ignored by the old build and stored by the new one), which is why they are wired now rather
+ * than waiting: the day the owner merges and deploys, existing app builds start linking with
+ * no further change. Do NOT tell anyone claim↔file linking works until that merge lands.
  *
  * FAILS QUIETLY ON PURPOSE. The binary is already safely on the server by the time this runs, so
  * a failure here must not tell the user their upload failed — that would be a lie that makes them
@@ -3567,8 +3571,17 @@ export type FileAttachmentInput = {
   fileUrl: string;
   fileSize?: number;
   fileType?: string;
-  /** Coarse grouping the endpoint also echoes back as `entity_type` — e.g. 'claim'. */
+  /** Coarse grouping, kept for the legacy rows the panel's file manager still reads. */
   category?: string;
+  /**
+   * The record this file belongs to — a claim id. Omit it when there is genuinely nothing to
+   * point at yet (a file attached while a claim is still being created), rather than inventing
+   * a placeholder: an empty `entity_id` honestly means "not linked", a wrong one means "linked
+   * to the wrong claim".
+   */
+  entityId?: string;
+  /** What `entityId` refers to. `'claim'` is the only kind the app sends today. */
+  entityType?: string;
   uploadedBy?: string;
   description?: string;
 };
@@ -3584,6 +3597,12 @@ export async function recordFileAttachment(input: FileAttachmentInput): Promise<
         file_size: input.fileSize ?? null,
         file_type: input.fileType || '',
         category: input.category || '',
+        // Phase 94 fields. Both are dropped by the currently-deployed build and stored by
+        // the one on `origin/Shivam` — see the header. `entity_type` is sent even when
+        // `entity_id` is empty: it is still true ("this is a claim document") and the
+        // backend falls back to `category` for legacy rows either way.
+        entity_id: input.entityId || '',
+        entity_type: input.entityType || '',
         uploaded_by: input.uploadedBy || '',
         description: input.description || '',
       }),

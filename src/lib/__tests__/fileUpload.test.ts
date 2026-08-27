@@ -25,7 +25,7 @@ describe('backend limit mirror', () => {
     expect(MAX_UPLOAD_MB).toBe(10);
   });
 
-  it('accepts exactly the multer fileFilter allowlist', () => {
+  it('mirrors the DOCUMENT half of the multer fileFilter allowlist', () => {
     expect([...ALLOWED_UPLOAD_MIME].sort()).toEqual([
       'application/msword',
       'application/pdf',
@@ -159,6 +159,18 @@ describe('isEphemeralUrl — the "captures vanish" signature', () => {
     expect(isEphemeralUrl('not a url')).toBe(false);
     expect(isEphemeralUrl('')).toBe(false);
   });
+  it('treats a MinIO path-style object as durable — UNLESS the bucket is named "uploads"', () => {
+    // Backend Phase 94 makes storage path-style by default, so the bucket is the FIRST path
+    // segment: `${S3_ENDPOINT}/${S3_BUCKET_NAME}/${folder}/${file}`. Any ordinary bucket name
+    // is correctly read as durable.
+    expect(isEphemeralUrl('https://minio.cgpe.in/cgpe-docs/general/x.jpg')).toBe(false);
+    expect(isEphemeralUrl('https://minio.cgpe.in:9000/claims-store/general/x.mp4')).toBe(false);
+    // This one is the documented FALSE POSITIVE, pinned deliberately so the behaviour is a
+    // known ops constraint rather than a surprise: a bucket literally called `uploads` makes a
+    // durable object indistinguishable from the local-disk fallback, and the app errs toward
+    // warning the user. The fix is to not name the bucket that — see the note on isEphemeralUrl.
+    expect(isEphemeralUrl('https://minio.cgpe.in/uploads/general/x.jpg')).toBe(true);
+  });
 });
 
 describe('describeUploadFailure', () => {
@@ -221,6 +233,26 @@ describe('classifyUploadFailureBody — reading the server own words, not guessi
   it('is case-insensitive about the server message', () => {
     expect(classifyUploadFailureBody(500, 'FILE TYPE VIDEO/MP4 IS NOT ALLOWED', 'video/mp4'))
       .toBe('video_not_accepted');
+  });
+
+  it('gives the SAME answer when the rejection arrives as 415 instead of 500', () => {
+    // Backend Phase 94 (`fda199c`, not yet on the deployed `origin/main`) tags the fileFilter
+    // error `statusCode = 415`, so the SAME body will arrive under a different status. The body
+    // match runs before the status fallback, so both shapes must resolve identically — this is
+    // what makes the change a no-op for the app and is why the body match was kept.
+    expect(classifyUploadFailureBody(415, 'File type video/mp4 is not allowed', 'video/mp4'))
+      .toBe('video_not_accepted');
+    expect(classifyUploadFailureBody(415, 'File type application/zip is not allowed', 'application/zip'))
+      .toBe('type_rejected');
+  });
+
+  it('falls back to the plain type_rejected copy for a BODY-LESS 415, never the stronger claim', () => {
+    // A 415 with no readable body can only come from something in front of the app (a proxy) or
+    // a truncated response — both backend versions send a body. `video_not_accepted` says the
+    // server accepts NO video at all, which a body-less 415 does not support and which is false
+    // once Phase 94 deploys, so the weaker, always-true answer is the honest one.
+    expect(classifyUploadFailureBody(415, undefined, 'video/mp4')).toBe('type_rejected');
+    expect(classifyUploadFailureBody(415, '', 'video/mp4')).toBe('type_rejected');
   });
 
   it('the video-rejection copy does NOT tell the user to try again — it can never succeed', () => {

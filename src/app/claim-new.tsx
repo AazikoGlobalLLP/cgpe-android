@@ -281,14 +281,16 @@ function ClaimNewScreen() {
 
     // Record the file's metadata so the returned URL is not discarded. Fire-and-forget: the
     // binary is already on the server, so a failure here must not read as a failed upload.
-    // The claim does not exist yet on this screen, so there is no id to carry — another reason
-    // the missing `entity_id` on that endpoint is what actually needs fixing.
+    // The claim does not exist yet on this screen, so there is no id to put in `entity_id` —
+    // and an empty one is the honest value. `entity_type` is still true and is sent, so the
+    // record says "a claim document, not yet attached to a claim" rather than pretending.
     void api.recordFileAttachment({
       filename: file.name,
       fileUrl: up.url,
       fileSize: file.size,
       fileType: resolveMime(file) || '',
       category: 'claim',
+      entityType: 'claim',
       // `uploaded_by` is deliberately left to the server's default. The signed-in user lives in
       // the outer access-gate wrapper, not in this screen, and threading it down just to label a
       // record would mean touching the gate — a security surface — for a cosmetic field.

@@ -274,24 +274,29 @@ export default function ClaimDetail() {
     // correctness: the binary is already stored, so a failure here must not tell the user the
     // upload failed. It is fire-and-forget and returns null quietly.
     //
-    // ⚠️ THIS IS A RECORD, NOT A LINK. That endpoint's whitelist has no `entity_id`, so nothing
-    // ties this file to THIS claim; the claim id travels in `description` as human text only,
-    // which is honest but not queryable. The checklist tick below therefore stays local, exactly
-    // as before. Adding `entity_id` is the one backend change that would close it, and it is
-    // filed as an `[api]` ask rather than faked by overloading a field that means something else.
+    // The claim id now rides in the REAL `entity_id` field (backend Phase 94) instead of being
+    // spelled out in `description`, so the file is queryable as belonging to this claim rather
+    // than merely mentioning it. `description` keeps a human sentence for the panel's file
+    // manager, which shows that column — it is no longer load-bearing.
+    // 🔴 Phase 94 is on `origin/Shivam` and NOT on the deployed `origin/main`, so on prod today
+    // both fields are still discarded. Sending them is harmless on the old build and correct on
+    // the new one; the checklist tick below therefore still stays local (see next comment).
     void api.recordFileAttachment({
       filename: file.name,
       fileUrl: up.url,
       fileSize: file.size,
       fileType: resolveMime(file) || '',
       category: 'claim',
-      description: `Claim ${claim.id}`,
+      entityId: claim.id,
+      entityType: 'claim',
+      description: 'Attached from the claim screen',
     });
 
-    // The register has no endpoint that links a file to a claim, so the ONLY thing recorded
-    // here is the local checklist tick, and the group footer and the caption under this button
-    // both say so. No timeline entry is fabricated: the register did not log this, and inventing
-    // an entry signed with the user's name would put a record on screen that no system is holding.
+    // Until that merge lands, the register still has no DEPLOYED endpoint that links a file to a
+    // claim, so the ONLY thing recorded here is the local checklist tick, and the group footer
+    // and the caption under this button both say so. No timeline entry is fabricated: the
+    // register did not log this, and inventing an entry signed with the user's name would put a
+    // record on screen that no system is holding.
     const firstPending = claim.docs.find((d) => !d.received);
     if (firstPending) {
       setClaim({
