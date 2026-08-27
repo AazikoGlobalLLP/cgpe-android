@@ -65,13 +65,14 @@ const countBy = (items: Client[], pred: (cl: Client) => boolean) => items.reduce
  */
 export default function Clients() {
   const { user, viewAs, ready } = useAuth();
+  const t = useT();
   if (ready && !canViewOwnClients(user, viewAs)) {
     return (
       <RestrictedNotice
-        title="Clients"
+        title={t('tab.clients')}
         back={false}
-        heading="Clients are master and admin only"
-        subtitle="The client directory is available to administrators and the master account. Ask an administrator if you need a client's details."
+        heading={t('clients.restrictedTitle')}
+        subtitle={t('clients.restrictedBody')}
       />
     );
   }
@@ -219,7 +220,7 @@ function ClientsScreen() {
     <Screen>
       <Header
         title={t('tab.clients')}
-        subtitle="Search your whole book"
+        subtitle={t('clients.searchSubtitle')}
         right={total != null && total > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={total.toLocaleString('en-IN')} size={font.h3} />
@@ -342,7 +343,7 @@ function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
   // One status token per row, ranked by urgency: money first, then the courtesy touch.
   const pill = hasDue && due < 0 ? { label: t('tasks.overdue'), tone: 'danger' as const }
     : hasDue && due === 0 ? { label: t('common.dueToday'), tone: 'danger' as const }
-      : hasDue && due <= 30 ? { label: `Due ${fmtDay(p!.nextRenewal)}`, tone: 'warning' as const }
+      : hasDue && due <= 30 ? { label: t('common.dueOn', { date: fmtDay(p!.nextRenewal) }), tone: 'warning' as const }
         : client.segment.includes('birthday') ? { label: t('seg.birthday'), tone: 'accent' as const }
           : null;
 

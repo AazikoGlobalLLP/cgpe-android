@@ -291,10 +291,8 @@ export default function TaskNew() {
         {/* WHO. An open set of real people, so it opens a sheet with faces in it. */}
         <Appear index={1}>
           <Group
-            label="Assign to"
-            hint={!canAssignOthers
-              ? 'This task will be on your own list. Assigning work to someone else needs an admin or leader.'
-              : assignee === UNASSIGNED ? 'Nobody is assigned yet. The task stays on your own list.' : undefined}
+            label={t('task.assignTo')}
+            hint={!canAssignOthers || assignee === UNASSIGNED ? t('task.assignHint') : undefined}
           >
             <Pressable
               onPress={() => { if (canAssignOthers) setPickerOpen(true); }}
@@ -355,7 +353,7 @@ export default function TaskNew() {
         </Appear>
 
         <Appear index={4}>
-          <Group label="Category">
+          <Group label={t('task.category')}>
             <Chips
               options={CATEGORIES.map((x) => ({ key: x, label: x }))}
               value={category}

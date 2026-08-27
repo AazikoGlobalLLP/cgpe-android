@@ -1654,13 +1654,13 @@ export default function Home() {
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(pendingReminders.length) ? 'cloud-offline-outline' : 'call-outline'}
-                title={unsure(pendingReminders.length) ? 'Follow-ups did not load' : 'No follow-up is pending'}
+                title={unsure(pendingReminders.length) ? 'Follow-ups did not load' : t('home.noFollowups')}
                 subtitle={unsure(pendingReminders.length)
                   ? 'The server did not answer, so an empty list here is not confirmed. Pull down to refresh.'
-                  : 'Birthdays, renewals and callbacks land here on the day they are due.'}
+                  : t('home.followUpsEmptyBody')}
                 action={unsure(pendingReminders.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
-                  : { label: 'Open follow-ups', onPress: () => router.push('/reminders') }}
+                  : { label: t('home.openFollowUps'), onPress: () => router.push('/reminders') }}
               />
             ) : (
               <ListSection>
@@ -2049,25 +2049,25 @@ export default function Home() {
             onAction={() => router.push('/analytics')}
           >
             {snapshot ? (
-              <ListSection footer="Organisation-wide totals. Open analytics for the full breakdown.">
+              <ListSection footer={t('home.portfolioFooter')}>
                 <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: spacing.md }}>
                   <Row style={{ gap: spacing.lg }}>
                     <View style={{ flex: 1 }}>
-                      <Eyebrow>Clients</Eyebrow>
+                      <Eyebrow>{t('tab.clients')}</Eyebrow>
                       <Metric value={snapshot.total_clients.toLocaleString('en-IN')} size={font.h2} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Eyebrow>Leads</Eyebrow>
+                      <Eyebrow>{t('tab.leads')}</Eyebrow>
                       <Metric value={snapshot.leads.toLocaleString('en-IN')} size={font.h2} />
                     </View>
                   </Row>
                   <Row style={{ gap: spacing.lg }}>
                     <View style={{ flex: 1 }}>
-                      <Eyebrow>Claims open</Eyebrow>
+                      <Eyebrow>{t('home.claimsOpen')}</Eyebrow>
                       <Metric value={String(snapshot.claims.under_process)} size={font.h2} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Eyebrow>Tickets</Eyebrow>
+                      <Eyebrow>{t('common.tickets')}</Eyebrow>
                       <Metric value={String(snapshot.tickets)} size={font.h2} />
                     </View>
                   </Row>

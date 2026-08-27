@@ -468,15 +468,15 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
         </ListSection>
 
         <ListSection
-          title="Close out"
-          footer="A closed lead stays in the pipeline list under its own stage, so nothing is lost."
+          title={t('lead.closeOut')}
+          footer={t('lead.closeOutFooter')}
         >
           <DataRow
-            label="Not proceeding"
+            label={t('lead.notProceeding')}
             value={t(STAGE_META.lost.labelKey)}
             tone="danger"
             onPress={current === 'lost' ? undefined : () => pick('lost')}
-            right={current === 'lost' ? <Pill label="Current" tone="danger" small dot /> : undefined}
+            right={current === 'lost' ? <Pill label={t('common.current')} tone="danger" small dot /> : undefined}
           />
         </ListSection>
 

@@ -233,7 +233,7 @@ export default function Commissions() {
                     <Pill
                       label={growthPct === 0
                         ? 'Level with last month'
-                        : `${growthPct > 0 ? '+' : '-'}${Math.abs(growthPct)}% vs last month`}
+                        : t('home.vsLastPct', { pct: `${growthPct > 0 ? '+' : '-'}${Math.abs(growthPct)}` })}
                       tone={growthPct === 0 ? 'neutral' : growthPct > 0 ? 'success' : 'danger'}
                       icon={growthPct === 0 ? 'remove' : growthPct > 0 ? 'trending-up' : 'trending-down'}
                       numeric

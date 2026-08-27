@@ -24,6 +24,9 @@ import { useAuth } from '@/store/auth';
 import { canViewOwnClients } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
 
+/** The translator, as `dueToken` needs it: that helper is module scope and cannot call a hook. */
+type TFn = ReturnType<typeof useT>;
+
 /* ------------------------------------------------------------------ *
  * Client 360 — everything the book knows about one person.
  *
@@ -60,14 +63,14 @@ const POLICY_STATUS: Record<Policy['status'], { label: string; tone: Tone }> = {
 };
 
 /** Days-to-FUP, rendered as a status token. Returns null when there is no usable date. */
-function dueToken(iso?: string): { label: string; tone: Tone } | null {
+function dueToken(iso: string | undefined, t: TFn): { label: string; tone: Tone } | null {
   if (!iso) return null;
   const d = daysUntil(iso);
   if (!Number.isFinite(d)) return null;
-  if (d < 0) return { label: `${Math.abs(d)} days late`, tone: 'danger' };
-  if (d === 0) return { label: 'Due today', tone: 'danger' };
-  if (d <= 30) return { label: `In ${d} days`, tone: 'warning' };
-  return { label: `In ${d} days`, tone: 'neutral' };
+  if (d < 0) return { label: t('common.daysLate', { n: Math.abs(d) }), tone: 'danger' };
+  if (d === 0) return { label: t('common.dueToday'), tone: 'danger' };
+  if (d <= 30) return { label: t('common.inDays', { n: d }), tone: 'warning' };
+  return { label: t('common.inDays', { n: d }), tone: 'neutral' };
 }
 
 type ReportSummary = {
@@ -171,7 +174,7 @@ function ClientDetailScreen() {
       { label: t('client.policies'), value: String(client.policies.length), icon: 'documents-outline', tone: 'primary' },
     ];
     // A matured policy has run its full term — no premium is due, so don't raise a "days late" alarm on it.
-    const due = p && p.status !== 'matured' ? dueToken(p.nextRenewal) : null;
+    const due = p && p.status !== 'matured' ? dueToken(p.nextRenewal, t) : null;
     if (due) out.push({ label: t('act.premiumDue'), value: due.label, icon: 'time-outline', tone: due.tone });
     const mat = monthYear(p?.maturityDate);
     if (mat) out.push({ label: t('client.maturity'), value: mat, icon: 'flag-outline', tone: 'accent' });
@@ -340,10 +343,11 @@ function ClientDetailScreen() {
  * ================================================================== */
 
 function PolicySection({ p, index, count }: { p: Policy; index: number; count: number }) {
+  const t = useT();
   const status = POLICY_STATUS[p.status] ?? POLICY_STATUS.in_force;
   const matured = p.status === 'matured';
   // A matured policy has no next premium — suppress the due date + "days late" pill entirely.
-  const due = matured ? null : dueToken(p.nextRenewal);
+  const due = matured ? null : dueToken(p.nextRenewal, t);
   const hasNumber = !!p.number && p.number !== '—';
   const started = dateOr(p.startDate);
   const matures = dateOr(p.maturityDate);
@@ -386,10 +390,10 @@ function ReportSheet({ visible, report, onClose }: {
   const s = report?.summary ?? {};
 
   const rows: { label: string; value: string }[] = [];
-  if (s.total_policies != null) rows.push({ label: 'Total policies', value: String(s.total_policies) });
-  if (s.life_cover != null) rows.push({ label: 'Total life cover', value: inr(s.life_cover) });
-  if (s.annual_premium != null) rows.push({ label: 'Annual premium', value: inr(s.annual_premium) });
-  if (s.members != null) rows.push({ label: 'Family members', value: String(s.members) });
+  if (s.total_policies != null) rows.push({ label: t('report.totalPolicies'), value: String(s.total_policies) });
+  if (s.life_cover != null) rows.push({ label: t('report.lifeCover'), value: inr(s.life_cover) });
+  if (s.annual_premium != null) rows.push({ label: t('client.annualPremium'), value: inr(s.annual_premium) });
+  if (s.members != null) rows.push({ label: t('report.familyMembers'), value: String(s.members) });
 
   const share = () => {
     if (!report) return;

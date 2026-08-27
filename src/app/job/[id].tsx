@@ -10,6 +10,7 @@ import { Button } from '@/ui/controls';
 import { Banner, EmptyState, Meter } from '@/ui/feedback';
 import type { MeterTone } from '@/ui/feedback';
 import { ListSection, Pill } from '@/ui/data';
+import { useT } from '@/i18n';
 import type { Tone } from '@/ui/data';
 import { Appear, useCountUp } from '@/ui/motion';
 import { haptics } from '@/lib/haptics';
@@ -50,6 +51,7 @@ const LOG_ICON: Record<JobLogLine['state'], IconName> = {
 
 export default function JobMonitor() {
   const c = useTheme();
+  const t = useT();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -92,8 +94,8 @@ export default function JobMonitor() {
         <Header title="Job" back />
         <EmptyState
           icon="hourglass-outline"
-          title="This job is no longer running"
-          subtitle="Background jobs are kept only while the app is open. It has finished and been cleared."
+          title={t('job.goneTitle')}
+          subtitle={t('job.goneBody')}
           action={{ label: 'Go back', onPress: () => router.back() }}
         />
       </Screen>
@@ -187,7 +189,7 @@ export default function JobMonitor() {
         borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border,
       }}>
         <Button
-          label={running ? 'Keep working, this runs in the background' : 'Done'}
+          label={running ? t('job.keepWorking') : t('common.done')}
           icon={running ? 'arrow-back' : 'checkmark'}
           variant={running ? 'outline' : 'primary'}
           full

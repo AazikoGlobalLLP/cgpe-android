@@ -11,6 +11,7 @@ import { Sheet } from '@/ui/sheet';
 import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
+import { useT } from '@/i18n';
 
 import * as api from '@/data/api';
 import type { LicPlan } from '@/data/types';
@@ -71,6 +72,7 @@ const ALL = 'all';
 
 export default function LicPlans() {
   const c = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
 
@@ -160,7 +162,7 @@ export default function LicPlans() {
 
   return (
     <Screen>
-      <Header title="LIC Plans" subtitle={subtitle} back />
+      <Header title={t('act.licPlans')} subtitle={subtitle} back />
 
       <ScrollView
         contentContainerStyle={{

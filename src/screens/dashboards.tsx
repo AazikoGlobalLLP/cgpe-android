@@ -373,23 +373,23 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
         hero's team-derived minis, which also stay live while the org big reads NO_VALUE.
       */}
       <KpiGrid items={[
-        { label: 'Total clients', value: snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE, icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
-        { label: 'Active leads', value: snapshot ? snapshot.leads.toLocaleString('en-IN') : NO_VALUE, icon: 'trending-up', tint: c.accent, onPress: () => router.push('/(tabs)/leads') },
-        { label: 'Claims total', value: snapshot ? String(snapshot.claims.total) : NO_VALUE, icon: 'shield-checkmark', tint: c.warning, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'In process', value: snapshot ? String(snapshot.claims.under_process) : NO_VALUE, icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'Claims paid', value: snapshot ? inrShort(snapshot.claims.paid_amount) : NO_VALUE, icon: 'cash', tint: c.success, onPress: () => router.push('/(tabs)/claims') },
-        { label: 'Open tasks', value: String(snapshot?.tasks.open ?? tasks.filter((t) => t.status !== 'done').length), icon: 'checkbox', tint: c.info, onPress: () => router.push('/(tabs)/tasks') },
+        { label: t('dash.totalClients'), value: snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE, icon: 'people', tint: c.primary, onPress: () => router.push('/(tabs)/clients') },
+        { label: t('home.activeLeads'), value: snapshot ? snapshot.leads.toLocaleString('en-IN') : NO_VALUE, icon: 'trending-up', tint: c.accent, onPress: () => router.push('/(tabs)/leads') },
+        { label: t('dash.claimsTotal'), value: snapshot ? String(snapshot.claims.total) : NO_VALUE, icon: 'shield-checkmark', tint: c.warning, onPress: () => router.push('/(tabs)/claims') },
+        { label: t('dash.inProcess'), value: snapshot ? String(snapshot.claims.under_process) : NO_VALUE, icon: 'shield-half', tint: c.danger, onPress: () => router.push('/(tabs)/claims') },
+        { label: t('dash.claimsPaid'), value: snapshot ? inrShort(snapshot.claims.paid_amount) : NO_VALUE, icon: 'cash', tint: c.success, onPress: () => router.push('/(tabs)/claims') },
+        { label: t('dash.openTasks'), value: String(snapshot?.tasks.open ?? tasks.filter((t) => t.status !== 'done').length), icon: 'checkbox', tint: c.info, onPress: () => router.push('/(tabs)/tasks') },
       ]} />
 
       <View>
-        <SectionHeader title="Master controls" />
+        <SectionHeader title={t('dash.masterControls')} />
         <QuickRow actions={[
-          { icon: 'people-circle', label: 'All teams', tint: th.accent, onPress: () => router.push('/team') },
-          { icon: 'map', label: 'Agent map', tint: c.info, onPress: () => router.push('/agent-map') },
-          { icon: 'navigate', label: 'Movement', tint: c.accent, onPress: () => router.push('/agent-track') },
-          { icon: 'stats-chart', label: 'Analytics', tint: c.primary, onPress: () => router.push('/analytics') },
-          { icon: 'paper-plane', label: 'Campaigns', tint: c.warning, onPress: () => router.push('/campaigns') },
-          ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: 'Assign task', tint: c.success, onPress: () => router.push('/task-new') }] : []),
+          { icon: 'people-circle', label: t('dash.allTeams'), tint: th.accent, onPress: () => router.push('/team') },
+          { icon: 'map', label: t('dash.agentMap'), tint: c.info, onPress: () => router.push('/agent-map') },
+          { icon: 'navigate', label: t('dash.movement'), tint: c.accent, onPress: () => router.push('/agent-track') },
+          { icon: 'stats-chart', label: t('dash.analytics'), tint: c.primary, onPress: () => router.push('/analytics') },
+          { icon: 'paper-plane', label: t('dash.campaigns'), tint: c.warning, onPress: () => router.push('/campaigns') },
+          ...(canCreateTask ? [{ icon: 'person-add' as IconName, label: t('dash.assignTask'), tint: c.success, onPress: () => router.push('/task-new') }] : []),
         ]} />
       </View>
 

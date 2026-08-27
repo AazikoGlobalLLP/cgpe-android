@@ -158,12 +158,12 @@ export function DocumentSourceSheet({ visible, onClose, onResult }: {
             screen. Inventing the Gujarati/Hindi spelling of "video" would be machine translation,
             which is forbidden here (PHASE-19 §4) — so this joins the other not-yet-translated
             strings and is listed in docs/i18n/COPY-REQUEST-2026-08-26.md for the owner. */}
-        <Button label="Record a video" icon="videocam-outline" variant="outline" full onPress={() => choose('video')} />
+        <Button label={t('doc.recordVideo')} icon="videocam-outline" variant="outline" full onPress={() => choose('video')} />
         <Button label={t('doc.gallery')} icon="images-outline" variant="outline" full onPress={() => choose('gallery')} />
         <Button label={t('doc.file')} icon="document-outline" variant="outline" full onPress={() => choose('document')} />
         <Txt size={c.font.cap} color={c.faint} numberOfLines={3} style={{ textAlign: 'center', lineHeight: 17, marginTop: spacing.xs }}>
-          You can attach {ALLOWED_UPLOAD_LABEL}, up to {MAX_UPLOAD_MB} MB. Videos are limited to{' '}
-          {MAX_VIDEO_SECONDS} seconds and are made smaller on your phone before they are sent.
+          You can attach {ALLOWED_UPLOAD_LABEL}, up to {MAX_UPLOAD_MB} MB.{' '}
+          {t('doc.videoHint', { seconds: MAX_VIDEO_SECONDS })}
         </Txt>
       </View>
     </Sheet>

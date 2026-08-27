@@ -318,7 +318,7 @@ export default function NotifyScreen() {
                       }}
                       right={
                         <Pill
-                          label={on ? 'Added' : 'Add'}
+                          label={on ? t('common.added') : t('common.add')}
                           tone={on ? 'success' : 'neutral'}
                           small
                           icon={on ? 'checkmark' : undefined}

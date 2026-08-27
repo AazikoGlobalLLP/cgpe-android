@@ -678,7 +678,7 @@ function CampaignsScreen() {
                   size="lg"
                   variant="whatsapp"
                   icon="logo-whatsapp"
-                  label={!canSend ? 'Sending is disabled for your role' : sending ? 'Starting' : count > 0 ? `Send to all ${num(count)}` : 'Nobody to send to'}
+                  label={!canSend ? 'Sending is disabled for your role' : sending ? 'Starting' : count > 0 ? t('premium.sendAllCount', { n: num(count) }) : 'Nobody to send to'}
                   loading={sending}
                   disabled={count === 0 || !canSend}
                   onPress={() => { void sendAll(); }}
