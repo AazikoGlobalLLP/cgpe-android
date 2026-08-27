@@ -80,7 +80,9 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   `expo start` targets the dev build. `--tunnel` for a phone on another network.
 - `npx expo start --web` — the only way to reach a localhost backend.
 - `npx tsc --noEmit` — a green gate. Run before every commit.
-- `npm test` — Vitest, 258 tests over 9 files, ~0.6 s, no network. The second green gate.
+- `npm test` — Vitest, **1068 tests over 66 files**, ~4 s, no network. The second green gate.
+  (It said "258 over 9 files, ~0.6 s" for months; recounted 2026-08-27. The ~4 s is the Phase-55
+  retry backoff in the real-timer api tests, not a regression — see the retry note below.)
   **Run the whole suite with `npm test` — do NOT invoke `npx vitest run <file>` for one file; it fails
   `Vitest failed to find the runner` (the project's runner resolves only through the npm script). To scope to
   one file, pass the path to the script: `npm test -- src/data/__tests__/<file>.test.ts`.**
@@ -314,7 +316,9 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
    which reports to `src/data/health.ts` and raises the one global `<HealthBanner/>`. Screens branch
    their empty state on `useDataHealth().degraded` so "no clients" ≠ "could not load clients".
 5. New route = drop a file in `src/app`. A new **tab** must be added twice: `<Tabs.Screen>` *and*
-   `TAB_META` + `ORDER` in `src/app/(tabs)/_layout.tsx`.
+   `TAB_META` in `src/app/(tabs)/_layout.tsx`. **There is no `ORDER` constant** — this line said so
+   until 2026-08-27 and sent readers hunting for a symbol that does not exist. Tab ORDER is simply the
+   declaration order of the `<Tabs.Screen>` elements.
    **⚠️ TYPED-ROUTES TRAP (Phase 67, 2026-08-19): after adding a NEW route file, `tsc` fails on any
    `router.push` to it** — `typedRoutes:true` (app.json) generates the route union into
    `.expo/types/router.d.ts`, which is regenerated **only on `expo start`** (it can be days stale;
@@ -327,7 +331,8 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
    `keyboardShouldPersistTaps="handled"` (and usually `keyboardDismissMode="on-drag"`) on that ScrollView.
    RN's default is `"never"`: while the keyboard is up, the first tap on any child is consumed to dismiss
    the keyboard and **never reaches the child** — the two-tap "feels broken" bug, documented in the code at
-   `ui/base.tsx:80-82` and guarded on ~15 screens (`search.tsx:585`, `clients.tsx`, `leads.tsx`,
+   `ui/base.tsx:81-83` (the prop itself is applied at `:103`) and guarded on **20** files
+  (`search.tsx:606`, `clients.tsx`, `leads.tsx`,
    `notes.tsx`, login…). `tsc`/`npm test`/`eslint` CANNOT see this — it needs a device or an eye on the
    ScrollView props. The Tasks-tab search shipped missing it and an adversarial review caught it; don't
    repeat the miss.
@@ -393,17 +398,58 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   vanish" bug, and it is a SERVER gap: the app already detects it (`isEphemeralUrl`) and is honest.
 - **A no-auth `curl` distinguishes deployed from not:** `401` = deployed and protected, `404`/`501` =
   not on the deployed build. `POST /api/file-attachments` → **401**, i.e. live (mount is on
-  `origin/main` at `app.js:466`). ⚠️ Its field whitelist has **no `entity_id`**, so it can RECORD a
-  file but cannot LINK one to a claim — do not fake that by overloading `category`/`description`.
+  `origin/main` at `app.js:466`).
+- ✅ **`entity_id` EXISTS NOW — but read the deploy caveat before believing it (2026-08-27).**
+  `cgpe-api`'s **Phase 94 (`fda199c`)** answered our whole upload item: `entity_id` + `entity_type` are
+  real persisted fields on `POST /api/file-attachments` (with a `?entity_id=` filter), the four video
+  MIME types are allowed, a rejected type now returns **415** instead of a bare 500, and
+  `cloudStorage.js` is MinIO-shaped. **The app already sends `entity_id`/`entity_type`** and no longer
+  smuggles the claim id into `description`.
+  🔴 **NONE OF IT IS DEPLOYED.** `fda199c` is on `origin/Shivam`; prod deploys `origin/main`, which was
+  `990c660`. Confirm before claiming any of it works on a phone:
+  `git -C ../cgpe-backend-main ls-remote origin refs/heads/main`, then
+  `git -C ../cgpe-backend-main merge-base --is-ancestor fda199c origin/main`. Until the owner merges +
+  deploys + restarts `:3001`, video uploads still fail and `entity_id` is still dropped. An unknown key
+  is ignored by the old build, which is why sending it early is safe.
+  ⚠️ **MinIO bucket naming is an OPS CONSTRAINT the app cannot enforce:** storage is path-style, so the
+  bucket is the first path segment — a bucket named **`uploads`** would make every durable object look
+  like the local-disk fallback to `isEphemeralUrl` and warn users their files will not be kept. The
+  host-scoped narrowing was deliberately NOT taken (it would turn a harmless false alarm into a false
+  reassurance); the reasoning is written at the function and pinned by a test.
 - **The upload route names its own failure in the BODY.** A rejected type is thrown from multer's
-  `fileFilter` and surfaces as a bare **500** carrying `{error:'File type video/mp4 is not allowed'}`;
+  `fileFilter` and surfaces as a bare **500** on the deployed build — a **415** once Phase 94 ships —
+  both carrying `{error:'File type video/mp4 is not allowed'}`;
   `LIMIT_FILE_SIZE` is a **400** carrying `File too large`. `classifyUploadFailureBody`
   (`lib/fileUpload.ts`) reads those words so a PERMANENT rejection is never reported with transient
   "try again" copy. Keep it conservative — an unrecognised body must fall through to the status, or a
   real 5xx gets relabelled as a content problem.
 
+- ⚠️ **THE AUTH ROUTES PUT A MACHINE TOKEN IN `error` AND THE SENTENCE IN `message` (2026-08-27).**
+  Everywhere else this backend answers a refusal with prose in `error` (`errorHandler.js` emits
+  `{error: <thrown message>}`, and `routes/auth.js` sends e.g. `error:'Your account is inactive…'`).
+  But `/auth/login` sends `{"error":"NO_ACCOUNT","message":"No account found with that email…"}` —
+  **probed live, not inferred** — and `BAD_PASSWORD`, `OTP_NOT_CONFIGURED`, `OTP_DELIVERY_FAILED` are
+  the same shape. Reading `json.error || json.message` therefore printed the bare word `NO_ACCOUNT` on
+  the login screen for the commonest failure in the product. **Never read those two fields by hand:
+  use `humanApiMessage(json, fallback)` (`lib/apiMessage.ts`)**, which prefers a prose `error`, falls
+  back to `message` when `error` is SCREAMING_SNAKE_CASE, and never shows a token. A blanket
+  `message`-first flip is a REGRESSION — several routes send only `error`.
+
 ## Danger zones
-- `src/data/api.ts` (1744 lines, 56 importers) — `state` is a write buffer, not seed data.
+- ⚠️ **`src/app/_layout.tsx` EXPORTS `ErrorBoundary`, and that export is the whole mechanism.**
+  expo-router wraps a route in its `Try` boundary **only** if the route module exports
+  `ErrorBoundary` (`expo-router/build/useScreens.js:141-158`), and the ROOT route node resolves
+  through the same path (`global-state/useStore.js:55`) — so that one export is the app's only error
+  containment, covering every screen. Before 2026-08-27 there was none at all: any render-time throw
+  unmounted the entire React root, and a release build has no LogBox, so the user got a dead screen
+  and the bug report said "it went blank". **Do not delete the export while "tidying imports"** —
+  importing the component is not enough. The boundary itself (`ui/RouteErrorBoundary.tsx`) renders
+  OUTSIDE every provider, so it must stay on react-native primitives and literal colours. The trap
+  there is that **`useTheme()` would NOT throw** outside its provider — `ThemeContext` is created with
+  `light` as its default (`theme/theme.tsx:271`), so it silently returns the wrong scheme and a
+  dark-mode user gets a white flash. `useColorScheme` (react-native) is the one to trust.
+- `src/data/api.ts` (**4332 lines**, 56 importers — the line count said 1744 until 2026-08-27, which
+  badly understated how much lives in here) — `state` is a write buffer, not seed data.
   `setAuthToken` silently disables all network calls for a token starting `demo-`.
   **⚠️ IN-MEMORY PER-USER STATE MUST BE RESET ON TEARDOWN (loophole round 4, 2026-08-25).** The module
   holds per-user data in JS memory that `store/auth`'s AsyncStorage/SecureStore purge does NOT touch:
@@ -413,7 +459,9 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   **`resetApiState()`** empties all of them and is called from `clear()` + `onSessionExpired` (+ the
   `persist()` different-user branch). **If you add another module-scope per-user Map/buffer here, add it
   to `resetApiState()`** — a purge in `store/auth` alone will NOT clear it.
-- `src/app/(tabs)/home.tsx` (1915 lines) — the only consumer of `useAppUi()`.
+- `src/app/(tabs)/home.tsx` (**2534 lines**) — the LARGEST consumer of `useAppUi()`, not the only one:
+  **11** source files call it (`home`, `tasks`, `claims`, `more`, `(tabs)/_layout`, `campaigns`,
+  `notify`, `task/[id]`, `task-new`, `tickets/[id]`, `_layout`). Changing the AppUi shape touches all 11.
 - ⚠️ **GPS sampling is HOURLY on all three profiles (`motion.ts` `HOURLY_MS`), and that is an OWNER
   decision, not a regression.** 2026-08-26 the owner asked for hourly instead of 60 s for battery and
   mobile data, was shown in writing that a nine-hour shift then records ~9 points and the live map
@@ -441,7 +489,7 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   etc., so those ELEMENTS now tighten on every screen that renders them, though a not-yet-migrated screen's OWN
   layout — its outer padding/gaps — stays comfortable until that screen is migrated too; **Phase 33:
   `(tabs)/home.tsx`** — the danger-zone dashboard, so Home now tightens WHOLE-screen, its own layout included);
-  the static `spacing`/`radius`/`font` exports stay = comfortable for the ~68 remaining unmigrated files (no
+  the static `spacing`/`radius`/`font` exports stay = comfortable for the **57** remaining unmigrated files (no
   single dominant one — the other `ui/` modules `spine`/`swipe`/`Confirm`/… + the ~40 flat stack-route
   screens). Migrate by destructuring the scale off `c` (`const {spacing,radius,font}=c`), stripping the
   static import (`tsc` flags any miss), and handling three non-mechanical shapes as helper/hooks/fallbacks, not
@@ -459,7 +507,8 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   every tier today**. To actually gate a create/assign/admin affordance FROM a lower tier, AND the flag with the
   role-derived predicate — `capabilitiesOf(user, viewAs).<cap> && (ready ? can('feature') !== false : true)` — the
   caps term is what protects the tier, the flag term lets a future seeded config tighten it. Gating on the flag alone
-  is the bug the Home create-affordance had (`home.tsx:688`) and the trap Point 6's "wire the 10 inert toggles" will
+  is the bug the Home create-affordance had (`home.tsx:736` — this said `:688`, which is unrelated widget-merge code)
+  and the trap Point 6's "wire the 10 inert toggles" will
   hit. `caps.assignTasks` was verified to equal the backend's own create allow-list `['admin','leader','super_admin']`.
   **⚠️ THE SAME TRAP HIT A DASHBOARD *WIDGET*, NOT JUST A BUTTON (loophole round 4, 2026-08-25).** `DEFAULT_UI`
   (the fallback used when a role config is unseeded — the prod reality) ships the `team_roster` + `analytics`
@@ -478,7 +527,8 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   changes, NEVER client phone literals in `src/`. Keep it that way (same reason the email literal was removed).**
   **`tierOf()` folds `leader` INTO the `admin` tier** (so
   `caps.manageTeam` is true for a leader) — but several backend surfaces gated `authorize('admin')`
-  **403 a leader** (payroll is the live example: `routes/payroll.js:22-23`). So any mobile surface that
+  **403 a leader** (payroll is the live example: `routes/payroll.js:84` — this said `:22-23`, which is the
+  `protect` token gate, not the admin gate). So any mobile surface that
   consumes an admin-only endpoint must gate on the **real** `user.role === 'admin'|'super_admin'`, never
   on `caps`/the tier, or a leader reaches the fetch and gets a 403 blank. Phase 20 (`app/payroll.tsx`)
   does exactly this; copy it. See `docs/spec/PHASE-20.md` D-3.
@@ -495,8 +545,10 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   non-strict scope treats the ~9k UNOWNED book as firm-visible) — relay FILED at INBOX top 2026-08-24, owner-owned.
   Spec `docs/spec/BAND2-7-client-access.md`. Left ungated (owner call, flagged): WhatsApp hub, search Tickets group,
   task-contact sheet.
-- Dead, do not maintain: `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`,
-  `hooks/use-color-scheme*.ts`, `constants/theme.ts`, `src/global.css`, `data/mock.ts`.
+- Dead, do not maintain: **`data/mock.ts`** — and that is now the ONLY one. This list also named
+  `ui/kit.tsx`, `ui/characters.tsx`, `hooks/use-theme.ts`, `hooks/use-color-scheme*.ts`,
+  `constants/theme.ts` and `src/global.css`; **all six were deleted at some point and none exist on
+  disk** (checked 2026-08-27). Do not go looking for them.
 - `HOW_TO_RUN.md` and `TESTING_GUIDE.md` were corrected in Phase 8 (2026-08-11) — they no
   longer describe an offline demo mode or a hand-editable localhost default. Keep them honest
   when `src/constants/config.ts`'s base-URL logic or the login path changes again.
@@ -513,36 +565,46 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   outage-honesty convention (#4 below). They need per-screen copy in a later batch.
   (b) **composed strings stay English** (`On duty (n)`, `${duration} on duty`, `withCount('All', n)`)
   — they need placeholder keys that do not exist, and gluing `t()` into a template literal breaks
-  Hindi/Gujarati word order. Next i18n job is **Batch 5 (sign-in)**, and its literals must be
-  extracted verbatim into `docs/i18n/COPY-REQUEST-2026-08-26.md` BEFORE asking for copy.
+  Hindi/Gujarati word order. ✅ **Batch 5 (sign-in) is now EXTRACTED** (2026-08-27): all **47** strings
+  are quoted verbatim in `docs/i18n/COPY-REQUEST-2026-08-26.md`, along with a new Batch 5b (the crash
+  screen, 4 strings). Nothing on the sign-in screen is a composed string, so it needs no placeholder
+  keys — do not invent one. The next extraction job is the **39 outage bodies**, then Batches 6–9.
   ⚠️ **A local `t` shadows the translator.** Renaming the LOCAL (not the translator) is the fixed
   convention — done for `agent-track` (`t`→`track`), `kb` (`t`→`tag`), `performance` (`t`→`task`);
   `notes.tsx` and `tickets/index.tsx` still bind the translator as `tr`.
-- **i18n (`src/i18n/index.tsx`) — two traps before adding keys.** **143 keys** exist (was 75 when this line was written; bumped as phases added copy); ~6 files use `t()`
-  substantially and — as of **Phase 21 P1 (2026-08-12)** — **16 more screens** wire a handful of shared
-  `common.*` labels (`Call`/`Cancel`/`Delete`/`WhatsApp`/`Today`). **RECOUNTED Phase 77: it is ~49 of the
-  53 route files that are ~100% hardcoded English, not "~40"** — 32 have ZERO `t()` calls and only 4 have
-  five or more (`home` 57, `tasks` 28, `consent` 14, `settings` 8). `claims.tsx` and `search.tsx` are
-  permanent bottom tabs with zero. **All net-new `common.*` keys (`tryAgain` — **55 occurrences across 37
-  files**, not the 34 this line used to say — `clearSearch` ×15, `refresh` ×6, the outage body (**60
-  occurrences in 39 near-identical variants**), the a11y labels) still need human copy — do NOT wire them
-  until gu/hi/hi-en/gu-en are supplied (PHASE-19 §4).** The consolidated, batched, fillable ask lives in
-  **`docs/i18n/COPY-REQUEST-2026-08-26.md`** — hand the owner that file rather than re-deriving the list.
-  ⚠️ **Four ALREADY-WIRED keys are wrong today and the parity test cannot see it** (it rejects only
-  `value === key`, never `value === English`): `tab.search` is untranslated in gu+hi, `consent.agree/
-  declineButton` are English in hi-en, `tasks.tomorrow`/`tasks.yesterday` are BOTH `कल`/`Kal` in hi+hi-en
-  (an overdue header reads identically to an upcoming one), and `tasks.emptyCalendarBody` still says
-  "strip" in all four after the day-rail became a month grid. When wiring a shared label, reuse an existing key;
-  add a new one only by lifting existing human copy (as `common.today` did from `tab.home`) or with supplied
-  copy — never a machine guess. Some screens bind the translator to `tr` (not `t`) where a local `t` already
-  exists (`tickets/index.tsx`, `notes.tsx`). (1) `t()` is now `t(key, params?)` (Phase 21 P0, 2026-08-11, `a7a0979`):
-  named `{placeholder}` interpolation + count-plurals (`key_one`/`key_other`, CLDR by active language,
-  falls back to base key). Use `t(key, {name})` / `t(key, {count})` for dynamic strings — **never string
-  concatenation** (Hindi/Gujarati word order). Single-arg `t(key)` is unchanged. Pure seams
-  `pluralCategory`/`interpolate`/`translate(…,lookup?)` are exported and tested in `__tests__/format.test.ts`.
-  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes the key count — **143 as of
-  Phase 77**, not the 75 this line originally said (bump
-  it deliberately when adding keys) **and** its leak check rejects only `value === key`, **not**
+- **i18n (`src/i18n/index.tsx`) — the real numbers, recounted 2026-08-27.** **226 keys** exist (this
+  line said 75, then 143; both were stale). **60** source files import the translator and there are
+  **348** `t()`/`tr()` call sites in `src/`. Only **6 of the 53 route files have ZERO `t()` calls**
+  (`(auth)/_layout`, `index`, `job/[id]`, `lic-plans`, `task-edit`, `task-new`) — this line used to say
+  **32**, and used to claim `claims.tsx` and `search.tsx` were permanent bottom tabs with zero; **both
+  call the translator now.** So the app is nowhere near "~49 of 53 files are 100% English" any more;
+  what remains is depth (most screens translate a handful of shared words, not their own copy), not
+  breadth.
+  ⚠️ **DO NOT repeat this file's old instruction "do NOT wire the net-new `common.*` keys until
+  gu/hi/hi-en/gu-en are supplied".** The owner supplied that copy on 2026-08-26 and the sweep shipped
+  the same day: `common.tryAgain` (55 sites / 37 files), `clearSearch` (×15), `refresh` (×6) and the
+  a11y labels are all wired, in all five languages. Following the old instruction would block work
+  that is already done. What genuinely still needs copy is listed — batch by batch, with the English
+  quoted verbatim — in **`docs/i18n/COPY-REQUEST-2026-08-26.md`**; hand the owner that file rather
+  than re-deriving the list. Ready to send today: **Batch 5** (sign-in, 47 strings), **Batch 5b** (the
+  crash screen, 4) and **Batch 4b** (video, 4). Still un-extracted: the outage bodies and Batches 6–9.
+  ✅ **The four "already-wired but wrong" keys this file used to list are ALL FIXED** (verified against
+  the dictionary 2026-08-27, not the docs): `tab.search` is `શોધો` (gu) / `खोजें` (hi);
+  `consent.agreeButton`/`declineButton` are translated in hi-en; `tasks.tomorrow`/`tasks.yesterday` are
+  distinct in hi and hi-en (`आने वाला कल` vs `बीता हुआ कल`); and `tasks.emptyCalendarBody` says
+  "calendar" in all five. Do not re-file any of them. **The underlying trap is still real** and is why
+  they survived so long: the parity test rejects only `value === key`, **never** `value === English`.
+  When wiring a shared label, reuse an existing key; add a new one only by lifting existing human copy
+  (as `common.today` did from `tab.home`) or with supplied copy — never a machine guess. Some screens
+  bind the translator to `tr` (not `t`) where a local `t` already exists (`tickets/index.tsx`,
+  `notes.tsx`). (1) `t()` is `t(key, params?)` (Phase 21 P0, `a7a0979`): named `{placeholder}`
+  interpolation + count-plurals (`key_one`/`key_other`, CLDR by active language, falls back to the base
+  key). Use `t(key, {name})` / `t(key, {count})` for dynamic strings — **never string concatenation**
+  (Hindi/Gujarati word order). Pure seams `pluralCategory`/`interpolate`/`translate(…,lookup?)` are
+  exported and tested in `__tests__/format.test.ts`.
+  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes the key count — **226**
+  (bump it deliberately when adding keys; note its own `it(…)` title still says "94-key set" and is
+  cosmetic) **and** its leak check rejects only `value === key`, **not**
   `value === English` — so a Gujarati entry left as the English string **passes the suite green**. The
   test cannot certify translation happened; human copy is load-bearing and machine translation is
   forbidden (PHASE-19 §4).

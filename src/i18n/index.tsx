@@ -128,8 +128,9 @@ const en = {
   'tasks.emptyMonthTitle': 'Nothing this month',
   'tasks.emptyMonthBody': 'No task is scheduled in this calendar month.',
   // Band 2 #4: reworded "strip above" → "calendar above" now that the Calendar view is a month grid,
-  // not the removed day rail. English only (the source); gu/hi/hi-en/gu-en still say "strip" and OWE a
-  // human copy pass — machine translation is forbidden (see docs/spec/BAND2-4-calendar.md).
+  // not the removed day rail. CLOSED 2026-08-26 — the owner supplied human copy and all four
+  // translations now say "calendar" too, so the debt this comment recorded is paid. Kept as the
+  // record of why the wording changed (see docs/spec/BAND2-4-calendar.md).
   'tasks.emptyCalendarBody': 'No task is due on the selected day. Pick another day from the calendar above.',
   'guide.welcome': 'Welcome', 'guide.title': 'Your day in 3 steps',
   'guide.step1Title': 'Clock in', 'guide.step1Body': 'Tap Clock in when you reach the office to start your day.',
