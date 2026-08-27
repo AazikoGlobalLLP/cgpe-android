@@ -669,7 +669,7 @@ is good and the app simply cannot use it in the shape it was supplied:
 the parity test only proves the five languages agree, and the compiler only sees a valid string. The
 same defect shipped twice before — supplied copy sitting unread while the screen showed English.
 
-### 6f — WHAT BATCH 6a ITSELF CREATED (2026-08-27, after wiring — 21 strings) ⭐ NEXT
+### 6f — WHAT BATCH 6a ITSELF CREATED (2026-08-27, after wiring — 23 strings) ⭐ NEXT
 
 **Batch 6a is wired and shipped.** 68 of its 70 rows now render on a phone. This section is the
 short, honest list of what wiring it left behind — the same "half-translated group" arithmetic that
@@ -685,18 +685,27 @@ created 6a in the first place, now one level down. It is small, and it closes re
   controls row, and the other five buttons beside it have no copy. Wiring one of six would look
   broken. It is unblocked by the Master-dashboard rows below.
 
-**Then, three questions only you can answer:**
+**Then, three calls that were left to us — decided, and easy to reverse if you disagree:**
 
-1. **`Generating report` now exists twice, in two different Gujarati forms.** The earlier drop gave
-   `રિપોર્ટ બની રહી છે…` / `Report bani rahi chhe…`; this drop gave `રિપોર્ટ બની રહ્યો છે` /
-   `Report bani rahyo chhe`. The verb agreement differs. **The app is still using the earlier one** —
-   it was already live and we do not overwrite human copy on a guess. Which is right?
-2. **The app now says two different Gujarati words for the same noun**, because you filled the
-   Search-table cells fresh and they differ from the bottom tab bar: **Clients** is `ગ્રાહકો` on the
-   tab bar and `ક્લાયન્ટ્સ` in the Search table; **Claims** is `ક્લેમ` vs `ક્લેમ્સ`; **Tasks** is
-   `કાર્યો` vs `ટાસ્ક્સ`. We shipped what you wrote for each place. Deliberate, or should one word
-   win everywhere?
-3. **Home's follow-ups widget** — still waiting on the wording decision from 6e item 3.
+1. **`Generating report` arrived twice in two different Gujarati forms**, differing on verb
+   agreement: the earlier drop's `રિપોર્ટ બની રહી છે…` / `Report bani rahi chhe…` against this
+   drop's `રિપોર્ટ બની રહ્યો છે` / `Report bani rahyo chhe`. **We adopted the newer one** — it is
+   your later instruction, and the masculine agreement is the commoner treatment of the loanword
+   *રિપોર્ટ* — keeping the `…` the English carries. Hindi and Hinglish were identical in both drops,
+   so only the two Gujarati values moved. **If a native reader says otherwise it is a two-line
+   change.**
+2. **The app now says two different Gujarati words for the same noun** — **Clients** is `ગ્રાહકો` on
+   the bottom tab bar and `ક્લાયન્ટ્સ` in the Search table; **Claims** `ક્લેમ` vs `ક્લેમ્સ`;
+   **Tasks** `કાર્યો` vs `ટાસ્ક્સ` — because you wrote the Search cells fresh. **We kept both, and
+   did not touch the tab bar.** Neither is wrong: one is a menu label, the other names what a search
+   looks through, and both are your words. Rewriting the most-seen text in the app on our own
+   judgement is a bigger risk than a mild difference of register across two screens. **Say the word
+   and one wins everywhere** — but that is a decision about the tab bar, not about this batch.
+3. **Home's follow-ups widget was left in English**, again. Its empty title could read your
+   `home.noFollowups` today at zero cost, but its subtitle and its button have no copy, so wiring
+   the title alone would leave one of three translated. **Both peers are now rows 20 and 21 below**,
+   which closes it properly. 6e item 3's wording question still stands and is the only thing it
+   waits on.
 
 **And the 21 strings themselves:**
 
@@ -721,13 +730,15 @@ created 6a in the first place, now one level down. It is small, and it closes re
 | 17 | Claims total | Master dashboard — the six org tiles | ⬜ | ⬜ | ⬜ | ⬜ |
 | 18 | In process | Master dashboard — the six org tiles | ⬜ | ⬜ | ⬜ | ⬜ |
 | 19 | Claims paid | Master dashboard — the six org tiles | ⬜ | ⬜ | ⬜ | ⬜ |
+| 20 | Birthdays, renewals and callbacks land here on the day they are due. | Home — the follow-ups widget's empty state (with 21, this unblocks the title you already supplied) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 21 | Open follow-ups | Home — the follow-ups widget's button | ⬜ | ⬜ | ⬜ | ⬜ |
 
 **Plus two that need a `{placeholder}`, like 6e:**
 
 | # | Where it appears | What is needed | gu | hi | hi-en | gu-en |
 |---|---|---|---|---|---|---|
-| 20 | Clients list — a renewal row reads **"Due 14 Mar"** | The date has to sit inside the phrase. Please translate **`Due {date}`** | ⬜ | ⬜ | ⬜ | ⬜ |
-| 21 | Client 360 — a follow-up tag reads **"3 days late"** and **"In 12 days"** | Two phrases, number inside: **`{n} days late`** and **`In {n} days`**. Until these arrive, "Due today" stays English on that one tag, so the three read as one set | ⬜ | ⬜ | ⬜ | ⬜ |
+| 22 | Clients list — a renewal row reads **"Due 14 Mar"** | The date has to sit inside the phrase. Please translate **`Due {date}`** | ⬜ | ⬜ | ⬜ | ⬜ |
+| 23 | Client 360 — a follow-up tag reads **"3 days late"** and **"In 12 days"** | Two phrases, number inside: **`{n} days late`** and **`In {n} days`**. Until these arrive, "Due today" stays English on that one tag, so the three read as one set | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ### What is deliberately NOT in Batch 6, and why
 
