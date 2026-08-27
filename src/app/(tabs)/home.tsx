@@ -733,7 +733,10 @@ export default function Home() {
   // on the role-derived `caps.assignTasks` (false for team) AS WELL AS the RBAC flag — matching the
   // Tasks tab and task-new. The flag alone fails OPEN when unseeded, so without the caps term a team
   // advisor would still be shown "Add task" here and dead-end at the create screen's entry guard.
-  const canCreateTask = caps.assignTasks && (storeReady ? can('can_create_task') !== false : true);
+  // OWNER DECISION 2026-08-27: "har ek team member khud ke liye task bana sakta hai". The tier
+  // gate is GONE from create on purpose — `can_create_task` (schema default TRUE) is now the only
+  // gate, and assigning to SOMEONE ELSE stays behind `caps.assignTasks` in task-new/task/[id].
+  const canCreateTask = storeReady ? can('can_create_task') !== false : true;
   // Defence-in-depth on the FETCH (the widget filter above already removes the shells): AND the
   // fail-open RBAC flag with the role-derived capability, exactly as canCreateTask does. Without the
   // caps term the flag reads true for an unseeded team role and would fire the roster/snapshot round

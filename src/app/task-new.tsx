@@ -101,7 +101,14 @@ export default function TaskNew() {
   // screen is now reached only by an entitled tier (the Tasks tab / Home hide the create affordances
   // for team), but a deep-link or older entry could still land here — so we ALSO guard at the entry
   // (below) and show an honest "can't create" state instead of a form that only fails at submit.
-  const canCreateTask = capabilitiesOf(user, viewAs).assignTasks && (uiReady ? can('can_create_task') !== false : true);
+  // OWNER DECISION 2026-08-27: anyone may create a task for themselves (see (tabs)/tasks.tsx).
+  const canCreateTask = uiReady ? can('can_create_task') !== false : true;
+  // ...but choosing a DIFFERENT assignee is still admin/leader work. When this is false the form
+  // keeps the task on the creator's own list, which is exactly what the backend does with no
+  // `assigned_to` (routes/tasks.js:210) and what `can_assign_task_to_others` (schema default
+  // FALSE) models.
+  const canAssignOthers = capabilitiesOf(user, viewAs).assignTasks
+    && (uiReady ? can('can_assign_task_to_others') !== false : true);
 
   const [title, setTitle] = useState('');
   const [titleError, setTitleError] = useState('');
@@ -180,8 +187,8 @@ export default function TaskNew() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'This account cannot create tasks',
-        message: 'Creating work for the team needs an admin, leader, or super admin role. Ask your branch admin to raise it, or ask them to add the task.',
+        title: 'The server has not enabled this yet',
+        message: 'Creating your own tasks has been approved but is not switched on on the server yet. Ask your branch admin to add the task for now.',
       });
       return;
     }
@@ -283,10 +290,17 @@ export default function TaskNew() {
 
         {/* WHO. An open set of real people, so it opens a sheet with faces in it. */}
         <Appear index={1}>
-          <Group label="Assign to" hint={assignee === UNASSIGNED ? 'Nobody is assigned yet. The task stays on your own list.' : undefined}>
+          <Group
+            label="Assign to"
+            hint={!canAssignOthers
+              ? 'This task will be on your own list. Assigning work to someone else needs an admin or leader.'
+              : assignee === UNASSIGNED ? 'Nobody is assigned yet. The task stays on your own list.' : undefined}
+          >
             <Pressable
-              onPress={() => setPickerOpen(true)}
+              onPress={() => { if (canAssignOthers) setPickerOpen(true); }}
+              disabled={!canAssignOthers}
               accessibilityRole="button"
+              accessibilityState={{ disabled: !canAssignOthers }}
               accessibilityLabel={`Assign to. Currently ${assignee}`}
               style={({ pressed }) => [{
                 flexDirection: 'row', alignItems: 'center', gap: spacing.md,

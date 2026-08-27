@@ -25,6 +25,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import * as api from '@/data/api';
 import type { AppUiConfig, UiWidget } from '@/data/api';
 import { useAuth } from '@/store/auth';
+import { canonicalizeDepartment, tierOf } from '@/store/roles';
 
 export type { AppUiConfig, UiWidget } from '@/data/api';
 
@@ -192,6 +193,166 @@ export const DEFAULT_UI: AppUiConfig = {
     global_search_scopes: [...SEARCH_SCOPES],
   },
 };
+
+/* ------------------------------------------- owner's department layouts (2026-08-27) */
+
+/**
+ * OWNER DECISION, 2026-08-27, given verbatim: an ops-team member sees "reminders,
+ * processes/operations, claims, maturity, Home me tasks + claims + maturity, tasks tab ke andar
+ * active claims … except settled, and sab se mandatory clock-in & out & break" — **"baki kuch bhi
+ * nahi"**. A sales-team member sees "Leads, Prospects, home mein unke tasks, tasks tab ke andar
+ * leads and prospects, home tab me yeh dono 5-5 ke batch mein, and mandatory clock-in & out &
+ * break" — **"aur kuch bhi nahi dikhana hai"**.
+ *
+ * WHY THIS LIVES IN THE APP AND NOT IN THE ADMIN PANEL. The panel is the real home for this
+ * (`PUT /rbac/app-ui/:roleKey`), and a seeded document still WINS — see `departmentFallbackUi`,
+ * which is consulted only when the server returned nothing. But the per-role documents have never
+ * been seeded in production (owner backlog Point 6), so today every department resolves to
+ * `DEFAULT_UI`, which shows everything. Encoding the owner's two departments here is what makes
+ * their decision real on a handset without waiting on a seeding job.
+ *
+ * FOUR THINGS ARE DELIBERATELY KEPT VISIBLE even though "nothing else" was said, because removing
+ * them would take away something the owner did not mean and could not get back from inside the app:
+ *   • `profile` / `settings` / `account` — `settings` is where the LANGUAGE switch lives, and
+ *     `account` is the DPDP data/deletion screen. Hiding them would strand a user in a language
+ *     they cannot read with no way out. `more.tsx` gates these separately anyway.
+ *   • `attendance` — this IS the clock-in/out/break record the owner called "sab se mandatory".
+ *     The hero shows today; this screen is the history of it.
+ *   • `tickets` (ops only) — **this is an interpretation and it is the one to check first.** The
+ *     owner wrote "processees/oprations kya hai abhi", i.e. they were ASKING what that module is.
+ *     There is no module named "Processes" in this app; `tickets` (requests raised by
+ *     policyholders that ops claim and work) is the closest thing, so it is included. If the owner
+ *     meant something else, remove `'tickets'` from `OPS_MODULES` and add it to the hidden list.
+ *   • `my_tasks` stays `mandatory: true` in both, per the contract rule that a field agent's own
+ *     tasks can never be configured away.
+ *
+ * NOT HERE, AND NOT AN OVERSIGHT: "tasks tab ke andar active claims" (ops) and "tasks tab ke andar
+ * leads and prospects" (sales) are net-new SCREEN features, not visibility config — they put a
+ * different record type inside the Tasks tab. They are filed for the next phase; this object cannot
+ * express them.
+ */
+const OPS_MODULES = ['claims', 'reminders', 'tickets', 'attendance'] as const;
+const SALES_MODULES = ['leads', 'prospects', 'attendance'] as const;
+const SELF_MODULES = ['profile', 'settings', 'account'] as const;
+
+/** Every module key the More tab can place — kept in step with `more.tsx`'s `MORE_CATALOGUE`. */
+const ALL_MODULES = [
+  'leads', 'clients', 'segments', 'families', 'premium', 'prospects', 'lic-plans', 'claims',
+  'tickets', 'reminders', 'calendar', 'attendance', 'whatsapp', 'commissions', 'notice-board',
+  'notes', 'kb', 'search', 'contests', 'profile', 'settings', 'account',
+] as const;
+
+/** Widget keys, in the order `DEFAULT_UI` declares them. */
+const ALL_WIDGETS = DEFAULT_UI.dashboard.widgets.map((w) => w.key);
+
+/**
+ * Build a department layout: only `show` widgets visible, only `keep` modules reachable, and
+ * everything else in `nav.hidden` so it disappears from the tab bar AND the More menu.
+ *
+ * Widgets not named in `show` are emitted with `visible: false` rather than dropped, because
+ * `normalizeUiConfig` falls back to the whole `DEFAULT_UI` list when the array is EMPTY — an
+ * "everything off" config expressed by omission would silently re-open the full dashboard.
+ */
+function departmentUi(
+  roleKey: string,
+  label: string,
+  show: { key: string; max: number; mandatory?: boolean }[],
+  keep: readonly string[],
+  sections: AppUiConfig['nav']['more_sections'],
+  tabs: string[],
+): AppUiConfig {
+  const shown = new Map(show.map((s) => [s.key, s]));
+  return {
+    role_key: roleKey,
+    label,
+    dashboard: {
+      hero: 'clock_and_tasks',
+      // Array order IS render order (see this module's header), so the visible ones lead, in the
+      // order the owner listed them — Leads before Prospects for sales — and every remaining key
+      // follows switched off. `DEFAULT_UI`'s own order is not preserved here on purpose.
+      widgets: [
+        ...show.map((on) => ({
+          key: on.key,
+          visible: true,
+          title_override: null,
+          max_items: on.max,
+          mandatory: !!on.mandatory,
+        })),
+        ...ALL_WIDGETS.filter((key) => !shown.has(key)).map((key) => ({
+          key,
+          visible: false,
+          title_override: null,
+          max_items: DEFAULT_MAX_ITEMS,
+          mandatory: false,
+        })),
+      ],
+    },
+    nav: {
+      tabs,
+      more_sections: sections,
+      hidden: ALL_MODULES.filter((m) => !keep.includes(m)),
+    },
+    // Features are NOT narrowed here. This object decides what a member SEES; what they may DO is
+    // the server's call, and `SCHEMA_FEATURE_DEFAULTS` already models it (`can_create_task` true,
+    // `can_assign_task_to_others` false) — which is exactly the owner's "everyone can create a task
+    // for themselves" rule.
+    features: { ...SCHEMA_FEATURE_DEFAULTS },
+  };
+}
+
+export const OPS_TEAM_UI: AppUiConfig = departmentUi(
+  'operations_team',
+  'Operations (owner default)',
+  [
+    { key: 'my_tasks', max: 8, mandatory: true },
+    { key: 'claim_requests', max: 8 },
+    { key: 'follow_ups', max: 5 },
+  ],
+  [...OPS_MODULES, ...SELF_MODULES],
+  [
+    { title: 'Day to day', items: [...OPS_MODULES] },
+    { title: 'You', items: [...SELF_MODULES] },
+  ],
+  ['home', 'tasks', 'claims', 'more'],
+);
+
+export const SALES_TEAM_UI: AppUiConfig = departmentUi(
+  'sales_team',
+  'Sales (owner default)',
+  [
+    { key: 'my_tasks', max: 8, mandatory: true },
+    // "home tab me yeh dono 5-5 ke batch mein" — five each, exactly as asked.
+    { key: 'leads_pipeline', max: 5 },
+    { key: 'prospects', max: 5 },
+  ],
+  [...SALES_MODULES, ...SELF_MODULES],
+  [
+    { title: 'Your pipeline', items: [...SALES_MODULES] },
+    { title: 'You', items: [...SELF_MODULES] },
+  ],
+  ['home', 'tasks', 'leads', 'more'],
+);
+
+/**
+ * The layout to stand in with when the server has NO config for this user.
+ *
+ * Order matters and so does the narrowness:
+ *  1. A SEEDED server document always wins — this is only ever the `served == null` branch.
+ *  2. Only the **team** tier is narrowed. An admin or a leader sitting in Operations keeps their
+ *     full surface; the owner's two lists describe field staff, not the people who supervise them.
+ *  3. Only the two departments the owner actually specified are narrowed. Every other department —
+ *     and the four live values `canonicalizeDepartment` returns `null` for (`GENERAL INSURANCE`,
+ *     `BANKING & COLLECTION`, `DRIVER`, `IT`) — keeps `DEFAULT_UI`. **Guessing a layout for a
+ *     department the owner did not describe is how you hide a field agent's own work.**
+ */
+export function departmentFallbackUi(user: { role?: string | null; department?: string | null } | null): AppUiConfig {
+  if (!user) return DEFAULT_UI;
+  if (tierOf(user as Parameters<typeof tierOf>[0]) !== 'team') return DEFAULT_UI;
+  const dept = canonicalizeDepartment(user.department);
+  if (dept === 'Operations') return OPS_TEAM_UI;
+  if (dept && dept.toUpperCase().startsWith('SALES')) return SALES_TEAM_UI;
+  return DEFAULT_UI;
+}
 
 /* ------------------------------------------------------------ normalisation */
 
@@ -551,7 +712,9 @@ export function AppUiProvider({ children }: { children: React.ReactNode }) {
   // user's own answer. Both wait for auth, so a cold start with a saved session cannot
   // flash the wide-open fallback before the real layout arrives.
   const ready = authReady && (userId === null || (last !== null && last.user === userId));
-  const config = served ?? DEFAULT_UI;
+  // The owner's two department layouts stand in only when the server said nothing — a seeded
+  // document always wins. See `departmentFallbackUi`.
+  const config = served ?? departmentFallbackUi(auth?.user ?? null);
   const widgets = useMemo(() => visibleWidgetsOf(config), [config]);
   const tabs = useMemo(() => resolveTabs(config), [config]);
 

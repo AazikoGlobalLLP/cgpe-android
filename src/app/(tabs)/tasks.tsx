@@ -187,7 +187,13 @@ export default function Tasks() {
   // it is what actually protects team-tier, because the RBAC `can_create_task` flag fails OPEN when
   // unseeded. ANDing the flag (fail-open until the store is ready) subsumes Home's gate and lets the
   // panel turn create off for an entitled department later.
-  const canCreateTask = caps.assignTasks && (uiReady ? can('can_create_task') !== false : true);
+  // OWNER DECISION 2026-08-27 (supersedes Band 2 #3's tier gate): every team member may create a
+  // task for THEMSELVES, so `caps.assignTasks` no longer gates create. Assign-to-others is still
+  // gated, in task-new and task/[id]. ⚠️ The server side of this is NOT deployed yet:
+  // `POST /team/tasks` (team.js:384) still 403s a team role, and `addTask` surfaces that honestly
+  // rather than faking a save. The ask is filed; until it ships, a team member gets a clear
+  // refusal at submit instead of no button at all, which is what the owner asked for.
+  const canCreateTask = uiReady ? can('can_create_task') !== false : true;
 
   const [list, setList] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);

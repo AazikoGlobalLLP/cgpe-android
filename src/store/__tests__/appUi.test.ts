@@ -19,7 +19,7 @@
  * DEFAULT_UI for every later case in this file.
  */
 import { describe, expect, it } from 'vitest';
-import { arrangeMoreSections, DEFAULT_UI, normalizeUiConfig, resolveTabs } from '@/store/appUi';
+import { arrangeMoreSections, DEFAULT_UI, departmentFallbackUi, normalizeUiConfig, OPS_TEAM_UI, resolveTabs, SALES_TEAM_UI } from '@/store/appUi';
 import type { AppUiConfig } from '@/store/appUi';
 
 /** A hidden-predicate over a fixed set — the shape more.tsx passes from useAppUi().isHidden. */
@@ -465,5 +465,84 @@ describe('pinned known bugs — these must be updated deliberately when fixed', 
     // default at all, so an absent or mis-cased density stays undefined.
     expect(normalizeUiConfig({ theme: { density: 'COMPACT' } })!.theme).toBeUndefined();
     expect(normalizeUiConfig({ theme: { accent: '#ff8800' } })!.theme!.density).toBeUndefined();
+  });
+});
+
+/* ================================================================== *
+ * OWNER'S DEPARTMENT LAYOUTS (2026-08-27)
+ *
+ * The owner named exactly two departments and said "baki kuch bhi nahi" about the rest of each
+ * one's menu. These pin the three ways that instruction could be got wrong: narrowing somebody
+ * it was not about, narrowing a department it did not name, and taking away the two screens a
+ * user cannot recover from losing (Settings holds the language switch).
+ * ================================================================== */
+
+describe('departmentFallbackUi — the owner-specified department layouts', () => {
+  const ops = { role: 'advisor', department: 'Operations' };
+  const sales = { role: 'advisor', department: 'SALES - RENEWALS & LIC' };
+
+  it('narrows an OPERATIONS team member to claims, reminders, tickets and attendance', () => {
+    const ui = departmentFallbackUi(ops);
+    expect(ui).toBe(OPS_TEAM_UI);
+    expect(ui.nav.tabs).toEqual(['home', 'tasks', 'claims', 'more']);
+    // The owner's Home list: their tasks, and claims. Nothing else may be on.
+    const on = ui.dashboard.widgets.filter((w) => w.visible).map((w) => w.key);
+    expect(on).toEqual(['my_tasks', 'claim_requests', 'follow_ups']);
+    // Sales surfaces are gone from navigation entirely, not merely off the dashboard.
+    expect(ui.nav.hidden).toContain('leads');
+    expect(ui.nav.hidden).toContain('prospects');
+    expect(ui.nav.hidden).toContain('clients');
+  });
+
+  it('narrows a SALES team member to leads and prospects, five each on Home', () => {
+    const ui = departmentFallbackUi(sales);
+    expect(ui).toBe(SALES_TEAM_UI);
+    expect(ui.nav.tabs).toEqual(['home', 'tasks', 'leads', 'more']);
+    const on = ui.dashboard.widgets.filter((w) => w.visible);
+    expect(on.map((w) => w.key)).toEqual(['my_tasks', 'leads_pipeline', 'prospects']);
+    // "home tab me yeh dono 5-5 ke batch mein" — five each, verbatim.
+    expect(on.find((w) => w.key === 'leads_pipeline')!.max_items).toBe(5);
+    expect(on.find((w) => w.key === 'prospects')!.max_items).toBe(5);
+    expect(ui.nav.hidden).toContain('claims');
+  });
+
+  it('NEVER narrows an admin, a leader or a master, whatever their department', () => {
+    expect(departmentFallbackUi({ role: 'admin', department: 'Operations' })).toBe(DEFAULT_UI);
+    expect(departmentFallbackUi({ role: 'leader', department: 'SALES' })).toBe(DEFAULT_UI);
+    expect(departmentFallbackUi({ role: 'super_admin', department: 'Operations' })).toBe(DEFAULT_UI);
+  });
+
+  it('NEVER narrows a department the owner did not describe — including the four unmapped ones', () => {
+    // canonicalizeDepartment returns null for these live values (roles.ts records the data gap).
+    for (const department of ['GENERAL INSURANCE', 'BANKING & COLLECTION', 'DRIVER', 'IT', 'HEALTH INSURANCE', '', null]) {
+      expect(departmentFallbackUi({ role: 'advisor', department })).toBe(DEFAULT_UI);
+    }
+    expect(departmentFallbackUi(null)).toBe(DEFAULT_UI);
+  });
+
+  it('keeps Settings, profile and account reachable in BOTH layouts', () => {
+    // Settings is where the language switch lives. Hiding it would strand a user in a script they
+    // cannot read with no way back, which is not what "nothing else" can be allowed to mean.
+    for (const ui of [OPS_TEAM_UI, SALES_TEAM_UI]) {
+      for (const k of ['profile', 'settings', 'account']) {
+        expect(ui.nav.hidden).not.toContain(k);
+        expect(ui.nav.more_sections!.some((g) => g.items.includes(k))).toBe(true);
+      }
+    }
+  });
+
+  it('emits every hidden widget explicitly rather than by omission', () => {
+    // normalizeUiConfig falls back to the WHOLE DEFAULT_UI widget list when the array is empty,
+    // so an "everything off" layout expressed by omission would silently re-open the dashboard.
+    expect(OPS_TEAM_UI.dashboard.widgets.length).toBe(DEFAULT_UI.dashboard.widgets.length);
+    expect(SALES_TEAM_UI.dashboard.widgets.length).toBe(DEFAULT_UI.dashboard.widgets.length);
+  });
+
+  it('leaves task CREATION on and assign-to-others off, per the same-day owner decision', () => {
+    for (const ui of [OPS_TEAM_UI, SALES_TEAM_UI]) {
+      expect(ui.features.can_create_task).toBe(true);
+      expect(ui.features.can_assign_task_to_others).toBe(false);
+      expect(ui.features.can_clock_in).toBe(true);
+    }
   });
 });
