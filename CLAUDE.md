@@ -578,23 +578,63 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   `npm install --package-lock-only` (no re-install, one-line diff), and commit it with the change.
 - **i18n — BATCH 2 IS SWEPT (2026-08-26, `48b3509`): 118 call sites across 43 files now translate.**
   Do **not** re-file it as outstanding. Two deliberate exclusions that will look like gaps:
-  (a) **`common.offlineBody` was NOT wired and should not be** — the copy request called it "one
-  canonical replacement for all 39 variants", but **zero sites match it verbatim** and each of the 39
-  names *what* failed ("an empty inbox here is not confirmed"). Collapsing them destroys the
-  outage-honesty convention (#4 below). They need per-screen copy in a later batch.
+  (a) **`common.offlineBody` must NOT replace the 39 EMPTY-STATE sentences** — the copy request called
+  it "one canonical replacement for all 39 variants", but **no empty-state site matches it verbatim**
+  and each of the 39 names *what* failed ("an empty inbox here is not confirmed"). Collapsing them
+  destroys the outage-honesty convention (#4 below). They are now **Batch 6b** (41 distinct / 54
+  places), quoted verbatim in the copy request.
+  ⚠️ **BUT SEVEN *WRITE-FAILURE* NOTICES DID MATCH IT WORD FOR WORD AND ARE NOW WIRED** (Phase 80,
+  2026-08-27, `9074d08`): the clock-in, clock-out and both break failure messages in `home.tsx`. This
+  line used to say "zero sites match it verbatim" flatly, which was true of the empty-state family it
+  was written about and **false of the app as a whole**. **Both facts are true of different string
+  sets — do not "correct" either one by deleting the other.**
   (b) **composed strings stay English** (`On duty (n)`, `${duration} on duty`, `withCount('All', n)`)
   — they need placeholder keys that do not exist, and gluing `t()` into a template literal breaks
   Hindi/Gujarati word order. ✅ **Batch 5 (sign-in) is now EXTRACTED** (2026-08-27): all **47** strings
   are quoted verbatim in `docs/i18n/COPY-REQUEST-2026-08-26.md`, along with a new Batch 5b (the crash
   screen, 4 strings). Nothing on the sign-in screen is a composed string, so it needs no placeholder
-  keys — do not invent one. The next extraction job is the **39 outage bodies**, then Batches 6–9.
+  keys — do not invent one. *(Published as 47, corrected to **49** the same day.)*
+  ✅ **THE EXTRACTION BACKLOG IS NOW CLEAR (Phase 80, 2026-08-27).** **Batch 6** is written out:
+  **6a** (70 — the copy that closes the groups Phase 80 left half-translated), **6b** (41 — the outage
+  bodies, formerly "the 39"), **6c** (the More menu + the other module-scope label tables, listed as
+  whole units). Only Batches **7–9** remain as counts. **Hand the owner
+  `docs/i18n/COPY-REQUEST-2026-08-26.md`; do not re-derive any list.**
+  🔑 **RE-RUN THE FREE-WINS SCAN AFTER EVERY COPY DROP.** Compare every hardcoded literal in `src/`
+  against the **VALUES** of the English dictionary (not the keys): an exact match is copy the owner
+  already supplied, in all five languages, that no screen reads. It found **117** the first time and
+  **73 were wired at zero copy cost**. **Nothing else can see this class of gap** — the parity test
+  only proves a key EXISTS in five languages, `tsc` sees a well-typed literal, `npm test` covers pure
+  logic. Same defect family as Phase 79's `channel` field with zero consumers. Two scan traps: use a
+  **2-character floor** (a `<4` filter hid `priority.low` = "Low") and parse the dictionary with a
+  tokenizer, not a line-anchored regex (entries are several per line and mix `'` and `"` quoting — a
+  naive regex read 124 of 226 keys and silently under-reported). **Count swaps from the diff**, not by
+  hand: the first commit message said 61 when the diff said 73.
+  🚫 **SIX CATEGORIES MUST NOT BE SWEPT, and the reasons differ** (decided Phase 80, written into
+  `docs/PHASES.md`; do not re-litigate): a value **persisted to AsyncStorage** (`home.tsx` `place`);
+  strings that are **backend DATA** (task `CATEGORIES` are sent as `category`, icon-map keys are
+  looked up — translating writes Gujarati into the DB and breaks every filter); **module-scope label
+  tables** (`MORE_CATALOGUE`, prospects `STAGE_META`, notice-board `CATEGORY`, campaigns
+  `KIND_LABEL`, notify options — wiring the 1–2 entries that have keys yields a **navigation menu in
+  two languages**, worse than one, so they go to the owner whole); **module-scope date formatters**;
+  the four strings in `api.ts`/`tracker.ts`/`calendar.ts`/`config.ts` where **there is no non-React
+  translator** (the active language lives in provider state); and `ui/LeafletMap.tsx:299` where **`t`
+  is a local time string**.
+  ⚠️ **A PARTIAL SWEEP LEAVES GROUPS VISIBLY HALF-TRANSLATED — only do it if you extract the closing
+  copy in the SAME session.** Two Gujarati tiles beside one English one reads worse than all-English.
+  That closing list is Batch 6a.
+  ⚠️ **`t()` INSIDE A `useMemo`/`useCallback` REQUIRES `t` IN THE DEP ARRAY.** Five hooks needed it in
+  Phase 80 and **`tsc` + all 1069 tests were green without them** — only cache-free
+  `npx eslint <file>` catches it. Without the dep, a language switch leaves memoized labels in the old
+  language. Same family as the `preserve-manual-memoization` trap above.
   ⚠️ **A local `t` shadows the translator.** Renaming the LOCAL (not the translator) is the fixed
   convention — done for `agent-track` (`t`→`track`), `kb` (`t`→`tag`), `performance` (`t`→`task`);
   `notes.tsx` and `tickets/index.tsx` still bind the translator as `tr`.
 - **i18n (`src/i18n/index.tsx`) — the real numbers, recounted 2026-08-27.** **226 keys** exist (this
-  line said 75, then 143; both were stale). **60** source files import the translator and there are
-  **348** `t()`/`tr()` call sites in `src/`. Only **6 of the 53 route files have ZERO `t()` calls**
-  (`(auth)/_layout`, `index`, `job/[id]`, `lic-plans`, `task-edit`, `task-new`) — this line used to say
+  line said 75, then 143; both were stale). **68** source files import the translator and there are
+  **421** `t()`/`tr()` call sites in `src/` — recounted after Phase 80; it said 60 files / 348 sites
+  before that sweep. Only **4 of the 53 route files have ZERO `t()` calls**
+  (`(auth)/_layout`, `index`, `job/[id]`, `lic-plans`; `task-edit` and `task-new` were on this list
+  until Phase 80 wired their Due/Priority controls) — this line used to say
   **32**, and used to claim `claims.tsx` and `search.tsx` were permanent bottom tabs with zero; **both
   call the translator now.** So the app is nowhere near "~49 of 53 files are 100% English" any more;
   what remains is depth (most screens translate a handful of shared words, not their own copy), not

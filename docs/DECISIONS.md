@@ -4628,3 +4628,73 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
 - **`.claude/settings.json` was committed by a careless `git add -u` and reverted forward.** It is the
   owner's local machine config. Restored with a plain follow-up commit — no history rewrite, no force
   push — and the owner's working copy was backed up first and put back untouched.
+
+---
+
+## 2026-08-27 (later) — Phase 80: the copy that was already paid for
+
+- **Owner directive: "no APK now — finish everything first."** So Phase 80 is defined as *everything
+  that could be finished without the owner, a device or a merge*. That turned out to be one large
+  thing (the i18n free-wins sweep), one extraction (Batch 6), and one page of relay.
+
+- **Scanning literals against dictionary VALUES — not keys — is the technique that found this.**
+  117 hardcoded English strings in `src/` exactly matched copy the owner supplied weeks ago in all
+  five languages, sitting unread. **73 are now wired across 42 keys, at zero copy cost.** Nothing in
+  the existing toolchain could have surfaced this: the parity test only proves a key *exists* in five
+  languages, `tsc` sees a well-typed literal, and `npm test` covers pure logic. **This scan should be
+  re-run after every future copy drop** — a supplied key with no consumer is invisible otherwise, and
+  is the same defect class as the Phase-79 `channel` field that had zero consumers.
+
+- **The seven clock-flow notices do NOT contradict the Phase-78 `common.offlineBody` decision.**
+  Phase 78 recorded "zero sites match it verbatim" and refused to collapse the outage sentences. That
+  is still correct **about the 39 empty-state variants**, each of which names *what* failed. The seven
+  sites wired here are **write-failure** notices in the clock-in/clock-out/break flow — a different
+  set of strings that did match word for word. Both statements are true; the copy request, the phase
+  entry and the memory now all say so explicitly, because the obvious "correction" in either
+  direction would be wrong.
+
+- **Six categories were deliberately NOT swapped, and the reasons differ.** Recorded so they are not
+  re-litigated: (a) a value **persisted to AsyncStorage** (`home.tsx` `place`) — translating bakes
+  today's language into stored state; (b) strings that are **backend DATA** (task `CATEGORIES` are
+  sent as `category`; icon-map keys are looked up) — translating writes Gujarati into the database
+  and breaks every filter; (c) **module-scope label tables** — wiring the one or two entries that
+  have keys yields a navigation menu in two languages, worse than one, so they go to the owner as
+  whole units; (d) **module-scope date formatters** — cannot reach the translator without threading
+  it; (e) **`api.ts`/`tracker.ts`/`calendar.ts`/`config.ts`** — there is **no non-React translator**,
+  the active language lives in provider state; (f) `LeafletMap:299` — **`t` is a local time string**
+  there.
+
+- **A partial sweep leaves groups visibly half-translated, and that is worse than English.** This was
+  accepted deliberately, because the project's own precedent already mixes (`claims.tsx` shipped
+  `t('common.all')` beside English chips in Batch 2) — **but only on condition that the closing copy
+  is extracted in the same session.** That is Batch 6a (70 strings), and it is now the top copy ask.
+  A sweep like this must never be shipped without its 6a.
+
+- **`t()` inside a `useMemo`/`useCallback` REQUIRES `t` in the dep array, and only lint sees it.**
+  Five hooks needed it; `tsc` and all 1069 tests were green without them. Without the dep a language
+  switch leaves memoized labels in the old language. Same family as the documented
+  `preserve-manual-memoization` trap: **lint the touched screen after any hook-dep change.**
+
+- **The first scan undercounted and the first commit message was wrong; both were corrected before
+  pushing.** A `length < 4` filter hid `priority.low` = "Low" (making a 3-of-3 group look 2-of-3),
+  and the message claimed 61 sites when the diff says 73. **Count from the diff, not from arithmetic
+  in your head.** The commit had not left the machine, so the message was amended rather than left
+  wrong — no shared history was rewritten.
+
+- **The owner-facing page re-verified its own claims live rather than copying them forward.** Prod
+  `origin/main` is still `990c660`, `fda199c` is not an ancestor, and the upload endpoint still
+  answers `cloudStorageConfigured:false`. The standing rule that "backend shipped ≠ backend deployed"
+  applies to our own documents too — a relay sheet that repeats a stale claim wastes the owner's
+  credibility with the backend team, not just ours.
+
+- **🔎 BUG #8 — THE OWNER ANSWERED THE ONE CHEAP QUESTION: "buttons dikhte hain" (the bottom tab bar
+  IS still visible while the screen is blank).** This is now a **direct owner observation** rather
+  than the second-hand "reported as still navigable" the docs had been resting on. What it settles:
+  the **React root did not die**, so a root unmount, a whole-app crash and the error-boundary path are
+  all excluded — which independently confirms Phase 79's reasoning that the new `ErrorBoundary` is
+  **not** the #8 fix. What it does **NOT** settle: it does not prove native screen detach. Detach is
+  simply the last hypothesis still standing after Phase 79 ruled out a stuck `loading`/`uiReady` and
+  showed `home.tsx` cannot render an empty body in either fork. **The discriminator that actually
+  splits paint-from-render is still unmade** — a `uiautomator dump` while the screen is blank: widget
+  text nodes present ⇒ a paint/opacity problem, absent ⇒ a render/data problem. **Do not ship
+  `detachInactiveScreens={false}` on the strength of this one answer.**

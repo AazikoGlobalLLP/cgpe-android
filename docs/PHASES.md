@@ -237,20 +237,37 @@ longer any self-contained app-side work that does not first need copy or a devic
    own, then the storage details and the signed-vs-public decision. **Do not name the bucket
    `uploads`.** Both states re-verified live 2026-08-27: prod `origin/main` = `990c660`, `fda199c`
    is not an ancestor, `cloudStorageConfigured:false`. Re-verify before repeating either claim.
-2. **Get Batch 6a back (70 strings).** It is the copy that closes the groups Phase 80 left visibly
-   half-translated, then Batch 5 (49, sign-in), then 6b (41, outage), then 6c (the menus). All are
-   quoted verbatim in `docs/i18n/COPY-REQUEST-2026-08-26.md` — hand over that file, do not re-derive
-   the list. **Wiring is fast once copy lands**; it is the copy that is the long pole.
-3. **Phase 81 — the APK, on or after 1 Sep 2026** (or `eas billing:subscribe starter --account
+2. **Phase 81 — wire Batch 6a the moment the copy lands (70 strings).** It closes the groups Phase 80
+   left visibly half-translated, then Batch 5 (49, sign-in), then 6b (41, outage), then 6c (the
+   menus). All quoted verbatim in `docs/i18n/COPY-REQUEST-2026-08-26.md` — hand over that file, do
+   not re-derive the list. **Wiring is fast once copy lands**; the copy is the long pole. **The owner
+   has said they will start 6a later** — so this is queued, not blocked on us.
+3. **Phase 82 — the APK, on or after 1 Sep 2026** (or `eas billing:subscribe starter --account
    shivam-bhadoriya`). First build to carry the Search tab and Phases 77–80, and video is native so
    it cannot reach a phone any other way. Check the quota BEFORE promising a date — a doomed attempt
    still uploads ~317 MB before refusing. **Strongly consider adding EAS Update in that same build**
    to end the rebuild-per-fix cycle.
 
-**Still open, needs a device (~1 minute, no build):** bug #8, the More→Today blank screen. The
-cheapest observation is still unmade and costs the owner one sentence: **is the bottom tab bar still
-visible while the screen is blank?** Bar visible ⇒ only Home's screen is empty; bar gone ⇒ the whole
-root died. `bash scripts/diagnose-blank-screen.sh` runs both discriminators on the installed APK.
+⚠️ **If none of the three has moved, there is NO self-contained app-side work left that does not
+first need copy, a device, a merge or a decision.** Phase 80 was the last of it. Say so plainly
+rather than inventing a phase.
+
+**🔎 BUG #8 — THE OWNER HAS NOW ANSWERED, AND IT NARROWS THINGS (2026-08-27): "buttons dikhte hain"
+— the bottom tab bar IS still visible while the screen is blank.**
+- **What it settles:** the **React root did not die.** A root unmount takes the tab bar with it, so a
+  whole-app crash, a root remount and the `ErrorBoundary` path are all **excluded**. This is now a
+  direct owner observation rather than the second-hand "reported as still navigable" the docs had
+  been resting on, and it **independently confirms Phase 79's reasoning** that the new error boundary
+  is not the #8 fix.
+- **What it does NOT settle:** it does **not** prove native screen detach. Detach is simply the last
+  hypothesis left standing after Phase 79 ruled out a stuck `loading`/`uiReady` and showed `home.tsx`
+  cannot render an empty body in either fork. **Do NOT ship `detachInactiveScreens={false}` on the
+  strength of this one answer.**
+- **The discriminator that actually splits paint-from-render is STILL unmade** — `uiautomator dump`
+  while the screen is blank: widget text nodes **present** ⇒ a paint/opacity/native-view problem;
+  **absent** ⇒ a React render/data problem. `bash scripts/diagnose-blank-screen.sh` runs it on the
+  installed APK in about a minute, and needs only that the phone is plugged in.
+- **The owner has deferred this** ("baad mein yeh screen wala"), along with starting Batch 6a.
 
 **When copy arrives, the wiring notes are already written** — Phase 80's commit message and the
 PHASES entry above list exactly which sites were skipped and why, so nobody re-litigates the
@@ -769,8 +786,16 @@ screens). No backend, no copy — buildable today. See `docs/spec/PHASE-33.md` +
 
 ## Status board
 
+⚠️ **THIS TABLE STOPPED BEING MAINTAINED AT PHASE 26 (plus a stray row 47) AND IS NOT THE CURRENT
+STATE.** Roughly fifty phases since — 27 through 80 — are recorded in `## Now` above and in
+`docs/DECISIONS.md`, not here. **Read `## Now` for what is actually done**; this table is kept only
+because rows 1–26 carry per-phase detail (test counts, commit hashes, device-check debts) that is not
+duplicated elsewhere. Do not infer from a missing row that a phase did not happen, and do not spend a
+session back-filling it — the information already exists in a better-maintained place.
+
 | # | Phase | Status |
 |---|---|---|
+| 77–80 | see `## Now` | **Built** 2026-08-26/27 — splash + LIC + storage-clear; i18n Batch 2 sweep + hourly GPS + video evidence; sign-in token leak + error boundary + backend Phase 94 consumed; the i18n free-wins sweep (73 sites) + Batch 6 extraction + the owner relay sheet. All device-unverified — no APK possible until 1 Sep 2026 |
 | 1 | Write-path honesty | **Built** — handset verification outstanding |
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
 | 3 | Data-health channel | **Done** 2026-08-10 — 164 tests green (`e0b0b2c`) |
