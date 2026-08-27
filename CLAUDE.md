@@ -215,6 +215,20 @@ reset (**1 Sep 2026**) or `eas billing:subscribe starter --account shivam-bhador
 **AFTER** the ~317 MB project archive uploads, so a doomed attempt still costs several minutes — check the plan
 first, and tell the owner an APK is blocked rather than saying "shipping works". The editor-side gates
 (`tsc`/`npm test`/`eslint`) are unaffected; work can continue, it just cannot reach a phone.
+⚠️ **"CAN WE JUST SWITCH EXPO ACCOUNTS?" — the owner asked this on 2026-08-27, and the answer has a
+trap in it.** Yes, the free quota is **per account**, so a different account can build. **But a new
+account issues a NEW ANDROID KEYSTORE, and Android refuses to install an APK signed with a different
+key over an existing one** — all 21 handsets would need an uninstall first, losing login, the
+AsyncStorage clock keys and the offline queue. The keystore **can** be exported from the old account
+and uploaded to the new one, but only through **interactive `eas credentials`, which cannot run from
+this session** (stdin is EOF) — it is the owner's job in a real terminal — and `app.json`'s
+`extra.eas.projectId` must be re-pointed too. Ranked honestly: **wait for the reset** (same keystore,
+₹0) > **pay one month on the existing account** (same keystore, immediate) > **new account WITH the
+keystore moved** > **new account without it** (never — it costs every user their session). A local
+Gradle build (`expo prebuild` + `run:android --variant release`) needs no EAS at all, but **this
+machine has neither a JDK nor the Android SDK** (`java` not found, `ANDROID_HOME` empty, no
+`android/` dir — checked 2026-08-27), so it is a multi-GB setup, not a shortcut. Repeatedly farming
+free quota with fresh accounts is against Expo's terms — say so rather than proposing it.
 (Consider an `.easignore` at some point — EAS itself flags the 317 MB archive as reducible.)
 
 ⚠️ **WINDOWS FINGERPRINT TRAP (2026-08-25, build `093a3b33` v1.10.0):** the build can fail **locally**, BEFORE
@@ -616,12 +630,18 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   (`it'll` vs `it’ll` is byte-unequal). **Nothing else can see this class of gap** — the parity test
   only proves a key EXISTS in five languages, `tsc` sees a well-typed literal, `npm test` covers pure
   logic. Same defect family as Phase 79's `channel` field with zero consumers.
-  ✅ **THE HUNT IS CLOSED — do NOT re-run it hoping for more (Phase 81).** `--orphans` audits from
-  the dictionary end (for each of the 226 keys, does any file read it?) — a **superset** of the
-  literal scans with no template-literal blind spot. **18 keys have no consumer and NOT ONE is a free
-  win:** 2 false positives, 3 blocked, 3 composed without a placeholder key, 10 dead copy for
+  ✅ **THE HUNT CLOSES AND REOPENS — it is a cycle, not a one-time job.** `--orphans` audits from
+  the dictionary end (for each key, does any file read it?) — a **superset** of the literal scans
+  with no template-literal blind spot. Phase 81 ran it and found **18 keys with no consumer, NOT ONE
+  a free win:** 2 false positives, 3 blocked, 3 composed without a placeholder key, 10 dead copy for
   surfaces that no longer exist (**there is no `src/app/premium.tsx` any more**, so all four
-  `premium.*` keys are for a screen folded into `campaigns`). Only a **new copy drop** reopens this.
+  `premium.*` keys are for a screen folded into `campaigns`). It then said "only a new copy drop
+  reopens this" — **and Phase 82's Batch 6a drop reopened it the very next session, exactly as
+  written.** After that drop: **orphans still 18** (every one of the 58 new keys has a reader — no
+  new dead copy), but **82 EXACT matches that did not exist before**, because the new keys' English
+  also appears hand-written on other screens. Most are the six no-sweep categories or already-filed
+  Batch 6d/6f peers — **but that is a triage, not an assumption. RE-RUN BOTH SCANS AFTER EVERY COPY
+  DROP, in that order, before concluding anything.** Do not re-read Phase 81's "closed" as permanent.
   ⚠️ **A RUNTIME-ASSEMBLED KEY LOOKS ORPHANED AND IS NOT:** `(tabs)/_layout.tsx:151` does
   `t('tab.' + route.name)`, so every `tab.*` key reads as unused. Check for an assembled key before
   believing an orphan.
@@ -657,10 +677,10 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   ⚠️ **A local `t` shadows the translator.** Renaming the LOCAL (not the translator) is the fixed
   convention — done for `agent-track` (`t`→`track`), `kb` (`t`→`tag`), `performance` (`t`→`task`);
   `notes.tsx` and `tickets/index.tsx` still bind the translator as `tr`.
-- **i18n (`src/i18n/index.tsx`) — the real numbers, recounted 2026-08-27.** **226 keys** exist (this
-  line said 75, then 143; both were stale). **68** source files import the translator and there are
-  **421** `t()`/`tr()` call sites in `src/` — recounted after Phase 80; it said 60 files / 348 sites
-  before that sweep. Only **4 of the 53 route files have ZERO `t()` calls**
+- **i18n (`src/i18n/index.tsx`) — the real numbers, recounted 2026-08-27 after Phase 82.**
+  **284 keys** exist (this line said 75, then 143, then 226; all were stale in turn — **recount, do
+  not quote this number**). **71** source files import the translator and there are **497**
+  `t()`/`tr()` call sites in `src/` — it said 68 files / 421 sites before the Batch 6a wiring. Only **4 of the 53 route files have ZERO `t()` calls**
   (`(auth)/_layout`, `index`, `job/[id]`, `lic-plans`; `task-edit` and `task-new` were on this list
   until Phase 80 wired their Due/Priority controls) — this line used to say
   **32**, and used to claim `claims.tsx` and `search.tsx` were permanent bottom tabs with zero; **both
@@ -673,8 +693,23 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   a11y labels are all wired, in all five languages. Following the old instruction would block work
   that is already done. What genuinely still needs copy is listed — batch by batch, with the English
   quoted verbatim — in **`docs/i18n/COPY-REQUEST-2026-08-26.md`**; hand the owner that file rather
-  than re-deriving the list. Ready to send today: **Batch 5** (sign-in, 47 strings), **Batch 5b** (the
-  crash screen, 4) and **Batch 4b** (video, 4). Still un-extracted: the outage bodies and Batches 6–9.
+  than re-deriving the list. ✅ **Batch 6a (70) WAS SUPPLIED AND IS WIRED — Phase 82, 2026-08-27.**
+  Still owed by the owner: **6f** (23 — what wiring 6a itself created, and the only thing that
+  unblocks the already-supplied `Agent map`), **5** (sign-in, 49), **6b** (outage, 41), **6c**
+  (~70, whole tables), **6d** (13), **6e** (3), **5b** (4), **4b** (4), then 7–9 as counts.
+  ⚠️ **A SUPPLIED ROW CAN HAVE NO CALL SITE — grep before adding a key (Phase 82).** Batch 6a's
+  `0 clients in process` appears nowhere on screen: the Phase-80 scan lifted it out of a **source
+  comment** in `screens/dashboards.tsx:279`. Adding a key for it would have *created* the
+  zero-consumer defect Phases 79–81 were spent removing, out of copy the owner had paid for. A row
+  in the copy request is not proof a screen says it.
+  ⚠️ **A SUB-COMPONENT MAY HAVE NO TRANSLATOR AT ALL, AND ONLY `tsc` SAYS SO.** `search.tsx`'s
+  `Resting` (the "Where it looks" table) had no `useT()` — 13 `Cannot find name 't'` errors, with
+  `npm test` and eslint both silent. Expect it whenever the string you are wiring lives in a helper
+  component rather than the screen body.
+  ⚠️ **WHEN TWO OWNER DROPS DISAGREE, THE LATER ONE WINS — AND YOU SAY SO.** `report.generating`
+  came back a second time with different Gujarati verb agreement; the newer is live, the older is
+  recorded, and the question went back to the owner. Never silently overwrite human copy, and never
+  silently keep the stale one either.
   ✅ **The four "already-wired but wrong" keys this file used to list are ALL FIXED** (verified against
   the dictionary 2026-08-27, not the docs): `tab.search` is `શોધો` (gu) / `खोजें` (hi);
   `consent.agreeButton`/`declineButton` are translated in hi-en; `tasks.tomorrow`/`tasks.yesterday` are
@@ -689,7 +724,7 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   key). Use `t(key, {name})` / `t(key, {count})` for dynamic strings — **never string concatenation**
   (Hindi/Gujarati word order). Pure seams `pluralCategory`/`interpolate`/`translate(…,lookup?)` are
   exported and tested in `__tests__/format.test.ts`.
-  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes the key count — **226**
+  (2) The parity test `src/i18n/__tests__/dictionaries.test.ts` hard-codes the key count — **284**
   (bump it deliberately when adding keys; note its own `it(…)` title still says "94-key set" and is
   cosmetic) **and** its leak check rejects only `value === key`, **not**
   `value === English` — so a Gujarati entry left as the English string **passes the suite green**. The

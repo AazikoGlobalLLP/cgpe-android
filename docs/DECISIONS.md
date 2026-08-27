@@ -4767,3 +4767,64 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   with all three traps and the **template-literal blind spot** written at the top. That blind spot
   is not theoretical: `leads.tsx:251` built its message as a template literal and was found by
   grepping the dictionary's English, **not** by the script.
+
+---
+
+## 2026-08-27 (Phase 82) — the Batch 6a copy arrived and was wired the same day
+
+- **A supplied row can have NO CALL SITE, and adding a key for it would be the defect, not the
+  fix.** `0 clients in process` was one of the 70 rows the owner translated into five languages.
+  It appears nowhere on screen: the Phase-80 scan lifted it out of a **source comment** in
+  `screens/dashboards.tsx:279` ("…and \"0 clients in process\" is a fabricated fact in both"). No
+  key was added. This is the same family as Phase 79's zero-consumer `channel` field and Phase 81's
+  three unread keys — except this time it would have been *created* by us, from copy the owner had
+  paid for. **Grep for the real call site before adding a key. A row in the copy request is not
+  proof a screen says it.**
+
+- **When two owner drops disagree, the later one wins — after saying so out loud.**
+  `report.generating` came back a second time with different Gujarati verb agreement:
+  `રિપોર્ટ બની રહી છે…` / `Report bani rahi chhe…` (earlier, already live) against
+  `રિપોર્ટ બની રહ્યો છે` / `Report bani rahyo chhe` (this drop). The newer is now live — it is the
+  owner's later instruction, and masculine agreement is the commoner treatment of the loanword
+  *રિપોર્ટ*. The English `…` was preserved. **Hindi and Hinglish were identical in both drops**, so
+  only two values moved. This is a *language judgement, not a fact*: it is flagged in Batch 6f for a
+  native reader and is a two-line revert. The alternative — keeping the older copy because it was
+  already tested — was rejected because it silently discards the owner's most recent input.
+
+- **The tab bar was NOT rewritten, and the app now says two Gujarati words for one noun on
+  purpose.** The owner filled the Search-table cells fresh and they differ from the bottom tabs:
+  Clients `ક્લાયન્ટ્સ` vs `ગ્રાહકો`, Claims `ક્લેમ્સ` vs `ક્લેમ`, Tasks `ટાસ્ક્સ` vs `કાર્યો`.
+  Two options were available and both are defensible; the reasoning for the one taken:
+  (a) discarding supplied copy in favour of a reuse **we** invented is precisely the defect this
+  whole i18n effort exists to remove — it is how the four wrong-but-green keys survived for months;
+  (b) neither word is wrong — one is a menu label, the other names what a search looks through;
+  (c) the blast radius is asymmetric — changing the Search table touches one screen, changing the
+  tab bar touches `tab.clients`/`tab.claims`/`tab.tasks` in four languages and **every** screen that
+  reads them, including `team/[id]`'s KPI strip. Left as an owner decision **about the tab bar**.
+
+- **The half-translated-group rule was applied to the drop itself, and it refused four sites.**
+  Client 360's follow-up tag (its other three states are composed — `{n} days late`, `In {n} days` —
+  with no placeholder keys), the client-report summary rows, the Lead "Close out" section, and the
+  Master dashboard's org grid + controls row. The last of these is why supplied row 65 `Agent map`
+  is sitting unused: five of the six buttons beside it have no copy. **All of them became Batch 6f
+  (23 strings) rather than a change.**
+
+- **Two sites BEYOND the request were wired, on a narrow test: does its own immediate sibling
+  already translate?** Home's tickets empty-state action (the other branch of the same ternary
+  already read `t('common.tryAgain')`) and the Reminders screen title (the More tile that opens it
+  now reads `રિમાઇન્ડર્સ`, and a screen whose title does not match the entry that opened it reads as
+  a different screen — the same shape as `clients.tsx`'s already-shipped translated `Header` title
+  over an English subtitle).
+
+- **A sub-component can have no translator at all, and only `tsc` finds it.** The "Where it looks"
+  table lives in `search.tsx`'s `Resting`, which had no `useT()`. Thirteen `Cannot find name 't'`
+  errors; `npm test` and eslint would both have been silent. Worth expecting on any file where the
+  wired string is inside a helper component rather than the screen body.
+
+- **THE FREE-WINS HUNT IS REOPENED — by this drop, exactly as its own rule said it would be.**
+  Phase 81 closed it with "only a new copy drop reopens this", and re-running the scan afterwards is
+  a rule, not a nicety. It paid: **orphans are still 18** (so the 58 new keys all have readers and no
+  new dead copy was created), but **82 exact matches now exist that did not before** — mostly the
+  six no-sweep categories and already-filed 6d/6f peers, but not verified one by one. That triage is
+  Phase 83's first job. **Re-run `node scripts/i18n-freewins-scan.mjs` and `--orphans` after every
+  copy drop, in that order, before concluding anything.**

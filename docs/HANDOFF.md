@@ -1,98 +1,120 @@
-# HANDOFF — CGPE Connect (Android) — Phase 81 — 2026-08-27
+# HANDOFF — CGPE Connect (Android) — Phase 82 — 2026-08-27
 
 ## Done
 
-Boot reported the truth — Phase 81 (Batch 6a) needs copy that has not arrived and Phase 82 (the APK)
-is quota-blocked until 1 Sep — so this phase went after the one thing that was still findable
-without the owner, a device or a merge: **more copy the owner had already paid for that no screen
-was reading.**
+**The owner sent the Batch 6a copy, and it is wired the same day.** Phase 81 closed on "there is no
+self-contained app-side work left — it all needs copy, a device, a merge or a decision." The copy
+arrived; this is what it bought.
 
-- **Three keys supplied in all five languages had ZERO consumers, and four screens hand-wrote the
-  English instead.** They are now wired: the offline-save toasts on Notes, New-task and Leads, and
-  the Generate-report button on the client screen. Same defect family as Phase 79's zero-consumer
-  `channel` field.
-- **Phase 80's scan could not see them, for one reason: apostrophes.** The source types `it'll`; the
-  supplied copy has `it’ll`. Byte-unequal, same sentence. This phase normalises case, trailing full
-  stops and curly-vs-straight quotes before matching.
-- **The client-screen button was half-translated inside a single ternary** — its idle state already
-  called `t('report.generate')` while its loading state hand-wrote English on the same button.
-- **The hunt is now CLOSED, not merely advanced.** The audit was re-run from the dictionary end —
-  for each of the 226 keys, does any file read it? **18 have no consumer and not one is a free win.**
-  There are no more free wins to find; the next run belongs after the next copy drop.
-- **Both scans are committed as `scripts/i18n-freewins-scan.mjs`**, with their traps and their one
-  real blind spot written at the top, so this is repeatable rather than a scratchpad one-off.
+- **68 of the 70 supplied rows now render on a phone**, in all five languages. The dictionary goes
+  **226 → 284 keys** (58 new).
+- **Eleven groups that Phase 80's sweep left visibly half-translated are now whole**: the Claims
+  register stats and filter chips, the Clients filter sheet, Home's needs-attention strip, the More
+  quick-action tiles, the Search "Where it looks" table, the Campaigns and Analytics stat tiles,
+  Client 360's KPI strip, the Lead pipeline caption, both task forms' Due and Priority controls, the
+  team-member stat strip, and the whole Admin dashboard.
+- **One bonus the drop unlocked.** More's "Quick actions" eyebrow now translates too. Phase 81
+  refused it for one reason — the four tiles under it had no copy — and that reason is gone.
+- **Two supplied rows were deliberately NOT wired, and one of them is a finding.**
+  `0 clients in process` **has no call site at all**: the Phase-80 scan extracted it from a source
+  **comment** in `screens/dashboards.tsx:279`. No key was added — an unread key is exactly the
+  zero-consumer defect Phases 79 and 81 were spent closing. `Agent map` is blocked by its own five
+  neighbours in the Master controls row.
+- **The three judgement calls the owner delegated are settled**, each reversible in a line or two —
+  see Decisions.
+- **The scan was re-run, as the rule requires after a copy drop.** Orphans are **still 18** — the 58
+  new keys all have readers, so the drop introduced **no new dead copy**. But it did open **82 exact
+  matches** that did not exist before, and that list is the next session's first job.
 
-Gates: `tsc` **0** · `npm test` **1069** (unchanged — no logic added) · `eslint` **0 errors / 12
-warnings** (baseline, verified cache-free with `npx eslint src`). Device-unverified. **No APK is
-possible until 1 Sep 2026**, so none of Phases 77–81 is on a phone.
+Gates: `tsc` **0** · `npm test` **1069** (unchanged — no new pure logic to pin) · `npx eslint`
+cache-free over the 16 touched files **0 errors**; the two warnings it reported were proven
+pre-existing by re-running lint against a stash. Device-unverified — **no APK is possible until
+1 Sep 2026**, so Phases 77–82 are on nobody's phone.
 
 ## Files changed
 
-- `src/app/notes.tsx`, `src/app/task-new.tsx` — the offline-save toast now reads `sync.savedLocal`.
-  **`notes.tsx` binds the translator as `tr`** (a local `t` is a `setState` accumulator there), and
-  its `saveNote` `useCallback` gained `tr` in the dep array.
-- `src/app/(tabs)/leads.tsx` — the named variant, `t('sync.savedLocalNamed', { name: lead.name })`;
-  its `onAdded` `useCallback` gained `t`.
-- `src/app/client/[id].tsx` — the Generate-report button's loading branch now reads
-  `t('report.generating')`, closing the pair.
-- `src/app/commissions.tsx`, `src/app/notifications.tsx` — two wired by key reuse
-  (`tasks.viewMonth`, `stage.new`).
-- `scripts/i18n-freewins-scan.mjs` *(new)* — the exact/near-miss scan plus `--orphans`, the audit
-  from the dictionary end. Traps and the template-literal blind spot documented in the file.
-- `docs/i18n/COPY-REQUEST-2026-08-26.md` — **Batch 6d** (13 peers that must not be wired alone) and
-  **Batch 6e** (3 the owner has already paid for that the app still cannot use).
-- `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md`.
+- `src/i18n/index.tsx` — 58 new keys × 5 languages, with the "why six rows added no key" reasoning
+  written at the English block. Also **two values changed**: `report.generating` (gu, gu-en) adopts
+  the later of two conflicting owner drops.
+- `src/i18n/__tests__/dictionaries.test.ts` — key count 226 → **284**, with the 70-rows-to-58-keys
+  arithmetic recorded.
+- Wired: `(tabs)/claims.tsx`, `(tabs)/clients.tsx`, `(tabs)/home.tsx`, `(tabs)/more.tsx`,
+  `(tabs)/search.tsx`, `analytics.tsx`, `attendance.tsx`, `campaigns.tsx`, `client/[id].tsx`,
+  `lead/[id].tsx`, `team/[id].tsx`, `task-new.tsx`, `task-edit.tsx`, `reminders.tsx`,
+  `screens/dashboards.tsx`.
+- `(tabs)/search.tsx` also gained `const t = useT();` in the `Resting` component — the "Where it
+  looks" table lives in a sub-component that had no translator. `tsc` caught it; nothing else could.
+- `docs/i18n/BATCH-6A-RECEIVED-2026-08-27.md` *(new)* — the owner's table verbatim, plus what was
+  wired, what was not, and every judgement call.
+- `docs/i18n/COPY-REQUEST-2026-08-26.md` — **Batch 6f (23 strings)**: what wiring 6a itself created.
 
-Commits `c4ad3e5` · `9d3f6d2`, pushed to `aaziko/Shivam`.
+Commits `16e71a1` · `e8ef28c`, pushed to `aaziko/Shivam`.
 
 ## Decisions made
 
-*(Full text in `docs/DECISIONS.md` under 2026-08-27 (later still). The four that will bite someone:)*
+*(Full text in `docs/DECISIONS.md` under 2026-08-27 (Phase 82).)*
 
-- **"Composed strings stay English" is TRUE ONLY where no `{placeholder}` key was supplied.** Phase
-  80 excluded them on the reasoning that the keys do not exist — but `sync.savedLocalNamed` is
-  `'{name} saved on this device — …'`, written for exactly that call site. **Grep for a `…Named`
-  variant before excluding a composed string.**
-- **A runtime-assembled key looks orphaned and is not.** `(tabs)/_layout.tsx:151` does
-  `t('tab.' + route.name)`, so every `tab.*` key reads as unused. Two of the twenty "orphans" were
-  this. Check for an assembled key before believing the audit.
-- **Six candidate sites were deliberately NOT wired**, because their on-screen peers have no keys.
-  Home's Portfolio-analytics row has four peer Eyebrows and only two have keys — wiring two would
-  produce exactly the broken-looking strip Phase 80 warned about. They went to the owner as Batch 6d.
-- **The Home follow-ups widget was left alone even though it looks like a win.** Its title, See-all
-  and Try-again already translate, so its English empty state stands out — but its subtitle and its
-  `'Open follow-ups'` button have no keys, and `home.noFollowups` words the message differently from
-  the screen. Adopting different English is the owner's call, so it became a one-line question in
-  Batch 6e rather than a change.
+- **When two owner drops disagree, the later one wins — but only after saying so.**
+  `report.generating` arrived twice with different Gujarati verb agreement. The newer
+  (`રિપોર્ટ બની રહ્યો છે…` / `Report bani rahyo chhe…`) is now live: it is the owner's later
+  instruction and masculine agreement is the commoner treatment of the loanword *રિપોર્ટ*. Hindi and
+  Hinglish were identical in both drops, so only two values moved. **This is a language judgement,
+  not a fact — it is flagged for a native reader and is a two-line revert.**
+- **The tab bar was NOT rewritten, even though the app now says two Gujarati words for one noun.**
+  Clients is `ગ્રાહકો` on the tab bar and `ક્લાયન્ટ્સ` in the Search table (likewise ક્લેમ/ક્લેમ્સ,
+  કાર્યો/ટાસ્ક્સ) because the owner wrote both. Discarding supplied copy for a reuse **we** invented
+  is the defect this work exists to stop; and rewriting the most-seen text in the app on our own
+  judgement would cascade through `tab.clients`/`tab.claims`/`tab.tasks` in four languages and every
+  screen that reads them. Left as an owner decision **about the tab bar**, not about this batch.
+- **Home's follow-ups widget stays English rather than becoming one-of-three translated.** Its title
+  could read the supplied `home.noFollowups` today, but its subtitle and button have no copy. Both
+  peers went into Batch 6f instead. Same call as Phase 81's, for the same reason.
+- **Two sites beyond the request were wired**, both because their own immediate sibling already
+  translated: Home's tickets empty-state button (its other branch reads `t('common.tryAgain')`) and
+  the Reminders screen title (the More tile that opens it now reads `રિમાઇન્ડર્સ`).
+- **Four apparent wins were refused** because their peers have no copy: Client 360's follow-up tag
+  (its other three states are composed — `{n} days late`, `In {n} days`), the client-report summary
+  rows, the Lead "Close out" section, and the Master dashboard's grid and controls row.
 
 ## Known broken / deliberately skipped
 
-- 🔴 **Backend Phase 94 is still not deployed** — prod `origin/main` was `990c660` at boot and
-  `fda199c` is not an ancestor. Video upload and the claim↔file link still fail on a phone.
-- 🔴 **Storage is still off** (`cloudStorageConfigured:false`). **Do not name the MinIO bucket
+*(All four re-verified live this session, not copied from notes.)*
+
+- 🔴 **Backend Phase 94 is still not deployed.** `origin/main` = `990c660`; `fda199c` is **not** an
+  ancestor. Video upload and the claim↔file link still fail on a phone.
+- 🔴 **File storage is still off** — `cloudStorageConfigured:false`. ⚠️ **Do not name the bucket
   `uploads`.**
-- 🔴 **No APK until 1 Sep 2026** — EAS free-plan quota. Nothing from Phases 77–81 is on a phone.
-- ⚠️ **Several groups remain visibly half-translated** — the accepted cost of Phase 80's sweep.
-  **Batch 6a (70 strings) is exactly the copy that closes them.** Batch 6d adds 13 more peers.
-- ❌ **Bug #8 is still open and the owner has deferred it.** The tab bar staying visible excludes a
-  root unmount; it does **not** prove native screen detach. **The discriminator is still unmade** —
-  `bash scripts/diagnose-blank-screen.sh` runs it on the installed APK in about a minute and needs
-  only a plugged-in phone. **Do not ship `detachInactiveScreens={false}` without it.**
+- 🔴 **No APK until 1 Sep 2026.** `eas build:list` still tops out at `093a3b33` (25 Aug). Phases
+  77–82 are on no phone. **An Expo account switch WOULD build — but a new account means a new
+  keystore, and an APK signed with a different key cannot install over the existing one**; all 21
+  handsets would need an uninstall, losing login and local clock data. The keystore can be moved
+  across accounts, but only through interactive `eas credentials`, which cannot run from here.
+- 🔴 **`cgpe.in` is still IPv4-only** — checked against 8.8.8.8 this session: an A record, **no
+  AAAA**. The droplet's MSS clamp fixed the IPv6/NAT64 symptom operationally; **confirm it survives a
+  reboot**, and the permanent fix (AAAA + IPv6 on nginx) is still owed.
+- ⚠️ **The free-wins hunt is REOPENED, exactly as its own rule predicted.** 82 exact matches now
+  exist that did not before. Most fall into the six documented no-sweep categories (module-scope
+  label tables, backend data, persisted values, module-scope date formatters) or are Batch 6d/6f
+  peers already filed — but **it needs a triage pass, not an assumption.**
+- ❌ **Bug #8 is still open**, still owner-deferred, still one minute of cable
+  (`bash scripts/diagnose-blank-screen.sh`, verified present).
 - **No `contracts/` change was needed** — this phase is app-only and touches no wire shape, no
   endpoint and no field name. `INBOX.md` was not written to. **No sibling session needs notifying.**
 
 ## Next session starts here
 
-- **Phase 82: wire Batch 6a the moment the copy arrives** (70 strings), then 6d (13), 5 (49,
-  sign-in), 6b (41, outage), 6c (the menus), 6e (3, two of which need `{pct}`/`{n}` variants and one
-  only a wording decision). **The APK is Phase 83, on or after 1 Sep 2026.** Both are owner-gated.
-  **If neither has moved, say so plainly rather than inventing a phase** — Phase 81 closed the last
-  self-contained thread, and the orphan audit proves it rather than assuming it.
+- **Phase 83: triage the 82 exact-match scan hits.** This is the only self-contained app-side work
+  that exists right now, and it is real: the drop created it. Apply the peer rule to each — wire the
+  ones whose group completes, file the peers of the ones that do not, and skip the six forbidden
+  categories on sight. **Then** wire Batch 6f (23) the moment its copy lands, in this order:
+  6f → 5 (49) → 6b (41) → 6c (~70, whole tables) → 6d (13) → 6e (3) → 5b (4) → 4b (4).
+  **The APK is Phase 84, on or after 1 Sep 2026** — and it should carry EAS Update, or every future
+  one-word fix costs another full reinstall on 21 phones.
 - **First command: `/boot`**
-- **Watch out for:** ⚠️ **do not re-run the free-wins hunt hoping for more — it is closed.** Run
-  `node scripts/i18n-freewins-scan.mjs` (and `--orphans`) **after the next copy drop**, not before.
-  ⚠️ **adding `t()` inside a `useMemo`/`useCallback` needs the translator in the dep array**; `tsc`
-  and all 1069 tests stay green without it and only cache-free `npx eslint <file>` catches it — it
-  bit twice more this phase, exactly as predicted. ⚠️ **do not "correct" either half of the
-  `common.offlineBody` record** — the 39 empty-state sentences and the 7 write-failure notices are
-  different string sets and both notes are right.
+- **Watch out for:** ⚠️ **a supplied row can have NO call site.** `0 clients in process` was
+  extracted from a code comment, and adding a key for it would have created the very zero-consumer
+  defect the last three phases were spent removing. **Grep for the real call site before adding a
+  key — a row in the copy request is not proof a screen says it.** And the standing traps still
+  bite: `t()` inside a `useMemo`/`useCallback` needs `t` in the dep array (`tsc` and all 1069 tests
+  stay green without it), and a sub-component may have no translator at all — `search.tsx`'s
+  `Resting` did not, and only `tsc` caught it.

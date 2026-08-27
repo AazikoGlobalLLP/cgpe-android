@@ -14,6 +14,48 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-27 (evening) — PHASE 82: THE COPY ARRIVED AND IS WIRED THE SAME DAY — ELEVEN
+HALF-TRANSLATED GROUPS ARE NOW WHOLE.** Gates: `tsc` **0** · `npm test` **1069** (unchanged — no new
+pure logic) · `eslint` **0 errors / 12 warnings** (baseline; the two on touched files were proven
+pre-existing by re-linting a stash). Device-unverified.
+- **Phase 81 ended saying there was no self-contained work left — it all needed copy, a device, a
+  merge or a decision. The owner sent the copy.** 70 rows → **58 keys** (dictionary **226 → 284**),
+  **68 of the 70 rows now render** in all five languages.
+- **The eleven groups Phase 80's sweep left visibly half-translated are closed**: Claims register
+  stats + filter chips, the Clients filter sheet, Home's needs-attention strip, the More
+  quick-action tiles, the Search "Where it looks" table, the Campaigns and Analytics stat tiles,
+  Client 360's KPI strip, the Lead pipeline caption, both task forms' Due/Priority controls, the
+  team-member stat strip, and the Admin dashboard. **More's "Quick actions" eyebrow came free** —
+  Phase 81 refused it only because the tiles under it had no copy, and that reason is gone.
+- **🔴 A SUPPLIED ROW HAD NO CALL SITE, AND WRITING A KEY FOR IT WOULD HAVE BEEN THE DEFECT.**
+  `0 clients in process` appears nowhere on screen — the Phase-80 scan lifted it out of a **source
+  comment** in `screens/dashboards.tsx:279`. No key was added. Same family as Phase 79's
+  zero-consumer `channel` and Phase 81's three unread keys, except this one would have been
+  **created by us**, from copy the owner paid for. **Grep for the call site before adding a key.**
+- **Row 65 `Agent map` is supplied and still unusable** — its only site is the Master controls row,
+  where five of six buttons have no copy. Wiring one of six rebuilds the exact strip this batch
+  removed. Its neighbours are Batch 6f.
+- **Three judgement calls the owner delegated, all reversible in a line or two.** (1)
+  `report.generating` adopts the **newer** of two conflicting Gujarati drops — a *language*
+  judgement, flagged for a native reader. (2) **The tab bar was NOT rewritten**, so the app now says
+  `ત્લાયન્ટ્સ`-vs-`ગ્રાહકો` on two screens on purpose — both are the owner's words,
+  and rewriting the most-seen text in the app on our judgement cascades through four languages.
+  (3) Home's follow-ups widget stays English rather than one-of-three translated.
+- **Four apparent wins were refused** on the peer rule (Client 360's follow-up tag, the
+  client-report summary rows, the Lead close-out section, the Master dashboard grid + controls) and
+  became **Batch 6f — 23 strings**, which is what wiring 6a itself created.
+- **⚠️ THE FREE-WINS HUNT IS REOPENED, exactly as its own rule predicted.** Phase 81 closed it with
+  "only a new copy drop reopens this", and the re-run after this drop paid: **orphans are still 18**
+  (so all 58 new keys have readers — no new dead copy), but **82 exact matches now exist that did
+  not before.** Mostly the six no-sweep categories and already-filed 6d/6f peers — **but not
+  verified one by one. That triage is Phase 83.**
+- **A sub-component can have no translator at all**: `search.tsx`'s `Resting` had no `useT()`, and
+  only `tsc` said so — 13 `Cannot find name 't'` errors that `npm test` and eslint were silent on.
+
+---
+
+## Superseded — Now, as of 2026-08-27 (after Phase 81)
+
 **🔎 2026-08-27 (later still) — PHASE 81: THE NEAR-MISS SCAN — THREE SUPPLIED KEYS HAD *ZERO*
 CONSUMERS WHILE FOUR SCREENS HAND-WROTE THE ENGLISH.** Gates: `tsc` **0** · `npm test` **1069**
 (unchanged — no logic added) · `eslint` **0 errors / 12 warnings** (baseline, verified cache-free
@@ -291,7 +333,43 @@ session by design** — Phase 77 is where fixing starts.
 
 **SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
 
-## Next 3 — as of 2026-08-27 (after Phase 81)
+## Next 3 — as of 2026-08-27 (after Phase 82)
+
+**One blocker moved: the copy arrived and is wired.** The other three did not — all re-verified
+live this session, not copied from notes. Hand the owner `docs/OWNER-ACTIONS-2026-08-27.md`.
+
+1. **Phase 83 — triage the 82 exact-match scan hits. THIS IS REAL, SELF-CONTAINED WORK AND IT
+   EXISTS BECAUSE OF THIS DROP.** Do not repeat Phase 81's "the residue is empty" — that was true of
+   the dictionary as it stood, and the dictionary changed. Run
+   `node scripts/i18n-freewins-scan.mjs`, then apply the peer rule to each hit: wire the ones whose
+   group completes, file the peers of the ones that do not, and skip the six forbidden categories on
+   sight (persisted values, backend data, module-scope label tables, module-scope date formatters,
+   the four non-React strings, `LeafletMap`'s local `t`). Expect most to be exactly those. **Then
+   `--orphans`** — it is still 18 and must not grow.
+2. **Wire the copy the moment it lands**, in this order: **6f** (23 — what wiring 6a created, and
+   what unblocks the already-supplied `Agent map`) → **5** (49, sign-in) → **6b** (41, outage) →
+   **6c** (~70, whole tables) → **6d** (13) → **6e** (3) → **5b** (4) → **4b** (4). All quoted
+   verbatim in `docs/i18n/COPY-REQUEST-2026-08-26.md`; hand over that file, do not re-derive it.
+   **Three owner answers are pending inside 6f** — the Gujarati verb agreement on
+   `report.generating`, whether one word should win for Clients/Claims/Tasks across the tab bar and
+   the Search table, and the follow-ups wording.
+3. **Relay the two server asks — unchanged, both re-verified live at Phase 82:** prod `origin/main`
+   = `990c660` and `fda199c` is **not** an ancestor; `cloudStorageConfigured:false`. A third is now
+   verified alongside them: **`cgpe.in` still has no AAAA record** (checked against 8.8.8.8), so the
+   IPv6/NAT64 fix is still the droplet's MSS clamp only — **confirm it survives a reboot.**
+   **Do not name the bucket `uploads`.**
+
+**Phase 84 is the APK, on or after 1 Sep 2026** (or `eas billing:subscribe starter --account
+shivam-bhadoriya`). `eas build:list` still tops out at `093a3b33`, 25 Aug — **nothing from Phases
+77–82 is on a phone.** **Strongly consider adding EAS Update in that same build.** ⚠️ **An Expo
+account switch WOULD get past the quota, but a new account issues a NEW KEYSTORE, and an APK signed
+with a different key cannot install over the existing app** — all 21 handsets would need an
+uninstall, losing login and local clock data. The keystore can be exported and re-uploaded, but only
+through interactive `eas credentials`, which cannot run from this session.
+
+---
+
+## Superseded — Next 3 as of 2026-08-27 (after Phase 81)
 
 **Nothing has moved on the three blockers, and Phase 81 closed the last self-contained thread —
 this time with proof rather than an assumption.** The orphan audit enumerated all 226 dictionary
