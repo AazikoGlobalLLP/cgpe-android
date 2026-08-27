@@ -508,7 +508,7 @@ export default function ClaimDetail() {
             )}
 
             <Button
-              label={preparing ? `Preparing video… ${Math.round(prepPct * 100)}%` : uploading ? t('common.uploading') : 'Capture or upload a document'}
+              label={preparing ? `${t('doc.preparingVideo')} ${Math.round(prepPct * 100)}%` : uploading ? t('common.uploading') : 'Capture or upload a document'}
               disabled={preparing || uploading}
               icon="camera"
               variant="outline"

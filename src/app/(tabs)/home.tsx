@@ -2044,7 +2044,7 @@ export default function Home() {
       case 'analytics':
         return (
           <WidgetShell
-            title={w.title ?? 'Portfolio analytics'}
+            title={w.title ?? t('home.portfolioAnalytics')}
             action={t('common.seeAll')}
             onAction={() => router.push('/analytics')}
           >
@@ -2083,7 +2083,7 @@ export default function Home() {
             ) : (
               <LinkCard
                 icon="stats-chart"
-                title="Portfolio analytics"
+                title={t('home.portfolioAnalytics')}
                 subtitle="Book value, cover bands and trends across the organisation"
                 onPress={() => router.push('/analytics')}
               />

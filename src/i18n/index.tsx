@@ -443,7 +443,6 @@ const en = {
   'doc.recordVideo': 'Record a video',
   'doc.videoHint': 'Videos are limited to {seconds} seconds and are made smaller on your phone before they are sent.',
   'doc.preparingVideo': 'Preparing video…',
-  'doc.videoStillTooLarge': 'That video is still too large after compressing. Record a shorter clip.',
 };
 
 /** Every dictionary carries exactly the English key set. */
@@ -763,7 +762,6 @@ const gu: Dict = {
   'doc.recordVideo': 'વિડિયો રેકોર્ડ કરો',
   'doc.videoHint': 'વિડિયો વધુમાં વધુ {seconds} સેકન્ડનો હોઈ શકે અને મોકલતા પહેલાં તમારા ફોનમાં જ નાનો કરવામાં આવે છે.',
   'doc.preparingVideo': 'વિડિયો તૈયાર થઈ રહ્યો છે…',
-  'doc.videoStillTooLarge': 'નાનો કર્યા પછી પણ આ વિડિયો બહુ મોટો છે. ટૂંકી ક્લિપ રેકોર્ડ કરો.',
 };
 
 const hi: Dict = {
@@ -1074,7 +1072,6 @@ const hi: Dict = {
   'doc.recordVideo': 'वीडियो रिकॉर्ड करें',
   'doc.videoHint': 'वीडियो ज़्यादा से ज़्यादा {seconds} सेकंड का हो सकता है और भेजने से पहले आपके फ़ोन में ही छोटा कर दिया जाता है।',
   'doc.preparingVideo': 'वीडियो तैयार हो रहा है…',
-  'doc.videoStillTooLarge': 'छोटा करने के बाद भी यह वीडियो बहुत बड़ा है। छोटी क्लिप रिकॉर्ड करें।',
 };
 
 /**
@@ -1391,7 +1388,6 @@ const hiEn: Dict = {
   'doc.recordVideo': 'Video record karein',
   'doc.videoHint': 'Video zyada se zyada {seconds} second ka ho sakta hai aur bhejne se pehle aapke phone mein hi chhota kar diya jata hai.',
   'doc.preparingVideo': 'Video taiyar ho raha hai…',
-  'doc.videoStillTooLarge': 'Chhota karne ke baad bhi yeh video bahut bada hai. Chhoti clip record karein.',
 };
 
 /**
@@ -1708,7 +1704,6 @@ const guEn: Dict = {
   'doc.recordVideo': 'Video record karo',
   'doc.videoHint': 'Video vadhu ma vadhu {seconds} second no hoi shake ane moklta pehla tamara phone ma j nano kari devay chhe.',
   'doc.preparingVideo': 'Video taiyar thai rahyo chhe…',
-  'doc.videoStillTooLarge': 'Nano karya pachhi pan aa video bahu moto chhe. Tunki clip record karo.',
 };
 
 /**
