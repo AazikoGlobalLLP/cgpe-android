@@ -14,6 +14,47 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🔑 2026-08-27 — PHASE 79: THE LOGIN SCREEN STOPS SHOWING MACHINE TOKENS · BACKEND PHASE 94 CONSUMED · THE APP GETS ITS FIRST ERROR BOUNDARY · CLAUDE.md CORRECTED.**
+Commits `0833707` · `3508d9f` · `2c04eb7` · `2d3cafc` · `dc589cd`, pushed to `aaziko/Shivam`.
+Gates: `tsc` 0 · `npm test` **1068** (was 1037) · `eslint` 0 errors. Device-unverified (EAS quota).
+- **🔴 SIGN-IN WAS SHOWING USERS THE RAW WORDS `NO_ACCOUNT` AND `BAD_PASSWORD`, on production, today.**
+  Probed live: `POST /auth/login` answers `{"error":"NO_ACCOUNT","message":"No account found with
+  that email or mobile number…"}`. The app read `json.error || json.message`, so the two commonest
+  failures in the whole product printed a machine token under the heading "Sign in refused" while the
+  sentence that tells the user what to do sat unread one field away. Fixed via a new pure seam
+  `lib/apiMessage.ts` — **not** a blanket `message`-first flip, which would REGRESS the many routes
+  whose only human copy is in `error` (`'Your account is inactive…'`, `'The code has expired…'`).
+  `error` still wins unless it is SCREAMING_SNAKE_CASE. Same bug leaked `OTP_NOT_CONFIGURED` /
+  `OTP_DELIVERY_FAILED`. Also: the OTP toast always said "Code sent to your **WhatsApp** number" even
+  when the code was emailed — it now reads the server's own `channel`.
+- **✅ BACKEND PHASE 94 (`fda199c`) CONSUMED — the claim↔file link is real.** `entity_id` +
+  `entity_type` are now sent; the claim id is out of `description`. The **415** they added needed **no
+  app change** — the body match already runs before the status fallback, and a test now pins 415 and
+  500 producing identical outcomes. 🔴 **It is NOT deployed** (`origin/Shivam` only; `origin/main` is
+  `990c660`), so video and linking still fail on a phone. Filed as an OPS ask.
+  ⚠️ **New ops constraint filed: do not name the MinIO bucket `uploads`** — storage is now path-style,
+  so the bucket is the first path segment and would collide with the local-disk fallback signature.
+  The host-scoped narrowing was rejected on purpose: it trades a harmless false alarm for a false
+  reassurance (the 2026-08-25 audit's exact defect). Reasoning is at the code, pinned by a test.
+- **🛡️ THE APP HAD NO REACT ERROR BOUNDARY AT ALL — it has one now.** expo-router wraps a route in
+  `Try` only if the module exports `ErrorBoundary` (`useScreens.js:141-158`) and **no file in `src/`
+  did**, so any render throw unmounted the whole React root with no LogBox in release: a dead screen
+  and an unactionable "it went blank" report. Exported from `_layout.tsx`, which covers every screen
+  (`useStore.js:55`). **This is NOT filed as the #8 fix** — a root unmount kills the tab bar too,
+  and #8 is described as still navigable. Verified by actually booting: `expo start --web` bundled all
+  1821 modules and served a rendered page, zero errors.
+- **🌍 i18n Batch 5 EXTRACTED** — all **47** sign-in strings quoted verbatim into
+  `docs/i18n/COPY-REQUEST-2026-08-26.md`, plus a new Batch 5b (the 4 crash-screen strings). Nothing on
+  that screen is a composed string, so it needs no placeholder keys. Ready to hand to the owner.
+- **📖 CLAUDE.md was wrong in ~20 places and two of them were BLOCKING.** It still ordered "do NOT wire
+  the net-new `common.*` keys until copy is supplied" (supplied and wired on 2026-08-26), and listed
+  four already-fixed keys as still wrong. Also: 143 keys → **226**; 258 tests/9 files → **1068/66**;
+  api.ts 1744 → **4332** lines; home.tsx "the only consumer of `useAppUi()`" → **11** files; a `ORDER`
+  constant that does not exist; five "dead" files that are not on disk; and four wrong line anchors.
+- **📮 INBOX: a stale reply of OURS was correcting-worthy.** The GPS item still told `cgpe-api` the two
+  shift profiles were NOT changed and asked the owner two questions they had already answered — all
+  three profiles have been hourly since `97f2d13`. Corrected and ticked.
+
 **🌍 2026-08-26 (latest) — PHASE 78: i18n BATCH 2 SWEPT · GPS NOW HOURLY (owner reversal) · STORAGE BUG PROVEN ON PROD · VIDEO EVIDENCE SHIPPED.**
 Commits `48b3509` · `97f2d13` · `8e249bb` · `ba534b1` · `ad2fd5a` · `ab391ca` · `4cad297`, pushed to `aaziko/Shivam`.
 Gates: `tsc` 0 · `npm test` **1037** (was 1005) · `eslint` 0 errors. Device-unverified.
@@ -112,7 +153,57 @@ session by design** — Phase 77 is where fixing starts.
 
 ## Next 3
 
-**CURRENT next 3 (2026-08-26, after Phase 78). Almost everything worth doing is now blocked on the
+**SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
+
+## Next 3 — as of 2026-08-27 (after Phase 79)
+
+**Everything self-contained on the app side is now done. All three remaining items need someone
+else: a phone plugged in, a merge, or a decision.**
+
+1. **Relay the OPS asks — this is the biggest unblock and none of it is code.** All filed at
+   `../contracts/INBOX.md`:
+   (a) **merge `cgpe-backend-main` `Shivam` → `origin/main`, deploy, restart `:3001`.** Backend
+   Phase 94 is written and tested but runs nowhere: video uploads still fail on a phone and
+   `entity_id` is still dropped. Verify with
+   `git -C ../cgpe-backend-main merge-base --is-ancestor fda199c origin/main`.
+   (b) **set `BACKEND_URL`** — one line, and it repairs today's unopenable attachments with or
+   without MinIO. Then the storage env, where **`S3_BUCKET_NAME` is now mandatory** (the silent
+   default was removed, so omitting it fails silently to "storage off").
+   (c) **do not name the MinIO bucket `uploads`** — it would make every durable object look
+   ephemeral to the app. Any other name needs nothing from us.
+   (d) the public-vs-presigned decision for KYC/claim docs (mobile recommends presigned; cgpe-api
+   agrees it must be signed **on read**).
+   Verify the whole thing landed with `curl https://cgpe.in/internal/api/upload` — it must stop
+   saying `cloudStorageConfigured:false`.
+
+2. **Hand the owner `docs/i18n/COPY-REQUEST-2026-08-26.md`.** Batches **5** (sign-in, 47 strings),
+   **5b** (crash screen, 4) and **4b** (video, 4) are extracted verbatim and ready to fill in. This
+   needs nothing from us until the copy comes back, and it is the largest remaining chunk of visible
+   English in the app.
+
+3. **Phase 80 — the APK, on or after 1 Sep 2026** (or `eas billing:subscribe starter --account
+   shivam-bhadoriya`). It will be the first build carrying the Search tab, Phases 77, 78 and 79, and
+   the video feature — and video is native, so it cannot reach a phone any other way. **Check the
+   quota BEFORE promising a date:** a doomed attempt still uploads ~317 MB before it refuses.
+   Strongly consider adding EAS Update in that same build to end the rebuild-per-fix cycle.
+
+**Still open, needs a device (~1 minute, no build):** bug #8, the More→Today blank screen.
+`bash scripts/diagnose-blank-screen.sh` runs both discriminators on the APK already installed.
+**Phase 79 narrowed it on paper:** a stuck `loading`/`uiReady` is now ruled out (there is exactly one
+`setLoading` call and it passes `false`; `uiReady` is derived from monotonic inputs), and home.tsx
+cannot render an empty body in either fork (the skeleton always paints and every widget has a visible
+fallback). What survives is **native screen detach** — `detachInactiveScreens` really does default to
+`true` on Android and expo-router really does forward it, verified in the installed source, so
+`<Tabs detachInactiveScreens={false}>` is a genuine one-line A/B — but it is armed, not proven, and
+must not be shipped as a fix without a repro. **The single cheapest observation, and nobody has made
+it yet: is the bottom tab bar still visible while the screen is blank?** Bar visible ⇒ only Home's
+screen is empty. Bar gone ⇒ the whole root died. Ask the owner; it costs one sentence.
+
+---
+
+## Superseded — Next 3 as of 2026-08-26 (after Phase 78)
+
+**Almost everything worth doing is now blocked on the
 owner or on the 1 Sep build quota — so the ONE unblocked item goes first, because it needs no build:**
 
 1. **Phase 79 — run the two device tests and close #8 (the More→Today blank screen).**

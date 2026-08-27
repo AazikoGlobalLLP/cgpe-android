@@ -1,115 +1,110 @@
-# HANDOFF — CGPE Connect (Android) — Phase 78 — 2026-08-26
+# HANDOFF — CGPE Connect (Android) — Phase 79 — 2026-08-27
 
 ## Done
 
-Four things shipped, and one of them only survived because it was adversarially reviewed.
+The session started as "finish what's left" and the biggest thing found was not on any list: **the
+login screen has been showing users raw machine tokens on production.**
 
-- **The app speaks Gujarati and Hindi in 118 more places.** Batch 2 of the owner's copy drop was
-  sitting in the dictionary with none of its call sites wired. `Try again` alone was **54 copies
-  across 41 files**. Every one of those now translates, along with `Clear search`, `Refresh`, `All`,
-  `Done`, `Clear`, `Mobile`, `On duty`/`Off duty`, `Saving…`, `Uploading…` and the screen-reader
-  labels for Call and WhatsApp.
-- **GPS sampling is hourly on every profile**, down from every 60 seconds. This is a **deliberate
-  reversal of the owner's own Phase-63 decision**, made by the owner after being shown in writing
-  that a nine-hour shift now records ~9 points and the live map draws nine straight hops.
-- **The file-upload failure is diagnosed, and it is not the app** — proven on the live server, not
-  inferred. Cloud storage has never been switched on, so every attachment is written to the
-  droplet's own disk and handed back a web address pointing at the phone itself.
-- **Video evidence capture works, app-side.** Record or pick a clip; it is compressed on the phone
-  from 40–80 MB down to ~9.5 MB, with a live percentage, so it fits the existing 10 MB limit.
-  Photos, PDFs and documents are provably untouched — a test pins that.
-- **A boot-breaking bug I introduced was caught before it shipped.** See "Decisions".
+- **`NO_ACCOUNT` and `BAD_PASSWORD` were appearing on screen as the error message.** Probed live, not
+  inferred. The backend puts a code in `error` and the human sentence in `message`; the app read
+  `error` first. So the two commonest failures in the product — a mistyped address and a wrong
+  password — told the user a machine word, under the heading "Sign in refused", while the sentence
+  explaining what to do sat one field away unread.
+- **Backend Phase 94 arrived mid-session and is consumed.** `cgpe-api` answered our whole
+  upload/storage item while we were working. Files can now be linked to a claim for real. **It is not
+  deployed**, and that is stated everywhere it matters.
+- **The app got its first React error boundary.** It had none — verified in the installed
+  expo-router, not assumed — so any render throw killed the whole app with nothing on screen.
+- **i18n Batch 5 is extracted**: 47 sign-in strings, quoted verbatim, ready to hand to the owner.
+- **CLAUDE.md was corrected in ~20 places.** Two of its instructions were actively blocking work that
+  is already finished.
 
-Gates: `tsc` **0** · `npm test` **1037** (was 1005) · `eslint` **0 errors / 3 warnings on touched
-files, all pre-existing**. Everything below is **device-unverified** — no EAS build is possible
-until the quota resets on 1 Sep 2026.
+Gates: `tsc` **0** · `npm test` **1068** (was 1037) · `eslint` **0 errors**. Everything is
+**device-unverified** — no EAS build is possible until the quota resets on 1 Sep 2026.
 
 ## Files changed
 
-- **43 screen/UI files** — Batch 2 `t()` call sites. No dictionary key was added and nothing was
-  machine-translated; only keys that already held human copy were used.
-- `src/lib/motion.ts` + `src/lib/__tests__/motion.test.ts` — new `HOURLY_MS`; all three sampling
-  profiles moved to it. The owner-#1 guard test was edited **deliberately and only in its cadence
-  clause**; `distanceInterval: 0` and `accuracy: 'high'` are untouched and still asserted.
-- `src/lib/tracker.ts` — comments corrected where they still claimed 60 s, plus two real
-  second-order effects recorded at the code (attribution slop, watchdog role).
-- `src/lib/fileUpload.ts` — `VIDEO_UPLOAD_MIME`, `ALL_UPLOAD_MIME`, `MAX_VIDEO_UPLOAD_BYTES`,
-  `isVideoMime`, per-kind size cap, and `classifyUploadFailureBody` (reads the server's own error
-  text so a permanent rejection is never reported as "try again in a moment").
-- `src/lib/videoCompress.ts` *(new)* — the pure, tested bitrate arithmetic. Audio is charged **per
-  second**, not as a fraction of a fixed budget; that distinction is a real bug fix.
-- `src/lib/videoTranscode.ts` *(new)* — the native half. `react-native-compressor` is **`require`d
-  lazily inside the try**, never imported at the top. Read the header before touching it.
-- `src/ui/DocumentSource.tsx` — a separate "Record a video" entry point; gallery and file picker
-  widened to video. The stills camera is deliberately unchanged.
-- `src/app/claim/[id].tsx`, `src/app/claim-new.tsx` — compression step, `preparing` state with a
-  percentage, button disabled during the encode, `stillTooLarge` consumed, and the uploaded URL
-  recorded instead of discarded.
-- `src/data/api.ts` — new `recordFileAttachment`; `uploadFile` now reads the failure body.
-- `scripts/diagnose-blank-screen.sh` *(new)* — the two zero-build ADB tests for bug #8.
-- `docs/MINIO-AND-CAPTURE-AUDIT-2026-08-26.md` *(new)* — the full storage diagnosis and the exact
-  MinIO requirements. Also published as a shareable page for the owner.
-- `app.json`, `package.json`, `package-lock.json` — compressor plugin; lockfile synced in the same
-  commit because EAS runs `npm ci`.
+- `src/lib/apiMessage.ts` *(new)* + its test — the pure seam that decides which of a failed
+  response's two strings a human should read. **Read the header before touching it**: a blanket
+  "prefer `message`" would be a regression, because most routes carry their only human copy in
+  `error` and send no `message` at all.
+- `src/data/api.ts` — `login()` and `sendOtp()` read through it. `sendOtp` also returns the server's
+  `channel` now, so an emailed code stops claiming it went to WhatsApp.
+- `src/app/(auth)/login.tsx`, `src/ui/feedback.tsx` — two strings that already had human copy in all
+  five languages were still hardcoded (`common.signIn`, `common.dismiss`). The Banner one lands on
+  every screen.
+- `src/lib/fileUpload.ts` — six comment blocks corrected. They stated "a plain 500" and "THE BACKEND
+  DOES NOT ACCEPT ANY OF THESE YET" as unconditional facts; both are now conditional on a deploy that
+  has not happened.
+- `src/data/api.ts` `recordFileAttachment` + `claim/[id].tsx` + `claim-new.tsx` — real `entity_id` /
+  `entity_type`.
+- `src/data/__tests__/api-file-attachments.test.ts` *(new, 7)* — the whitelist, the
+  empty-vs-placeholder id, single-attempt, fail-quiet.
+- `src/lib/crashReport.ts` *(new)* + test, `src/ui/RouteErrorBoundary.tsx` *(new)*,
+  `src/app/_layout.tsx` — the error boundary.
+- `docs/i18n/COPY-REQUEST-2026-08-26.md` — Batch 5 + 5b written out; its stale STATUS header fixed.
+- `CLAUDE.md`, `docs/PHASES.md`, `docs/STATUS.md`, `src/i18n/index.tsx` (one stale comment).
+- `../contracts/INBOX.md` — two replies (see below).
 
 ## Decisions made
 
-- **The owner reversed their own Phase-63 GPS decision, and that is recorded as theirs.** They were
-  shown the consequence in writing first. The guard test was edited openly rather than worked
-  around, and the two assertions that prevent points being lost *outright* were kept.
-- **`common.offlineBody` was deliberately NOT swept, against what the copy request said.** It called
-  itself "one canonical replacement for all 39 variants", but **zero sites match it verbatim** and
-  each of the 39 names *what* could not load. Collapsing them would destroy the outage-honesty
-  convention the app is built on. They need per-screen copy in a later batch.
-- **Compress video to fit the existing 10 MB rather than raise the cap** (owner's choice, offered
-  with the alternatives). Consequence: the backend needs **no size change and no nginx change** —
-  only a MIME allowlist change.
-- **A boot-breaking bug was found by adversarial review that all three gates were green on.** A
-  top-level `import` of `react-native-compressor` throws at *module-evaluation* time, and
-  expo-router eagerly loads every route file at boot in development — so `expo start --go`,
-  `--web` and `npm run e2e` would all have died at startup, taking the everyday photo/PDF path with
-  them. The module's own header claimed it failed open; the import made that false.
-- **The audio budget was modelled wrong and was fixed before shipping.** Reserving a fixed
-  *fraction* of a fixed byte budget under-provisions audio, whose cost grows with the clip; a
-  3-minute clip went over the cap while the video track was exactly to budget.
-- **Read the server's own words rather than guessing from a status code.** A rejected file type
-  arrives as a bare 500 carrying `File type video/mp4 is not allowed`. Conservative by design: an
-  unrecognised body still falls through to the status, so a real 5xx is never relabelled.
-- **A record is not a link, and the difference was not faked.** `POST /api/file-attachments` has no
-  `entity_id`, so a file cannot be tied to a claim. The claim id rides in `description` as human
-  text and the checklist tick stays local; `entity_id` is filed as an `[api]` ask instead of being
-  smuggled into a field that means something else.
+- **The sign-in fix is a rule, not a flip.** `error` still wins unless it is SCREAMING_SNAKE_CASE.
+  The test file pins every prose refusal the backend really sends (`'Your account is inactive…'`,
+  `'The code has expired…'`) precisely so a future "simplification" to `message`-first fails loudly.
+- **We did NOT take cgpe-api's advice to add a 415 branch, and told them why.** Their new 415 carries
+  the same body as the old 500, and our classifier reads the body before the status — so both already
+  resolve identically, with no deploy-order coupling. A status-only branch would have been *worse*: a
+  body-less 415 from a proxy would print "this server does not accept videos yet", which becomes
+  false the moment their change deploys. Pinned by a test asserting 415 and 500 agree.
+- **`isEphemeralUrl` was deliberately NOT narrowed, and this is the judgement call of the session.**
+  MinIO storage is path-style, so a bucket named `uploads` would make durable objects look ephemeral.
+  The obvious fix — only flag `/uploads/` when the host matches the API host — trades a harmless
+  false alarm for a false *reassurance*: if `BACKEND_URL` ever points at a non-API host, the disk
+  fallback starts reading as durable and a file wiped on the next redeploy is reported as safely
+  attached. That is the exact defect the 2026-08-25 audit fixed. **Over-warning is recoverable;
+  under-warning loses a claimant's evidence.** Filed as an ops constraint instead, pinned by a test.
+- **The error boundary is justified on its own merits and is NOT filed as the #8 fix.** A root
+  unmount kills the tab bar with it, so it presents as a wholly dead app; #8 is described as still
+  navigable. Reporting it as the fix would be the third confident-but-wrong answer to that bug.
+- **The boundary uses literal colours, and the reason is a trap worth knowing:** `useTheme()` does
+  **not** throw outside its provider — `ThemeContext` is created with `light` as its default — so it
+  would silently return the wrong scheme and flash a dark-mode user a white screen.
+- **Verified by booting, not by typechecking.** `_layout.tsx` is a danger-zone file, so
+  `expo start --web` was run: 1821 modules bundled, page served, zero errors. That also exercises
+  expo-router's dev-mode route validation over every route file.
+- **Two backend claims were checked against the DEPLOYED branch, not the commit.** Phase 94 is on
+  `origin/Shivam`; `origin/main` is `990c660` and still has the old allowlist. Stated in the code
+  comments, in CLAUDE.md and to cgpe-api.
 
 ## Known broken / deliberately skipped
 
-- 🔴 **Video uploads will FAIL until the backend adds four MIME strings.** That is the single gate.
-  Filed as item 1 of the new INBOX entry. The app now fails honestly ("This server does not accept
-  videos yet") instead of telling the user to retry something that can never succeed.
-- 🔴 **Attachments are unreachable on prod today** — `cloudStorageConfigured:false`, confirmed live.
-  Setting `BACKEND_URL` on the droplet is a one-line fix that helps immediately, MinIO or not.
-- 🔴 **No APK until 1 Sep 2026** (EAS free-plan quota). Nothing from Phase 77 or 78 is on a phone,
-  and there is no OTA.
-- ❌ **More→Today blank screen (#8) is still undiagnosed.** `scripts/diagnose-blank-screen.sh` runs
-  the two discriminators on the APK already installed and needs no build — **it was not run because
-  no device was attached.**
-- **Compression has never executed.** It is native, it fails open by construction, but it is unproven.
-- **Four video strings are hardcoded English on purpose** (`Record a video`, the hint, "Preparing
-  video…", the still-too-large message). The keys do not exist, and `t()` falls back to the key, so
-  wiring them early would print `doc.recordVideo` on screen. Listed in the copy request.
-- **`claims.tsx`'s filter row is half-translated** — five status chips have exact keys, but "Review"
-  has none (`claimStatus.review` is "Under review"). Needs an owner call, not a guess.
-- **Home's duty line and the agent-map roster headers stay English** — they are composed strings
-  (`${duration} on duty`, `On duty (n)`) and need placeholder keys that do not exist.
+- 🔴 **Backend Phase 94 is not deployed**, so video uploads and claim↔file linking still fail on a
+  phone. The app is correct for both the old and the new backend; nothing is blocked, but nothing
+  works either until the merge. **OPS ask filed.**
+- 🔴 **Storage is still off** — `cloudStorageConfigured:false`, re-probed today. `BACKEND_URL` alone
+  is a one-line fix for existing attachments.
+- 🔴 **No APK until 1 Sep 2026.** Nothing from Phases 77, 78 or 79 is on a phone, and there is no OTA.
+- ❌ **#8 (More→Today blank) is still open, and still needs a device.** Phase 79 narrowed it on paper:
+  a stuck `loading`/`uiReady` is ruled out, and home.tsx cannot render an empty body in either fork.
+  **Native screen detach survives** — `detachInactiveScreens` does default to `true` on Android and
+  expo-router does forward it (checked in the installed source) — but it is armed, not proven. Do not
+  ship `detachInactiveScreens={false}` as a fix without a repro. **Cheapest unmade observation: is
+  the bottom tab bar still visible while the screen is blank?**
+- **The crash screen's copy is English on purpose** (4 strings, in the copy request). It cannot use
+  `t()` at all — it renders outside every provider.
+- **`verifyOtp` still returns a generic message** rather than the server's specific "Incorrect code" /
+  "Too many attempts". Less precise, not dishonest; left alone rather than widening the change.
+- **`common.offlineBody` still not swept** — deliberate, for the third session running. The 39 outage
+  sentences each name what failed.
 
 ## Next session starts here
 
-- **Phase 79: run the two device tests, then close #8.** Everything else worth doing is blocked on
-  the owner or on the 1 Sep build quota, and #8 is the one open bug that needs no build.
-- First command: `/boot`
-- **Watch out for:** 🔴 **never import a native module at the top level of anything a route file can
-  reach.** `react-native-compressor` throws at module scope, and expo-router's dev-mode
-  `validateRouteTreeExports` calls an unguarded `loadRoute()` on **every** route — so one static
-  import kills the entire app at boot while `tsc`, `npm test` and `eslint` all stay green. This is a
-  *different* trap from the documented Vitest one and it is now written into `CLAUDE.md`. Second
-  trap: do not re-file `common.offlineBody` as unfinished Batch 2 work, and do not "fix" the hourly
-  GPS cadence back to 60 s — both are deliberate.
+- **First command: `/boot`.** Every self-contained app-side item is done; all three remaining items
+  need someone else — a phone plugged in, a merge, or a decision. See "Next 3" in `docs/PHASES.md`.
+- **The relay is worth more than any code right now:** merge + deploy Phase 94, set `BACKEND_URL`,
+  and tell whoever creates the MinIO bucket **not to call it `uploads`**.
+- **Watch out for:** ⚠️ do not "simplify" `humanApiMessage` into `json.message || json.error` — the
+  test suite says why. ⚠️ do not delete the `ErrorBoundary` export from `_layout.tsx` while tidying
+  imports; that export *is* the mechanism. ⚠️ CLAUDE.md's numbers were wrong for months in ways that
+  blocked finished work — when one of its claims decides what you do next, spend the thirty seconds
+  to check it against the code.
