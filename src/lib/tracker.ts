@@ -35,6 +35,7 @@ import { Accelerometer } from 'expo-sensors';
 import { storage } from './storage';
 import { watchdogAction } from './watchdog';
 import { isBufferStale, WATCHDOG_INTERVAL_MS } from './staleBuffer';
+import { partitionShiftPoints } from './boundaryAttribution';
 import { dropMocked, shouldSignalWithdrawal, locationBlockReason, type BlockReason } from './antiCircumvention';
 import {
   classifyMotion,
@@ -139,6 +140,13 @@ type Persisted = {
   v: 1;
   /** Attendance session this route belongs to. */
   sid?: string;
+  /**
+   * Epoch ms of the clock-in that opened `sid`, so `ingest` can split a straddling batch at the
+   * boundary (release audit 2026-08-29, `boundaryAttribution.ts`): a 24/7-armed member's points
+   * recorded BEFORE this instant are off-duty (ambient), not shift. Absent ⇒ boundary unknown ⇒
+   * everything attributes to the shift (the exact pre-audit behaviour).
+   */
+  sidStartedAt?: number;
   pts: PointTuple[];
   /** Newest timestamp already buffered, so a redelivered batch cannot duplicate rows. */
   lastAt: number;
@@ -194,6 +202,7 @@ async function readState(): Promise<Persisted> {
         return {
           v: 1,
           sid: typeof p.sid === 'string' && p.sid ? p.sid : undefined,
+          sidStartedAt: Number(p.sidStartedAt) > 0 ? Number(p.sidStartedAt) : undefined,
           pts: normalize(p.pts),
           lastAt: Number(p.lastAt) || 0,
         };
@@ -727,8 +736,15 @@ async function ingest(locations: Location.LocationObject[]): Promise<void> {
   // the shift's (unchanged). Absent + 24/7 armed ⇒ off-duty ambient. Absent + NOT armed ⇒ the PHASE 7
   // unattributable case (a service running with no shift and no consent) → tear it down.
   if (state.sid) {
-    const outcome = await deliver(state.sid, state.pts);
-    if (outcome === 'sent' || outcome === 'refused') state.pts = [];
+    // RELEASE AUDIT 2026-08-29 — split the batch at the clock-in instant so a 24/7-armed member's
+    // pre-clock-in OFF-DUTY points are not filed under the shift (`boundaryAttribution.ts`). With
+    // hourly sampling a batch can hold up to an hour of off-duty movement plus the first shift points;
+    // attributing the whole batch by `sid` filed that movement under the shift. When `sidStartedAt` is
+    // unknown (0 — a non-24/7 shift clears its buffer at clock-in so it holds no pre-clock-in points, or
+    // a shift resumed from before this field existed) the split returns everything as shift, i.e. the
+    // exact pre-audit behaviour — so this is a no-op for every non-24/7 user.
+    const { shift, preShift } = partitionShiftPoints(state.pts, state.sidStartedAt ?? 0, (t) => t[2]);
+    const outcome = await deliver(state.sid, shift);
     if (outcome === 'signed-out' || outcome === 'unattributable') {
       // `signed-out`: the account was signed out while the service kept running. `unattributable`
       // (PHASE 7): a running service with no session id collects location for nobody and, if posted,
@@ -738,6 +754,25 @@ async function ingest(locations: Location.LocationObject[]): Promise<void> {
       await stopUpdates();
       return;
     }
+    // The pre-clock-in points are OFF-DUTY. Post them to ambient when 24/7 is armed; otherwise a
+    // non-consented user has no ambient dataset for them, so they are dropped. An ambient result here
+    // (consent-required, refused, sent) must NOT tear down the live shift — the shift is validly
+    // attributed on its own basis (the employee clocked in); only a lost account (`signed-out`) stops it.
+    let preShiftRetry = false;
+    if (preShift.length && (await ambientArmed())) {
+      const amb = await deliverAmbient(preShift);
+      if (amb === 'signed-out') {
+        await storage.remove(STATE_KEY);
+        await stopUpdates();
+        return;
+      }
+      preShiftRetry = amb === 'retry';
+    }
+    // Rebuild the buffer from only what must be retried; everything sent/refused/dropped is gone.
+    // Pre-shift points are older, so they lead — keeping the buffer in chronological order.
+    const keepShift = outcome === 'retry' ? shift : [];
+    const keepPreShift = preShiftRetry ? preShift : [];
+    state.pts = keepPreShift.length || keepShift.length ? [...keepPreShift, ...keepShift] : [];
   } else if (await ambientArmed()) {
     const outcome = await deliverAmbient(state.pts);
     if (outcome === 'sent' || outcome === 'refused') state.pts = [];
@@ -889,6 +924,7 @@ export async function startTracking(sid: string): Promise<void> {
         if (state.sid !== sid) {
           state.pts = [];
           state.lastAt = 0;
+          state.sidStartedAt = Date.now();   // clock-in instant → the boundary `ingest` splits on
         }
         state.sid = sid;
         await writeState(state);
@@ -912,6 +948,7 @@ export async function startTracking(sid: string): Promise<void> {
       // fix, if it is ever judged to matter, is to split the buffer at the boundary timestamp rather
       // than attributing the batch as a unit. NOT done here: it is a behaviour change nobody asked
       // for, and doing it silently inside a cadence change is how a subtle data bug gets shipped.
+      if (state.sid !== sid) state.sidStartedAt = Date.now();   // clock-in instant → the boundary `ingest` splits on
       state.sid = sid;
       await writeState(state);
       await storage.remove(LEGACY_SESSION_KEY);
@@ -971,6 +1008,7 @@ export async function stopTracking(): Promise<void> {
       }
       if (state.sid) await api.stopTrack(state.sid).catch(() => {});
       state.sid = undefined;
+      state.sidStartedAt = undefined;   // shift closed — retire the boundary with its sid
       await writeState(state);
     } catch {
       // Non-fatal: the recorder stays in ambient mode regardless.
