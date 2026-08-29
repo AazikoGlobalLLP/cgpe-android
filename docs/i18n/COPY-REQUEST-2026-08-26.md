@@ -769,6 +769,67 @@ created 6a in the first place, now one level down. It is small, and it closes re
 | 22 | Clients list — a renewal row reads **"Due 14 Mar"** | The date has to sit inside the phrase. Please translate **`Due {date}`** | ⬜ | ⬜ | ⬜ | ⬜ |
 | 23 | Client 360 — a follow-up tag reads **"3 days late"** and **"In 12 days"** | Two phrases, number inside: **`{n} days late`** and **`In {n} days`**. Until these arrive, "Due today" stays English on that one tag, so the three read as one set | ⬜ | ⬜ | ⬜ | ⬜ |
 
+### 6g — Home dashboard widget headers (Phase 85, 2026-08-29 — the peers this wiring created)
+
+**Phase 85 wired the three home-dashboard widget headers that already had an exact key** — the
+Prospects, Notes and Tickets widget titles now read in all five languages by reusing copy you had
+already supplied (`Prospects` / `Notes` / `Tickets`). It changed **no** English and added **no** new
+key. This section is the short, honest list of the *neighbouring* headers on the same dashboard that
+could **not** be wired — because no key of their exact wording exists, or wiring the title alone
+would leave the rest of the card English. They are grouped by what unblocks each one.
+
+**A. Four widget headers with no key of any shape** — one new key each, then they wire:
+
+| # | English (exact) | where it appears | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 1 | The day, in order | Home — the "day spine" widget header | ⬜ | ⬜ | ⬜ | ⬜ |
+| 2 | Leads pipeline | Home — the leads widget header. **Do not reuse the existing "Leads and pipeline"** — it is different words | ⬜ | ⬜ | ⬜ | ⬜ |
+| 3 | Claim requests | Home — the claims widget header | ⬜ | ⬜ | ⬜ | ⬜ |
+| 4 | Issue log | Home — the issue-log widget header | ⬜ | ⬜ | ⬜ | ⬜ |
+
+**B. The issue-log card needs two more before its header (#4) can be wired** — otherwise the header
+translates and the card body stays English:
+
+| # | English (exact) | where it appears | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 5 | Open tickets that are unclaimed, flagged red, or raised as P1. | Home — the issue-log card footer/empty line | ⬜ | ⬜ | ⬜ | ⬜ |
+| 6 | Unclaimed | Home — the issue-log status pill on a ticket nobody owns | ⬜ | ⬜ | ⬜ | ⬜ |
+
+**C. The Team widget's header key already exists** (`Team`), but its card footer is a count sentence
+that stays English, and the on/off-duty pills next to it are already translated — so wiring the
+header alone would leave the English footer as a visible odd-one-out. **One `{placeholder}` string
+unblocks it**, and then the header + footer wire together:
+
+| # | Where it appears | What is needed | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 7 | Home — the Team widget footer reads **"3 of 8 on duty right now."** | Number inside the phrase. Please translate **`{n} of {total} on duty right now`** | ⬜ | ⬜ | ⬜ | ⬜ |
+
+**D. The Home nav catalogue (the compact "shortcut" cards) — a whole-table job, like the More menu.**
+Each card shows a **title above a subtitle**, so it must be translated as a unit or it looks
+half-done. The seven subtitles have **no** key at all, and three of the titles differ from an
+existing key only by a capital letter or a word (so please confirm the exact wording you want):
+
+| # | English (exact) | which card | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|---|
+| 8 | Announcements from the firm | Notice board — subtitle | ⬜ | ⬜ | ⬜ | ⬜ |
+| 9 | Bulk WhatsApp sends to your book | Campaigns — subtitle | ⬜ | ⬜ | ⬜ | ⬜ |
+| 10 | Slice the client book by need | Smart segments — subtitle | ⬜ | ⬜ | ⬜ | ⬜ |
+| 11 | Households and their total cover | Families — subtitle | ⬜ | ⬜ | ⬜ | ⬜ |
+| 12 | The advisor field guide | Knowledge base — subtitle | ⬜ | ⬜ | ⬜ | ⬜ |
+| 13 | What you have earned so far | Commissions — subtitle | ⬜ | ⬜ | ⬜ | ⬜ |
+| 14 | Your GPS clock log, day by day | My attendance — subtitle | ⬜ | ⬜ | ⬜ | ⬜ |
+| 15 | Notice board | Title (an existing key says "Notice Board" with a capital B — confirm) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 16 | Smart segments | Title (an existing key says just "Segments" — confirm) | ⬜ | ⬜ | ⬜ | ⬜ |
+| 17 | Knowledge base | Title (an existing key says "Knowledge Base" with a capital B — confirm) | ⬜ | ⬜ | ⬜ | ⬜ |
+
+*(The other four card titles — Campaigns, Families, Commissions, My attendance — already have exact
+keys and need nothing.)*
+
+**Non-blocking flag (already handled, no copy owed yet):** the Notes widget rows show a small
+**"Voice"** tag and a **"Voice note"** fallback in English on voice-dictated notes — the same status
+as the "Overdue" tag on the tasks widget. They are pre-existing untranslated peers to sweep in a
+later batch, and they do **not** hold up the Notes header that Phase 85 wired.
+
 ### What is deliberately NOT in Batch 6, and why
 
 - **Task categories** (Follow-up, Claim, Renewal, Meeting, Documentation, Collection, Training,

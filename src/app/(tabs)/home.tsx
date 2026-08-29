@@ -1698,7 +1698,7 @@ export default function Home() {
         const rows = prospects.slice(0, w.max);
         return (
           <WidgetShell
-            title={w.title ?? 'Prospects'}
+            title={w.title ?? t('more.prospectsTitle')}
             action={t('common.seeAll')}
             onAction={() => router.push('/prospects')}
           >
@@ -1803,7 +1803,7 @@ export default function Home() {
         const rows = sortedNotes.slice(0, w.max);
         return (
           <WidgetShell
-            title={w.title ?? 'Notes'}
+            title={w.title ?? t('more.notesTitle')}
             action={t('common.seeAll')}
             onAction={() => router.push('/notes')}
           >
@@ -1952,7 +1952,7 @@ export default function Home() {
         const rows = activeTickets.slice(0, w.max);
         return (
           <WidgetShell
-            title={w.title ?? 'Tickets'}
+            title={w.title ?? t('common.tickets')}
             action={t('common.seeAll')}
             onAction={() => router.push('/tickets')}
           >
