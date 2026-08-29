@@ -1,17 +1,18 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-29
-**Working on right now:** Getting the app ready to publish on the Google Play Store and the Apple App Store.
+**Working on right now:** Making more of the app show in every staff member's own language, alongside getting it ready to publish on the app stores.
 
 **Done this week:**
-- Went through the whole store-publishing plan line by line and checked it against the real app. The good news: the app is about 90% ready to submit — most of what's left is paperwork, store artwork, and accounts, not building the app.
-- Fixed a location bug: for staff who share their location 24/7, movement recorded just before they clocked in could be mislabelled as part of their shift. It now correctly stays as off-duty. (This needs one check on a real phone before it goes out.)
-- Fixed the app so the "version" it shows matches the version it actually is.
-- Wrote up all the evidence a store reviewer will ask for — what data is collected, how location is used, the privacy and consent details, and the security check — and saved it in one folder.
-- Confirmed the promise that location history is hidden after 90 days and deleted after 180 days is genuinely running on the live server.
+- More of the home screen now appears in all five languages: the Prospects, Notes and Tickets sections now use the words we already had translated, at no extra translation cost.
+- Went carefully through the rest of the home screen and found that most of the remaining labels can't be translated yet without a few more words from you — those are written up in one clean list, ready for you to fill in.
+- Checked the whole store-publishing plan against the real app: it's about 90% ready to submit; most of what's left is paperwork, artwork and accounts, not building the app.
+- Fixed a location bug for 24/7 staff so movement before they clock in is no longer mislabelled as part of their shift (still needs one check on a real phone).
+- Made the app show its correct version number, and gathered all the evidence a store reviewer will ask for into one folder.
+- Groundwork for a voice-command feature was also written this week (a separate piece of work); it's ready in the code but waiting on some setup before it can actually talk.
 
 **Blocked on:**
-- Buying the Apple developer account (needed for the Apple side).
-- The free Google build allowance is used up until 1 September, so a new installable build can't be made before then.
-- A few things only the owner can provide: the store publishing keys, the notification key, the public privacy and account-deletion web pages actually being live, and the store screenshots/graphics.
+- A short list of translations from you (the words for the remaining home-screen sections) so we can finish them properly rather than leave them half-done.
+- The Apple developer account, and the free Google build allowance which is used up until 1 September, so a new installable app can't be made before then.
+- A few owner-only items for publishing: store keys, the notification key, the live privacy and account-deletion web pages, and store artwork.
 
-**Next:** Once the accounts and artwork are ready (and after 1 September for the build), produce the store builds, test on real phones, and submit — recommended as private, company-only apps to keep review simple.
+**Next:** Keep translating screens as the words arrive; after 1 September, produce the store builds, test on real phones, and submit as private, company-only apps.

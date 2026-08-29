@@ -728,9 +728,20 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   group headings ("The book"/"Day to day"/…) come from `DEFAULT_UI.nav.more_sections` in `store/appUi.tsx`;
   Phase 84 added a `MORE_SECTION_TITLE_KEYS` title→key map + `sectionTitle(raw,t)` in `more.tsx` (custom
   server titles fall through; the "More" catch-all reuses `tab.more`). Check the group titles' SOURCE first.
-  🔑 **`home.tsx` has a PARALLEL nav catalogue** (widget quick-nav tiles + `w.title ?? 'Prospects'`) with
-  labels identical to `MORE_CATALOGUE` — the next free win, wire-able by REUSING the `more.*` keys (peer-
-  check; danger-zone file). The other module-scope no-sweep reasons stand: **module-scope date formatters**;
+  🔑 **`home.tsx`'s PARALLEL nav catalogue was PARTLY wired in Phase 85 (`d9adb5b`) — and it is NOT the
+  clean "free win" this line used to promise.** Only **3** widget headers had a byte-exact key and were
+  wired by reuse (`prospects`→`more.prospectsTitle`, `personal_notes`→`more.notesTitle`, `tickets`→
+  `common.tickets`). The rest were REFUSED and filed as **Batch 6g** (owner copy): `day_spine`/
+  `leads_pipeline`/`claim_requests`/`issue_logs` have no key (and `'Leads pipeline'`≠`more.leadsTitle`
+  `'Leads and pipeline'` — do NOT reword); `team_roster` has a byte-exact `dash.team` but its card
+  renders translated `onDuty`/`offDuty` pills beside an English `${onDuty} of ${team.length} on duty
+  right now` footer → a translated header = a half-translation island (needs a `{n} of {total}`
+  placeholder key); and the `LINK_WIDGETS` shortcut cards are a whole-table-or-none job (7 keyless
+  subtitle SENTENCES, `dash.campaigns` NOT a clean win because its subtitle has no key).
+  **The rule Phase 85 established: translate a widget header ONLY where the card body has no *translated*
+  chrome for its English peers to clash with** (pure-data body, or one-direction English like the shipped
+  `my_tasks` which renders hardcoded `Overdue ·` under a translated header). See memory
+  `phase85-home-headers-i18n-2026-08-29`. The other module-scope no-sweep reasons stand: **module-scope date formatters**;
   the four strings in `api.ts`/`tracker.ts`/`calendar.ts`/`config.ts` where **there is no non-React
   translator** (the active language lives in provider state); and `ui/LeafletMap.tsx:299` where **`t`
   is a local time string**.

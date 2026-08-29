@@ -459,38 +459,42 @@ session by design** — Phase 77 is where fixing starts.
 
 **SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
 
-## Next 3 — as of 2026-08-29 (after Phase 84)
+## Next 3 — as of 2026-08-29 (after Phase 85)
 
 > **Parallel store-deployment track (opened 2026-08-29):** code-side is done for now; the next moves are
 > **owner/ops** — Apple account, `eas.json submit` creds, FCM key, public privacy/delete pages, store assets,
 > reviewer account (see `docs/store-release/1.10.0/README.md`). The next *engineering* step is the **1-Sep
-> APK** (Phase 86 below), which carries BOTH the i18n work and the boundary fix and is where the boundary fix
+> APK** (item 3 below), which carries BOTH the i18n work and the boundary fix and is where the boundary fix
 > gets its device QA. No backend/contract change is owed by the shipped deployment work.
+>
+> **Concurrent voice track:** another session shipped the pure app-side voice seams (`src/voice/**`,
+> `41dffbb`→`4fb2086`) on top of Phase 85; it is owner-blocked on the n8n webhook URL, ElevenLabs
+> keys/voice IDs, the avatar asset, and the UI/native layer. See memory `voice-scaffolding-2026-08-29`.
 
-1. **Phase 85 — either Batch 6b (41 outage sentences, 54 places) OR the `home.tsx` nav-catalogue
-   free win first.** 6b names *what* failed at each site, so they are translated individually, never
-   collapsed into `common.offlineBody` (CLAUDE.md #4). **The free win:** `home.tsx` has a parallel
-   module-scope nav catalogue (widget quick-nav tiles + `w.title ?? 'Prospects'`) whose labels are
-   IDENTICAL to `MORE_CATALOGUE` — wire it by REUSING the new `more.*` keys (peer-check first; it is
-   the 2534-line danger-zone file). Do NOT wire the `api.ts` "New Lead"/"in progress" hits — backend
-   data. **Then** the ~6 single-word scan candidates, peers checked first.
+1. **Phase 86 — Batch 6b, OR finish the home nav catalogue once Batch 6g copy lands.** Phase 85 wired
+   the 3 home widget headers that had a byte-exact key (`prospects`/`personal_notes`/`tickets`) and
+   REFUSED the rest → **there is no self-contained i18n free win left in `home.tsx`.** So: **Batch 6b**
+   (41 outage sentences, 54 places — each names *what* failed, never collapsed into `common.offlineBody`,
+   CLAUDE.md #4), owner-owed; OR when the owner supplies **Batch 6g** (the refused home headers + the
+   `{n} of {total} on duty right now` placeholder + the LINK_WIDGETS subtitles/titles), finish those
+   headers + the shortcut-card table **as a whole**. Then the ~6 single-word scan candidates, peers first.
 2. **Relay the server asks — still FOUR, NOT re-verified this session (no code touched them):**
    backend Phase 94 not deployed (`origin/main` = `990c660` as of Phase 83); `cloudStorageConfigured:
    false`; `cgpe.in` has **no AAAA record**; and **let any authenticated user create a `team_task`
    assigned to themselves** (filed at the foot of `INBOX.md`). **Re-verify before repeating any of
-   these.** Also NEW and unactioned: `cgpe-api`'s 2026-08-27 INBOX item asking the app to adopt the
+   these.** Also unactioned: `cgpe-api`'s 2026-08-27 INBOX item asking the app to adopt the
    **presigned MinIO upload flow** (presign → PUT → `storage_key` → download-url) — inert until OPS
    sets `S3_*`, so app-side work but device-dead for now; box still `[ ]`. **Do not name the bucket
    `uploads`.**
-3. **Phase 86 — the APK, on or after 1 Sep 2026.** First build to carry Phases 77–85. **Carry EAS
-   Update in it.** ⚠️ An Expo account switch WOULD beat the quota but issues a NEW KEYSTORE — all 21
-   handsets would have to uninstall and lose their session. Not worth five days.
+3. **Phase 87 — the APK, on or after 1 Sep 2026.** First build to carry Phases 77–85 (+ the voice
+   seams). **Carry EAS Update in it.** ⚠️ An Expo account switch WOULD beat the quota but issues a NEW
+   KEYSTORE — all 21 handsets would have to uninstall and lose their session. Not worth five days.
 
 **Still NOT built, and named so nobody reads them as done:** "tasks tab ke andar active claims"
 (ops) and "… leads and prospects" (sales) are net-new SCREEN features. The rest of request-Batch-5
 (`session.*`, `net.*`, `biometric.prompt`, `login.codeSent*`) is blocked by architecture — no React
 translator in those modules. The More screen's fixed admin/Personal/About chrome stays English (out
-of 6c). Voice is untouched and owner-blocked at its ₹0 ten-minute test.
+of 6c). Voice has its pure seams built (see the note above) but the round-trip is owner-blocked.
 
 ---
 

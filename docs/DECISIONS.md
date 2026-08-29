@@ -4979,3 +4979,26 @@ every spec claim against the code (0 errors, cited to file:line). The app is ~90
 
 Commits (aaziko/Shivam, tip `b55afcd`): `664b3c6` version reconcile · `8d2196c` boundary split · `b55afcd`
 store-release evidence. Gates green: `tsc` 0 · `npm test` 1084 · `eslint` 0.
+
+## 2026-08-29 — Phase 85: home.tsx nav-catalogue i18n (the "free win" was mostly not clean)
+
+- **Wired 3 widget headers by pure key reuse** (`prospects`→`more.prospectsTitle`, `personal_notes`→
+  `more.notesTitle`, `tickets`→`common.tickets`); zero new keys, no English changed. Decided by a
+  4-lens adversarial review (completeness/convention/exact-match/skeptic + synthesis).
+- **The wiring rule adopted:** translate a widget header ONLY where the card body has no *translated*
+  chrome for its English peers to clash with — pure-data body, or one-direction English like the
+  shipped `my_tasks` (hardcoded `Overdue ·` under a translated header).
+- **Team REFUSED** despite `dash.team` being byte-exact: the populated card mixes translated
+  `onDuty`/`offDuty` pills with a hardcoded English `${onDuty} of ${team.length} on duty right now`
+  footer, so a translated header creates a half-translation island. Needs a `{n} of {total}`
+  placeholder key (owner copy, Batch 6g) before it can wire.
+- **`dash.campaigns` is NOT a clean win** — campaigns renders only as a LINK_WIDGETS shortcut card
+  (title+subtitle), and its subtitle sentence has no key, so wiring the title strands the subtitle.
+- **`'Leads pipeline'` left English** rather than reuse near-miss `more.leadsTitle` ('Leads and
+  pipeline') — reusing would silently reword the shipped header (discipline #1).
+- **Refused set filed as Batch 6g** in `docs/i18n/COPY-REQUEST-2026-08-26.md`, strings verbatim.
+- Gates: `tsc` 0 · `npm test` 1084/67 at commit time (1207/73 on the combined tree with the
+  concurrent voice work) · `eslint` cache-free 0 on home.tsx · orphans 17 · dict 430 (all unchanged).
+- Commits (aaziko/Shivam): `d9adb5b` code+Batch 6g · `16ffb2f` board.
+- **Concurrent-session note:** voice-scaffolding commits (`41dffbb`→`4fb2086`, another session) landed
+  on top of these in the same checkout; linear history, nothing overridden. Not this session's work.
