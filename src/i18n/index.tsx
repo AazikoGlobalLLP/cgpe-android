@@ -547,6 +547,8 @@ const en = {
   'voice.failed': 'Something went wrong. Please try again.',
   'voice.notUnderstood': "I didn't catch that. Please try again.",
   'voice.whichOne': 'Which one?',
+  'voice.female': 'Female',
+  'voice.male': 'Male',
 };
 
 /** Every dictionary carries exactly the English key set. */
@@ -952,6 +954,8 @@ const gu: Dict = {
   'voice.failed': 'કંઈક ખોટું થયું. ફરી પ્રયત્ન કરો.',
   'voice.notUnderstood': 'સમજાયું નહીં. ફરી પ્રયત્ન કરો.',
   'voice.whichOne': 'કઈ?',
+  'voice.female': 'સ્ત્રી',
+  'voice.male': 'પુરુષ',
 };
 
 const hi: Dict = {
@@ -1348,6 +1352,8 @@ const hi: Dict = {
   'voice.failed': 'कुछ गड़बड़ हो गई। फिर कोशिश करें।',
   'voice.notUnderstood': 'समझ नहीं आया। फिर कोशिश करें।',
   'voice.whichOne': 'कौन सा?',
+  'voice.female': 'महिला',
+  'voice.male': 'पुरुष',
 };
 
 /**
@@ -1751,6 +1757,8 @@ const hiEn: Dict = {
   'voice.failed': 'Kuch gadbad ho gayi. Dobara try karein.',
   'voice.notUnderstood': 'Samajh nahi aaya. Dobara try karein.',
   'voice.whichOne': 'Kaunsa?',
+  'voice.female': 'Female',
+  'voice.male': 'Male',
 };
 
 /**
@@ -2154,6 +2162,8 @@ const guEn: Dict = {
   'voice.failed': 'Kaink khotu thayu. Fari try karo.',
   'voice.notUnderstood': 'Samjaayu nahi. Fari try karo.',
   'voice.whichOne': 'Kai?',
+  'voice.female': 'Female',
+  'voice.male': 'Male',
 };
 
 /**

@@ -41,6 +41,8 @@ import { JobsProvider } from '@/store/jobs';
 import { AppUiProvider, useAppUi } from '@/store/appUi';
 import { JobPill } from '@/ui/JobPill';
 import { VoiceLauncher } from '@/ui/VoiceLauncher';
+import { VoiceModeProvider } from '@/ui/voice/VoiceModeContext';
+import { VoiceMode } from '@/ui/voice/VoiceMode';
 import { HealthBanner } from '@/ui/health-banner';
 import { getLocationConsent, needsConsentGate, flushWriteQueue } from '@/data/api';
 import { subscribeHealth } from '@/data/health';
@@ -289,6 +291,9 @@ function RootNav() {
           location is off (owner-locked immediate trigger). Overlay, native-only — see LocationBlock.
           Below AppLock's zIndex so the biometric device lock always wins if both are up. */}
       <LocationBlock />
+      {/* Full-screen voice-mode surface. zIndex 50 — BELOW LocationBlock(55)/AppLock(60), so a
+          location wall or biometric lock always covers voice. Native-only, returns null when closed. */}
+      <VoiceMode />
       <AppLock />
       {/* Hold the animated splash until the auth session AND the Geist faces are ready,
           so the first painted frame is never in the fallback system face. */}
@@ -331,7 +336,11 @@ export default function RootLayout() {
                       Without this mounted, useToast() silently resolves to the no-op
                       default and every toast in the app does nothing, with no warning. */}
                   <ToastProvider>
-                    <RootNav />
+                    {/* Voice mode state (open + persona). Inside AuthProvider/AppUiProvider/ToastProvider
+                        so the full-screen VoiceMode surface + VoiceLauncher can read user/theme/toast. */}
+                    <VoiceModeProvider>
+                      <RootNav />
+                    </VoiceModeProvider>
                   </ToastProvider>
                 </ConfirmProvider>
               </JobsProvider>

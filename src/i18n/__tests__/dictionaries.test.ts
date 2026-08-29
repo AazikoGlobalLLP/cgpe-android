@@ -84,7 +84,8 @@ describe('i18n dictionaries — parity and value quality', () => {
     // Bumped 430 → 444 for the 14 `voice.*` keys (2026-08-29): the voice-assistant sheet. PROVISIONAL
     // CLAUDE translations under the 2026-08-27 waiver (labelled in the code); owner to confirm the
     // gu/hi/hi-en/gu-en copy. `Cancel`/`Confirm`/`Try again` reuse the existing common.* keys.
-    expect(EN_KEYS.length).toBe(444);
+    // Bumped 444 → 446 for `voice.female`/`voice.male` (2026-08-29): the voice-mode persona toggle.
+    expect(EN_KEYS.length).toBe(446);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });
