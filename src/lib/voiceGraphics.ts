@@ -11,6 +11,7 @@ import { Platform } from 'react-native';
 
 let skia: boolean | null = null;
 let blur: boolean | null = null;
+let lottie: boolean | null = null;
 
 /** Is `@shopify/react-native-skia` linked and usable on this runtime? (false on web / Expo Go.) */
 export function hasSkia(): boolean {
@@ -24,6 +25,20 @@ export function hasSkia(): boolean {
     skia = false;
   }
   return skia;
+}
+
+/** Is `lottie-react-native` linked and usable on this runtime? (false on web.) */
+export function hasLottie(): boolean {
+  if (lottie != null) return lottie;
+  if (Platform.OS === 'web') { lottie = false; return false; }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- lazy probe; must not eval at boot
+    require('lottie-react-native');
+    lottie = true;
+  } catch {
+    lottie = false;
+  }
+  return lottie;
 }
 
 /** Is `expo-blur` linked and usable on this runtime? (false on web.) */

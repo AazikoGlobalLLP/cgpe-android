@@ -11,10 +11,12 @@ import React, { Suspense } from 'react';
 import { useReducedMotion, type SharedValue } from 'react-native-reanimated';
 import { OrbStatic } from '@/ui/voice/OrbStatic';
 import { tierGlow, type Persona, type VoiceCharacterState } from '@/ui/voice/voiceVisual';
-import { hasSkia } from '@/lib/voiceGraphics';
+import { mascotFor } from '@/ui/voice/mascots';
+import { hasLottie, hasSkia } from '@/lib/voiceGraphics';
 import type { Tier } from '@/store/roles';
 
 const OrbSkiaLazy = React.lazy(() => import('@/ui/voice/OrbSkia'));
+const VoiceMascotLazy = React.lazy(() => import('@/ui/voice/VoiceMascot'));
 
 /** Falls back to the given node if the lazy Skia orb throws on load or render. */
 class OrbBoundary extends React.Component<{ fallback: React.ReactNode; children: React.ReactNode }, { failed: boolean }> {
@@ -39,9 +41,21 @@ export function VoiceCharacter({
     <OrbStatic persona={persona} state={state} level={level} glow={glow} size={size} muted={muted} reduced={reduced} />
   );
 
-  // Reduced-motion or a non-Skia build → the static orb (no continuous GPU cost).
-  if (reduced || !hasSkia()) return staticOrb;
+  // 1) A commissioned Lottie mascot for this persona (if bundled + linked) wins — the "extraordinary
+  //    character". Never over reduced-motion (a looping Lottie is continuous motion).
+  const mascot = !reduced && hasLottie() ? mascotFor(persona) : null;
+  if (mascot != null) {
+    return (
+      <OrbBoundary fallback={staticOrb}>
+        <Suspense fallback={staticOrb}>
+          <VoiceMascotLazy source={mascot} state={state} size={size} />
+        </Suspense>
+      </OrbBoundary>
+    );
+  }
 
+  // 2) The glossy Skia orb — the premium default. 3) Reduced-motion / non-Skia → the static orb.
+  if (reduced || !hasSkia()) return staticOrb;
   return (
     <OrbBoundary fallback={staticOrb}>
       <Suspense fallback={staticOrb}>
