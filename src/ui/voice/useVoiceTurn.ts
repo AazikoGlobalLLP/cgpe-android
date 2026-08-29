@@ -22,7 +22,7 @@ import { askVoice, isTransportError } from '@/voice/client';
 import { langForVoice, isRecordingTooShort } from '@/voice/request';
 import { isAllowedVoiceRoute } from '@/voice/routes';
 import { historyForNlu, recordAssistantTurn, recordUserTurn } from '@/voice/session';
-import type { VoiceCharacterState } from '@/ui/voice/voiceVisual';
+import { dbToAmp01, type VoiceCharacterState } from '@/ui/voice/voiceVisual';
 
 export type VoiceTurn = {
   state: VoiceCharacterState;
@@ -60,21 +60,35 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   const startedAtRef = useRef(0);
 
   const recorder = useAudioRecorder(
-    useMemo(() => ({ ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1 }), []),
+    useMemo(() => ({ ...RecordingPresets.HIGH_QUALITY, numberOfChannels: 1, isMeteringEnabled: true }), []),
   );
   const level = useSharedValue(0);
 
-  // Unit 1: a gentle synthetic amplitude so the character has life. Unit 2 replaces this with a real
-  // mic-metering sampler writing `level.value`.
+  // Drive `level` (0..1) on the UI thread. While LISTENING, sample the recorder's real mic metering
+  // (dBFS from `getStatus().metering`, Android-implemented) every ~70 ms and smooth it with withTiming;
+  // if a device exposes no metering, fall back to a synthetic oscillation so the character never looks
+  // dead. SPEAKING has no playback metering, so it uses a procedural envelope. Zero React re-render.
   useEffect(() => {
     cancelAnimation(level);
-    if (state === 'listening' || state === 'speaking') {
-      level.value = withRepeat(withTiming(0.6, { duration: 620 }), -1, true);
-    } else {
-      level.value = withTiming(0, { duration: 200 });
+    if (state === 'listening') {
+      const id = setInterval(() => {
+        let amp: number | null = null;
+        try {
+          const m = recorder.getStatus?.()?.metering;
+          if (typeof m === 'number' && Number.isFinite(m)) amp = dbToAmp01(m);
+        } catch { /* getStatus unavailable on this build */ }
+        if (amp == null) amp = 0.28 + 0.28 * Math.abs(Math.sin(Date.now() / 190)); // synthetic fallback
+        level.value = withTiming(amp, { duration: 80 });
+      }, 70);
+      return () => clearInterval(id);
     }
+    if (state === 'speaking') {
+      level.value = withRepeat(withTiming(0.55, { duration: 520 }), -1, true);
+      return () => cancelAnimation(level);
+    }
+    level.value = withTiming(0, { duration: 200 });
     return () => cancelAnimation(level);
-  }, [state, level]);
+  }, [state, level, recorder]);
 
   const reset = useCallback(() => {
     setState('idle');
