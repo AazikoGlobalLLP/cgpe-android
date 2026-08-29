@@ -96,8 +96,11 @@ function parseConfirm(v: unknown): VoiceConfirm | null {
   return { title, rows, confirmText };
 }
 
+/** The neutral "answer only, don't navigate" action — used on an absent/unknown action or a soft failure. */
+const NO_ACTION: VoiceAction = { type: 'none', route: null, params: {}, intentId: null, args: {}, confirm: null };
+
 function parseAction(v: unknown): VoiceAction {
-  const none: VoiceAction = { type: 'none', route: null, params: {}, intentId: null, args: {}, confirm: null };
+  const none: VoiceAction = { ...NO_ACTION };
   if (!isRec(v)) return none;
 
   const rawType = str(v.type);
@@ -149,38 +152,36 @@ export function parseVoiceReply(raw: unknown): VoiceReply | VoiceReplyError {
   }
 
   const transcript = str(raw.transcript);
+  const replyText = str(raw.reply_text);
+  // The n8n brain uses `success`; the backend proxy may use `ok`. Either being false is a SOFT failure:
+  // it still carries a spoken `reply_text` ("a short reason") — we speak it, we just never navigate.
+  const failed = raw.ok === false || raw.success === false;
 
-  // Failure path — the contract keeps HTTP 200 and fills `error` (A1.3), so `ok:false` is a normal
-  // reply, not an outage. The transcript is still shown if present.
-  if (raw.ok === false) {
-    const e = isRec(raw.error) ? raw.error : null;
+  // Any 200 that carries a non-empty reply_text is speakable — this is the normal path, and the soft
+  // failure path too. Navigation is dropped on a soft failure.
+  if (replyText != null && replyText.trim().length > 0) {
+    const rawConf = raw.confidence;
+    const hasConf = typeof rawConf === 'number' && Number.isFinite(rawConf);
+    // The brain provides NO confidence. Absence means "act normally" (confident), NOT "refuse" — else
+    // every real reply would be treated as low-confidence and never navigate.
+    const confidence = hasConf ? clamp01(rawConf) : 1;
     return {
-      ok: false,
-      code: normalizeErrorCode(e?.code),
-      transcript,
-      message: e ? str(e.message) : null,
+      ok: true,
+      requestId: str(raw.request_id),
+      transcript: transcript ?? '',
+      lang: str(raw.lang_detected),
+      replyText,
+      action: failed ? NO_ACTION : parseAction(raw.action),
+      audio: parseAudio(raw.audio),
+      confidence,
+      lowConfidence: confidence < VOICE.CONFIDENCE_MIN,
     };
   }
 
-  // Success path — must carry at least a transcript and a reply_text to be usable.
-  const replyText = str(raw.reply_text);
-  if (transcript == null || replyText == null) {
-    return { ok: false, code: 'malformed', transcript, message: null };
+  // No usable reply_text → a HARD failure (STT died / empty / garbage body). Transcript shown if present.
+  if (failed) {
+    const e = isRec(raw.error) ? raw.error : null;
+    return { ok: false, code: normalizeErrorCode(e?.code), transcript, message: e ? str(e.message) : null };
   }
-
-  const confidence = typeof raw.confidence === 'number' && Number.isFinite(raw.confidence)
-    ? clamp01(raw.confidence)
-    : 0;
-
-  return {
-    ok: true,
-    requestId: str(raw.request_id),
-    transcript,
-    lang: str(raw.lang_detected),
-    replyText,
-    action: parseAction(raw.action),
-    audio: parseAudio(raw.audio),
-    confidence,
-    lowConfidence: confidence < VOICE.CONFIDENCE_MIN,
-  };
+  return { ok: false, code: 'malformed', transcript, message: null };
 }

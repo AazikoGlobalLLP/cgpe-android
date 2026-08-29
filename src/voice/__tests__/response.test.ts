@@ -47,8 +47,13 @@ describe('malformed success — object but missing required fields', () => {
     expect(r.code).toBe('malformed');
     expect(r.transcript).toBe('t');
   });
-  it('missing transcript is malformed', () => {
-    expect(bad(parseVoiceReply({ ok: true, reply_text: 'r' })).code).toBe('malformed');
+  it('a reply_text with no transcript is still SPEAKABLE (transcript defaults to empty), not malformed', () => {
+    const r = ok(parseVoiceReply({ ok: true, reply_text: 'r' }));
+    expect(r.replyText).toBe('r');
+    expect(r.transcript).toBe('');
+  });
+  it('an empty reply_text with no transcript is malformed', () => {
+    expect(bad(parseVoiceReply({ ok: true, reply_text: '   ' })).code).toBe('malformed');
   });
 });
 
@@ -68,11 +73,33 @@ describe('minimal valid success', () => {
   });
 });
 
+describe('🔴 the live n8n brain shape (success + reply_text, no audio/confidence)', () => {
+  it('success:true with a reply_text + allowed route navigates', () => {
+    const r = ok(parseVoiceReply({ success: true, transcript: 'x', reply_text: 'Aaj 4 kaam hai.', action: { type: 'navigate', route: '/attendance' } }));
+    expect(r.replyText).toBe('Aaj 4 kaam hai.');
+    expect(r.action.type).toBe('navigate');
+    expect(r.action.route).toBe('/attendance');
+    expect(r.confidence).toBe(1); // no confidence field → confident
+  });
+  it('success:false WITH reply_text is a speakable SOFT failure — spoken, but never navigates', () => {
+    const r = ok(parseVoiceReply({ success: false, transcript: 'x', reply_text: 'Aapko iski permission nahi hai.', action: { type: 'navigate', route: '/attendance' } }));
+    expect(r.replyText).toBe('Aapko iski permission nahi hai.');
+    expect(r.action.type).toBe('none');
+  });
+  it('success:false with NO reply_text is a hard failure', () => {
+    expect(bad(parseVoiceReply({ success: false, transcript: 'x' })).code).toBeTruthy();
+  });
+});
+
 describe('confidence — clamped, defaulted, and flagged', () => {
-  it('a non-numeric confidence defaults to 0 and flags lowConfidence', () => {
-    const r = ok(parseVoiceReply({ ...base, confidence: 'high' }));
-    expect(r.confidence).toBe(0);
-    expect(r.lowConfidence).toBe(true);
+  it('🔴 an ABSENT/non-numeric confidence defaults to CONFIDENT (the brain sends none)', () => {
+    // The n8n brain returns no confidence — absence must mean "act normally", NOT "refuse to navigate".
+    expect(ok(parseVoiceReply({ ...base, confidence: undefined })).confidence).toBe(1);
+    expect(ok(parseVoiceReply({ ...base, confidence: 'high' })).confidence).toBe(1);
+    expect(ok(parseVoiceReply({ ...base, confidence: 'high' })).lowConfidence).toBe(false);
+  });
+  it('an EXPLICIT low confidence still gates', () => {
+    expect(ok(parseVoiceReply({ ...base, confidence: 0.2 })).lowConfidence).toBe(true);
   });
   it('clamps out-of-range values', () => {
     expect(ok(parseVoiceReply({ ...base, confidence: 5 })).confidence).toBe(1);
