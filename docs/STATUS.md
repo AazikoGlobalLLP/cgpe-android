@@ -1,18 +1,17 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-29
-**Working on right now:** Making more of the app show in every staff member's own language, alongside getting it ready to publish on the app stores.
+**Working on right now:** Building the voice assistant — letting staff talk to the app and get spoken answers.
 
 **Done this week:**
-- More of the home screen now appears in all five languages: the Prospects, Notes and Tickets sections now use the words we already had translated, at no extra translation cost.
-- Went carefully through the rest of the home screen and found that most of the remaining labels can't be translated yet without a few more words from you — those are written up in one clean list, ready for you to fill in.
-- Checked the whole store-publishing plan against the real app: it's about 90% ready to submit; most of what's left is paperwork, artwork and accounts, not building the app.
-- Fixed a location bug for 24/7 staff so movement before they clock in is no longer mislabelled as part of their shift (still needs one check on a real phone).
-- Made the app show its correct version number, and gathered all the evidence a store reviewer will ask for into one folder.
-- Groundwork for a voice-command feature was also written this week (a separate piece of work); it's ready in the code but waiting on some setup before it can actually talk.
+- The voice assistant's app side is fully built: a staff member can hold a button, speak, see what was heard, and hear the answer — and the app can jump to the right screen when asked.
+- The voice screen was redesigned to look premium: a full-screen, glassy design with a glowing, animated character that reacts to your voice, and a male/female switch.
+- The "brain" that understands the questions is now live and working. It handles several questions in one go and replies in the person's own language.
+- The one remaining voice piece — connecting the microphone and the spoken reply to the brain — has been written up as a clear task and handed to the backend developer.
+- (Separate work, in parallel:) more of the home screen now shows in all five languages, and the store-publishing plan was checked against the app — about 90% ready to submit.
 
 **Blocked on:**
-- A short list of translations from you (the words for the remaining home-screen sections) so we can finish them properly rather than leave them half-done.
-- The Apple developer account, and the free Google build allowance which is used up until 1 September, so a new installable app can't be made before then.
-- A few owner-only items for publishing: store keys, the notification key, the live privacy and account-deletion web pages, and store artwork.
+- The backend developer building the one voice connection piece (assigned), plus a few setup keys from you for it.
+- A proper drawn character for the voice screen (needs a designer) — for now it's a polished glowing orb, and the drawn character drops straight in when it's ready.
+- The Apple account and the free Google build allowance, which is used up until 1 September — so a new installable app can't be made before then anyway.
 
-**Next:** Keep translating screens as the words arrive; after 1 September, produce the store builds, test on real phones, and submit as private, company-only apps.
+**Next:** Finish the voice connection piece, then — only at the very end, once everything is done — make one installable app and test the voice on real phones.

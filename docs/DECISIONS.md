@@ -5002,3 +5002,28 @@ store-release evidence. Gates green: `tsc` 0 · `npm test` 1084 · `eslint` 0.
 - Commits (aaziko/Shivam): `d9adb5b` code+Batch 6g · `16ffb2f` board.
 - **Concurrent-session note:** voice-scaffolding commits (`41dffbb`→`4fb2086`, another session) landed
   on top of these in the same checkout; linear history, nothing overridden. Not this session's work.
+
+## 2026-08-29 — Voice assistant: app-side built, heavy UI redesign, backend task filed
+- **Architecture (confirmed live): n8n is a PURE TEXT brain; the BACKEND does STT + TTS.** The owner
+  overrode the Express-fat-registry recommendation for speed. The live brain
+  (`https://ai.cgpe.in/webhook/cgpe-voice-brain`) takes `{transcript, authToken}` and returns
+  `{success, reply_text, action}` — no audio, no confidence. So STT/TTS live in the CGPE backend proxy
+  (`POST /api/voice/ask`), which is filed to `cgpe-api` via INBOX. App is DONE; proxy is the only piece left.
+- **App aligned to the live contract** (`src/voice/response.ts`): an ABSENT `confidence` now means ACT
+  (not refuse), `success` is accepted alongside `ok`, and a `success:false` is SPEAKABLE (play the reason,
+  never navigate). Without this the app read every reply as low-confidence and refused to navigate.
+- **Heavy voice-mode UI (owner: "full heavy / glossy glass").** Full-screen immersive overlay (AppLock
+  pattern, not the bottom sheet), a glossy **Skia** liquid orb + real **expo-blur** frosted glass +
+  **Lottie** integration + a **male/female toggle** (persisted). Aesthetic delegated → light glassmorphic,
+  theme-aware. Added deps: `@shopify/react-native-skia 2.6.2`, `expo-blur ~57.0.2`, `lottie-react-native
+  ~7.3.8` (+~10-16 MB, native rebuild). Everything behind `hasSkia/hasBlur/hasLottie` probes + React.lazy
+  so natives never eval at boot/web/Expo-Go; gradient `OrbStatic` is the always-works fallback.
+- **🔴 Lottie web-build trap:** lottie's web renderer needs `@lottiefiles/dotlottie-react` (not shipped) →
+  web export fails. Fixed with `VoiceMascot.web.tsx` + `voiceGraphics.web.ts` STUBS (native-only feature).
+  Keep the stubs — the web export is the boot-safety gate.
+- **Mascot ART is owner-commissioned** — `mascotFor()` returns null (the premium orb shows) until the
+  male/female `.json` lands in `assets/voice/`; the toggle then swaps them with no other change.
+- **Writes stay DARK** in v1 (`VOICE_WRITES_ENABLED=false`) — reads + navigate only.
+- **No APK yet — one build at the very end** (owner), after the backend proxy + all other tasks. Existing
+  EAS account cannot build before 1 Sep (free quota exhausted); recommend the 1-Sep build (same keystore).
+- Commits (aaziko/Shivam): voice logic + UI `41dffbb`→`5c03103`. Gates: tsc 0 · npm test 1254 · eslint 0 · web-boot verified.

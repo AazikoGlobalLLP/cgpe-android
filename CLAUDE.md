@@ -517,6 +517,36 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   it**. The backend ask (allow a self-assigned `team_task` from any authenticated user) is filed at
   the foot of `INBOX.md`. Until it ships, `POST /team/tasks` 403s and `addTask` reports it honestly.
 
+## Voice assistant (built 2026-08-29 — read before touching `src/voice/**` or `src/ui/voice/**`)
+- **Architecture: n8n is a PURE TEXT brain; the BACKEND does STT + TTS** (owner overrode the Express-
+  fat-registry recommendation). The live brain `https://ai.cgpe.in/webhook/cgpe-voice-brain` takes
+  `{transcript, authToken}` → `{success, reply_text, action}` (NO audio, NO confidence). The app records
+  audio → `POST /api/voice/ask` (the backend proxy — **STILL TO BE BUILT by cgpe-api**, filed to INBOX,
+  brief at `docs/spec/VOICE-BACKEND-PROXY-BRIEF.md`) → the proxy does STT → brain → TTS → returns the
+  A1.3 shape. **Do NOT build a run/say registry** and do NOT make the app call the brain directly (the
+  webhook secret must never ship in the app).
+- **The app parser (`src/voice/response.ts`) treats an ABSENT `confidence` as ACT** (the brain sends
+  none), accepts `success` as an alias for `ok`, and a `success:false` is SPEAKABLE (play the reason,
+  never navigate). Don't "fix" absent-confidence back to a refusal — it would stop every reply navigating.
+- **Writes are DARK** in v1 (`src/voice/dispatch.ts` `VOICE_WRITES_ENABLED=false`) — reads + navigate only.
+- **🔴 THE HEAVY UI ADDS THREE NATIVE DEPS behind probes:** `@shopify/react-native-skia`, `expo-blur`,
+  `lottie-react-native`. They are loaded ONLY via `hasSkia/hasBlur/hasLottie` (`src/lib/voiceGraphics.ts`)
+  + `React.lazy` + an error boundary in `VoiceCharacter`. **Never static-import any of them from a file a
+  route/boot reaches** (module-scope-throw trap, above). The always-works fallback is the gradient
+  `OrbStatic`.
+- **🔴 LOTTIE WEB-BUILD TRAP:** `lottie-react-native`'s web renderer needs `@lottiefiles/dotlottie-react`
+  (NOT installed), so ANY web-reachable import of it (even a lazy `require` in the probe) breaks
+  `expo export -p web` — the boot-safety gate. It is neutralised by **`src/ui/voice/VoiceMascot.web.tsx`
+  + `src/lib/voiceGraphics.web.ts` STUBS** (Metro resolves them on web). **Do NOT delete those stubs.**
+  Re-run `npx expo export -p web` after any voice-native change; EXIT 0 = boot-safe.
+- **The character is the gradient/Skia ORB** until the owner-commissioned **Lottie mascot** art
+  (`assets/voice/mascot-{male,female}.json`) is dropped in and `mascotFor()` requires uncommented — then
+  the male/female toggle swaps them with no other change. A hand-authored placeholder looks WORSE than
+  the orb; don't ship one.
+- Voice mode is a full-screen overlay (`src/ui/voice/VoiceMode.tsx`), AppLock-pattern, mounted in
+  `_layout` RootNav at zIndex 50 (< LocationBlock 55 < AppLock 60), back-intercepted. NOT a route (dodges
+  the typed-routes trap). Real mic amplitude = `isMeteringEnabled` + `recorder.getStatus().metering`.
+
 ## Danger zones
 - ⚠️ **`src/app/_layout.tsx` EXPORTS `ErrorBoundary`, and that export is the whole mechanism.**
   expo-router wraps a route in its `Try` boundary **only** if the route module exports

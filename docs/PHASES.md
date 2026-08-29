@@ -14,6 +14,29 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🗣️ 2026-08-29 — NEW TRACK: VOICE ASSISTANT — app-side BUILT + heavy UI redesigned; the backend proxy
+is the only piece left.** The n8n "voice brain" is LIVE (text-in/text-out); the app records → POSTs the
+backend proxy → speaks the reply + navigates. Built + pushed (`aaziko/Shivam` `41dffbb`→`5c03103`; gates
+`tsc` 0 · `npm test` **1254** · `eslint` 0 · web-boot verified after every native add):
+- **Tested pure core** `src/voice/*` (gate/resolve/session/response/routes/registry/dispatch/client) +
+  the **heavy voice mode** `src/ui/voice/*` — full-screen immersive overlay (AppLock pattern, not the
+  bottom sheet), **glossy Skia orb** + real **expo-blur** frosted glass + **Lottie** wired + a
+  **male/female toggle** (persisted), mic-reactive waveform, 5 states, reduced-motion/non-Skia fallback.
+  Added deps: skia 2.6.2 / blur ~57.0.2 / lottie ~7.3.8 (+~10-16 MB, native rebuild). Old
+  `VoiceSheet`/`VoiceAvatar` removed.
+- **Aligned to the LIVE brain contract** — no `confidence` (absent = act), `success` accepted alongside
+  `ok`, a `success:false` speaks its reason but never navigates.
+- **Backend task FILED** to `cgpe-api` (INBOX top): `POST /api/voice/ask` (STT → brain → TTS). Full brief
+  `docs/spec/VOICE-BACKEND-PROXY-BRIEF.md`. **Owner owes the `.env` keys.**
+- **Owner decisions:** full heavy / light glassmorphic; Lottie mascot ART is owner-commissioned (the orb
+  is the character until the `.json` lands in `assets/voice/`); writes DARK (`VOICE_WRITES_ENABLED=false`);
+  **NO APK until the backend proxy + all other tasks — one build at the very end** (the existing EAS
+  account cannot build before 1 Sep — free quota exhausted).
+- ⚠️ **Keep `VoiceMascot.web.tsx` + `voiceGraphics.web.ts` stubs** (the lottie-web-build trap) and never
+  static-import Skia/blur/lottie from a route/boot file — probes + `React.lazy` only.
+
+---
+
 **🚀 2026-08-29 — NEW TRACK: STORE-DEPLOYMENT PROGRAM (App Store + Google Play).** Separate from the
 i18n phases below; driven by the owner's spec `CGPE_Connect_App_Store_Play_Store_Developer_Deployment_Spec.md`.
 An 8-agent read-only audit verified every spec claim against code (0 errors): **the app is ~90% already
@@ -459,7 +482,21 @@ session by design** — Phase 77 is where fixing starts.
 
 **SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
 
-## Next 3 — as of 2026-08-29 (after Phase 85)
+## Next 3 — as of 2026-08-29 (after the VOICE track)
+
+> **🗣️ Voice is now the lead track.** App-side is DONE; the ONE remaining piece is the backend proxy.
+> **Do NOT build an APK yet** — owner: one build at the very end, after the proxy + all other tasks.
+
+1. **Voice go-live — relay the backend proxy ask + confirm it's built.** `POST /api/voice/ask`
+   (STT → the live brain → TTS) is filed at `contracts/INBOX.md` (top, to `cgpe-api`) with the full brief
+   `docs/spec/VOICE-BACKEND-PROXY-BRIEF.md`. The owner owes the `.env` keys (`SARVAM_API_KEY`,
+   `CGPE_VOICE_SECRET` = the `vbk_` value, optional ElevenLabs). Until it's live the app records but
+   can't round-trip. Re-read INBOX for the cgpe-api reply.
+2. **When device access exists (pre-1-Sep test APK or the 1-Sep build): device-QA the voice UI** — orb
+   fps + real amplitude, expo-blur on Android, back-intercept, the male/female toggle, reduced-motion.
+   Then the owner commissions the **Lottie mascot** (`assets/voice/mascot-{male,female}.json`) which drops
+   into the orb's slot with no code change. Consider adding **EAS Update** in that build.
+3. **Then the store-deployment / i18n items below** — unchanged.
 
 > **Parallel store-deployment track (opened 2026-08-29):** code-side is done for now; the next moves are
 > **owner/ops** — Apple account, `eas.json submit` creds, FCM key, public privacy/delete pages, store assets,
