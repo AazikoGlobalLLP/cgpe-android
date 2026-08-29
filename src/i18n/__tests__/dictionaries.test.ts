@@ -76,7 +76,12 @@ describe('i18n dictionaries — parity and value quality', () => {
     // screens (`home.openTickets`), rows 13/14 and 47–53 share keys, and one supplied row —
     // `0 clients in process` — was extracted from a source COMMENT and has NO call site, so it
     // deliberately got no key rather than a zero-consumer one.
-    expect(EN_KEYS.length).toBe(361);
+    // Bumped 361 → 430 for the Batch 6c drop (2026-08-29, Phase 84): the More menu (MORE_CATALOGUE
+    // 16 titles + 21 subtitles + `more.openCount` + 5 group headings), the prospect stages (11,
+    // Meeting/Lost reuse stage.*), the notice-board categories (10) and the notify priorities +
+    // audiences (5). CLAUDE-TRANSLATED under the 2026-08-27 waiver (labelled at the code); each
+    // table is wired as a WHOLE unit. Six More rows reuse existing exact-match keys and add none.
+    expect(EN_KEYS.length).toBe(430);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

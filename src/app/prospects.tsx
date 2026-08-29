@@ -20,7 +20,7 @@ import * as api from '@/data/api';
 import type { Prospect } from '@/data/api';
 import { fmtDate } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
-import { useT } from '@/i18n';
+import { useT, type TFn, type TKey } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Recruitment prospects — a schema-agnostic pool, read defensively.
@@ -135,20 +135,24 @@ const niceDate = (raw: string): string => {
  * Mirrors STAGES / STAGE_META in routes/prospects.js, plus the two outreach states that
  * `prospectFlags` can surface through the same field. Anything the data invents beyond
  * this list is still rendered, just title-cased and toned neutral. */
-const STAGE_META: Record<string, { label: string; tone: Tone }> = {
-  not_contacted: { label: 'Not contacted', tone: 'warning' },
-  prospect: { label: 'Prospect', tone: 'neutral' },
-  target: { label: 'Target', tone: 'neutral' },
-  contacted: { label: 'Contacted', tone: 'info' },
-  responded: { label: 'Responded', tone: 'accent' },
-  lead: { label: 'Lead', tone: 'primary' },
-  meeting: { label: 'Meeting', tone: 'primary' },
-  quotation: { label: 'Quotation', tone: 'primary' },
-  documents: { label: 'Documents', tone: 'info' },
-  login: { label: 'Policy login', tone: 'info' },
-  won: { label: 'Won', tone: 'success' },
-  hold: { label: 'Hold', tone: 'warning' },
-  lost: { label: 'Lost', tone: 'danger' },
+// Phase 84 (2026-08-29): each stage carries its i18n KEY, not an English string, resolved with
+// `t()` in `stageLabel` (docs/i18n §6c). Meeting/Lost reuse the lead-pipeline keys `stage.meeting`
+// / `stage.lost`; the rest are `prospect.stage*`. A stage the data invents beyond this list still
+// renders, title-cased and toned neutral.
+const STAGE_META: Record<string, { key: TKey; tone: Tone }> = {
+  not_contacted: { key: 'prospect.stageNotContacted', tone: 'warning' },
+  prospect: { key: 'prospect.stageProspect', tone: 'neutral' },
+  target: { key: 'prospect.stageTarget', tone: 'neutral' },
+  contacted: { key: 'prospect.stageContacted', tone: 'info' },
+  responded: { key: 'prospect.stageResponded', tone: 'accent' },
+  lead: { key: 'prospect.stageLead', tone: 'primary' },
+  meeting: { key: 'stage.meeting', tone: 'primary' },
+  quotation: { key: 'prospect.stageQuotation', tone: 'primary' },
+  documents: { key: 'prospect.stageDocuments', tone: 'info' },
+  login: { key: 'prospect.stageLogin', tone: 'info' },
+  won: { key: 'prospect.stageWon', tone: 'success' },
+  hold: { key: 'prospect.stageHold', tone: 'warning' },
+  lost: { key: 'stage.lost', tone: 'danger' },
 };
 const STAGE_ORDER = Object.keys(STAGE_META);
 const stageRank = (k: string) => {
@@ -156,7 +160,10 @@ const stageRank = (k: string) => {
   return i < 0 ? STAGE_ORDER.length : i;
 };
 const titleise = (s: string) => s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-const stageLabel = (k: string) => STAGE_META[k]?.label ?? titleise(k);
+const stageLabel = (k: string, t: TFn) => {
+  const meta = STAGE_META[k];
+  return meta ? t(meta.key) : titleise(k);
+};
 const stageTone = (k: string): Tone => STAGE_META[k]?.tone ?? 'neutral';
 
 /** The industry / wealth classification, which is what a recruiter reads the pool for. */
@@ -238,7 +245,7 @@ function ProspectRow({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
         style={{ marginHorizontal: 0, paddingHorizontal: spacing.lg, borderRadius: 0 }}
         right={
           <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 120 }}>
-            {stage ? <Pill label={stageLabel(stage)} tone={stageTone(stage)} small /> : null}
+            {stage ? <Pill label={stageLabel(stage, t)} tone={stageTone(stage)} small /> : null}
             {reminders > 0 ? (
               <Txt size={11} color={c.faint} numeric numberOfLines={1}>
                 {num(reminders)} {plural(reminders, 'touch', 'touches')}
@@ -397,7 +404,7 @@ export default function Prospects() {
 
     return [
       { key: 'all', label: t('common.all'), count: rows.length },
-      ...keys.map((k) => ({ key: k, label: stageLabel(k), count: counts.get(k) ?? 0 })),
+      ...keys.map((k) => ({ key: k, label: stageLabel(k, t), count: counts.get(k) ?? 0 })),
     ];
   }, [statusFacets, rows, stage, t]);
 
@@ -537,7 +544,7 @@ export default function Prospects() {
             : health.degraded ? 'cloud-offline-outline' : 'person-add-outline'
       }
       title={
-        stage !== 'all' ? `Nothing loaded is at ${stageLabel(stage)}`
+        stage !== 'all' ? `Nothing loaded is at ${stageLabel(stage, t)}`
           : q.trim() ? `No prospect matches "${q.trim()}"`
             : health.degraded ? 'The prospect pool did not load'
               : 'No prospects in the pool yet'
@@ -682,7 +689,7 @@ export default function Prospects() {
           {selectedStage || selectedTouches > 0 ? (
             <Row style={{ gap: spacing.sm, flexWrap: 'wrap' }}>
               {selectedStage ? (
-                <Pill label={stageLabel(selectedStage)} tone={stageTone(selectedStage)} icon="git-branch-outline" />
+                <Pill label={stageLabel(selectedStage, t)} tone={stageTone(selectedStage)} icon="git-branch-outline" />
               ) : (
                 <Pill label="No stage recorded" tone="neutral" icon="help-circle-outline" />
               )}

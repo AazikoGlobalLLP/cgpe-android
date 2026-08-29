@@ -31,21 +31,24 @@ import { capabilitiesOf } from '@/store/roles';
 import { useAppUi } from '@/store/appUi';
 import { haptics } from '@/lib/haptics';
 import * as api from '@/data/api';
-import { useT } from '@/i18n';
+import { useT, type TKey } from '@/i18n';
 
 type Audience = 'all' | 'selected';
 type Priority = 'low' | 'medium' | 'high';
 type Member = { id: string; name: string; role: string };
 
-const AUDIENCE_OPTIONS: { key: Audience; label: string }[] = [
-  { key: 'all', label: 'Whole team' },
-  { key: 'selected', label: 'Choose people' },
+// Phase 84 (2026-08-29): these tables hold i18n KEYS, resolved to the active language inside the
+// component (docs/i18n §6c). Normal/Urgent deliberately do NOT reuse the task priority.medium /
+// priority.high words — the copy request flags them as different terms in Hindi/Gujarati.
+const AUDIENCE_OPTIONS: { key: Audience; labelKey: TKey }[] = [
+  { key: 'all', labelKey: 'notify.audAll' },
+  { key: 'selected', labelKey: 'notify.audChoose' },
 ];
 
-const PRIORITY_OPTIONS: { key: Priority; label: string }[] = [
-  { key: 'low', label: 'Low' },
-  { key: 'medium', label: 'Normal' },
-  { key: 'high', label: 'Urgent' },
+const PRIORITY_OPTIONS: { key: Priority; labelKey: TKey }[] = [
+  { key: 'low', labelKey: 'notify.prioLow' },
+  { key: 'medium', labelKey: 'notify.prioNormal' },
+  { key: 'high', labelKey: 'notify.prioUrgent' },
 ];
 
 const TITLE_MAX = 120;
@@ -70,6 +73,17 @@ export default function NotifyScreen() {
   const [message, setMessage] = useState('');
   const [audience, setAudience] = useState<Audience>('all');
   const [priority, setPriority] = useState<Priority>('medium');
+
+  // Built here (not at module scope) so the labels can be translated; `t` in the deps relabels
+  // them on a language switch.
+  const priorityOptions = useMemo(
+    () => PRIORITY_OPTIONS.map((o) => ({ key: o.key, label: t(o.labelKey) })),
+    [t],
+  );
+  const audienceOptions = useMemo(
+    () => AUDIENCE_OPTIONS.map((o) => ({ key: o.key, label: t(o.labelKey) })),
+    [t],
+  );
 
   const [roster, setRoster] = useState<Member[] | null>(null);
   const [picking, setPicking] = useState(false);
@@ -211,7 +225,7 @@ export default function NotifyScreen() {
           <View style={{ gap: 8 }}>
             <Txt weight="700" size={13.5} color={c.muted}>Priority</Txt>
             <Segmented
-              options={PRIORITY_OPTIONS}
+              options={priorityOptions}
               value={priority}
               onChange={(v) => { haptics.select(); setPriority(v); }}
               full
@@ -226,7 +240,7 @@ export default function NotifyScreen() {
           <View style={{ gap: 8 }}>
             <Txt weight="700" size={13.5} color={c.muted}>Send to</Txt>
             <Segmented
-              options={AUDIENCE_OPTIONS}
+              options={audienceOptions}
               value={audience}
               onChange={(v) => {
                 haptics.select();
@@ -357,7 +371,7 @@ export default function NotifyScreen() {
             <View style={{ gap: 4, paddingVertical: spacing.sm }}>
               <Row style={{ gap: 8 }}>
                 <Txt weight="800" size={15} style={{ flex: 1 }}>{title.trim() || 'Untitled'}</Txt>
-                {priority === 'high' ? <Pill label="Urgent" tone="danger" small /> : null}
+                {priority === 'high' ? <Pill label={t('notify.prioUrgent')} tone="danger" small /> : null}
               </Row>
               <Txt size={13.5} color={c.muted}>{message.trim()}</Txt>
             </View>

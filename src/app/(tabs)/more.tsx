@@ -15,7 +15,7 @@ import { Sheet } from '@/ui/sheet';
 import { Appear } from '@/ui/motion';
 import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
-import { useT } from '@/i18n';
+import { useT, type TFn, type TKey } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { arrangeMoreSections, useAppUi } from '@/store/appUi';
 import { canViewClients, canViewOwnClients, capabilitiesOf, canViewAs, TIER_THEME } from '@/store/roles';
@@ -98,32 +98,55 @@ const VIEW_OPTIONS: { tier: Tier; label: string; hint: string; icon: IconName }[
  * notify) and the personal local features (viewing-as/my-earnings/payroll). Those render in fixed,
  * role-gated sections and must not be reorderable by a department document (PHASE-26 D-2/D-3).
  */
-const MORE_CATALOGUE: Record<string, { icon: IconName; label: string; value: string; href: Href }> = {
-  leads:          { icon: 'funnel',          label: 'Leads and pipeline',       value: 'Stages',            href: '/(tabs)/leads' },
-  clients:        { icon: 'people',           label: 'Clients',                  value: 'Directory',         href: '/(tabs)/clients' },
-  segments:       { icon: 'pie-chart',        label: 'Segments',                 value: 'Smart lists',       href: '/segments' },
-  families:       { icon: 'home',             label: 'Families',                 value: 'Households',         href: '/families' },
-  premium:        { icon: 'gift',             label: 'Premium and greetings',    value: 'Renewals',          href: '/campaigns' },
-  prospects:      { icon: 'person-add',       label: 'Prospects',                value: 'Recruitment',       href: '/prospects' },
-  'lic-plans':    { icon: 'calculator',       label: 'LIC plans',                value: 'Products',          href: '/lic-plans' },
-  claims:         { icon: 'document-text',    label: 'Claims',                   value: 'Register',          href: '/(tabs)/claims' },
-  tickets:        { icon: 'ticket',           label: 'Tickets',                  value: 'Requests',          href: '/tickets' },
-  reminders:      { icon: 'notifications',    label: 'Reminders and follow-ups', value: 'Due dates',         href: '/reminders' },
-  calendar:       { icon: 'calendar',         label: 'Calendar',                 value: 'Meetings',          href: '/calendar' },
-  attendance:     { icon: 'time',             label: 'My attendance',            value: 'GPS log',           href: '/attendance' },
-  whatsapp:       { icon: 'logo-whatsapp',    label: 'WhatsApp Hub',             value: 'Chats',             href: '/whatsapp' },
-  commissions:    { icon: 'cash',             label: 'Commissions',              value: 'Earnings',          href: '/commissions' },
-  'notice-board': { icon: 'megaphone',        label: 'Notice Board',             value: 'From the firm',     href: '/notice-board' },
-  notes:          { icon: 'journal',          label: 'Notes',                    value: 'Private',           href: '/notes' },
-  kb:             { icon: 'library',          label: 'Knowledge Base',           value: 'Field guide',       href: '/kb' },
-  search:         { icon: 'search',           label: 'Global search',            value: 'Everything',        href: '/search' },
-  contests:       { icon: 'trophy',           label: 'Contests',                 value: 'Leaderboards',      href: '/contests' },
-  profile:        { icon: 'person-circle',    label: 'My profile',               value: '',                  href: '/profile' },
-  settings:       { icon: 'settings',         label: 'Settings',                 value: 'Security, language', href: '/settings' },
-  account:        { icon: 'shield-checkmark', label: 'Account and privacy',      value: 'Data and deletion', href: '/account' },
+/* Since Phase 84 (2026-08-29) each row carries its i18n KEYS, not English strings, so the menu
+ * reads in the user's language (docs/i18n §6c). `titleKey`/`subKey` are resolved with `t()` at the
+ * point the Entry is built below. Six titles reuse existing exact-match keys — `tab.clients`,
+ * `tab.claims`, `common.tickets`, `act.calendar`, `act.contests`, `settings.title` — so the menu
+ * label stays in step with the tab bar / quick actions rather than inventing a second word for the
+ * same noun. `profile` has no subKey (its value is overridden with the user's name below). */
+const MORE_CATALOGUE: Record<string, { icon: IconName; titleKey: TKey; subKey?: TKey; href: Href }> = {
+  leads:          { icon: 'funnel',          titleKey: 'more.leadsTitle',       subKey: 'more.leadsSub',       href: '/(tabs)/leads' },
+  clients:        { icon: 'people',           titleKey: 'tab.clients',           subKey: 'more.clientsSub',     href: '/(tabs)/clients' },
+  segments:       { icon: 'pie-chart',        titleKey: 'more.segmentsTitle',    subKey: 'more.segmentsSub',    href: '/segments' },
+  families:       { icon: 'home',             titleKey: 'more.familiesTitle',    subKey: 'more.familiesSub',    href: '/families' },
+  premium:        { icon: 'gift',             titleKey: 'more.premiumTitle',     subKey: 'more.premiumSub',     href: '/campaigns' },
+  prospects:      { icon: 'person-add',       titleKey: 'more.prospectsTitle',   subKey: 'more.prospectsSub',   href: '/prospects' },
+  'lic-plans':    { icon: 'calculator',       titleKey: 'more.licTitle',         subKey: 'more.licSub',         href: '/lic-plans' },
+  claims:         { icon: 'document-text',    titleKey: 'tab.claims',            subKey: 'more.claimsSub',      href: '/(tabs)/claims' },
+  tickets:        { icon: 'ticket',           titleKey: 'common.tickets',        subKey: 'more.ticketsSub',     href: '/tickets' },
+  reminders:      { icon: 'notifications',    titleKey: 'more.remindersTitle',   subKey: 'more.remindersSub',   href: '/reminders' },
+  calendar:       { icon: 'calendar',         titleKey: 'act.calendar',          subKey: 'more.calendarSub',    href: '/calendar' },
+  attendance:     { icon: 'time',             titleKey: 'more.attendanceTitle',  subKey: 'more.attendanceSub',  href: '/attendance' },
+  whatsapp:       { icon: 'logo-whatsapp',    titleKey: 'more.whatsappTitle',    subKey: 'more.whatsappSub',    href: '/whatsapp' },
+  commissions:    { icon: 'cash',             titleKey: 'more.commissionsTitle', subKey: 'more.commissionsSub', href: '/commissions' },
+  'notice-board': { icon: 'megaphone',        titleKey: 'more.noticeTitle',      subKey: 'more.noticeSub',      href: '/notice-board' },
+  notes:          { icon: 'journal',          titleKey: 'more.notesTitle',       subKey: 'more.notesSub',       href: '/notes' },
+  kb:             { icon: 'library',          titleKey: 'more.kbTitle',          subKey: 'more.kbSub',          href: '/kb' },
+  search:         { icon: 'search',           titleKey: 'more.searchTitle',      subKey: 'more.searchSub',      href: '/search' },
+  contests:       { icon: 'trophy',           titleKey: 'act.contests',          subKey: 'more.contestsSub',    href: '/contests' },
+  profile:        { icon: 'person-circle',    titleKey: 'more.profileTitle',                                    href: '/profile' },
+  settings:       { icon: 'settings',         titleKey: 'settings.title',        subKey: 'more.settingsSub',    href: '/settings' },
+  account:        { icon: 'shield-checkmark', titleKey: 'more.accountTitle',     subKey: 'more.accountSub',     href: '/account' },
 };
 /** Catalogue keys in declaration order — the module universe `arrangeMoreSections` may place. */
 const MORE_KEYS = Object.keys(MORE_CATALOGUE);
+
+/* The content-group SECTION HEADINGS come from the server's nav.more_sections (or DEFAULT_UI when a
+ * role is unseeded — the prod reality), so they are strings, not keys. This maps the known default
+ * headings to i18n keys so the rows do not sit under an English header; an unrecognised (custom
+ * server) title falls through untranslated, and the "More" catch-all reuses `tab.more`. */
+const MORE_SECTION_TITLE_KEYS: Record<string, TKey> = {
+  'The book': 'more.groupBook',
+  'Day to day': 'more.groupDayToDay',
+  'Board': 'more.groupBoard',
+  'Reference': 'more.groupReference',
+  'You': 'more.groupYou',
+  'More': 'tab.more',
+};
+const sectionTitle = (raw: string, t: TFn): string => {
+  const key = MORE_SECTION_TITLE_KEYS[raw];
+  return key ? t(key) : raw;
+};
 
 export default function More() {
   const c = useTheme();
@@ -266,7 +289,7 @@ export default function More() {
     MORE_KEYS,
     isHidden,
   ).map((g) => ({
-    title: g.title,
+    title: sectionTitle(g.title, t),
     items: g.keys.flatMap((key): Entry[] => {
       // Point 9: drop the client-book modules for a team-tier user. 'premium' routes to
       // /campaigns, whose audience preview shows client names + phones from the whole book.
@@ -274,18 +297,23 @@ export default function More() {
       if (!canBook && (key === 'segments' || key === 'families' || key === 'premium')) return [];
       const cat = MORE_CATALOGUE[key];
       if (!cat) return [];   // key came from MORE_KEYS, so always defined; guarded for safety
-      if (key === 'profile') return [{ ...cat, value: user.name, navKey: key }];
+      // Phase 84: the catalogue holds i18n keys, resolved to the active language here.
+      const label = t(cat.titleKey);
+      const value = cat.subKey ? t(cat.subKey) : '';
+      const icon = cat.icon;
+      const href = cat.href;
+      if (key === 'profile') return [{ icon, label, value: user.name, href, navKey: key }];
       if (key === 'tickets') {
         // Silence rather than a fabricated zero when the count did not come back.
         return [{
-          ...cat,
-          value: openTickets > 0 ? `${openTickets} open` : cat.value,
+          icon, label, href,
+          value: openTickets > 0 ? t('more.openCount', { count: openTickets }) : value,
           tone: openTickets > 0 ? ('primary' as Tone) : undefined,
           numeric: openTickets > 0,
           navKey: key,
         }];
       }
-      return [{ ...cat, navKey: key }];
+      return [{ icon, label, value, href, navKey: key }];
     }),
   }));
 

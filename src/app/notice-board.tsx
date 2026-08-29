@@ -16,7 +16,7 @@ import { haptics } from '@/lib/haptics';
 import { fmtDate, fmtDay, fmtTime, timeAgo } from '@/lib/format';
 import { getHealth } from '@/data/health';
 import * as api from '@/data/api';
-import { useT } from '@/i18n';
+import { useT, type TFn, type TKey } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Notice Board — the firm talking to the field. READ ONLY.
@@ -61,21 +61,24 @@ type NoticeRow = api.CompanyNotice & {
 
 type CatMeta = { label: string; group: string; tone: Tone; icon: IconName };
 
-const CATEGORY: Record<string, CatMeta> = {
-  event: { label: 'Event', group: 'Events', tone: 'accent', icon: 'calendar-outline' },
-  meeting: { label: 'Meeting', group: 'Meetings', tone: 'info', icon: 'people-outline' },
-  announcement: { label: 'Announcement', group: 'Announcements', tone: 'primary', icon: 'megaphone-outline' },
-  policy: { label: 'Policy', group: 'Policy updates', tone: 'warning', icon: 'document-text-outline' },
-  holiday: { label: 'Holiday', group: 'Holidays', tone: 'success', icon: 'sunny-outline' },
+// Phase 84 (2026-08-29): CATEGORY holds i18n KEYS (chip label + section heading), resolved to the
+// active language by catMeta(key, t) (docs/i18n §6c). The fallback for an unrecognised server
+// category stays a literal — there is no key to translate an arbitrary value.
+const CATEGORY: Record<string, { labelKey: TKey; groupKey: TKey; tone: Tone; icon: IconName }> = {
+  event: { labelKey: 'notice.eventLabel', groupKey: 'notice.eventGroup', tone: 'accent', icon: 'calendar-outline' },
+  meeting: { labelKey: 'notice.meetingLabel', groupKey: 'notice.meetingGroup', tone: 'info', icon: 'people-outline' },
+  announcement: { labelKey: 'notice.announcementLabel', groupKey: 'notice.announcementGroup', tone: 'primary', icon: 'megaphone-outline' },
+  policy: { labelKey: 'notice.policyLabel', groupKey: 'notice.policyGroup', tone: 'warning', icon: 'document-text-outline' },
+  holiday: { labelKey: 'notice.holidayLabel', groupKey: 'notice.holidayGroup', tone: 'success', icon: 'sunny-outline' },
 };
 
 /** Reading order of the board. Anything unrecognised falls in after these. */
 const GROUP_ORDER = ['event', 'meeting', 'announcement', 'policy', 'holiday'];
 
-function catMeta(key: string): CatMeta {
-  return CATEGORY[key] ?? {
-    label: key || 'Notice', group: 'Other notices', tone: 'neutral', icon: 'information-circle-outline',
-  };
+function catMeta(key: string, t: TFn): CatMeta {
+  const c = CATEGORY[key];
+  if (c) return { label: t(c.labelKey), group: t(c.groupKey), tone: c.tone, icon: c.icon };
+  return { label: key || 'Notice', group: 'Other notices', tone: 'neutral', icon: 'information-circle-outline' };
 }
 
 const noticeId = (n: NoticeRow): string => String(n._id ?? n.id ?? n.noticeId ?? '');
@@ -189,7 +192,7 @@ export default function NoticeBoard() {
     const extra = [...tally.keys()].filter((k) => !GROUP_ORDER.includes(k));
     return [
       { key: 'all', label: t('common.all') },
-      ...[...known, ...extra].map((k) => ({ key: k, label: catMeta(k).group, count: tally.get(k) })),
+      ...[...known, ...extra].map((k) => ({ key: k, label: catMeta(k, t).group, count: tally.get(k) })),
     ];
   }, [notices, t]);
 
@@ -223,10 +226,10 @@ export default function NoticeBoard() {
       ...GROUP_ORDER.filter((k) => buckets.has(k)),
       ...[...buckets.keys()].filter((k) => !GROUP_ORDER.includes(k)),
     ];
-    keys.forEach((k) => out.push({ key: k, title: catMeta(k).group, rows: buckets.get(k) ?? [] }));
+    keys.forEach((k) => out.push({ key: k, title: catMeta(k, t).group, rows: buckets.get(k) ?? [] }));
 
     return out;
-  }, [notices, cat]);
+  }, [notices, cat, t]);
 
   const shownCount = groups.reduce((n, g) => n + g.rows.length, 0);
 
@@ -240,7 +243,7 @@ export default function NoticeBoard() {
   ) : cat !== 'all' ? (
     <EmptyState
       icon="funnel-outline"
-      title={`Nothing under ${catMeta(cat).group}`}
+      title={`Nothing under ${catMeta(cat, t).group}`}
       subtitle="Other parts of the board still have notices on them."
       action={{ label: 'Show the whole board', onPress: () => { haptics.select(); setCat('all'); } }}
     />
@@ -345,7 +348,8 @@ function NoticeLine({ notice, now, onOpen }: {
   notice: NoticeRow; now: number; onOpen: () => void;
 }) {
   const c = useTheme();
-  const meta = catMeta(noticeCat(notice));
+  const t = useT();
+  const meta = catMeta(noticeCat(notice), t);
   const ev = eventAt(notice);
   const token = ev ? eventToken(ev, now) : null;
   const posted = postedAt(notice);
@@ -402,9 +406,10 @@ function NoticeSheet({ visible, notice, now, onClose }: {
   visible: boolean; notice: NoticeRow | null; now: number; onClose: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
   if (!notice) return null;
 
-  const meta = catMeta(noticeCat(notice));
+  const meta = catMeta(noticeCat(notice), t);
   const ev = eventAt(notice);
   const evToken = ev ? eventToken(ev, now) : null;
   const posted = postedAt(notice);
