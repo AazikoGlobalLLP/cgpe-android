@@ -101,6 +101,13 @@ export function setCurrentUser(id: string | null, name?: string | null) {
   else pendingBus.resetPending();
 }
 export function isRealSession() { return sessionReal; }
+/**
+ * Read the current bearer token — for the ONE caller that needs to attach it to a request this module
+ * does not make itself: the voice client's multipart POST to `/api/voice/ask` (`src/voice/client.ts`),
+ * which cannot go through `req()` (that hardcodes `application/json`, which corrupts a multipart body).
+ * Everything else must keep going through `req()`; this is a read-only accessor, never a second auth path.
+ */
+export function getAuthToken(): string | null { return authToken; }
 
 /**
  * Why a write did not land. PHASE 1.
