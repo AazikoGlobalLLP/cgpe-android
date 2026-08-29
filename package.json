@@ -1,7 +1,7 @@
 {
   "name": "android",
   "main": "expo-router/entry",
-  "version": "1.8.0",
+  "version": "1.10.0",
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo/vector-icons": "^15.0.2",

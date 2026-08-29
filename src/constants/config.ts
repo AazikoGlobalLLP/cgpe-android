@@ -30,7 +30,10 @@ export const APP = {
   tagline: 'Khushiyo Ka Financial Planner',
   org: 'C.G.P.E LLP',
   since: 'Since 1989',
-  version: '1.8.0',
+  // Must match app.json `expo.version` (the store marketing version). This is the string the in-app
+  // About/Settings screen shows; it read '1.8.0' while app.json shipped 1.10.0, so the app told the
+  // user a different version than the build it was running (release-audit 2026-08-29).
+  version: '1.10.0',
 };
 
 /** true = skip every network call and resolve straight to each call's honest-empty result
