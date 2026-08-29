@@ -716,9 +716,21 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   `docs/PHASES.md`; do not re-litigate): a value **persisted to AsyncStorage** (`home.tsx` `place`);
   strings that are **backend DATA** (task `CATEGORIES` are sent as `category`, icon-map keys are
   looked up — translating writes Gujarati into the DB and breaks every filter); **module-scope label
-  tables** (`MORE_CATALOGUE`, prospects `STAGE_META`, notice-board `CATEGORY`, campaigns
-  `KIND_LABEL`, notify options — wiring the 1–2 entries that have keys yields a **navigation menu in
-  two languages**, worse than one, so they go to the owner whole); **module-scope date formatters**;
+  tables** (wiring the 1–2 entries that have keys yields a **navigation menu in two languages**,
+  worse than one — translate the WHOLE table or none of it).
+  ✅ **PHASE 84 (2026-08-29) TRANSLATED FOUR OF THESE WHOLE, with keys (Batch 6c, `62e9d8c`):**
+  `MORE_CATALOGUE` (→ `titleKey`/`subKey`; 6 titles REUSE `tab.clients`/`tab.claims`/`common.tickets`/
+  `act.calendar`/`act.contests`/`settings.title`), prospects `STAGE_META` (`stageLabel(k, t)`;
+  Meeting/Lost reuse `stage.*`), notice-board `CATEGORY` (`catMeta(key, t)`), and notify options
+  (`useMemo([t])`). **Still whole-table English:** campaigns `KIND_LABEL`.
+  ⚠️ **A module-scope MENU'S GROUP/SECTION TITLES MAY BE SERVER DATA, not hardcoded — translate the
+  rows without them and you ship translated rows under English headers.** `MORE_CATALOGUE`'s content-
+  group headings ("The book"/"Day to day"/…) come from `DEFAULT_UI.nav.more_sections` in `store/appUi.tsx`;
+  Phase 84 added a `MORE_SECTION_TITLE_KEYS` title→key map + `sectionTitle(raw,t)` in `more.tsx` (custom
+  server titles fall through; the "More" catch-all reuses `tab.more`). Check the group titles' SOURCE first.
+  🔑 **`home.tsx` has a PARALLEL nav catalogue** (widget quick-nav tiles + `w.title ?? 'Prospects'`) with
+  labels identical to `MORE_CATALOGUE` — the next free win, wire-able by REUSING the `more.*` keys (peer-
+  check; danger-zone file). The other module-scope no-sweep reasons stand: **module-scope date formatters**;
   the four strings in `api.ts`/`tracker.ts`/`calendar.ts`/`config.ts` where **there is no non-React
   translator** (the active language lives in provider state); and `ui/LeafletMap.tsx:299` where **`t`
   is a local time string**.

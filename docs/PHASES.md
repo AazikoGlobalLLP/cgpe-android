@@ -14,6 +14,35 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-29 — PHASE 84: THE MORE MENU AND ITS THREE SIBLING LABEL TABLES NOW READ IN ALL FIVE
+LANGUAGES (i18n Batch 6c).** Gates: `tsc` **0** · `npm test` **1076** (unchanged — no new logic) ·
+`npx eslint` cache-free **0 errors** (2 pre-existing warnings) · orphan scan **17 (unchanged)**.
+Commit `62e9d8c`, `aaziko/Shivam`. CLAUDE-translated under the 2026-08-27 waiver (labelled
+provisional at the code). **+69 keys × 5 (parity 361 → 430). Nothing reworded.** Device-unverified;
+no APK before 1 Sep.
+- **The module-scope "tables" — deferred because wiring only their few pre-existing keys would
+  half-translate a menu — are translated as WHOLE units.** `MORE_CATALOGUE` (22 rows → `titleKey`/
+  `subKey`; 6 titles REUSE exact-match `tab.clients`/`tab.claims`/`common.tickets`/`act.calendar`/
+  `act.contests`/`settings.title`), prospect `STAGE_META` (13; Meeting/Lost reuse `stage.*`;
+  `stageLabel(k, t)`), notice-board `CATEGORY` (`catMeta(key, t)`), notify priorities/audiences
+  (built in-component via `useMemo([t])`).
+- **⚠️ THE CONTENT-GROUP SECTION HEADINGS ARE SERVER DATA.** "The book" / "Day to day" / "Board" /
+  "Reference" / "You" come from `DEFAULT_UI.nav.more_sections`, not a hardcoded list — so a
+  `MORE_SECTION_TITLE_KEYS` title→key map + `sectionTitle(raw, t)` translates them, or the rows sit
+  under English headers. A custom server title falls through untranslated; the "More" catch-all
+  reuses `tab.more`. **General trap: a menu's group titles may be server-driven — check before
+  assuming the row keys suffice.**
+- **The fixed admin oversight group, the Personal group and the About section stay ENGLISH on
+  purpose** — separate non-catalogue constructs (PHASE-26 D-2/D-3), not part of 6c's ~70.
+- **🔑 NEXT FREE WIN (exact-match scan found it):** `home.tsx` has a parallel module-scope nav
+  catalogue with labels IDENTICAL to `MORE_CATALOGUE` (Families / Commissions / My attendance /
+  Prospects / Notice board / Knowledge base / Campaigns) — wire-able by REUSING the new `more.*`
+  keys. Do NOT wire the `api.ts` "New Lead"/"in progress" hits (backend data).
+
+---
+
+## Superseded — Now, as of 2026-08-27 (after Phase 83)
+
 **✅ 2026-08-27 (night) — PHASE 83: THE OWNER CLEARED FOUR OF THEIR OWN BLOCKERS IN ONE MESSAGE, AND
 ALL FOUR ARE BUILT.** Gates: `tsc` **0** · `npm test` **1076** (+7) · `eslint` **0 errors**
 cache-free on every touched file. Device-unverified; no APK before 1 Sep.
@@ -370,7 +399,36 @@ session by design** — Phase 77 is where fixing starts.
 
 **SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
 
-## Next 3 — as of 2026-08-27 (after Phase 83)
+## Next 3 — as of 2026-08-29 (after Phase 84)
+
+1. **Phase 85 — either Batch 6b (41 outage sentences, 54 places) OR the `home.tsx` nav-catalogue
+   free win first.** 6b names *what* failed at each site, so they are translated individually, never
+   collapsed into `common.offlineBody` (CLAUDE.md #4). **The free win:** `home.tsx` has a parallel
+   module-scope nav catalogue (widget quick-nav tiles + `w.title ?? 'Prospects'`) whose labels are
+   IDENTICAL to `MORE_CATALOGUE` — wire it by REUSING the new `more.*` keys (peer-check first; it is
+   the 2534-line danger-zone file). Do NOT wire the `api.ts` "New Lead"/"in progress" hits — backend
+   data. **Then** the ~6 single-word scan candidates, peers checked first.
+2. **Relay the server asks — still FOUR, NOT re-verified this session (no code touched them):**
+   backend Phase 94 not deployed (`origin/main` = `990c660` as of Phase 83); `cloudStorageConfigured:
+   false`; `cgpe.in` has **no AAAA record**; and **let any authenticated user create a `team_task`
+   assigned to themselves** (filed at the foot of `INBOX.md`). **Re-verify before repeating any of
+   these.** Also NEW and unactioned: `cgpe-api`'s 2026-08-27 INBOX item asking the app to adopt the
+   **presigned MinIO upload flow** (presign → PUT → `storage_key` → download-url) — inert until OPS
+   sets `S3_*`, so app-side work but device-dead for now; box still `[ ]`. **Do not name the bucket
+   `uploads`.**
+3. **Phase 86 — the APK, on or after 1 Sep 2026.** First build to carry Phases 77–85. **Carry EAS
+   Update in it.** ⚠️ An Expo account switch WOULD beat the quota but issues a NEW KEYSTORE — all 21
+   handsets would have to uninstall and lose their session. Not worth five days.
+
+**Still NOT built, and named so nobody reads them as done:** "tasks tab ke andar active claims"
+(ops) and "… leads and prospects" (sales) are net-new SCREEN features. The rest of request-Batch-5
+(`session.*`, `net.*`, `biometric.prompt`, `login.codeSent*`) is blocked by architecture — no React
+translator in those modules. The More screen's fixed admin/Personal/About chrome stays English (out
+of 6c). Voice is untouched and owner-blocked at its ₹0 ten-minute test.
+
+---
+
+## Superseded — Next 3 as of 2026-08-27 (after Phase 83)
 
 1. **Phase 84 — Batch 6c, the More menu and the other label tables (~70).** The app's main
    navigation and the highest-value block left. **It needs a small refactor first:**

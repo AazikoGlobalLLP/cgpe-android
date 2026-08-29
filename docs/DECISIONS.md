@@ -4899,3 +4899,40 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   non-React modules (`api.ts`, `tracker.ts`, `calendar.ts`, `config.ts`), module-scope tables and
   date formatters, and code comments. Roughly six single-word candidates remain and each needs its
   on-screen peers checked first. A scan hit is a candidate, not a fix.
+
+## 2026-08-29 (Phase 84) — i18n Batch 6c: the More menu + the sibling label tables
+
+- **Batch 6c is the continuation of the 2026-08-27 waiver, not a new grant.** The owner overrode
+  the machine-translation ban in writing for the remaining translation work; the owner said "go" on
+  a boot plan that named the waiver explicitly. The 69 new keys sit in a labelled **provisional**
+  "Batch 6c" block in each of the five dictionaries (same treatment as the 6f/6d/6e block), and a
+  native reader is asked to review. The risk PHASE-19 §4 names (the parity test proves a value
+  exists in five languages, never that it is correct) is **accepted and labelled**, not hidden.
+- **Translate module-scope "tables" as WHOLE units.** `MORE_CATALOGUE` (22 rows), prospect
+  `STAGE_META` (13), notice-board `CATEGORY` (5×2), notify priorities/audiences (5) each supply a
+  whole menu or every chip on a screen; wiring only their few pre-existing keys would half-translate
+  the menu, which reads worse than all-English. This is why they were deferred and why they are done
+  together now.
+- **Reuse exact-match keys; never mint a duplicate that could drift into a second word for one
+  noun.** Six More titles reuse `tab.clients`/`tab.claims`/`common.tickets`/`act.calendar`/
+  `act.contests`/`settings.title`; prospect Meeting/Lost reuse `stage.meeting`/`stage.lost`. This is
+  the same discipline that keeps the owner's flagged "two Gujarati words for Clients" problem from
+  spreading. `premium.title` was NOT reused — its English ("Premium & Greetings") differs from the
+  menu's ("Premium and greetings"), and reuse would have **reworded** English. This phase translates;
+  it never rewords.
+- **The More content-group section titles are SERVER DATA and had to be translated too.** "The
+  book" / "Day to day" / "Board" / "Reference" / "You" come from `DEFAULT_UI.nav.more_sections` (or a
+  seeded role doc), not a hardcoded list. Translating the rows alone leaves English headers over
+  translated rows. Fixed with a `MORE_SECTION_TITLE_KEYS` title→key map + `sectionTitle(raw, t)`; an
+  unrecognised custom server title falls through untranslated, and the "More" catch-all reuses
+  `tab.more`. **General trap: a module-scope menu's group/section titles may be server-driven — check
+  before assuming the row keys are enough.**
+- **The fixed admin/Personal/About chrome on the More screen stays English on purpose.** It is a
+  separate non-catalogue construct (PHASE-26 D-2/D-3), not part of 6c's ~70, and translating it means
+  threading `t()` through role-gated conditional row logic — a different change, deferred.
+- **A module-scope helper cannot call a hook — pass `t` in.** `stageLabel(k, t)` and
+  `catMeta(key, t)` take the translator as an argument; notify's option arrays are rebuilt in-component
+  via `useMemo([t])` like login's MODES. `notice-board`'s `groups` useMemo needed `t` added to its dep
+  array (the standing dep-array trap — `tsc`+tests were green without it; only cache-free eslint sees it).
+- **Gates:** `tsc` 0 · `npm test` 1076 · `npx eslint` cache-free 0 errors (2 pre-existing warnings) ·
+  orphan scan 17 (unchanged — every new key has a consumer). Commit `62e9d8c`, `aaziko/Shivam`.
