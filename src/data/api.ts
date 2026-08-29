@@ -37,6 +37,9 @@ import { expireSession, resetSessionGuard } from '@/lib/session';
 // `nbsp` is the house guarantee that a value never wraps between its number and its unit.
 import { nbsp } from '@/lib/format';
 import { humanApiMessage } from '@/lib/apiMessage';
+// Voice multi-turn context is module-scope per-user state that a storage purge does not touch — same
+// shared-handset class as `state`/`clientCache` below, so it is torn down in `resetApiState()` too.
+import { resetVoiceSession } from '@/voice/session';
 import { reportFailure, reportSuccess } from './health';
 // PHASE 57a — offline read cache. The freshness bus drives the "Synced <time>" chip without
 // changing any read's return type; `offlineStore` is the device I/O over the pure `offlineCache`.
@@ -355,6 +358,7 @@ export function resetApiState() {
   clientCache.clear();
   claimCache.clear();
   waThreadCache.clear();
+  resetVoiceSession();
 }
 
 /* ------------------------------------------------------------------- Tasks */
