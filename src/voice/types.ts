@@ -3,9 +3,20 @@
  * decision layer (gate, resolve, session, registry) stays inside the Vitest graph without a stub.
  */
 import type { Gate } from '@/voice/gate';
+import type { VoiceRoute } from '@/voice/routes';
 
 /** What a voice verb does. Writes ALWAYS require a confirm tap; reads execute directly (§7). */
 export type IntentKind = 'read' | 'write' | 'navigate';
+
+/**
+ * The api.ts write functions a voice WRITE intent may dispatch to. Deliberately tiny — only the three
+ * additive/queueable creates whose one-attempt + idempotency-key + offline-queue substrate is already
+ * built and tested. A name here is a string TAG the registry stays native-free with; `dispatch.ts`
+ * resolves it to the real function (so the registry never imports `api.ts`). Clock-in/out are NOT
+ * here — they are `navigate` intents that open the home clock control so the geofence + reason sheets
+ * run; a spoken clock-in must never bypass a compliance prompt.
+ */
+export type WriteApiFn = 'addNote' | 'addTask' | 'addLead';
 
 /**
  * The NLU's ONLY output. The model picks the verb and its args; it never composes the answer, never
@@ -87,4 +98,8 @@ export type VoiceIntent = {
   /** Does resolving this verb need a named entity (person/client)? */
   needsEntity: boolean;
   offline: OfflineTier;
+  /** For kind 'navigate': the route to open (must be in the `routes.ts` allow-list). */
+  route?: VoiceRoute;
+  /** For kind 'write': which api.ts create dispatch will call (v1: execution feature-flagged OFF). */
+  write?: WriteApiFn;
 };
