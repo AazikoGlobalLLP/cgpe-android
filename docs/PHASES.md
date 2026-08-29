@@ -14,6 +14,40 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🔑 2026-08-29 — PHASE 86 IS NEXT: ADOPT THE PRESIGNED MinIO UPLOAD FLOW. A full read-only audit found
+a fully-specified, sibling-owed item that NOBODY HAD STARTED and that was not on this board.** Gates
+re-run live this session (not quoted): `tsc` **0** · `npm test` **1254 / 77 files** · dictionary **446
+keys** · orphans **18**. HEAD == `aaziko/Shivam`. **This audit session wrote NO code.**
+- **THE FINDING.** `contracts/INBOX.md` (2026-08-27, from `cgpe-api` Phase 95) hands the app the whole
+  presigned upload contract — `POST /upload/presign` → signed `PUT` → `POST /file-attachments` with
+  `storage_key` → render via `GET /upload/download-url?key=…`. Its `cgpe-mobile` status box is
+  **UNTICKED**, and `grep -rn "presign\|storage_key\|download-url" src/` returns **ZERO hits**: the app
+  is still on the old multipart `/upload` + `/file-attachments` path. It sat unnoticed for two days.
+- **WHY IT JUMPS THE QUEUE.** It is the only outstanding item that is owed to a sibling in writing,
+  completely specified, buildable today with **no owner input**, and the actual fix for the owner's #1
+  field complaint ("documents vanish"). The i18n residue is owner-copy-blocked; the store track is
+  account/fee-blocked.
+- **SAFE TO SHIP EARLY.** All three routes answer `503 not_configured` until OPS sets `S3_*`, so
+  adopting the flow now is inert — the same reasoning that made sending `entity_id` early safe.
+- ⚠️ **THE TWO TRAPS, both from the contract itself:** **store the KEY, never the URL** (signed URLs
+  expire in 300 s, so a persisted one ships a dead link); and the `PUT` is **signed against the exact
+  `Content-Type` that `presign` returned** — any other value, or omitting the header, **403s at MinIO**.
+- **LIVE PRODUCTION FACTS re-verified this session** (probe, don't quote): `/health` → **200 ~40 ms** ·
+  `/upload` → **`cloudStorageConfigured: false`** (storage still OFF) · `POST /voice/ask` → **404** (the
+  voice proxy does not exist yet) · backend `origin/main` = **`990c660`**, so Phases 94 **and** 95 are
+  **NOT deployed** · latest EAS build still **`093a3b33` (25 Aug)** with **76 commits (40 in `src/`)**
+  landed since — nothing from 26–29 Aug is on any phone.
+- **Owner deliverable shipped:** `docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md` — a zero-jargon 5-day update
+  scoped to exactly the points the owner dictated. It deliberately OMITS storage/deploy/blank-screen/
+  role-matrix **on instruction**; do not "complete" it by adding them.
+- **🔑 NEXT 3:** (1) **Phase 86**, above — first command `npm test`, then
+  `grep -n "presign" ../contracts/INBOX.md`; tick the `cgpe-mobile` box after and grep the reply back.
+  (2) **Voice go-live** — blocked on the backend building `POST /api/voice/ask` (404 today).
+  (3) **The 1-Sep APK** — carries i18n Phases 80–85, the boundary fix (needs its device walk-through),
+  the version reconcile and the whole voice track; consider adding EAS Update (OTA) in that same build.
+
+---
+
 **🗣️ 2026-08-29 — NEW TRACK: VOICE ASSISTANT — app-side BUILT + heavy UI redesigned; the backend proxy
 is the only piece left.** The n8n "voice brain" is LIVE (text-in/text-out); the app records → POSTs the
 backend proxy → speaks the reply + navigates. Built + pushed (`aaziko/Shivam` `41dffbb`→`5c03103`; gates

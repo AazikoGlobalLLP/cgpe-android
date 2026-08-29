@@ -5027,3 +5027,47 @@ store-release evidence. Gates green: `tsc` 0 · `npm test` 1084 · `eslint` 0.
 - **No APK yet — one build at the very end** (owner), after the backend proxy + all other tasks. Existing
   EAS account cannot build before 1 Sep (free quota exhausted); recommend the 1-Sep build (same keystore).
 - Commits (aaziko/Shivam): voice logic + UI `41dffbb`→`5c03103`. Gates: tsc 0 · npm test 1254 · eslint 0 · web-boot verified.
+
+## 2026-08-29 — Phase 86 audit: the presigned MinIO upload item is OPEN and unstarted; it becomes the next phase
+
+**Context.** A full read-only audit re-verified every gate and probed production live rather than
+quoting docs. Gates: `tsc` 0 · `npm test` 1254/77 files · dictionary 446 keys · orphans 18.
+
+**What the live probes said (all re-verified 2026-08-29, none copied from an earlier note):**
+- `GET /internal/api/health` → 200 in ~40 ms.
+- `GET /internal/api/upload` → `cloudStorageConfigured: false` — storage still OFF in prod.
+- `POST /internal/api/voice/ask` → 404 — the voice backend proxy does not exist yet.
+- backend `origin/main` = `990c660`; Phase 94 (`fda199c`) and Phase 95 are NOT deployed.
+- latest EAS build is still `093a3b33` (25 Aug); **76 commits (40 touching `src/`) have landed since**.
+
+**The finding that changed the plan.** `contracts/INBOX.md` carries a 2026-08-27 item from `cgpe-api`
+(Phase 95) handing the app the full **presigned MinIO upload contract** — `POST /upload/presign` →
+signed `PUT` → record `storage_key` → render via `GET /upload/download-url`. Its `cgpe-mobile` status
+box is **unticked**, and `grep -rn "presign\|storage_key\|download-url" src/` returns **zero hits**:
+the app is still on the old multipart `/upload` + `/file-attachments` path. It was not on PHASES'
+`## Now` either — so a fully-specified, sibling-owed, owner-visible fix had gone unnoticed for two days.
+
+**Decision — Phase 86 is that adoption, ahead of more i18n.** It is the only outstanding item that is
+owed to a sibling session in writing, completely specified, buildable today with no owner input, and
+the real fix for the owner's #1 field complaint ("documents vanish"). The i18n residue is all
+owner-copy-blocked; the store track is all account/fee-blocked. **Ship it even though `S3_*` is unset
+in prod** — the three routes answer `503 not_configured` until OPS sets the env, so adopting early is
+inert-safe, the same reasoning that made sending `entity_id` early safe against the old build.
+
+**Decision — preserve a concurrent session's HANDOFF instead of overwriting it.** HEAD moved
+`5c03103` → `12bdaf7` *during* this session; the parallel voice-track session had just committed its
+handoff. `/handoff` says overwrite, but that snapshot is the only record of the Skia/Lottie/web-stub
+traps. It is archived verbatim at the foot of `docs/HANDOFF.md`. **Satisfying a template is not worth
+destroying a sibling session's only record.**
+
+**Decision — the owner status doc is deliberately narrower than the audit.** The owner scoped
+`docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md` to a fixed point list for a non-technical reader, in a
+respectful `aap` register, with zero technical terms. MinIO/storage, the backend deploy gap, the
+blank-screen bug and the role matrix were **left out on instruction**, not forgotten — they remain in
+`docs/OWNER-ACTIONS-2026-08-27.md`. Do not "complete" that document by adding them.
+
+**Operational note — verify an artifact URL before handing it to the owner.** The first page published
+this session went dead within minutes (absent from `action: list`). Re-published and confirmed listed
+before sharing. A parallel session had also published its own owner-facing page on the same account
+(`CGPE Connect Panch Din Ka Kaam`); it was **left untouched** and the choice handed to the owner
+rather than overwritten.

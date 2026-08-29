@@ -1,3 +1,97 @@
+# HANDOFF — CGPE Connect (Android) — Phase 86 (project audit + owner status doc) — 2026-08-29
+
+> ⚠️ **THIS SESSION WROTE NO CODE.** It was a full read-only audit plus one owner-facing document.
+> `src/` is untouched; the only new file is `docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md`.
+>
+> ⚠️ **A CONCURRENT SESSION IS COMMITTING IN THIS SAME CHECKOUT.** HEAD moved `5c03103` → `12bdaf7`
+> *during* this session — that session committed the voice-track handoff. **Its handoff is preserved
+> verbatim at the bottom of this file; do not delete it.** Read BOTH sections before starting.
+
+## Done (observable)
+
+- **Every gate re-run live, not quoted from docs:** `npx tsc --noEmit` **0 errors** · `npm test`
+  **1254 passed / 77 files** · dictionary **446 keys**, orphan scan **18**. HEAD == `aaziko/Shivam`.
+- **Production probed live** (the four facts the owner keeps asking about, each re-verified today):
+  - `GET /internal/api/health` → **200 in ~40 ms** — backend healthy.
+  - `GET /internal/api/upload` → **`cloudStorageConfigured: false`** — file storage still OFF in prod.
+  - `POST /internal/api/voice/ask` → **404** — the voice backend proxy does not exist yet.
+  - backend `origin/main` = **`990c660`** — Phase 94 (`fda199c`) and Phase 95 (presigned MinIO) are
+    **NOT deployed**, so video upload + `entity_id` still fail on a phone.
+- **The last APK is still `093a3b33` (25 Aug).** **76 commits** have landed since it (**40 touching
+  `src/`**), so every i18n phase 80–85, the boundary fix, the version reconcile and the whole voice
+  track are on **nobody's phone**.
+- 🔑 **NEW FINDING — an OPEN `cgpe-mobile` INBOX item nobody has started.** `contracts/INBOX.md`
+  (2026-08-27, from `cgpe-api` Phase 95) hands the app the **presigned MinIO upload contract**
+  (`POST /upload/presign` → signed `PUT` → `storage_key` → `GET /upload/download-url`). Its status
+  box `[ ] cgpe-mobile — adopt the presign→PUT→storage_key→download-url flow` is **unticked**, and
+  `grep -rn "presign\|storage_key\|download-url" src/` returns **zero hits** — the app is still on
+  the old multipart `/upload` + `/file-attachments` path. This is the **highest-value unblocked
+  app-side work that exists right now**, and it was not on `docs/PHASES.md`'s Now.
+- **Owner status document delivered** — `docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md`, plus a published
+  page at `https://claude.ai/code/artifact/2a437a25-4156-440e-8247-bb5c34ab2a03`. Zero technical
+  terms, respectful `aap` register, scoped to exactly the points the owner dictated.
+
+## Files changed
+
+- `docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md` — **NEW.** Plain-language 5-day update for Sagar Sir:
+  what completed, the three live tracks (voice / translation / store deployment), and the two
+  blockers the owner wanted highlighted (EAS quota; the App Store + Play Store breakdown).
+- `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/PHASES.md`, `CLAUDE.md` — board
+  update + the presigned-upload finding recorded so the next session does not miss it again.
+- **No `src/` file was touched.**
+
+## Decisions made
+
+- **Phase 86 is the presigned MinIO upload adoption, not more i18n.** It is the only outstanding item
+  that is (a) owed to a sibling session in writing, (b) fully specified, (c) buildable today with no
+  owner input, and (d) the actual fix for the owner's #1 field complaint ("documents vanish"). The
+  i18n residue is all owner-copy-blocked; the store track is all account/fee-blocked.
+- **Ship it even though `S3_*` is unset in prod.** The three routes answer `503 not_configured` until
+  OPS sets the env, so adopting the flow early is inert-safe — the same reasoning that made sending
+  `entity_id` early safe against the old build.
+- **The concurrent session's handoff is preserved, not overwritten.** `/handoff` says overwrite, but
+  that session's voice-track snapshot is the only record of the Skia/Lottie/web-stub traps. Losing it
+  to satisfy a template would be a real regression. Both sections now coexist.
+- **Did not touch the other session's artifact.** An artifact `CGPE Connect Panch Din Ka Kaam`
+  (`52fa0b74…`) covering the same subject already existed on the owner's account, from the parallel
+  session. Left untouched; the choice of which to send was handed to the owner.
+
+## Known broken / deliberately skipped
+
+- **The audit is read-only — nothing it found was fixed.** Every blocker listed above is still open.
+- **The first artifact URL published this session went dead** (deleted / not found on the account
+  minutes after publishing). Re-published at a new URL and **verified with `action: list`** before
+  handing it over. Verify a link before giving it to the owner.
+- **`docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md` is deliberately incomplete as an engineering doc** —
+  the owner scoped it to a fixed point list. MinIO/storage, the backend deploy gap, the blank-screen
+  bug and the role matrix were **left out on instruction**, not forgotten. Do not "fix" it by adding
+  them; those live in `docs/OWNER-ACTIONS-2026-08-27.md`.
+- **Untracked repo-root files left alone** (`*.mp3`, `translation-v.01.txt`,
+  `cgpe-connect.staff_unified.json`, the store spec `.md`, `.claude/settings.json`) — owner's local
+  files. `translation-v.01.txt` was checked and is an **already-wired** drop (consent copy), not a
+  pending one.
+
+## Next session starts here
+
+- **Phase 86: adopt the presigned MinIO upload flow.** `POST /upload/presign` → signed `PUT` with the
+  **exact** returned `Content-Type` → `POST /file-attachments` with `storage_key` (leave `file_url`
+  empty) → render via `GET /upload/download-url?key=…`, fetching a fresh signed URL each render.
+  Then tick the `cgpe-mobile` box in `contracts/INBOX.md` and grep the reply back.
+- **First command:** `npm test` (expect **1254** green), then
+  `grep -n "presign" ../contracts/INBOX.md` and read that item in full.
+- **Watch out for:** **store the KEY, never the URL** — signed URLs expire in 300 s, so persisting one
+  ships a link that dies. And the `PUT` is signed against the exact `Content-Type` returned by
+  `presign`: any other value, or omitting the header, **403s at MinIO**. Also — a **concurrent session
+  is committing into this checkout**: `git fetch aaziko` and check ancestry before assuming HEAD is
+  where you left it, and never force-push/reset to tidy its commits.
+
+---
+---
+
+# ARCHIVED — the parallel session's handoff (voice assistant track, 2026-08-29)
+
+> Preserved verbatim. This is the only record of the Skia / Lottie / web-stub traps. Do not delete.
+
 # HANDOFF — CGPE Connect (Android) — Voice assistant track — 2026-08-29
 
 > This session built the **voice assistant** end-to-end on the app side, produced the n8n + backend

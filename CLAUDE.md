@@ -22,6 +22,19 @@ Start every session with `/boot`. Map: `docs/PROJECT_MAP.md`. Plan: `docs/PHASES
   insert to land in the wrong item. `INBOX.md` went 77 KB → 103 KB inside the Phase 4 session
   alone. Answer questions addressed to `cgpe-mobile` even when they are not about your current
   phase — they block the sibling session's phase.
+- ⚠️ **AN UNTICKED `cgpe-mobile` BOX CAN BE REAL, UNSTARTED WORK THAT IS ON NO BOARD — GREP `src/`,
+  DO NOT TRUST `docs/PHASES.md` (proven 2026-08-29).** The presigned-MinIO item sat open for two days
+  with **zero** adoption in `src/` while `## Now` pointed at i18n and voice. **At `/boot`, for every
+  open `cgpe-mobile` box, grep the app for the symbols the item names** — a box is unticked either
+  because it is blocked (fine) or because nobody started it (not fine), and only the grep tells you
+  which. It was the highest-value unblocked work in the project and no board mentioned it.
+- ⚠️ **A CONCURRENT SESSION ALSO PUBLISHES ARTIFACTS TO THE OWNER'S ACCOUNT, AND ALSO REWRITES
+  `docs/HANDOFF.md` / `## Now` (both seen 2026-08-29).** HEAD moved mid-session and the parallel
+  session's handoff landed on disk. **Never overwrite a sibling handoff to satisfy the `/handoff`
+  template** — insert above it and archive theirs verbatim; the same goes for `## Now`. And before
+  handing the owner a link, run the artifact `list`: a page published this session went **dead within
+  minutes**, and a parallel session had already published its own owner-facing page on the same
+  subject. Verify the URL is listed, and never overwrite the other session's page.
 - **Put the answer under the box that is blocking.** Phase 4 found two `cgpe-mobile` boxes still
   open whose answer had been written weeks-equivalent earlier under a *different*, multi-recipient
   item — so `cgpe-api` read "mobile has not answered" and held a phase. Say it twice rather than
@@ -443,6 +456,20 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   like the local-disk fallback to `isEphemeralUrl` and warn users their files will not be kept. The
   host-scoped narrowing was deliberately NOT taken (it would turn a harmless false alarm into a false
   reassurance); the reasoning is written at the function and pinned by a test.
+- 🔑 **THE PRESIGNED MinIO FLOW IS THE CONTRACT NOW, AND THE APP HAS NOT ADOPTED IT (open as of
+  2026-08-29).** `cgpe-api` Phase 95 (INBOX 2026-08-27) superseded the multipart upload with a
+  **three-call presigned flow**: `POST /upload/presign` `{content_type, filename?, folder?}` →
+  `{key, url, method:'PUT', headers:{'Content-Type'}, expiresIn:300, maxBytes:10485760}`; **PUT the
+  bytes to that url with NO auth header** (the signature is the auth); then `POST /file-attachments`
+  with **`storage_key`** and an EMPTY `file_url`. Render later via `GET /upload/download-url?key=…`.
+  The `cgpe-mobile` box is **unticked** and `grep -rn "presign\|storage_key\|download-url" src/`
+  returns **zero hits** — the app is still on multipart `/upload` + `/file-attachments`. **Do not
+  re-derive this contract; read the INBOX item.** Two traps written into the contract itself:
+  **(a) persist the KEY, never the URL** — signed URLs expire in 300 s, so a stored URL ships a dead
+  link; **(b) the PUT is SIGNED against the exact `Content-Type` `presign` returned** — any other
+  value, or omitting the header, **403s at MinIO**. Adopting it early is inert-safe: all three routes
+  answer **`503 not_configured`** until OPS sets `S3_*` (still unset — `cloudStorageConfigured:false`
+  on 2026-08-29), the same reasoning that made sending `entity_id` early safe.
 - **The upload route names its own failure in the BODY.** A rejected type is thrown from multer's
   `fileFilter` and surfaces as a bare **500** on the deployed build — a **415** once Phase 94 ships —
   both carrying `{error:'File type video/mp4 is not allowed'}`;
