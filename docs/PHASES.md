@@ -36,6 +36,44 @@ This session shipped the code-side slice (commits `664b3c6`/`8d2196c`/`b55afcd`,
 
 ---
 
+**✅ 2026-08-29 — PHASE 85: THREE HOME-DASHBOARD WIDGET HEADERS NOW READ IN ALL FIVE LANGUAGES
+(the `home.tsx` nav-catalogue free win — but a SMALL, disciplined slice of it).** Gates: `tsc` **0** ·
+`npm test` **1084** (unchanged — no logic) · `npx eslint` cache-free **0** on `home.tsx` · orphan
+scan **17** (unchanged) · dict **430** (unchanged — ZERO new keys, pure reuse). Commit `d9adb5b`,
+`aaziko/Shivam`. Device-unverified; no APK before 1 Sep.
+- **WIRED 3, by reusing byte-exact keys the owner already supplied** — no English changed, no key
+  added: `prospects` header → `more.prospectsTitle`, `personal_notes` → `more.notesTitle`, `tickets`
+  → `common.tickets` (the last already consumed in this same file at the analytics eyebrow).
+- **The PHASES/CLAUDE "free win" was OPTIMISTIC — most of it is NOT a clean reuse, and a 4-lens
+  adversarial review (completeness/convention/exact-match/skeptic + synthesis) proved it.** The wire
+  rule that emerged and is worth keeping: **translate a widget header only where the card body has no
+  *translated* chrome for the header's English peers to clash with** — i.e. a pure-data body, or
+  one-direction English like the shipped flagship `my_tasks` (which renders hardcoded `Overdue ·`
+  under a translated header). That is why S2/S4/S7 wire and S8 does not.
+- **REFUSED 6 + the LINK_WIDGETS table, each filed to `docs/i18n` Batch 6g with the exact strings:**
+  - `day_spine` ('The day, in order'), `leads_pipeline` ('Leads pipeline'), `claim_requests`
+    ('Claim requests') — **no key of any shape.** ⚠️ 'Leads pipeline' ≠ existing `more.leadsTitle`
+    ('Leads and pipeline'); reusing it would silently REWORD the shipped English — banned.
+  - `issue_logs` ('Issue log') — **double block:** no header key AND an English footer sentence +
+    'Unclaimed' pill in the card.
+  - `team_roster` ('Team') — **the sharp catch.** The key `dash.team` IS byte-exact, but the
+    populated card renders already-translated `t('common.onDuty')`/`offDuty` pills beside a hardcoded
+    English footer `${onDuty} of ${team.length} on duty right now` (no placeholder key). Unlike the
+    uniform-English bodies of S2/S4/S7, this is the ONE card whose body already mixes translated
+    chrome, so a translated header would make the footer a visible **half-translation island** in a
+    leader's primary state. Needs a `{n} of {total} on duty right now` placeholder key first.
+  - **LINK_WIDGETS** (the compact shortcut cards) — **module-scope whole-table-or-none.** Each card
+    is title+subtitle; all 7 subtitle SENTENCES are keyless and 3 titles are case/word near-misses
+    ('Notice board'/'Smart segments'/'Knowledge base'). `dash.campaigns` is explicitly NOT a clean
+    win — campaigns renders only via this card, so wiring its title strands its keyless subtitle.
+- **Non-blocking flag:** the Notes rows' 'Voice'/'Voice note' are pre-existing English peers (same
+  status as `my_tasks`' 'Overdue') — noted in Batch 6g, not swept.
+- **🔑 NEXT:** Batch 6b (41 outage sentences, owner-owed) or, when the owner supplies Batch 6g copy,
+  finish these home headers + the LINK_WIDGETS table as a whole. There is no self-contained i18n
+  free win left in `home.tsx` after this — the residue all needs owner copy or a placeholder key.
+
+---
+
 **✅ 2026-08-29 — PHASE 84: THE MORE MENU AND ITS THREE SIBLING LABEL TABLES NOW READ IN ALL FIVE
 LANGUAGES (i18n Batch 6c).** Gates: `tsc` **0** · `npm test` **1076** (unchanged — no new logic) ·
 `npx eslint` cache-free **0 errors** (2 pre-existing warnings) · orphan scan **17 (unchanged)**.
