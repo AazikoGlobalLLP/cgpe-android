@@ -40,6 +40,7 @@ import { LocationBlock } from '@/ui/LocationBlock';
 import { JobsProvider } from '@/store/jobs';
 import { AppUiProvider, useAppUi } from '@/store/appUi';
 import { JobPill } from '@/ui/JobPill';
+import { VoiceLauncher } from '@/ui/VoiceLauncher';
 import { HealthBanner } from '@/ui/health-banner';
 import { getLocationConsent, needsConsentGate, flushWriteQueue } from '@/data/api';
 import { subscribeHealth } from '@/data/health';
@@ -263,6 +264,9 @@ function RootNav() {
         }}
       />
       <JobPill />
+      {/* Voice-mode launcher (floating mic → VoiceSheet). Beside JobPill so it inherits the live
+          navigation context VoiceSheet needs. Native-only + signed-in-only, self-guarded. */}
+      <VoiceLauncher />
       {/* Mounted once here so every route inherits outage reporting. Sample data is gone,
           so this is the only thing distinguishing "nothing to show" from "could not load". */}
       <HealthBanner />

@@ -81,7 +81,10 @@ describe('i18n dictionaries — parity and value quality', () => {
     // Meeting/Lost reuse stage.*), the notice-board categories (10) and the notify priorities +
     // audiences (5). CLAUDE-TRANSLATED under the 2026-08-27 waiver (labelled at the code); each
     // table is wired as a WHOLE unit. Six More rows reuse existing exact-match keys and add none.
-    expect(EN_KEYS.length).toBe(430);
+    // Bumped 430 → 444 for the 14 `voice.*` keys (2026-08-29): the voice-assistant sheet. PROVISIONAL
+    // CLAUDE translations under the 2026-08-27 waiver (labelled in the code); owner to confirm the
+    // gu/hi/hi-en/gu-en copy. `Cancel`/`Confirm`/`Try again` reuse the existing common.* keys.
+    expect(EN_KEYS.length).toBe(444);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

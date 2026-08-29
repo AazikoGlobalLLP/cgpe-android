@@ -531,6 +531,22 @@ const en = {
   'notify.prioUrgent': 'Urgent',
   'notify.audAll': 'Whole team',
   'notify.audChoose': 'Choose people',
+  // voice.* — the voice-assistant sheet. PROVISIONAL translations (CLAUDE-written under the
+  // 2026-08-27 machine-translation waiver); owner to confirm the gu/hi/hi-en/gu-en copy.
+  'voice.title': 'Voice assistant',
+  'voice.holdToSpeak': 'Hold to speak',
+  'voice.listening': 'Listening…',
+  'voice.thinking': 'Thinking…',
+  'voice.speaking': 'Speaking…',
+  'voice.transcriptLabel': 'You said',
+  'voice.replyLabel': 'Answer',
+  'voice.editHint': 'Tap to edit',
+  'voice.micDenied': 'Microphone access is needed to use voice. Enable it in Settings.',
+  'voice.tooShort': 'Please speak a little longer.',
+  'voice.offline': 'Voice needs a connection right now.',
+  'voice.failed': 'Something went wrong. Please try again.',
+  'voice.notUnderstood': "I didn't catch that. Please try again.",
+  'voice.whichOne': 'Which one?',
 };
 
 /** Every dictionary carries exactly the English key set. */
@@ -921,6 +937,21 @@ const gu: Dict = {
   'notify.prioUrgent': 'તાત્કાલિક',
   'notify.audAll': 'આખી ટીમ',
   'notify.audChoose': 'લોકો પસંદ કરો',
+  // voice.* — PROVISIONAL (see the English block header).
+  'voice.title': 'વૉઇસ સહાયક',
+  'voice.holdToSpeak': 'બોલવા માટે દબાવી રાખો',
+  'voice.listening': 'સાંભળી રહ્યું છે…',
+  'voice.thinking': 'વિચારી રહ્યું છે…',
+  'voice.speaking': 'બોલી રહ્યું છે…',
+  'voice.transcriptLabel': 'તમે કહ્યું',
+  'voice.replyLabel': 'જવાબ',
+  'voice.editHint': 'સંપાદિત કરવા ટૅપ કરો',
+  'voice.micDenied': 'વૉઇસ વાપરવા માઇક્રોફોનની પરવાનગી જરૂરી છે. સેટિંગ્સમાં ચાલુ કરો.',
+  'voice.tooShort': 'કૃપા કરી થોડું લાંબું બોલો.',
+  'voice.offline': 'વૉઇસ માટે અત્યારે કનેક્શન જરૂરી છે.',
+  'voice.failed': 'કંઈક ખોટું થયું. ફરી પ્રયત્ન કરો.',
+  'voice.notUnderstood': 'સમજાયું નહીં. ફરી પ્રયત્ન કરો.',
+  'voice.whichOne': 'કઈ?',
 };
 
 const hi: Dict = {
@@ -1302,6 +1333,21 @@ const hi: Dict = {
   'notify.prioUrgent': 'तत्काल',
   'notify.audAll': 'पूरी टीम',
   'notify.audChoose': 'लोग चुनें',
+  // voice.* — PROVISIONAL (see the English block header).
+  'voice.title': 'वॉइस सहायक',
+  'voice.holdToSpeak': 'बोलने के लिए दबाए रखें',
+  'voice.listening': 'सुन रहा है…',
+  'voice.thinking': 'सोच रहा है…',
+  'voice.speaking': 'बोल रहा है…',
+  'voice.transcriptLabel': 'आपने कहा',
+  'voice.replyLabel': 'जवाब',
+  'voice.editHint': 'बदलने के लिए टैप करें',
+  'voice.micDenied': 'वॉइस इस्तेमाल करने के लिए माइक्रोफ़ोन की अनुमति चाहिए। सेटिंग्स में चालू करें।',
+  'voice.tooShort': 'कृपया थोड़ा लंबा बोलें।',
+  'voice.offline': 'वॉइस के लिए अभी कनेक्शन चाहिए।',
+  'voice.failed': 'कुछ गड़बड़ हो गई। फिर कोशिश करें।',
+  'voice.notUnderstood': 'समझ नहीं आया। फिर कोशिश करें।',
+  'voice.whichOne': 'कौन सा?',
 };
 
 /**
@@ -1690,6 +1736,21 @@ const hiEn: Dict = {
   'notify.prioUrgent': 'Urgent',
   'notify.audAll': 'Poori team',
   'notify.audChoose': 'Log chunein',
+  // voice.* — PROVISIONAL (see the English block header).
+  'voice.title': 'Voice assistant',
+  'voice.holdToSpeak': 'Bolne ke liye daba ke rakhein',
+  'voice.listening': 'Sun raha hai…',
+  'voice.thinking': 'Soch raha hai…',
+  'voice.speaking': 'Bol raha hai…',
+  'voice.transcriptLabel': 'Aapne kaha',
+  'voice.replyLabel': 'Jawab',
+  'voice.editHint': 'Edit karne ke liye tap karein',
+  'voice.micDenied': 'Voice use karne ke liye microphone ki permission chahiye. Settings mein on karein.',
+  'voice.tooShort': 'Thoda lamba boliye.',
+  'voice.offline': 'Voice ke liye abhi connection chahiye.',
+  'voice.failed': 'Kuch gadbad ho gayi. Dobara try karein.',
+  'voice.notUnderstood': 'Samajh nahi aaya. Dobara try karein.',
+  'voice.whichOne': 'Kaunsa?',
 };
 
 /**
@@ -2078,6 +2139,21 @@ const guEn: Dict = {
   'notify.prioUrgent': 'Urgent',
   'notify.audAll': 'Aakhi team',
   'notify.audChoose': 'Loko pasand karo',
+  // voice.* — PROVISIONAL (see the English block header).
+  'voice.title': 'Voice assistant',
+  'voice.holdToSpeak': 'Bolva mate dabavi rakho',
+  'voice.listening': 'Sambhali rahyu chhe…',
+  'voice.thinking': 'Vichari rahyu chhe…',
+  'voice.speaking': 'Boli rahyu chhe…',
+  'voice.transcriptLabel': 'Tame kahyu',
+  'voice.replyLabel': 'Jawab',
+  'voice.editHint': 'Edit karva tap karo',
+  'voice.micDenied': 'Voice vaparva microphone ni permission jaruri chhe. Settings ma on karo.',
+  'voice.tooShort': 'Kripya thodu lambu bolo.',
+  'voice.offline': 'Voice mate atyare connection jaruri chhe.',
+  'voice.failed': 'Kaink khotu thayu. Fari try karo.',
+  'voice.notUnderstood': 'Samjaayu nahi. Fari try karo.',
+  'voice.whichOne': 'Kai?',
 };
 
 /**
