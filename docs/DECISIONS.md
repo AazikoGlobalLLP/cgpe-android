@@ -4936,3 +4936,46 @@ picked (AskUserQuestion 2026-08-22) the standard `Idempotency-Key` header and cg
   array (the standing dep-array trap — `tsc`+tests were green without it; only cache-free eslint sees it).
 - **Gates:** `tsc` 0 · `npm test` 1076 · `npx eslint` cache-free 0 errors (2 pre-existing warnings) ·
   orphan scan 17 (unchanged — every new key has a consumer). Commit `62e9d8c`, `aaziko/Shivam`.
+
+---
+
+## 2026-08-29 — Store-deployment track opened (App Store + Google Play)
+
+New track, separate from the i18n phases, driven by the owner's spec
+`CGPE_Connect_App_Store_Play_Store_Developer_Deployment_Spec.md`. An 8-agent read-only audit verified
+every spec claim against the code (0 errors, cited to file:line). The app is ~90% already store-ready.
+
+- **Target both stores, ship PRIVATELY.** Owner will buy the Apple Developer account. Recommended
+  distribution is Managed Google Play private app (Android) + Apple Business Manager Custom App (iOS):
+  it preserves the 24/7 feature unchanged while removing the biggest risk in the whole program — public
+  review of an employee-monitoring / 24/7 background-location app. Public listings remain a documented
+  fallback. Correction to an earlier assumption: **EAS builds and submits iOS from the cloud, so no Mac
+  is required** — only an iPhone for QA.
+- **Section-5 boundary attribution: IMPLEMENTED (owner said "depend on you").** With the hourly cadence,
+  `ingest()` attributed a whole flushed batch to the current shift `sid`, so a 24/7-armed member's
+  pre-clock-in OFF-DUTY points (up to an hour) were filed under the shift. Fixed with a new pure, tested
+  seam `src/lib/boundaryAttribution.ts` (`partitionShiftPoints`) + `sidStartedAt` persisted on the buffer
+  + a split in `ingest()` that routes each partition to its correct existing endpoint. **No-op for
+  non-24/7 users; defaults to pre-audit behaviour when the boundary is unknown.** No backend change needed
+  (the server already accepts per-point `at` and has both endpoints). `tracker.ts` is device-only, so the
+  wiring MUST get a handset walk-through in device QA before it ships — safe in the timeline because no APK
+  can build until the EAS quota resets 1 Sep. The reverse **clock-out spill** (a few trailing shift points
+  landing as ambient in a dead zone) is left as documented residual.
+- **Version reconciled to 1.10.0.** `app.json` shipped 1.10.0 while `package.json` and
+  `src/constants/config.ts` `APP.version` (the in-app About string) read 1.8.0 — the app told the user the
+  wrong version. All aligned; `app.json` is authoritative for the store build; `eas.json`
+  `appVersionSource:"remote"` means the build number lives on EAS.
+- **Three spec items deliberately DOCUMENTED, not coded** (discipline over blind execution):
+  (a) recording the consent *language variant* needs a backend-defined field — an app-only guess would be
+  a dead zero-consumer key (the anti-pattern this repo spent phases removing); (b) the FGS
+  stale-notification refresh restarts the location service and fights the owner-locked reliability design,
+  and is a rare edge case; (c) stripping `ACTIVITY_RECOGNITION` / suppressing iOS `NSMotionUsageDescription`
+  risks the accelerometer/motion classifier. All three are recorded in the errata + `docs/store-release/`.
+- **Spec corrections** go in an appended "Verification Errata (2026-08-29)" section (owner's choice), kept
+  on disk in the spec `.md` but NOT committed to the repo (it is the owner's working doc). The tracked
+  equivalent is `docs/store-release/1.10.0/`.
+- **Verified live:** the 90/180-day retention job is on the backend's deployed `origin/main` (`990c660`,
+  `services/locationRetention.js`, scheduler `server.js:205`) — not just a working-tree file.
+
+Commits (aaziko/Shivam, tip `b55afcd`): `664b3c6` version reconcile · `8d2196c` boundary split · `b55afcd`
+store-release evidence. Gates green: `tsc` 0 · `npm test` 1084 · `eslint` 0.

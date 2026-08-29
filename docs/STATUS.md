@@ -1,16 +1,17 @@
 # Status — CGPE Connect (Android)
 **Updated:** 2026-08-29
-**Working on right now:** Making the app's main menu read in the user's own language instead of English.
+**Working on right now:** Getting the app ready to publish on the Google Play Store and the Apple App Store.
 
 **Done this week:**
-- The "More" menu — the app's main list of everywhere you can go — now shows every item in whichever
-  of the five languages the person chose, not English. Its section headings do too.
-- The same was done for the recruitment pipeline stages, the company notice-board categories, and
-  the alert priorities.
-- All of it was double-checked automatically: the app still builds cleanly, all 1,076 self-tests
-  pass, and nothing was left showing a blank or an English word by mistake.
+- Went through the whole store-publishing plan line by line and checked it against the real app. The good news: the app is about 90% ready to submit — most of what's left is paperwork, store artwork, and accounts, not building the app.
+- Fixed a location bug: for staff who share their location 24/7, movement recorded just before they clocked in could be mislabelled as part of their shift. It now correctly stays as off-duty. (This needs one check on a real phone before it goes out.)
+- Fixed the app so the "version" it shows matches the version it actually is.
+- Wrote up all the evidence a store reviewer will ask for — what data is collected, how location is used, the privacy and consent details, and the security check — and saved it in one folder.
+- Confirmed the promise that location history is hidden after 90 days and deleted after 180 days is genuinely running on the live server.
 
-**Blocked on:** Nothing for this work. Putting a fresh copy of the app on the phones is still on hold
-until 1 September, when the free monthly build allowance resets.
+**Blocked on:**
+- Buying the Apple developer account (needed for the Apple side).
+- The free Google build allowance is used up until 1 September, so a new installable build can't be made before then.
+- A few things only the owner can provide: the store publishing keys, the notification key, the public privacy and account-deletion web pages actually being live, and the store screenshots/graphics.
 
-**Next:** Translate the "couldn't reach the server" messages the app shows when the connection drops.
+**Next:** Once the accounts and artwork are ready (and after 1 September for the build), produce the store builds, test on real phones, and submit — recommended as private, company-only apps to keep review simple.

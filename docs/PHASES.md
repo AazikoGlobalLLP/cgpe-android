@@ -14,6 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🚀 2026-08-29 — NEW TRACK: STORE-DEPLOYMENT PROGRAM (App Store + Google Play).** Separate from the
+i18n phases below; driven by the owner's spec `CGPE_Connect_App_Store_Play_Store_Developer_Deployment_Spec.md`.
+An 8-agent read-only audit verified every spec claim against code (0 errors): **the app is ~90% already
+store-ready** — most of what remains is declarations, assets, accounts, and device QA, not app-building.
+This session shipped the code-side slice (commits `664b3c6`/`8d2196c`/`b55afcd`, `aaziko/Shivam`; gates
+`tsc` 0 · `npm test` **1084** · `eslint` 0):
+- **Section-5 boundary fix** — new pure tested seam `src/lib/boundaryAttribution.ts` + `sidStartedAt`
+  persisted + `ingest()` split so a 24/7-armed member's pre-clock-in OFF-DUTY points route to ambient,
+  not the shift. **No-op for non-24/7 users.** ⚠️ `tracker.ts` is device-only → **needs a handset
+  walk-through in device QA before it ships** (safe: no APK until 1 Sep). Clock-out spill = documented residual.
+- **Version reconciled to 1.10.0** (app.json vs package.json/`config.ts` in-app About were a 3-way mismatch).
+- **`docs/store-release/1.10.0/`** evidence folder (permissions map, data map, retention proof, consent copy,
+  secrets scan, Play/Apple declarations + video script). **Verification Errata** appended to the spec `.md`
+  (on disk, uncommitted). Retention (90/180d) verified on backend deployed `origin/main` `990c660`.
+- **Blocked (owner/ops, not code):** EAS quota to 1 Sep · Apple account (buying) · `eas.json submit` creds ·
+  FCM key · public `cgpe.in/privacy`+`/delete-account` pages · store assets · reviewer account · device QA.
+  Recommended route: **private org distribution** (Managed Google Play + Apple Business Manager Custom App).
+- Deliberately documented-not-coded: consent-language field (needs a backend field name), FGS
+  stale-notification refresh (fights reliability design), permission stripping (risks the accelerometer).
+
+---
+
 **✅ 2026-08-29 — PHASE 84: THE MORE MENU AND ITS THREE SIBLING LABEL TABLES NOW READ IN ALL FIVE
 LANGUAGES (i18n Batch 6c).** Gates: `tsc` **0** · `npm test` **1076** (unchanged — no new logic) ·
 `npx eslint` cache-free **0 errors** (2 pre-existing warnings) · orphan scan **17 (unchanged)**.
@@ -400,6 +422,12 @@ session by design** — Phase 77 is where fixing starts.
 **SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
 
 ## Next 3 — as of 2026-08-29 (after Phase 84)
+
+> **Parallel store-deployment track (opened 2026-08-29):** code-side is done for now; the next moves are
+> **owner/ops** — Apple account, `eas.json submit` creds, FCM key, public privacy/delete pages, store assets,
+> reviewer account (see `docs/store-release/1.10.0/README.md`). The next *engineering* step is the **1-Sep
+> APK** (Phase 86 below), which carries BOTH the i18n work and the boundary fix and is where the boundary fix
+> gets its device QA. No backend/contract change is owed by the shipped deployment work.
 
 1. **Phase 85 — either Batch 6b (41 outage sentences, 54 places) OR the `home.tsx` nav-catalogue
    free win first.** 6b names *what* failed at each site, so they are translated individually, never
