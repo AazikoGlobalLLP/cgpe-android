@@ -34,7 +34,8 @@
         "RECEIVE_BOOT_COMPLETED",
         "POST_NOTIFICATIONS",
         "READ_CALENDAR",
-        "WRITE_CALENDAR"
+        "WRITE_CALENDAR",
+        "RECORD_AUDIO"
       ]
     },
     "web": {
@@ -103,6 +104,12 @@
         "expo-calendar",
         {
           "calendarPermission": "CGPE Connect adds your assigned tasks and reminders to your calendar so your deadlines show alongside your other events."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "CGPE Connect uses the microphone only while you hold the voice button, to record your spoken request for the assistant."
         }
       ]
     ],
