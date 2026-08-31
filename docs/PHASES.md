@@ -35,7 +35,51 @@ from the Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2
   adds a native module and changes the boot path, so it was deliberately NOT slipped into the tree
   ahead of the one build that matters. Free-plan quota resets monthly (not one-shot), so the safe
   order is: ship the known-good APK first, then a second build with OTA. **Owner's call.**
+- ✅ **PRE-FLIGHT DONE 2026-08-31 (Phase 90a, `954a0a4`) — the build is ready, and the pre-flight
+  found a live secret leak.** All four gates re-run green on the tree that will be uploaded:
+  `tsc` **0** · `npm test` **1309 / 77 files** · cache-free `npx eslint src` **0 errors, 12 warnings**
+  (the documented baseline) · `npx expo export -p web` **exit 0** (the voice-track boot-safety gate).
+  The `package.json` ↔ `package-lock.json` root deps are **in sync**, so EAS's `npm ci` will not
+  hard-fail. The Skia / Lottie native imports are behind `React.lazy` + the `hasSkia`/`hasLottie`
+  probes as designed; `expo-blur` is statically imported by `GlassCards` at boot, which is safe
+  because it is a first-party Expo module that is linked in the build and has a web implementation.
+  The `.easignore` fix independently re-measured at **301 files / 5.85 MB**, reproducing `4a12899`.
+- 🔴 **THE PRE-FLIGHT'S REAL FIND: the archive was uploading BOTH Android signing keystores, their
+  plaintext passwords, and the Firebase FCM service-account key.** Phase 90 fixed the *size* half of
+  the `.easignore`-replaces-`.gitignore` trap and left the rule one-sided — every **secret**
+  `.gitignore` protects was still being uploaded. Four secret files, all on disk since 29 Aug, were
+  in tomorrow's archive. Fixed in `954a0a4`; verified by diffing the archive file list before/after —
+  exactly those four leave, **zero** files newly included, every build-essential path survives.
 *(Phase Ω stays SHUT: device-unverified work exists.)*
+
+---
+
+**✅ 2026-08-31 — PHASE 90a: BUILD PRE-FLIGHT, AND THE SECRET LEAK IT FOUND.** Run because Phase 90's
+build is quota-blocked until 1 Sep and that build jumps ~21 handsets from 25 Aug to ten
+device-unverified phases in one step. Commit `954a0a4`, pushed to `aaziko/Shivam`.
+- **THE FIND.** `.easignore` **replaces** `.gitignore` for the EAS archive — Phase 90's own discovery.
+  It was applied only to the 338 MB of Playwright output. Re-measuring the archive with eas-cli's
+  filter semantics (`ignore` over `.easignore` + the always-dropped `.git`/`node_modules`) and
+  diffing against `.gitignore` showed **five gitignored files still in the upload, four of them
+  secret**: `credentials/android/keystore.jks` and `@shivam-bhadoriya__ANDROID.bak.jks` (the
+  app-signing keystore, twice), `credentials.json` (**keystore + key passwords in plaintext** — that
+  is how `eas credentials` writes them), and `com-cgpe-connect-firebase-adminsdk-*.json` (the **FCM
+  V1 service-account private key**). The fifth, `expo-env.d.ts`, is generated and harmless — left in.
+- **WHY IT MATTERS EVEN THOUGH EAS ALREADY HOLDS THE KEYSTORE.** The build archive is a separate
+  artifact with its own retention and download path, and it is extracted on a build worker. The
+  keystore plus its passwords is the ability to sign an APK that Android accepts as an **update to
+  CGPE Connect on every installed handset**. The Firebase service-account key is **not** something
+  EAS holds in this form — CLAUDE.md's own rule is that it goes *only* into `eas credentials`,
+  never a commit. So this was a genuine exfiltration path, and it was live: all four files have been
+  on disk since 29 Aug, i.e. they would have shipped in the very next build.
+- **THE FIX** mirrors `.gitignore`'s secret patterns into `.easignore` with a header explaining why
+  `.gitignore` alone is not enough. ⚠️ **`google-services.json` is the CLIENT config and must keep
+  shipping** — the `*-firebase-adminsdk-*.json` / `google-service-account*.json` patterns were chosen
+  not to match it, and the before/after diff proves it survives.
+- **NOTHING IN `src/` CHANGED**, so the app is byte-identical to Phase 89's. This phase only changes
+  what is uploaded.
+- **🔑 THE GENERAL RULE, now in CLAUDE.md:** a gitignored secret is **not** protected from the EAS
+  upload. Add a secret rule to `.gitignore` and `.easignore` in the **same commit**.
 
 ---
 

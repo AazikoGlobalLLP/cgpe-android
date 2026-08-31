@@ -258,6 +258,23 @@ project whose own source is ~6 MB. `e2e/`, `test-results/`, `playwright-report/`
 the root `*.mp3` scratch files are now listed; excluding `e2e/` wholesale is safe and is what the
 harness already documents (tsconfig excludes it, eslint ignores `e2e/**`, Vitest is scoped to `src/`,
 never bundled). **If you add anything to `.gitignore` that is large, add it HERE too or it uploads.**
+🔴 **AND THE SAME RULE APPLIES TO EVERY SECRET — THIS WAS LIVE, NOT HYPOTHETICAL (2026-08-31,
+`954a0a4`).** Phase 90 committed the size half of this finding and left the rule **one-sided**: it
+never occurred to anyone that `.gitignore`'s *secret* rules were equally dead for the archive. A
+re-measure the next morning found **five gitignored files in the 297-file archive, four of them
+secret and all four sitting on disk since 29 Aug**: `credentials/android/keystore.jks` **and**
+`@shivam-bhadoriya__ANDROID.bak.jks` (the Android app-signing keystore, twice),
+`credentials.json` (its keystore **and key passwords, in plaintext** — `eas credentials` writes them
+that way), and `com-cgpe-connect-firebase-adminsdk-*.json` (the **FCM V1 service-account private
+key**). The keystore plus its passwords is the ability to sign an APK that Android accepts as an
+update to CGPE Connect **on all 21 handsets**; the Firebase key grants push + admin on the project
+and is **not** something EAS holds in this form — it belongs only inside `eas credentials`. All the
+secret patterns are now mirrored into `.easignore` (`credentials.json`, `credentials/`, `*.jks`,
+`*.p8`, `*.p12`, `*.key`, `*.pem`, `*.mobileprovision`, `*-firebase-adminsdk-*.json`,
+`google-service-account*.json`, `.env*.local`). **`google-services.json` is the CLIENT config and
+must KEEP shipping** — check any new `*.json` pattern against it. ⚠️ **A gitignored secret is NOT
+protected from the upload. When you add a secret rule to `.gitignore`, add it to `.easignore` in the
+same commit.**
 **Measure, do not assume** — three plausible theories (Windows backslashes in `path.relative`, CRLF
 rules, a sub-`.gitignore` hijack) all died to one measurement. Replicate the real filter:
 `Ignore.createForCopyingAsync()` from eas-cli's own `build/vcs/local.js`, walk the tree, sum the

@@ -5343,3 +5343,67 @@ keystore-password guard uncommitted is a real risk on any other clone.
 **Note — the archive fix is unverified against a real build.** No build has consumed it. If tomorrow's
 build fails on a file it cannot find, `.easignore` is the first suspect and `git revert 4a12899` is
 the fallback.
+
+---
+
+## 2026-08-31 (Phase 90a) — the build pre-flight, and the secret leak it found
+
+Phase 90's build is quota-blocked until 1 Sep. Rather than re-attempt it (the refusal on the 31st
+said "resets in 18 hours", so an early retry only burns the upload again), the session pre-flighted
+the tree that build will upload. That APK jumps ~21 handsets from the 25 Aug build to **ten
+device-unverified phases in one step**, so the cost of a bad build is a week, not an hour.
+
+**A — all four gates re-run green on the exact tree that will be archived.**
+`npx tsc --noEmit` **0** · `npm test` **1309 / 77 files** · cache-free `npx eslint src` **0 errors,
+12 warnings** (the documented baseline, unchanged) · `npx expo export -p web` **exit 0**, which is
+the voice track's boot-safety gate and the only local thing that can catch the Lottie web-renderer
+trap. `package.json` ↔ `package-lock.json` root dependencies verified **in sync**, so EAS's `npm ci`
+will not hard-fail — the trap that bit Phase 77. The three voice native deps were re-checked against
+the module-scope-throw rule: Skia and Lottie are reached only through `React.lazy` plus the
+`hasSkia`/`hasLottie` probes, and `expo-blur`'s static import in `GlassCards` (boot-reachable via
+`_layout` → `VoiceMode`) is safe because it is a first-party Expo module that is linked in the build
+and ships a web implementation.
+
+**B — THE FIND: the archive was uploading both signing keystores, their plaintext passwords, and the
+Firebase service-account key.** Phase 90 discovered that `.easignore` **replaces** `.gitignore` for
+the EAS archive, and applied that finding to the 338 MB of Playwright output only. The rule was left
+**one-sided**: every *secret* `.gitignore` protects was equally unprotected. Re-measuring the archive
+and diffing it against `.gitignore` found **five gitignored files still in the upload, four of them
+secret** — `credentials/android/keystore.jks` and `@shivam-bhadoriya__ANDROID.bak.jks` (the Android
+app-signing keystore, twice), `credentials.json` (the keystore **and key passwords, in plaintext** —
+that is how `eas credentials` writes them), and `com-cgpe-connect-firebase-adminsdk-*.json` (the
+**FCM V1 service-account private key**). The fifth, `expo-env.d.ts`, is generated and harmless and
+was deliberately left in. **All four have been on disk since 29 Aug**, so this was live: they would
+have shipped in the very next build, not in some hypothetical future one.
+
+**Why it matters even though EAS already holds the keystore.** The build archive is a separate
+artifact with its own retention and download path, and it is extracted on a build worker. The
+keystore plus its passwords is the ability to sign an APK that Android accepts as an **update to
+CGPE Connect on every installed handset**. And the Firebase service-account key is **not** something
+EAS holds in this form at all — this project's own rule is that it goes only into `eas credentials`,
+never into a commit or a chat. Calling it "EAS already has it, so it does not count" would have been
+wrong on both halves.
+
+**C — the fix, and how it was verified.** `954a0a4` mirrors `.gitignore`'s secret patterns into
+`.easignore` (`credentials.json`, `credentials/`, `*.jks`, `*.p8`, `*.p12`, `*.key`, `*.pem`,
+`*.mobileprovision`, `*-firebase-adminsdk-*.json`, `google-service-account*.json`, `.env*.local`)
+under a header stating why `.gitignore` alone is not enough. Verified by building the archive file
+list **before and after** and diffing: exactly those four files leave, **zero** files are newly
+included, and every build-essential path survives — `app.json`, `package.json`, `package-lock.json`,
+`google-services.json`, `tsconfig.json`, `eas.json`, `src/` 239, `assets/` 28, `public/` 1,
+`scripts/` 4. **301 files / 5.85 MB → 297 files / 5.85 MB**, which also independently reproduces
+`4a12899`'s measurement rather than taking it on trust.
+
+⚠️ **`google-services.json` is the CLIENT config and must keep shipping.** It is the one file a
+careless `*google*.json` pattern would break, and it would break the build rather than fail loudly in
+review. The two Firebase patterns were chosen not to match it, and the before/after diff is what
+proves it — not the reading of the glob.
+
+**D — no `src/` file changed.** The app is byte-identical to Phase 89's. This phase changes only what
+is uploaded, which is why the gates are quoted as "re-run and unchanged" rather than as new results.
+
+**🔑 The transferable rule, now in CLAUDE.md: a gitignored secret is NOT protected from the EAS
+upload.** When a secret pattern goes into `.gitignore`, it goes into `.easignore` in the same commit.
+The general form is worth remembering past this repo — a second ignore mechanism that *replaces*
+rather than *extends* the first will silently un-protect everything the first one was trusted for,
+and the failure is invisible because the file is still, correctly, not in git.
