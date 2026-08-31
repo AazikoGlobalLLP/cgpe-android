@@ -505,6 +505,26 @@ contract change. `INBOX.md` alone would never have surfaced it.
   legacy path where the file already has a durable URL. `?entity_id=` is **filtered again on the
   client** — the server-side filter is undeployed, so an old build returns the whole collection;
   keep the second filter after the deploy. The contract below is retained as the reference:
+- ✅ **THE LEGACY PATH ALSO RETURNS A KEY NOW, AND THE APP READS IT — Phase 88, 2026-08-31
+  (`eb9760f`). THE TWO PATHS ARE NO LONGER "KEY" vs "URL".** Backend Phase 101 (`9a74c9a`,
+  `routes/upload.js:174-196`) made the legacy multipart `POST /api/upload` return a **short-lived
+  presigned GET** as `url` plus `key`/**`storage_key`**/**`url_expires_in`**, because the public-style
+  URL 403s against the now-private bucket. The app read only `data.url` and wrote it to `file_url`, so
+  once that deploys **and** `S3_*` is set it would have persisted a link that expires — trap (a) of
+  D-122 arriving through the one path the contract did not cover. `parseLegacyUploadResult`
+  (`lib/fileUpload.ts`) now decides, and a "signed" answer is reported as `storageKey` with an
+  **empty** `url`, which reuses the presigned plumbing with no call-site change.
+  🔴 **DO NOT SIMPLIFY THE DISCRIMINATOR TO "`storage_key` IS PRESENT".** Phase 101's documented
+  signing-failure branch **still sets `storage_key`** but falls back to the public URL with
+  **`url_expires_in: null`** — there the URL is the durable thing and the signer that just failed is
+  the one a re-sign would need, so keying on the key alone **throws away the only working link**. It
+  must be `storage_key` **AND** a **finite** `url_expires_in` (`Number.isFinite`, not
+  `typeof === 'number'` — NaN is a number). Six shapes are pinned by tests.
+  ⚠️ **Branch on the `storageKey` FIELD, never on which path you think ran** — three comments said
+  "presigned path" where they meant "has a key", and building on them would reintroduce the bug.
+  The legacy key IS reachable: Phase 101 passes `ownerTag` into `cloudStorage.uploadFile`, so the
+  proxy path builds the same owner-scoped key as the presigned one and passes `mayAccessKey`
+  (`services/cloudStorage.js:78-89, 188-206`) — verified, not assumed.
 - 🔑 **THE CONTRACT ITSELF (`cgpe-api` Phase 95, INBOX 2026-08-27).** `cgpe-api` Phase 95 (INBOX 2026-08-27) superseded the multipart upload with a
   **three-call presigned flow**: `POST /upload/presign` `{content_type, filename?, folder?}` →
   `{key, url, method:'PUT', headers:{'Content-Type'}, expiresIn:300, maxBytes:10485760}`; **PUT the

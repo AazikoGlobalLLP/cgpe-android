@@ -66,7 +66,13 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
 - **This is a judgement call, not a blocker.** Doing it after the next app release removes the window.
   Doing it sooner is still defensible: a file with an expiring link is better than one written to
   throwaway disk that a redeploy wipes, which is the situation today. **Either is fine — just make it
-  a decision.** The app-side fix is written up as mobile Phase 88.
+  a decision.**
+- **UPDATE 2026-08-31 — the app-side fix is BUILT (mobile Phase 88), and it does not change the line
+  above.** New app builds now save the durable key instead of the link. But the phones in the field
+  are still on the **25 Aug** build, which cannot be patched from here, so **the window described
+  above is about the installed builds and it is still real** until a new APK is installed on those
+  handsets. Nothing extra is needed from you — this note exists so "the app fixed it" is not read as
+  "the window is closed".
 
 ### 3. 🔴🔴 THE BUCKET MUST NOT BE NAMED `uploads` — the single most important line here
 - Storage is **path-style**, so the bucket name becomes the **first path segment** of every object URL.

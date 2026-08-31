@@ -14,27 +14,76 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**🔜 NEXT — PHASE 88: THE LEGACY UPLOAD PATH MUST STOP PERSISTING A URL THAT EXPIRES.** Found
-2026-08-31 while filing the backend asks, by reading `cgpe-api`'s **Phase 101** (`9a74c9a`,
-`routes/upload.js:160-198`) rather than its commit message. **Not yet built — this is the resume point.**
-- **THE DEFECT.** Phase 101 changed the legacy multipart `POST /api/upload` to return a **short-lived
-  presigned GET** as `url`, plus `key`, **`storage_key`** and **`url_expires_in`** (the old public-style
-  URL 403s against the now-private bucket). Our legacy path reads **only `data.url`**
-  (`src/data/api.ts:3640-3642`) and records it as `file_url`, ignoring `storage_key` — so the day
-  Phase 101 deploys **and** `S3_*` is set, every legacy-path upload saves a link that **dies when the
-  signature expires**. That is precisely the trap D-122 warned about: persist the KEY, never the URL.
-- **PHASE 86'S PRESIGNED PATH IS ALREADY CORRECT** — it records `storageKey`, leaves `file_url` empty
-  and re-signs per render. **Only the legacy fallback is wrong**, and the fallback is what runs today
-  (prod presign is 404).
-- **PLANNED FIX (one file + tests):** in `uploadFile`'s legacy branch, when `storage_key` is present
-  **and `url_expires_in` is a number**, return it as `storageKey` so the existing presigned-path
-  plumbing takes over. `url_expires_in` is `null` in Phase 101's signing-failure branch, where `url`
-  IS durable — hence the two-part discriminator rather than "`storage_key` present". **The exact field
-  to key on is an open question filed to `cgpe-api` (INBOX 2026-08-31, top);** build to their answer.
-- ⚠️ **SHIPPING CODE DOES NOT FIX THE PHONES.** The newest APK in the field is **`093a3b33` (25 Aug)**,
-  which predates Phase 86 and has **no `storage_key` handling at all**; ~21 handsets are on it. The
-  deploy-day ordering note is filed to `cgpe-api` and appended to `OPS-SERVER-HANDOVER.md` §2 — but the
-  honest summary is that this is fixed by **getting a new APK out**, which the EAS quota gates.
+**🔜 NEXT — PHASE 89: READ `cgpe-api`'s SIX UNDEPLOYED COMMITS AND FIND THE NEXT PHASE 101.**
+**Not started.** Phase 88 exists only because a routine sweep of the sibling's undeployed commits
+found a change to a route the app already calls, filed under a commit message ("finish MinIO") that
+read as internal. **Six more commits have landed since that sweep was taken** and none has been read:
+`e3156d2` **Phase 102 — an admin-TIER RBAC sweep** (the likeliest to touch us: the app's own
+admin-vs-leader tier split is a documented trap, `store/roles.ts`), `c6b00bc` + `ccae449` (security —
+an unauthenticated file read, the AI-query exfiltration path), `d4fad85` **Phase 104** (query-engine
+truth, IST correctness, fuzzy search, **storage confirm**, honest WhatsApp), `ca4db88` **Phase 105**
+(**clients search by any phone field**, debug endpoints deleted), `d9d9d85`/`85d55c5` (CORS + CI).
+- **THE METHOD, which is the whole point:** the commit MESSAGE is not enough — open the diff for
+  every route the app calls. `git -C ../cgpe-backend-main log --oneline origin/main..origin/Shivam`,
+  then read the ones touching `routes/`. Phase 101's message never hinted that a response shape the
+  app consumes had changed.
+- **Deliverable:** either a filed INBOX item + an app-side phase for anything that affects us, or a
+  written "nothing owed" — the same shape as Phase 87's sweep. Also re-probe the live state, since
+  `origin/main` may finally have moved.
+
+---
+
+**✅ 2026-08-31 — PHASE 88 SHIPPED: THE LEGACY UPLOAD PATH NO LONGER PERSISTS A URL THAT EXPIRES.**
+Commit `eb9760f`. Gates: `tsc` **0** · `npm test` **1308** (was 1297, **+11**) · cache-free
+`npx eslint` **0 errors** on every touched file (3 pre-existing warnings untouched). **Inert in
+production and device-unverified**, by construction — see the last bullet.
+- **THE DEFECT.** `cgpe-api`'s Phase 101 (`9a74c9a`, `routes/upload.js:174-196`) changed what the
+  legacy multipart `POST /api/upload` returns. The bucket is private now, so the public-style URL it
+  used to send 403s for every caller; it returns a **short-lived presigned GET** as `url` plus `key`,
+  **`storage_key`** and **`url_expires_in`** instead. The app read **only `data.url`** and recorded it
+  as `file_url` — so the day Phase 101 deploys **and** `S3_*` is set, every legacy-path upload would
+  save a link that **dies when the signature does**. That is trap (a) of the D-122 contract ("persist
+  the KEY, never the URL"), arriving through the one path that contract did not cover. Phase 86's
+  presigned path was already correct; **only the fallback was wrong, and the fallback is what runs
+  today.**
+- **THE FIX IS A PURE SEAM:** `parseLegacyUploadResult` (`src/lib/fileUpload.ts`) reads the body and
+  decides. When it says "signed", `uploadFile` reports `storageKey` with an **EMPTY** `url`, which
+  puts the response onto the presigned path's **existing plumbing with no call-site change** —
+  `recordFileAttachment` writes `storage_key` with an empty `file_url`, both claim screens **await**
+  that row (it is now the only thing on the server naming the object), and every render re-signs
+  through `getAttachmentDownloadUrl`.
+- 🔑 **THE DISCRIMINATOR IS TWO-PART, AND THE SECOND PART IS THE LOAD-BEARING ONE. DO NOT SIMPLIFY IT
+  TO "`storage_key` IS PRESENT".** Phase 101 has a documented **signing-failure branch** that still
+  sets `storage_key` but falls back to the public URL and sets **`url_expires_in: null`** — and there
+  the `url` is the durable thing while the signer that just failed is the same one a later re-sign
+  would need. Keying on the key alone would **throw away the only working link**. A **finite**
+  `url_expires_in` is the server saying "this url is signed"; that, and only that, makes it
+  disposable. `Number.isFinite`, not `typeof === 'number'` — a NaN is a number and would read as
+  signed. All six shapes are pinned by tests.
+- **VERIFIED END TO END AGAINST THE PRODUCER, not assumed.** The fix only works if a key minted by the
+  *legacy* route survives `mayAccessKey` — and it does: Phase 101's D-128 change passes `ownerTag`
+  into `cloudStorage.uploadFile`, so the proxy path now builds the **same owner-scoped key shape** as
+  the presigned path (`services/cloudStorage.js:78-89, 188-206`). Without that, this fix would have
+  turned a silent expiry into a loud `not_linked` on every upload.
+- **THE EPHEMERAL WARNING IS UNCHANGED, and a test pins it.** Phase 101 left the droplet-disk fallback
+  alone; it returns neither new field, so it still goes through `isEphemeralUrl` and can still tell a
+  user their file will not be kept. A pre-Phase-101 body likewise has neither field and behaves
+  exactly as before — which, with prod still 404ing presign and reporting
+  `cloudStorageConfigured:false`, is why this ships **inert**.
+- **THREE COMMENTS CORRECTED BECAUSE THEY WOULD NOW MISLEAD** (the Phase-79 rule: a fix is not done
+  until every place saying the wrong thing reads the new value). `UploadOutcome.storageKey` said "set
+  ONLY by the presigned flow"; both claim screens explained their await-vs-fire-and-forget branch in
+  terms of *which path ran*. **The test is the `storageKey` FIELD** — the legacy path can produce one
+  now, and building on the old sentence would reintroduce the bug.
+- ⚠️ **SHIPPING THIS DOES NOT FIX THE PHONES, and that has not changed.** The newest APK in the field
+  is **`093a3b33` (25 Aug)**, which predates Phase 86 and has **no `storage_key` handling at all**;
+  ~21 handsets are on it. The deploy-day ordering note is filed to `cgpe-api` and in
+  `OPS-SERVER-HANDOVER.md` §2. This reaches users only in a **new APK**, which the EAS quota gates
+  until **1 Sep**.
+- **The open question stays open, and the code says where to change it.** Whether both fields are
+  always present on the configured path is filed to `cgpe-api` (INBOX top, 2026-08-31, still `[ ]`).
+  We built to the two-part discriminator; if they answer with a different field, `parseLegacyUploadResult`
+  is the **only** place that decides.
 
 ---
 
@@ -81,9 +130,8 @@ copy added). **Device-unverified**, and inert in the field until the backend dep
   Added the env-var names it reads and the 80 s budget note. Live state re-probed: `/voice/ask` **404**
   · `/voice/status` **404** · `/upload/presign` **404** · `cloudStorageConfigured:false` ·
   backend `origin/main` still **`990c660`**, **29 behind** `origin/Shivam`.
-- **🔑 NEXT 3 (revised after the backend-ask sweep the same day):** (1) **Phase 88** — the legacy
-  upload path persisting an expiring URL, written up above. **The only one that is unblocked**, and it
-  is buildable now; check the INBOX for `cgpe-api`'s answer on which field to key on first.
+- **🔑 NEXT 3 (revised after the backend-ask sweep the same day; item 1 SHIPPED 2026-08-31 as Phase
+  88 — see above).** ~~(1) Phase 88 — the legacy upload path persisting an expiring URL.~~
   (2) **The post-quota APK** — the EAS free-plan quota resets **1 Sep 2026**. It carries i18n Phases
   80–85, the boundary fix (owes a device walk-through), the version reconcile, the whole voice track,
   Phase 86's upload flow, Phase 87 and Phase 88 — **and it is the only way any of it reaches the ~21
