@@ -14,14 +14,28 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**🔜 NEXT — PHASE 90: THE POST-QUOTA APK. Not started.** The EAS free-plan Android quota resets
-**1 Sep 2026** (tomorrow, or today depending on the hour). **First command:**
-`npx eas-cli build:list --platform android --limit 3 --json --non-interactive` — confirm the quota
-state and the newest build *before* spending twenty minutes on a ~317 MB upload. That build is now the highest-value action in the project: it is the only
-way i18n Phases 80–85, the boundary-attribution fix, the version reconcile, the whole voice track and
-Phases 86–89 reach the **~21 handsets still on `093a3b33` (25 Aug)**. Check the quota before promising
-one — a doomed attempt still costs a ~317 MB upload. Consider adding **EAS Update (OTA)** in the same
-build to end the rebuild-per-fix cycle. *(Phase Ω stays SHUT: device-unverified work exists.)*
+**🔜 NEXT — PHASE 90: THE POST-QUOTA APK. ATTEMPTED 2026-08-31 AND REFUSED; RESUME ON 1 SEP.** The
+build was launched with gates green and the quota **was still exhausted**: *"used its Android builds
+from the Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2026)"* →
+`Error: build command failed`, **no build created**, newest is still `093a3b33` (25 Aug). ⚠️ **"Resets
+1 Sep" means 1 Sep — not the evening of the 31st.** Nothing is wrong with the code; this is billing.
+- **First command on resume:** `npx eas-cli build:list --platform android --limit 3 --json
+  --non-interactive` (confirms the quota rolled over and what the newest build is), then
+  `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android --profile preview --non-interactive`.
+- **Still the highest-value action in the project:** it is the only way i18n Phases 80–85, the
+  boundary-attribution fix, the version reconcile, the whole voice track and Phases 86–89 reach the
+  **~21 handsets still on `093a3b33`**.
+- ✅ **The attempt paid for itself — the 347 MB archive is FIXED (`4a12899`), 347.1 MB → 5.9 MB.**
+  `.easignore` **replaces** `.gitignore` for the archive (eas-cli `vcs/local.js` early-returns when it
+  exists), and it had existed since the first commit without listing `e2e/artifacts/` — so 338 MB of
+  Playwright run output shipped in every build ever made. Verified by replicating eas-cli's own
+  `Ignore.createForCopyingAsync` filter, plus a check that **zero** build-essential files are excluded.
+  Tomorrow's upload is ~5.9 MB.
+- **Open decision for that build: EAS Update (OTA).** It would end the rebuild-per-fix cycle, but it
+  adds a native module and changes the boot path, so it was deliberately NOT slipped into the tree
+  ahead of the one build that matters. Free-plan quota resets monthly (not one-shot), so the safe
+  order is: ship the known-good APK first, then a second build with OTA. **Owner's call.**
+*(Phase Ω stays SHUT: device-unverified work exists.)*
 
 ---
 

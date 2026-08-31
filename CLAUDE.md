@@ -225,9 +225,14 @@ which will reset in 5 days (on Tue Sep 01 2026)"* → `Error: build command fail
 (`eas build:list` still tops out at `093a3b33`, 2026-08-25). This is **not** the fingerprint trap below, not a
 code fault and not fixable from here — it is **billing, i.e. an OWNER decision**: either wait for the monthly
 reset (**1 Sep 2026**) or `eas billing:subscribe starter --account shivam-bhadoriya`. Note the quota is checked
-**AFTER** the ~317 MB project archive uploads, so a doomed attempt still costs several minutes — check the plan
+**AFTER** the project archive uploads, so a doomed attempt still costs the upload — check the plan
 first, and tell the owner an APK is blocked rather than saying "shipping works". The editor-side gates
 (`tsc`/`npm test`/`eslint`) are unaffected; work can continue, it just cannot reach a phone.
+**RE-CONFIRMED 2026-08-31 (Phase 90):** the quota was **still exhausted** on 31 Aug — the attempt
+failed with *"will reset in 18 hours (on Tue Sep 01 2026)"* and **no build was created**; the newest
+build is still `093a3b33`. So "resets 1 Sep" means **1 Sep, not the evening of 31 Aug** — do not
+re-attempt on the 31st expecting it to have rolled over. The one good outcome of that attempt was
+finding the 347 MB archive bug below; a refused attempt now costs a **5.9 MB** upload, not 320 MB.
 ⚠️ **"CAN WE JUST SWITCH EXPO ACCOUNTS?" — the owner asked this on 2026-08-27, and the answer has a
 trap in it.** Yes, the free quota is **per account**, so a different account can build. **But a new
 account issues a NEW ANDROID KEYSTORE, and Android refuses to install an APK signed with a different
@@ -242,7 +247,23 @@ Gradle build (`expo prebuild` + `run:android --variant release`) needs no EAS at
 machine has neither a JDK nor the Android SDK** (`java` not found, `ANDROID_HOME` empty, no
 `android/` dir — checked 2026-08-27), so it is a multi-GB setup, not a shortcut. Repeatedly farming
 free quota with fresh accounts is against Expo's terms — say so rather than proposing it.
-(Consider an `.easignore` at some point — EAS itself flags the 317 MB archive as reducible.)
+✅ **THE 317 MB ARCHIVE IS FIXED — 347 MB → 5.9 MB, 2026-08-31 (`4a12899`). This line used to say
+"consider an `.easignore` at some point"; there has been one since the FIRST COMMIT (7 Aug) and that
+was the whole problem.** 🔴 **`.easignore` REPLACES `.gitignore` for the build archive — it does not
+add to it.** `eas-cli`'s `vcs/local.js` `initIgnoreAsync` **early-returns the moment `.easignore`
+exists**, so all 32 rules in `.gitignore` were never consulted, and `e2e/artifacts/` — gitignored,
+but absent from `.easignore` — shipped **338 MB of Playwright videos and traces in every single
+build**. A doomed attempt therefore cost minutes and the archive was **347.1 MB / 820 files** for a
+project whose own source is ~6 MB. `e2e/`, `test-results/`, `playwright-report/`, `.playwright/` and
+the root `*.mp3` scratch files are now listed; excluding `e2e/` wholesale is safe and is what the
+harness already documents (tsconfig excludes it, eslint ignores `e2e/**`, Vitest is scoped to `src/`,
+never bundled). **If you add anything to `.gitignore` that is large, add it HERE too or it uploads.**
+**Measure, do not assume** — three plausible theories (Windows backslashes in `path.relative`, CRLF
+rules, a sub-`.gitignore` hijack) all died to one measurement. Replicate the real filter:
+`Ignore.createForCopyingAsync()` from eas-cli's own `build/vcs/local.js`, walk the tree, sum the
+files that survive it. That is how 347.1 → 5.9 MB was verified, along with a companion check that
+**zero build-essential files** (`app.json`, `package-lock.json`, `google-services.json`, `tsconfig`,
+`src/`, `assets/`, `public/`, `scripts/`) were excluded.
 
 ⚠️ **WINDOWS FINGERPRINT TRAP (2026-08-25, build `093a3b33` v1.10.0):** the build can fail **locally**, BEFORE
 queueing, at "Computing project fingerprint" with `UNKNOWN: unknown error, open '…node_modules\react-native-reanimated\
