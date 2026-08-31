@@ -15,3 +15,26 @@ dist-*/
 # Docs and reference material
 *.md
 !README.md
+
+# ---------------------------------------------------------------------------
+# ⚠️ THIS FILE REPLACES .gitignore FOR THE EAS ARCHIVE — it does not add to it.
+# eas-cli reads .gitignore ONLY when this file is absent (vcs/local.js,
+# initIgnoreAsync early-returns as soon as .easignore exists). So anything git
+# ignores but this file does not list IS STILL UPLOADED. That is how
+# e2e/artifacts — 338 MB of Playwright videos and traces — rode along in every
+# build until 2026-08-31: the archive was 347 MB for a ~9 MB project.
+# Measured, not assumed: replicate the filter with Ignore.createForCopyingAsync
+# from eas-cli's own vcs/local.js before believing a size claim here.
+# ---------------------------------------------------------------------------
+
+# The Phase 18 Playwright E2E harness. Never bundled into the APK (tsconfig
+# excludes it, eslint ignores e2e/**, Vitest is scoped to src/), so excluding
+# the whole directory is safe — and e2e/artifacts alone is 338 MB of run output.
+e2e/
+test-results/
+playwright-report/
+.playwright/
+
+# Owner scratch recordings in the repo root (~3.4 MB). The app bundles no audio
+# assets, so nothing in src/ can reference these.
+/*.mp3

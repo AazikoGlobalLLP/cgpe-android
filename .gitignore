@@ -55,3 +55,9 @@ e2e/artifacts/
 test-results/
 playwright-report/
 .playwright/
+
+# EAS keystore export — SECRET. `eas credentials` → "Download credentials from EAS
+# to credentials.json" writes the .jks AND its keystore/key passwords in PLAINTEXT
+# here. The .jks is already ignored above; this file must never be committed either.
+credentials.json
+credentials/
