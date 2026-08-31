@@ -6,6 +6,90 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-31 — Phase Ω: the production developer's message is a GATED final phase, not a running document
+
+**Context.** The owner asked that everything the app side needs from the person who runs the
+production server be collected now and sent **as one message, once, after all phases are finished** —
+"koi bhi phase pending status mein nahi hona chahiye." Those dependencies were scattered across
+`CLAUDE.md`, four INBOX items and several session handoffs, in our vocabulary, with values that go
+stale (`cloudStorageConfigured`, the deploy gap, whether a probe 404s).
+
+**Decision.** Split it in two. `docs/OPS-SERVER-HANDOVER.md` is the **running list** — every phase
+appends to it, every item must trace to a probe or a named file, no secrets, only variable NAMES, and
+its "Live state" table is re-probed whenever the file is touched. **Phase Ω** in `docs/PHASES.md` is
+the **message**, and it is blocked by design: it may start only when no phase is planned, blocked, or
+"built but device-unverified" — that last one explicitly, because it is the status most of this
+project's work sits in and it is not Done.
+
+**Consequence.** The final message becomes assembly rather than archaeology, and it cannot be sent
+early. The reason the gate is worth enforcing is that this reader acts on the message **once**: a
+half-true instruction to production is worse than no instruction, and a message written while work is
+still moving is stale the day after it is sent. The row is in the status board as `Ω` with a lock, so
+a session scanning for "what's left" cannot mistake it for available work.
+
+---
+
+## 2026-08-31 — Phase 86: adopt the presigned MinIO upload flow, with a legacy fallback that makes it inert (`4d1c31a`)
+
+**Context.** `cgpe-api` Phase 95 (D-122, INBOX 2026-08-27) replaced the multipart proxy upload with a
+three-call presigned flow and the app had not started it — `grep -rn "presign\|storage_key\|
+download-url" src/` returned zero hits four days later. Meanwhile production has neither the routes
+(deployed `origin/main` is 29 commits behind) nor the storage env (`cloudStorageConfigured:false`,
+re-probed today), so a hard switch would have broken uploads outright.
+
+**Decision.** Adopt it presign-first with an explicit fallback: `POST /upload/presign` answering
+**404 / 501 / 503** returns the upload to the legacy multipart path, unchanged. A **415 does not fall
+back** — a rejected type can only fail again, and retrying it costs the user another transcode and
+another upload over mobile data. The read half is wired too (`listAttachments` +
+`getAttachmentDownloadUrl`, consumed by the claim screen), so the flow has a real consumer rather
+than a `download-url` helper nobody calls — the zero-consumer defect Phases 79–81 were spent removing.
+
+**Consequence.** Every upload on production still takes the old path today and behaves exactly as it
+did before; the day OPS sets `S3_*` and merges, existing builds switch over with no further change.
+Same reasoning that made sending `entity_id` early safe. Three sub-decisions worth not re-litigating,
+each written at the code:
+
+- **A `403` on the signed PUT is `'server'`, never `'unauthorized'`.** That request carries no session
+  at all — a 403 means the signature did not verify (a `Content-Type` mismatch, or the 300 s window
+  elapsed), which a retry fixes. `'unauthorized'` copy tells the user their role cannot upload and
+  sends them to their branch admin, which would be false and infuriating.
+- **The `/file-attachments` write is awaited and reported on the presigned path** (new `'not_linked'`
+  failure), while staying fire-and-forget on the legacy path. The reasoning genuinely inverts: legacy
+  already has a durable public URL, so a failed record must not read as a failed upload; with presign
+  that row is the **only** thing naming the object, so a silent failure leaves the bytes unreachable
+  and reporting success would be the "captures vanish" bug wearing a green tick.
+- **`?entity_id=` is filtered twice.** The server-side filter is backend Phase 94 and is not deployed,
+  so an older build answers with the whole collection — without the second filter a claim would list
+  another claim's documents. On prod today that yields an empty list, which is honest. **Keep the
+  client-side filter after the deploy lands**; it costs nothing and it is the only thing between a
+  stale server and a cross-claim leak.
+
+---
+
+## 2026-08-31 — A lazy `require()` is untestable: use a seam, not a stub (`src/lib/binaryUpload.ts`)
+
+**Context.** The presigned PUT has to go through `expo-file-system`'s native upload task — `fetch`
+cannot stream a `file://` URI as a raw body on React Native. Per the existing native-module rule that
+module is `require`d lazily, never imported. But `Platform.OS` is `'android'` in the test stub, so the
+native branch is the one the suite takes, and the whole presigned path was reachable in tests **only
+as a caught throw** — green, and pinning nothing.
+
+**Decision.** Two interception routes were tried and **both were backed out because they do not
+work**: a `vitest.config.mts` alias (Vite aliases only rewrite Vite's own module graph) and a
+`vi.mock()` factory (Vitest's module mocking is ESM-only). A probe test proved the `require` reaches
+the real `node_modules` copy and dies on *"Stripping types is currently unsupported for files under
+node_modules"*. The fix is a **seam**: the native call moved into `src/lib/binaryUpload.ts`, which
+exposes one plain `putBinary()` function, and callers `import` that. `vi.mock('@/lib/binaryUpload')`
+then works normally.
+
+**Consequence.** The contract's sharpest trap is now pinned by a test — the PUT's `Content-Type` is
+**signed**, so sending anything but the server's own string 403s at MinIO, silently, in the field.
+The module's own top level stays native-free, so the Vitest graph is still safe. Written into
+`CLAUDE.md` as the **third** native-module trap. **Do not add a `test/stubs/*` entry for a module
+reached by `require`** — it silently does nothing.
+
+---
+
 ## 2026-08-25 — Loophole hunt round 4: 5 fixes over the previously-unaudited lower-risk surfaces (`6736ede`)
 
 **Context.** Rounds 1–3 audited the daily-flow / location / offline / roles code. Four surfaces were

@@ -893,6 +893,26 @@ the reasoning is written in its header. **Do not add a `test/stubs/*` entry for 
   test cannot certify translation happened; human copy is load-bearing and machine translation is
   forbidden (PHASE-19 §4).
 
+## The server handover — append to it as you go (owner-mandated 2026-08-31)
+
+- **`docs/OPS-SERVER-HANDOVER.md` is the RUNNING LIST of everything the production server developer
+  owes us** — deploys, `.env`, nginx, DNS, storage. **Every phase that discovers a server-side
+  dependency appends to it**, so the final message is assembly, not archaeology. Rules written in the
+  file: never write an item from memory (each line traces to a probe or a named file), **re-probe the
+  "Live state" table whenever you touch it**, append rather than rewrite, and **variable NAMES only —
+  no secrets, ever**.
+- **`docs/PHASES.md` → "Phase Ω" is the MESSAGE, and it is BLOCKED BY DESIGN.** It may start only when
+  **no phase is planned, blocked, or "built but device-unverified"** — that last one explicitly, since
+  it is the status most of this project's work sits in and it is **not** Done. The person who runs
+  production acts on that message **once**; a half-true instruction to production is worse than none,
+  and one written while work is still moving is stale the next day. **Do not start it early**, and do
+  not send `OPS-SERVER-HANDOVER.md` itself — it is written in our vocabulary, for us.
+- 🔴 **The one item in it that must never be lost: the MinIO bucket must NOT be named `uploads`.**
+  Storage is path-style, so the bucket is the first path segment, and `isEphemeralUrl` would then read
+  every durable object as the local-disk fallback and warn users their evidence will not be kept. The
+  app cannot fix this, and the obvious narrowing was refused on purpose (it would trade a harmless
+  false alarm for a dangerous false reassurance).
+
 ## Done means
 `npx tsc --noEmit` clean, `npm test` green, no new lint errors, and the affected rows of
 `TESTING_GUIDE.md` walked by hand **on a device** (web does not exercise haptics, AsyncStorage

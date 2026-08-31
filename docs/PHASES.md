@@ -54,6 +54,15 @@ until the EAS quota resets.**
 - **STILL OPS-BLOCKED, unchanged by this phase:** `S3_*` + `BACKEND_URL` on the droplet, the
   `origin/main` merge, and **the bucket must not be named `uploads`** (`isEphemeralUrl` would warn
   users their durable files will not be kept — that narrowing was refused on purpose).
+- **🔒 NEW, OWNER-MANDATED THE SAME DAY: `Phase Ω` — the production/server developer's message.** The
+  running list it draws from is **`docs/OPS-SERVER-HANDOVER.md`** (created today, every live value
+  re-probed, no secrets — variable names only), and **every phase from now on appends to it**. Phase Ω
+  itself is **gated**: it runs only when no phase is planned, blocked, or built-but-device-unverified.
+  Full brief in the "🔒 Phase Ω" section below; the status board carries it as row `Ω`.
+- **LIVE PRODUCTION RE-PROBED 2026-08-31** (not quoted): `/health` **200 ~37 ms** · `/upload`
+  **`cloudStorageConfigured:false`** · `POST /upload/presign` **404** · `GET /upload/download-url`
+  **404** · `POST /voice/ask` **404** · backend `origin/main` = **`990c660`**, which is **29 commits
+  behind** `origin/Shivam`.
 
 ---
 

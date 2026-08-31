@@ -1,89 +1,99 @@
-# HANDOFF — CGPE Connect (Android) — Phase 86 (project audit + owner status doc) — 2026-08-29
+# HANDOFF — CGPE Connect (Android) — Phase 86 (presigned MinIO upload) — 2026-08-31
 
-> ⚠️ **THIS SESSION WROTE NO CODE.** It was a full read-only audit plus one owner-facing document.
-> `src/` is untouched; the only new file is `docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md`.
+> The presigned upload contract that had been sitting open for four days is **built, tested and
+> pushed**. The owner also mandated a **new final phase (Phase Ω)** — the production/server
+> developer's message — which is gated to run only after every other phase is Done.
 >
-> ⚠️ **A CONCURRENT SESSION IS COMMITTING IN THIS SAME CHECKOUT.** HEAD moved `5c03103` → `12bdaf7`
-> *during* this session — that session committed the voice-track handoff. **Its handoff is preserved
-> verbatim at the bottom of this file; do not delete it.** Read BOTH sections before starting.
+> ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM. Do not delete it** — it is still
+> the only record of the Skia / Lottie / web-stub traps.
 
-## Done (observable)
+## Done
 
-- **Every gate re-run live, not quoted from docs:** `npx tsc --noEmit` **0 errors** · `npm test`
-  **1254 passed / 77 files** · dictionary **446 keys**, orphan scan **18**. HEAD == `aaziko/Shivam`.
-- **Production probed live** (the four facts the owner keeps asking about, each re-verified today):
-  - `GET /internal/api/health` → **200 in ~40 ms** — backend healthy.
-  - `GET /internal/api/upload` → **`cloudStorageConfigured: false`** — file storage still OFF in prod.
-  - `POST /internal/api/voice/ask` → **404** — the voice backend proxy does not exist yet.
-  - backend `origin/main` = **`990c660`** — Phase 94 (`fda199c`) and Phase 95 (presigned MinIO) are
-    **NOT deployed**, so video upload + `entity_id` still fail on a phone.
-- **The last APK is still `093a3b33` (25 Aug).** **76 commits** have landed since it (**40 touching
-  `src/`**), so every i18n phase 80–85, the boundary fix, the version reconcile and the whole voice
-  track are on **nobody's phone**.
-- 🔑 **NEW FINDING — an OPEN `cgpe-mobile` INBOX item nobody has started.** `contracts/INBOX.md`
-  (2026-08-27, from `cgpe-api` Phase 95) hands the app the **presigned MinIO upload contract**
-  (`POST /upload/presign` → signed `PUT` → `storage_key` → `GET /upload/download-url`). Its status
-  box `[ ] cgpe-mobile — adopt the presign→PUT→storage_key→download-url flow` is **unticked**, and
-  `grep -rn "presign\|storage_key\|download-url" src/` returns **zero hits** — the app is still on
-  the old multipart `/upload` + `/file-attachments` path. This is the **highest-value unblocked
-  app-side work that exists right now**, and it was not on `docs/PHASES.md`'s Now.
-- **Owner status document delivered** — `docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md`, plus a published
-  page at `https://claude.ai/code/artifact/2a437a25-4156-440e-8247-bb5c34ab2a03`. Zero technical
-  terms, respectful `aap` register, scoped to exactly the points the owner dictated.
+- **The app is on the presigned MinIO flow** (`cgpe-api` Phase 95 / D-122, filed 2026-08-27, adopted
+  today). Attaching a document now goes: `POST /upload/presign` → a signed `PUT` **straight to
+  MinIO** → `POST /file-attachments` with `storage_key` and an empty `file_url`. The bytes no longer
+  pass through the API server and the app never holds storage credentials.
+- **The claim screen now shows what the register actually holds.** `claim/[id].tsx` lists the
+  documents recorded against the claim and opens each through a **freshly signed URL, per tap** —
+  so the read half of the contract has a real consumer instead of a helper nobody calls.
+- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1289 / 77 files** (was 1254, +35)
+  · cache-free `npx eslint` **0 errors** on every touched file · `npx expo export -p web` **exit 0**
+  (the boot-safety gate — a native `require` was added, so this mattered).
+- **Both `cgpe-mobile` INBOX boxes closed**, each with a reply underneath explaining the reasoning,
+  and both grepped back after writing (the file grew 814,049 → 819,033 bytes; a `.bak` was taken first).
+- **The server-side dependency list is now a single maintained file** —
+  `docs/OPS-SERVER-HANDOVER.md` — with every live value re-probed today, not quoted.
 
 ## Files changed
 
-- `docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md` — **NEW.** Plain-language 5-day update for Sagar Sir:
-  what completed, the three live tracks (voice / translation / store deployment), and the two
-  blockers the owner wanted highlighted (EAS quota; the App Store + Play Store breakdown).
-- `docs/HANDOFF.md`, `docs/STATUS.md`, `docs/DECISIONS.md`, `docs/PHASES.md`, `CLAUDE.md` — board
-  update + the presigned-upload finding recorded so the next session does not miss it again.
-- **No `src/` file was touched.**
+- `src/lib/binaryUpload.ts` — **NEW.** The native binary `PUT` behind one seam. `fetch` cannot stream
+  a `file://` body on React Native, so this wraps `expo-file-system`'s upload task; it also exists so
+  the path is testable at all (see Decisions).
+- `src/lib/fileUpload.ts` — the pure seam: `parsePresignTarget` / `classifyPresignResponse` /
+  `classifyPutStatus` / `parseDownloadUrl`, plus a new `'not_linked'` failure and its copy.
+- `src/data/api.ts` — presign-first `uploadFile` with the legacy fallback; `recordFileAttachment`
+  sends `storage_key` with an empty `file_url`; new `listAttachments` + `getAttachmentDownloadUrl`.
+- `src/app/claim/[id].tsx` — the register's document list + open-via-signed-URL; the record is
+  **awaited** on the presigned path; the "cannot link a file to a claim yet" caption is now
+  conditional, because the list below it would otherwise contradict it.
+- `src/app/claim-new.tsx` — the same await/report rule on the presigned path.
+- `src/data/__tests__/api-resilience.test.ts`, `api-file-attachments.test.ts`,
+  `src/lib/__tests__/fileUpload.test.ts` — +35 tests.
+- `docs/OPS-SERVER-HANDOVER.md` — **NEW.** The running list for the production server developer.
+- `docs/PHASES.md` — Phase 86 in `## Now`; **Phase Ω** added, gated. `CLAUDE.md` — presign marked
+  adopted; the lazy-`require` trap written up as the third native-module trap.
 
 ## Decisions made
 
-- **Phase 86 is the presigned MinIO upload adoption, not more i18n.** It is the only outstanding item
-  that is (a) owed to a sibling session in writing, (b) fully specified, (c) buildable today with no
-  owner input, and (d) the actual fix for the owner's #1 field complaint ("documents vanish"). The
-  i18n residue is all owner-copy-blocked; the store track is all account/fee-blocked.
-- **Ship it even though `S3_*` is unset in prod.** The three routes answer `503 not_configured` until
-  OPS sets the env, so adopting the flow early is inert-safe — the same reasoning that made sending
-  `entity_id` early safe against the old build.
-- **The concurrent session's handoff is preserved, not overwritten.** `/handoff` says overwrite, but
-  that session's voice-track snapshot is the only record of the Skia/Lottie/web-stub traps. Losing it
-  to satisfy a template would be a real regression. Both sections now coexist.
-- **Did not touch the other session's artifact.** An artifact `CGPE Connect Panch Din Ka Kaam`
-  (`52fa0b74…`) covering the same subject already existed on the owner's account, from the parallel
-  session. Left untouched; the choice of which to send was handed to the owner.
+- **A missing route is not a failure.** `presign` answering **404 / 501 / 503** falls back to the
+  legacy multipart path, unchanged. That is what makes shipping ahead of the backend deploy inert
+  rather than a field outage — production is **404 today**, so every upload still takes the old path.
+  A **415 deliberately does not fall back**: a rejected type can only fail again.
+- **A `403` on the PUT is `'server'`, never `'unauthorized'`.** That request carries no session at
+  all, so a 403 means a signature mismatch or an expired 300 s window — which a retry fixes.
+  `'unauthorized'` copy would have sent the user to their branch admin for nothing.
+- **The `/file-attachments` write is awaited and reported on the presigned path** (new
+  `'not_linked'`), and stays fire-and-forget on the legacy path. The reasoning inverts between them:
+  legacy has a durable URL already, so a failed record must not read as a failed upload; with
+  presign that row is the **only** thing naming the object, so a silent failure would be an
+  unreachable file wearing a green tick.
+- **`?entity_id=` is filtered twice.** The server-side filter is backend Phase 94 and is not
+  deployed, so an older build answers with the **whole collection**. Filtering again on the value the
+  server echoes back yields an honestly-empty list instead of one claim showing another claim's
+  documents. **Keep the client-side filter after the deploy lands.**
+- **The native call went behind our own module rather than a test stub.** A lazy `require()` resolves
+  through **Node, not Vite** — so a `vitest.config.mts` alias cannot redirect it and `vi.mock()`
+  cannot intercept it. Both were tried and backed out; a probe proved the `require` reaches the real
+  `node_modules` copy. Now in `CLAUDE.md` as the third native-module trap.
+- **Phase Ω exists and is blocked by design** (owner instruction, 2026-08-31): the production
+  developer's message is written **only** when no phase is pending, blocked, or built-but-unverified.
 
 ## Known broken / deliberately skipped
 
-- **The audit is read-only — nothing it found was fixed.** Every blocker listed above is still open.
-- **The first artifact URL published this session went dead** (deleted / not found on the account
-  minutes after publishing). Re-published at a new URL and **verified with `action: list`** before
-  handing it over. Verify a link before giving it to the owner.
-- **`docs/UPDATE-FOR-SAGAR-SIR-2026-08-29.md` is deliberately incomplete as an engineering doc** —
-  the owner scoped it to a fixed point list. MinIO/storage, the backend deploy gap, the blank-screen
-  bug and the role matrix were **left out on instruction**, not forgotten. Do not "fix" it by adding
-  them; those live in `docs/OWNER-ACTIONS-2026-08-27.md`.
-- **Untracked repo-root files left alone** (`*.mp3`, `translation-v.01.txt`,
-  `cgpe-connect.staff_unified.json`, the store spec `.md`, `.claude/settings.json`) — owner's local
-  files. `translation-v.01.txt` was checked and is an **already-wired** drop (consent copy), not a
-  pending one.
+- **Nothing from this phase has run on a handset.** The EAS free-plan quota still blocks any APK, so
+  the whole flow is code-verified only. The list, the signed-URL open and the `'not_linked'` path all
+  need a device walk-through in the next build.
+- **It is inert in the field until OPS acts** — `S3_*` and `BACKEND_URL` are unset and the backend
+  deploy is **29 commits behind**, so presign 404s and uploads still land on droplet disk. That is
+  expected, not a regression.
+- **`docs/OPS-SERVER-HANDOVER.md` is the list, not the message.** It is written in our vocabulary and
+  must not be sent as-is; Phase Ω turns it into something a server developer can act on.
+- **One pre-existing lint warning** on `claim/[id].tsx` (`nonce` dep) left alone — it predates this
+  work and touching it is unrelated churn.
+- **Untracked repo-root files left alone** (`*.mp3`, `*.txt`, the staff JSON, the store spec,
+  `.claude/settings.json`) — the owner's local files.
 
 ## Next session starts here
 
-- **Phase 86: adopt the presigned MinIO upload flow.** `POST /upload/presign` → signed `PUT` with the
-  **exact** returned `Content-Type` → `POST /file-attachments` with `storage_key` (leave `file_url`
-  empty) → render via `GET /upload/download-url?key=…`, fetching a fresh signed URL each render.
-  Then tick the `cgpe-mobile` box in `contracts/INBOX.md` and grep the reply back.
-- **First command:** `npm test` (expect **1254** green), then
-  `grep -n "presign" ../contracts/INBOX.md` and read that item in full.
-- **Watch out for:** **store the KEY, never the URL** — signed URLs expire in 300 s, so persisting one
-  ships a link that dies. And the `PUT` is signed against the exact `Content-Type` returned by
-  `presign`: any other value, or omitting the header, **403s at MinIO**. Also — a **concurrent session
-  is committing into this checkout**: `git fetch aaziko` and check ancestry before assuming HEAD is
-  where you left it, and never force-push/reset to tidy its commits.
+- **Phase: voice go-live** — still blocked on `cgpe-api` building `POST /api/voice/ask` (**404**
+  probed today). If it is still 404, the next unblocked work is the i18n residue, all of which needs
+  the owner's copy: hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.
+- **First command:** `npm test` (expect **1289** green), then
+  `grep -n "voice/ask" ../contracts/INBOX.md` for the `cgpe-api` reply.
+- **Watch out for:** **Phase Ω must not be started early.** It is the message that goes to the person
+  who runs production, they will act on it once, and a message sent while work is still moving is
+  stale the next day. Check every phase is Done first — "built but device-unverified" is **not** Done.
+  Second trap: after the backend deploy lands, do **not** remove the client-side `entity_id` filter.
 
 ---
 ---

@@ -1,17 +1,28 @@
 # Status — CGPE Connect (Android)
-**Updated:** 2026-08-29
-**Working on right now:** Checking the whole project end to end, and writing you a plain-language summary of where everything stands.
+
+**Updated:** 31 August 2026
+
+**Working on right now:** Making sure a document an advisor attaches to a claim is actually kept, and
+can be opened again later.
 
 **Done this week:**
-- Went through the entire project and checked every claim against the real thing rather than trusting our own notes — the app itself is healthy and everything we have built still works.
-- Found one piece of work that had quietly slipped through: the team that runs the server sent us the instructions for a proper file-storage system two days ago, and nobody had started it on the app side. That is now the next job, and it is the real fix for documents going missing.
-- Wrote a short, non-technical update for Sagar Sir covering the last five days, what is being worked on now, and exactly where we are stuck.
-- Confirmed the three things that are still waiting on other people: file storage is still switched off on the server, the voice feature's server half has not been built, and the finished server work from earlier is still not on the live machine.
-- Voice command feature and more language translations were also completed this week by the parallel piece of work.
+- Photos, videos and documents now go **straight to the company's file storage** instead of passing
+  through the main server. This is the fix for the complaint that attached documents disappear.
+- A claim screen now **shows the documents the office is holding against that claim**, and each one
+  opens with a fresh, private link. Before this, an advisor could attach a file and never see it again.
+- If a file reaches storage but the office record fails to save, the app now **says so plainly** and
+  asks the advisor to attach it again — instead of showing a tick for a file nobody could ever find.
+- The app menus, dashboard and claim screens continue to read correctly in all five languages.
+- Every automated check is passing: **1,289 checks**, all green.
 
 **Blocked on:**
-- The free monthly allowance for making a new installable app is used up until 1 September, so nothing built since 25 August has reached a single phone yet.
-- The Apple developer account and the Google Play account, both of which need to be bought before the app can go on either store.
-- A short list of translations from you, plus the store artwork, the two web pages, and a test login for the store reviewers.
+1. **The server team.** The new storage settings are not switched on yet, and the latest server work
+   (29 changes) has not been put live. Until then the app quietly keeps using the old method — nothing
+   is broken, but the improvement is not yet reaching phones. A full written list has been prepared
+   for the server developer.
+2. **The app-store build allowance**, which is used up until it resets. Nothing built in the last week
+   is on anyone's phone yet — one build will carry all of it.
+3. **Translations.** Several screens are waiting on Gujarati and Hindi wording that only you can supply.
 
-**Next:** Build the proper file-storage handling into the app so documents stop going missing, then produce the store builds after 1 September.
+**Next:** Finish the remaining phases, then send the server developer one complete instruction
+message — this has been locked so it cannot be sent early or half-finished.
