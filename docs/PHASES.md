@@ -201,6 +201,49 @@ no APK before 1 Sep.
 
 ---
 
+## 🔒 Phase Ω — THE PRODUCTION / SERVER DEVELOPER'S MESSAGE (runs LAST, and only last)
+
+**Owner-mandated, 2026-08-31.** This phase is **not optional** and it is **not startable early**.
+
+### The gate — check it before doing anything else in this phase
+Phase Ω may begin **only when every other phase in this file is Done.** Specifically:
+- **no phase is in a pending / planned status**,
+- **no phase is "Built but device-unverified"** — those are not Done; they are waiting on a handset,
+- **no phase is blocked** on the owner, on `cgpe-api`, or on a copy drop.
+
+If even one of those is open, **stop and say so**. Sending the server developer a message while work
+is still moving means the message is stale the day after it is sent, and this is a person who will
+act on it once. A half-true instruction to production is worse than no instruction.
+
+### What this phase produces
+**One message, addressed to the developer who runs the production server**, containing every
+server-side dependency the whole project accumulated. Source: **`docs/OPS-SERVER-HANDOVER.md`** —
+the running list that every phase appends to. Do **not** re-derive the contents; that file exists so
+this phase is assembly, not archaeology.
+
+### How to write it
+1. **Re-probe the live state FIRST** and put the fresh numbers in the message. The "Live state" table
+   in `OPS-SERVER-HANDOVER.md` is dated for exactly this reason — a value that was true a week ago is
+   not evidence. `/health`, `GET /upload` (`cloudStorageConfigured`), `POST /upload/presign`,
+   `POST /voice/ask`, and `git ls-remote origin refs/heads/main` on the backend.
+2. **Order it by consequence, not by discovery date.** Deploy → `S3_*` → the bucket-name rule →
+   `BACKEND_URL` → CORS sequencing → nginx → the MSS/IPv6 clamp → the dead env vars.
+3. **State each item as: what to do · why it matters · how they will know it worked.** No app
+   vocabulary, no file paths, no commit hashes — this reader does not have our repo open.
+4. **Mark what is already done** (the closed section) so they do not redo it, and **mark what is not
+   theirs** (EAS quota, Apple account, store assets) so it does not land back with them.
+5. **No secrets.** Variable NAMES only. Never a key, a password, or a credentialled URL.
+6. **The bucket-name rule (`OPS-SERVER-HANDOVER.md` §3) must be impossible to miss** — it is the one
+   item that silently produces a wrong-but-plausible result, telling users their saved evidence will
+   not be kept. Put it where it cannot be skimmed past.
+
+### Done when
+The message exists as a file under `docs/`, is handed to the owner to relay, and
+`docs/OPS-SERVER-HANDOVER.md` is marked as delivered with that date. Nothing in the message is
+quoted from memory; every claim traces to a probe run that day or to a named file.
+
+---
+
 ## Superseded — Now, as of 2026-08-27 (after Phase 83)
 
 **✅ 2026-08-27 (night) — PHASE 83: THE OWNER CLEARED FOUR OF THEIR OWN BLOCKERS IN ONE MESSAGE, AND
@@ -1272,6 +1315,7 @@ session back-filling it — the information already exists in a better-maintaine
 
 | # | Phase | Status |
 |---|---|---|
+| **Ω** | **FINAL — the production/server developer's message. GATED: runs only when every other phase is Done.** | 🔒 **BLOCKED BY DESIGN** — owner-mandated 2026-08-31. See "Phase Ω" below. The running list it draws from is `docs/OPS-SERVER-HANDOVER.md`, which every phase appends to. **Not startable while any phase is Planned / Built-but-unverified / blocked.** |
 | 77–80 | see `## Now` | **Built** 2026-08-26/27 — splash + LIC + storage-clear; i18n Batch 2 sweep + hourly GPS + video evidence; sign-in token leak + error boundary + backend Phase 94 consumed; the i18n free-wins sweep (73 sites) + Batch 6 extraction + the owner relay sheet. All device-unverified — no APK possible until 1 Sep 2026 |
 | 1 | Write-path honesty | **Built** — handset verification outstanding |
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
