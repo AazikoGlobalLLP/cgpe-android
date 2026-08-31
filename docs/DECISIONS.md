@@ -5289,3 +5289,57 @@ new APK on those handsets does that.
 finds nothing and fails the assertion (it did, first try). Normalise the anchor to the file's own line
 ending before matching. The write-to-temp-then-assert-larger rule is what turned that into a no-op
 instead of damage.
+
+---
+
+## 2026-08-31 (Phase 90) — the APK was refused by the quota, and the attempt found a 58x archive bug
+
+**Context.** Phase 90 is the post-quota APK: the only way i18n Phases 80–85, the boundary-attribution
+fix, the version reconcile, the presigned-upload work (86–88) and the whole voice track reach the ~21
+handsets still on `093a3b33` (25 Aug). Gates were green going in (`tsc` 0, `npm test` 1309/77).
+
+**The build was attempted and REFUSED.** `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android
+--profile preview --non-interactive` failed with *"This account has used its Android builds from the
+Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2026)"* → `Error: build command
+failed`, **no build created**; `build:list` still tops out at `093a3b33`. **Decision: report it as a
+blocked phase rather than work around it.** Switching Expo accounts is the only "workaround" and it
+issues a new keystore, which costs all 21 users their session, their AsyncStorage clock keys and the
+offline queue — already documented, not re-litigated. ⚠️ **Recorded for next time: "resets 1 Sep"
+means 1 Sep, not the evening of the 31st.**
+
+**D — the archive has been 347 MB for a ~6 MB project, in every build ever made.** The refusal cost a
+320 MB upload, which contradicted a pre-flight estimate of ~12 MB computed from `git ls-files -co
+--exclude-standard`. Chasing that discrepancy found the cause: **`.easignore` REPLACES `.gitignore`
+for the EAS archive — it does not add to it.** `eas-cli`'s `build/vcs/local.js` `initIgnoreAsync`
+early-returns the moment `.easignore` exists, so none of `.gitignore`'s 32 rules were consulted. This
+project has had a `.easignore` since its **first commit (7 Aug)**, listing only `.agents/`,
+`graphify-out/`, `dist*/`, `.expo/`, `*.md` — so `e2e/artifacts/`, gitignored but unlisted there,
+uploaded **338 MB of Playwright videos and traces every time**. Fixed in `4a12899` by adding `e2e/`,
+`test-results/`, `playwright-report/`, `.playwright/` and root `/*.mp3`: **347.1 MB / 820 files →
+5.9 MB / 302 files.** Excluding `e2e/` wholesale is safe and is what the harness already documents
+(tsconfig excludes it, eslint ignores `e2e/**`, Vitest is scoped to `src/`, never bundled).
+
+**Note — three plausible theories died to one measurement, and that is the transferable lesson.**
+Windows backslashes in `path.relative` defeating the `ignore` package; CRLF-terminated rules (this
+tree is all-CRLF, and that trap is real elsewhere — see Phase 88); and a sub-`.gitignore` under
+`.agents/skills/gstack/` hijacking the root rules. Each was consistent with the symptom and each was
+wrong. The measurement that settled it: import `Ignore.createForCopyingAsync` from eas-cli's **own**
+`build/vcs/local.js`, walk the tree applying it exactly as `fs.cp`'s filter does, and sum what
+survives. Paired with a companion check that build-essential files (`app.json`, `package-lock.json`,
+`google-services.json`, `tsconfig`, `src/`, `assets/`, `public/`, `scripts/`) still ship — excluding
+one of those would have cost a build, which is the one currency this project cannot spare.
+
+**D — EAS Update (OTA) was deliberately NOT added ahead of this build.** It is the standing
+recommendation and would end the rebuild-per-fix cycle, but it adds a native module and changes the
+boot path, and the build it would ride on is the one that finally reaches 21 handsets after six days.
+The free quota resets **monthly, not once**, so the safe order costs nothing: ship the known-good APK
+first, then a second build carrying OTA. **Left as an open owner decision rather than taken quietly.**
+
+**Note — the `.gitignore` rule for `credentials.json` / `credentials/` was committed, not left local.**
+`eas credentials` writes the Android signing key *and its keystore/key passwords* there in plaintext.
+It was sitting as an uncommitted working-copy edit; it only adds ignore rules, and leaving a
+keystore-password guard uncommitted is a real risk on any other clone.
+
+**Note — the archive fix is unverified against a real build.** No build has consumed it. If tomorrow's
+build fails on a file it cannot find, `.easignore` is the first suspect and `git revert 4a12899` is
+the fallback.

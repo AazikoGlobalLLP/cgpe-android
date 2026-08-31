@@ -1,102 +1,101 @@
-# HANDOFF — CGPE Connect (Android) — Phase 89 (the sibling's undeployed commits, read) — 2026-08-31
+# HANDOFF — CGPE Connect (Android) — Phase 90 (the post-quota APK) — 2026-08-31
 
-> Phase 89 is **shipped and pushed** (`968955e` on `aaziko/Shivam`). It found that **team
-> notifications are silently broken on production right now** — a server-side bug, already fixed in
-> `cgpe-api`'s undeployed window, that the app cannot detect and owes no code for.
+> **The APK was NOT built. The EAS free-plan quota was still exhausted on 31 Aug** — it resets on
+> **1 Sep**, and "1 Sep" does not mean the evening of the 31st. Nothing is wrong with the code; the
+> gates were green going in. **Phase 90 is unfinished and stays the next phase.**
 >
-> **The next action is the APK, not another phase.** The EAS free-plan quota resets **1 Sep**.
+> The attempt was not wasted: chasing why it cost a 320 MB upload found that **every EAS build ever
+> made has uploaded 338 MB of Playwright run output**. Fixed and pushed — tomorrow's upload is ~6 MB.
 >
 > ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM. Do not delete it** — it is still
 > the only record of the Skia / Lottie / web-stub traps.
 
 ## Done
 
-- **We now know that the "send a notice to the team" button does nothing, and why.** On the backend
-  running in production today, dispatching a notification writes each row under the app's `USR-…` id,
-  while the read behind every notification bell looks the rows up by the Profile `_id` hex string. The
-  two never match. The server inserts the rows, counts them, and tells the app it sent them to N
-  people — and not one person can ever see them. Nobody had reported it, because it looks like a
-  success from the sending end and like silence from the receiving end.
-- **It is already fixed on the backend, and needs no app change** — it is repaired by the pending
-  merge and a `:3001` restart alone. Unusually for this queue, that means it helps the ~21 handsets
-  **already in the field** without waiting for a new APK.
-- **Every other undeployed backend commit was read and cleared, with a reason recorded for each** —
-  so the next session does not have to wonder whether the window holds another surprise. Seven
-  commits (backend Phases 102–106), every touched route the app actually calls, read as diffs rather
-  than from their commit messages.
-- **One dead field removed from the app's upload request** — a value the server now stamps itself and
-  which the app could only ever have sent empty.
-- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1309 / 77 files** (was 1308, **+1**)
-  · cache-free `npx eslint` **0 errors** on all three touched files (2 pre-existing warnings in
-  `api.ts` untouched).
+- **We now know the build archive was 58x bigger than it needed to be, and it is fixed.** Every EAS
+  build this project has ever made uploaded the entire Playwright test-output folder — 338 MB of
+  screen recordings and traces that have nothing to do with the app. The upload is now **5.9 MB
+  instead of 347.1 MB**. This does not change the app; it makes every future build start faster and
+  makes a refused attempt cheap instead of costly.
+- **The reason it happened is now written down**, because it is genuinely counter-intuitive and would
+  otherwise be re-discovered the hard way: the `.easignore` file **replaces** `.gitignore` for the
+  build upload rather than adding to it, so the project's ordinary ignore rules were never applied.
+  That file has existed since the project's first commit on 7 Aug, which is why nobody looked at it.
+- **A secret-protection rule that was sitting uncommitted is now committed.** `eas credentials` writes
+  the Android signing key *and its passwords* into `credentials.json` in plain text; the rule keeping
+  that out of git existed only in the local working copy.
+- **Nothing reached a phone, and nothing in the app changed.** No `src/` file was touched this phase.
+- **Gates, run live before the attempt:** `npx tsc --noEmit` **0** · `npm test` **1309 / 77 files**.
+  Unchanged by this phase — no source file was modified.
 
 ## Files changed
 
-- `src/data/api.ts` — `recordFileAttachment` no longer sends `uploaded_by`, and the dead `uploadedBy`
-  input is gone from `FileAttachmentInput`. Backend Phase 104 stamps that field from the token and
-  ignores the body; on the *deployed* build the handler reads `b.uploaded_by || ''`, and no call site
-  here ever set it — so omitting the key stores byte-identically to sending it, on **both** builds.
-  The type now carries a warning explaining why adding it back would do nothing.
-- `src/app/claim-new.tsx` — comment only. It explained a trade-off ("we chose not to thread the
-  signed-in user down from the access-gate wrapper") that **no longer exists**; the server's value is
-  now the trustworthy one. Phase-79 rule: a fix is not done while something still says the old thing.
-- `src/data/__tests__/api-file-attachments.test.ts` — the whitelist pin drops to 9 keys, plus one new
-  test asserting `uploaded_by` is **not** sent. Pinned separately on purpose: re-adding it is the
-  tempting "fix" for a file that shows no uploader, and it would change nothing at all.
-- `docs/OPS-SERVER-HANDOVER.md` — new **§11** (the deploy repairs team notifications); §5 strengthened
-  with the code-level proof that `CORS_STRICT=true` cannot break the app; change log entry.
-- `docs/PHASES.md`, `docs/DECISIONS.md`, `CLAUDE.md` — the sweep is recorded as **recurring**, with
-  the two rules it earned (below).
-- `../contracts/INBOX.md` — two items filed: the dispatch bug, and a per-commit "nothing owed"
-  verification so `cgpe-api` does not have to re-derive it. 831,630 → 839,917 bytes, `.bak-p89` taken
-  first, both items greped back afterwards.
+- `.easignore` — adds `e2e/`, `test-results/`, `playwright-report/`, `.playwright/` and root `/*.mp3`,
+  with a header explaining that this file **replaces** `.gitignore` for the archive. Excluding `e2e/`
+  wholesale is safe and is what the harness already documents: tsconfig excludes it, eslint ignores
+  `e2e/**`, Vitest is scoped to `src/`, and it is never bundled into the APK.
+- `.gitignore` — commits the pre-existing but uncommitted `credentials.json` / `credentials/` rule.
+- `CLAUDE.md` — two lines corrected because they were provably wrong, not merely stale: "consider an
+  `.easignore` at some point" (one has existed all along, and was the cause) and the "~317 MB upload"
+  cost quoted in the quota section. Adds the measurement recipe.
+- `docs/PHASES.md` — `## Now` records the refused attempt, the resume command, and the open OTA
+  decision; a new `## Next 3` supersedes the 2026-08-29 one.
+- `docs/DECISIONS.md` — appended (D-123, D-124).
+- **No `src/` change, no test change, no contract change.**
 
 ## Decisions made
 
-- **The undeployed-commit sweep is a recurring step, not a task that completes.** It has returned a
-  real finding on **both** of its two runs — Phase 87's found backend Phase 101, Phase 89's found the
-  dispatch bug. Both were filed under commit messages that read as internal tidying.
-- **When the finding is server-only, the deliverable is the report, not a code change.** Filed under
-  the item that blocks, and written into `OPS-SERVER-HANDOVER.md` so the person who runs production
-  reads it as a reason to deploy rather than as trivia.
-- **Shipped the `uploaded_by` removal as part of the sweep rather than inventing a Phase 90.** It is
-  four lines, provably inert on both builds, and it removes a misleading affordance a future session
-  would otherwise wire up believing it worked.
-- **Did NOT weaken the app's role gates on the strength of backend Phase 102.** That RBAC sweep widens
-  `role !== 'admin'` to `!isAtLeast(role,'admin')`, and `ROLE_RANK` keeps `leader` at 2 below `admin`
-  at 3 — so the documented leader-403 split our gates depend on is **preserved, not blurred**. Checked
-  the rank table rather than trusting the word "sweep".
+- **Did NOT add EAS Update (OTA) to the tree ahead of this build.** It is the standing recommendation
+  and it would end the rebuild-per-fix cycle, but it adds a native module and changes the boot path,
+  and the build it would ride on is the one that finally reaches 21 handsets after six days. The free
+  quota resets **monthly, not once**, so shipping the known-good APK first and OTA in a second build
+  costs nothing. **Owner's call, recorded as open rather than taken quietly.**
+- **Excluded the whole of `e2e/` rather than just `e2e/artifacts/`.** The specs are ~40 KB, so
+  narrowing buys nothing measurable, and a rule that names the directory the harness lives in is
+  harder to get wrong later than one that names a subfolder created at runtime.
+- **Committed the `.gitignore` secret rule rather than leaving it as a local-only change.** It only
+  adds ignore rules, and leaving a keystore-password guard uncommitted is a real risk on any other
+  clone. Called out explicitly since it was the owner's uncommitted edit.
+- **Reported the refusal as a blocked phase rather than re-attempting or working around it.** Switching
+  Expo accounts would issue a new keystore and cost all 21 users their session; that trap is already
+  documented and was not re-litigated.
 
 ## Known broken / deliberately skipped
 
-- 🔴 **Nothing in this phase reaches a phone, and neither does anything from Phases 80–88.** The field
-  APK is still `093a3b33` (**25 Aug**); ~21 handsets are on it. The EAS free-plan quota resets
-  **1 Sep 2026** — that build is now the single highest-value action in the project.
-- **The dispatch bug is not fixed by us and cannot be.** It is repaired only by the backend merge to
-  `origin/main` + a `:3001` restart. Until then, every team notification sent from the app is written
-  and read by nobody. The owner should be told, because it is a live feature that does nothing.
-- **The whole backend window is still unshipped** — `origin/main` is `990c660`, **29 commits** behind
-  `origin/Shivam`, re-probed today. Storage (`cloudStorageConfigured:false`), presign (404) and the
-  voice proxy (404) are all still off, so mobile Phases 86–89 and the entire voice track are inert.
-- **Nothing from this phase has run on a handset**, and the one code change is unobservable by design.
-- **Untracked repo-root files left alone** (`*.mp3`, `*.txt`, the staff JSON, the store spec,
-  `.claude/settings.json`, `.gitignore`) — the owner's local files, unchanged from boot.
+- 🔴 **THE APK STILL DOES NOT EXIST.** The field build is `093a3b33` (**25 Aug**). Phases 80–89 — the
+  i18n work, the presigned upload path, the boundary-attribution fix, the version reconcile and the
+  entire voice track — reach **no phone** until it is built.
+- **The quota is the only blocker and it is billing, not engineering.** Wait for 1 Sep (zero cost, same
+  keystore) or `eas billing:subscribe starter --account shivam-bhadoriya`.
+- **The archive fix is unverified against a real build** — it was verified by replicating eas-cli's own
+  `Ignore.createForCopyingAsync` filter (347.1 MB / 820 files → 5.9 MB / 302 files) plus a check that
+  zero build-essential files are excluded, but no actual build has consumed it. If tomorrow's build
+  fails on a missing file, `.easignore` is the first suspect and `git revert 4a12899` is the fallback.
+- **The whole backend window is still unshipped** — re-probed today: `origin/main` still `990c660`,
+  `cloudStorageConfigured:false`, `/upload/presign` **404**, `/voice/ask` **404**, and
+  `GET /api/users/test` still **200** (the route backend Phase 105 deletes — the live discriminator
+  proving prod predates the merge). So mobile Phases 86–89 and the voice track remain inert.
+- **Team notifications are still silently broken in production** (Phase 89's find). Repaired only by
+  the backend merge + a `:3001` restart. Unchanged today.
+- **Untracked repo-root files left alone** (`*.mp3`, the `.txt` files, the staff JSON, the store spec,
+  `.claude/settings.json`) — the owner's local files, unchanged from boot. The two `.mp3`s are now
+  excluded from the *upload* but remain on disk untouched.
 
 ## Next session starts here
 
-- **Phase 90: build the APK.** The quota resets 1 Sep; check it *before* promising one (a doomed
-  attempt still costs a ~317 MB upload). It carries i18n Phases 80–85, the boundary-attribution fix,
-  the version reconcile, the whole voice track, and Phases 86–89. Consider adding **EAS Update (OTA)**
-  in the same build to end the rebuild-per-fix cycle.
+- **Phase 90 (unchanged): build the APK.** The quota should have reset. Everything else is ready.
 - **First command:**
   `npx eas-cli build:list --platform android --limit 3 --json --non-interactive`
-  (confirms the quota state and the newest build before spending twenty minutes on an upload)
-- **Watch out for:** 🔴 **the Windows fingerprint trap** — if the build dies locally at "Computing
-  project fingerprint" with an `UNKNOWN: unknown error` on a `react-native-reanimated` file, relaunch
-  with `EAS_SKIP_AUTO_FINGERPRINT=1`; the code is fine. Second trap: **a session teardown kills the
-  local "waiting for build" process but NOT the remote build** — on resume use `build:view <id>
-  --json`, never a relaunch. Third: **Phase Ω must not be started** — device-unverified work exists,
-  so that gate is shut.
+  (confirms the rollover and that `093a3b33` is still the newest), then
+  `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android --profile preview --non-interactive`
+- **Watch out for:** 🔴 **do not re-attempt before 1 Sep** — the refusal on the 31st said "resets in 18
+  hours", so an early retry just burns the attempt again. Then the three known build traps, in order of
+  likelihood: **(1)** if it dies locally at "Computing project fingerprint" with an `UNKNOWN: unknown
+  error` on a `react-native-reanimated` file, that is the Windows trap — `EAS_SKIP_AUTO_FINGERPRINT=1`
+  is already in the command above; **(2)** a session teardown kills the local "waiting for build"
+  process but **NOT** the remote build — on resume use `build:view <id> --json`, never a relaunch;
+  **(3)** if the build fails on a file it cannot find, suspect this phase's `.easignore` change first.
+  And **Phase Ω must not be started** — device-unverified work exists, so that gate is shut.
 
 ---
 ---

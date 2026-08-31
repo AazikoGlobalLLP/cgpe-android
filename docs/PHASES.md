@@ -822,11 +822,36 @@ Upload was probed live — `POST /upload` → **401**, so the route IS deployed;
 session by design** — Phase 77 is where fixing starts.
 
 
-## Next 3
+## Next 3 — as of 2026-08-31 (after Phase 90's refused build attempt)
 
-**SUPERSEDED by the list below — kept because its items are still accurate, just re-ordered.**
+1. **BUILD THE APK — Phase 90, unchanged and unfinished.** Attempted 31 Aug, refused: free-plan quota
+   still exhausted, *"resets in 18 hours (on Tue Sep 01 2026)"*, **no build created**. ⚠️ **Do not
+   re-attempt before 1 Sep.** First command:
+   `npx eas-cli build:list --platform android --limit 3 --json --non-interactive`, then
+   `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android --profile preview --non-interactive`.
+   The upload is now ~5.9 MB (was 347 MB — see `4a12899`). It is the only way Phases 80–89 and the
+   voice track reach the ~21 handsets on `093a3b33` (25 Aug). **If it fails on a missing file,
+   `.easignore` is the first suspect; `git revert 4a12899` is the fallback.**
+2. **Voice go-live** — needs the backend `origin/main` merge + `:3001` restart + the owner's
+   `SARVAM_API_KEY` / `CGPE_VOICE_SECRET` / `N8N_VOICE_BRAIN_URL`. App-side is done; `/voice/ask` was
+   re-probed today and is still **404**. Then device-QA the voice UI on the new APK (orb fps, real
+   amplitude, expo-blur on Android, back-intercept, male/female toggle, reduced-motion).
+3. **The next undeployed-commit sweep** — it has found something real on both of its two runs
+   (backend Phase 101, then the live notifications-dispatch bug). Treat it as recurring, not done.
 
-## Next 3 — as of 2026-08-29 (after the VOICE track)
+**Open owner decision, carried forward:** add **EAS Update (OTA)** to a *second* build after the
+known-good APK ships. It ends the rebuild-per-fix cycle but adds a native module and changes the boot
+path, so it was deliberately kept out of the build that matters. Quota resets monthly, so this costs
+nothing to sequence this way.
+
+*(Then: i18n Batches 6h/6f/5/6b — all owner-copy-blocked; hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.)*
+
+---
+
+## Superseded — Next 3 as of 2026-08-29 (after the VOICE track)
+
+**SUPERSEDED by the list above.** Its items remain accurate, just re-ordered; the "do NOT build an APK
+yet" instruction below is **obsolete** — the owner's one-build-at-the-end point has arrived.
 
 > **🗣️ Voice is now the lead track.** App-side is DONE; the ONE remaining piece is the backend proxy.
 > **Do NOT build an APK yet** — owner: one build at the very end, after the proxy + all other tasks.
