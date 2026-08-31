@@ -798,9 +798,17 @@ contract change. `INBOX.md` alone would never have surfaced it.
   destructure). Do **not** describe `density` as "deferred" again.
 - `store/appUi.tsx` `SCHEMA_FEATURE_DEFAULTS` mirrors `ui_rbac_config.json` **by hand** — drifts silently.
   **⚠️ RBAC FLAGS FAIL OPEN — `can('feature')` ALONE cannot restrict an unseeded role (Band 2 #3, 2026-08-24).**
-  `canIn()` returns the `SCHEMA_FEATURE_DEFAULTS` value (mostly `true`) when a role config omits a key, and the
+  `canIn()` returns the `SCHEMA_FEATURE_DEFAULTS` value when a role config omits a key, and the
   per-role docs are **unseeded** in prod (owner backlog Point 6), so `can('can_create_task')` etc. read **true for
-  every tier today**. To actually gate a create/assign/admin affordance FROM a lower tier, AND the flag with the
+  every tier today**. ⚠️ **This line said "mostly `true`" until 2026-08-31; counted against
+  `appUi.tsx:96-112` it is 4 true / 10 false** — `can_clock_in`, `can_create_task`, `can_create_claim`,
+  `can_claim_ticket` are the `true` ones (plus `global_search_scopes`, which defaults to the four
+  scopes `clients`/`leads`/`claims`/`tasks`, **not** to none). The fail-open warning is unchanged and
+  still correct — the four that matter for create affordances are exactly the `true` ones — but do not
+  reason from "mostly true" about a flag you have not looked up. **The same fact bites the ADMIN PANEL
+  from the other side:** a saved document that merely *omits* a key shows as OFF in its editor and is
+  ON on the handset, which is why the panel was asked to save every key explicitly (INBOX
+  `→ cgpe-admin · 2026-08-31`). To actually gate a create/assign/admin affordance FROM a lower tier, AND the flag with the
   role-derived predicate — `capabilitiesOf(user, viewAs).<cap> && (ready ? can('feature') !== false : true)` — the
   caps term is what protects the tier, the flag term lets a future seeded config tighten it. Gating on the flag alone
   is the bug the Home create-affordance had (`home.tsx:736` — this said `:688`, which is unrelated widget-merge code)

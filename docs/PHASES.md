@@ -54,6 +54,39 @@ from the Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2
 
 ---
 
+**✅ 2026-08-31 — PHASE 91: CROSS-REPO REQUESTS FILED (owner-directed, no app code).** The owner asked
+for the outstanding front-end and back-end requests to go out, and specifically for the admin panel's
+**Relationship map** to be made readable. Two items filed to `../contracts/INBOX.md`; **zero `src/`
+change**; INBOX 839,917 → 850,279 B, 151 headers, both replies grepped back.
+- **The Relationship map (`AndroidApplication.tsx:684-743`) — 7 defects, and the first is objective.**
+  **Every branch heading counts ONE array while the body renders TWO**, so on the owner's own
+  screenshot "Navigation · **5 tabs**" sits above **7** pills and "Features · **5 enabled**" above
+  **11** (`:722/:723`, `:731/:732-733`, `:736/:738-739`). Then: colour is the only state encoding with
+  no legend, and **gold means two things** (mandatory widget / landing tab) as does blue (visible
+  widget / search scope); the `·` suffix carries five unrelated kinds of value including a **bare
+  unlabelled `max_items` number** ("KPI Strip · 4"); it draws no edges despite being called a map; it
+  shows one role at a time when the real question is how two roles differ; and it has no
+  saved-vs-default provenance.
+- **🔑 The one only we could contribute: the map can show a config the PHONE WILL NOT OBEY.** Verified
+  in our source, not recalled — an **omitted** feature key inherits a schema default and **four of
+  those are `true`** (`can_clock_in`, `can_create_task`, `can_create_claim`, `can_claim_ticket`,
+  `store/appUi.tsx:96-112`), and an **empty `dashboard.widgets` array re-opens the whole default
+  dashboard** (`appUi.tsx:458`). So the panel can render "off" for something the handset has on. Asked
+  them to save every key explicitly. *(Note: CLAUDE.md's "mostly `true`" for these defaults is wrong —
+  it is 4 true / 10 false. Corrected here rather than propagated.)*
+- **THE OTHER HALF WAS TAKING WORK OFF THE BOARD, NOT ADDING IT.** Of the three `[admin]` items we had
+  carried since 26 Aug, **two did not survive re-reading the code** — see the superseded note under
+  "Phase 77 leftovers". The location gate is **fixed end-to-end and closed** (app, deployed backend,
+  and the panel has no such view); "Assign Task" is real but is a label in `TeamTasks.tsx`, not a
+  button. **This is the `docs/`-is-a-hypothesis rule paying off twice in one sweep.**
+- **NOTHING NEW WAS OWED BACKEND-SIDE.** Every outstanding server ask is already assembled and ordered
+  in `docs/OPS-SERVER-HANDOVER.md` §1–11 (merge + `:3001` restart, `S3_*`, the bucket-name constraint,
+  `BACKEND_URL`, CORS, nginx, the MSS fix, the voice env keys, per-role seeding, the notifications
+  repair). Re-filing it to INBOX would have been duplication. **Phase Ω — actually sending it — stays
+  shut by its own rule**, and whether to send §1 early is an owner decision, recorded not taken.
+
+---
+
 **✅ 2026-08-31 — PHASE 90a: BUILD PRE-FLIGHT, AND THE SECRET LEAK IT FOUND.** Run because Phase 90's
 build is quota-blocked until 1 Sep and that build jumps ~21 handsets from 25 Aug to ten
 device-unverified phases in one step. Commit `954a0a4`, pushed to `aaziko/Shivam`.
@@ -1252,6 +1285,17 @@ Phase 83 voice v2.
 
 **`[admin]` items — different repo (`cgpe-front-main-RECOVERED`), not touched here:** the "Assign Task"
 button showing "Create Task", the admin-panel location gate, and the per-department RBAC config seeding.
+> ⚠️ **SUPERSEDED 2026-08-31 (Phase 91) — do NOT re-file these three as written; two are not real.**
+> **The location gate is FIXED end-to-end and is CLOSED**: the app was always correct
+> (`store/roles.ts:72-74`), the backend 403s a non-`super_admin` at `routes/timeTracker.js:1008` **on
+> deployed `origin/main`** (backend Phase 69 `[sec]`), and the panel has **no live-location view at
+> all** — the only staff coordinates there are the payroll geofence *anchor* input
+> (`Payroll.tsx:447-451`), which is a policy setting, not a position read. The owner's report predates
+> the backend fix. **"Assign Task" is real but was described imprecisely** — there is no such button;
+> it is `TeamTasks.tsx`, whose assign-to-others dialog says "New task"/"Create task" (`:260`, `:365`,
+> `:391`) while carrying an "Assign to" field (`:372`). **RBAC seeding** was already filed and is the
+> owner's to run (`scripts/seedAppRolePreferences.js`). All three are now written up under
+> `## → cgpe-admin · 2026-08-31` in `../contracts/INBOX.md`.
 
 ---
 
