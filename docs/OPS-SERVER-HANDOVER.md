@@ -56,6 +56,18 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
 - Until this is set, all three presign routes answer `503 not_configured`, uploads land on droplet
   disk, and files are wiped on the next redeploy. **That is the field complaint "documents vanish".**
 
+### 2b. ⏱️ Deploy-day ORDERING for storage — worth one minute of thought (added 2026-08-31)
+- Backend **Phase 101** made the ordinary upload route return a **short-lived** link plus a durable
+  key. The app builds currently on phones (**25 Aug**) save the short-lived link as if it were
+  permanent, so once the code is deployed **and** `S3_*` is set, those phones record attachments whose
+  links stop working after the signature expires.
+- **Deploying Phase 101 on its own is safe** — with `S3_*` unset, the new branch is never reached.
+  The exposure begins only when **both** are done.
+- **This is a judgement call, not a blocker.** Doing it after the next app release removes the window.
+  Doing it sooner is still defensible: a file with an expiring link is better than one written to
+  throwaway disk that a redeploy wipes, which is the situation today. **Either is fine — just make it
+  a decision.** The app-side fix is written up as mobile Phase 88.
+
 ### 3. 🔴🔴 THE BUCKET MUST NOT BE NAMED `uploads` — the single most important line here
 - Storage is **path-style**, so the bucket name becomes the **first path segment** of every object URL.
 - The app treats a URL whose path starts `/uploads/` as the **local-disk fallback** (`isEphemeralUrl`,

@@ -1,99 +1,94 @@
-# HANDOFF — CGPE Connect (Android) — Phase 86 (presigned MinIO upload) — 2026-08-31
+# HANDOFF — CGPE Connect (Android) — Phase 87 (voice timeout + unconfigured-server honesty) — 2026-08-31
 
-> The presigned upload contract that had been sitting open for four days is **built, tested and
-> pushed**. The owner also mandated a **new final phase (Phase Ω)** — the production/server
-> developer's message — which is gated to run only after every other phase is Done.
+> Phase 87 is **shipped and pushed** (`fd28c70`). Two backend items were then filed to
+> `contracts/INBOX.md`, one of which is a **deploy-day warning that affects phones already in the
+> field**. **Phase 88 is written up and NOT started** — it is the resume point.
 >
 > ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM. Do not delete it** — it is still
 > the only record of the Skia / Lottie / web-stub traps.
 
 ## Done
 
-- **The app is on the presigned MinIO flow** (`cgpe-api` Phase 95 / D-122, filed 2026-08-27, adopted
-  today). Attaching a document now goes: `POST /upload/presign` → a signed `PUT` **straight to
-  MinIO** → `POST /file-attachments` with `storage_key` and an empty `file_url`. The bytes no longer
-  pass through the API server and the app never holds storage credentials.
-- **The claim screen now shows what the register actually holds.** `claim/[id].tsx` lists the
-  documents recorded against the claim and opens each through a **freshly signed URL, per tap** —
-  so the read half of the contract has a real consumer instead of a helper nobody calls.
-- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1289 / 77 files** (was 1254, +35)
-  · cache-free `npx eslint` **0 errors** on every touched file · `npx expo export -p web` **exit 0**
-  (the boot-safety gate — a native `require` was added, so this mattered).
-- **Both `cgpe-mobile` INBOX boxes closed**, each with a reply underneath explaining the reasoning,
-  and both grepped back after writing (the file grew 814,049 → 819,033 bytes; a `.bak` was taken first).
-- **The server-side dependency list is now a single maintained file** —
-  `docs/OPS-SERVER-HANDOVER.md` — with every live value re-probed today, not quoted.
+- **A voice question no longer dies before the server can answer it.** The app aborted every turn at
+  **8 s**; the proxy is three sequential vendor calls whose own timeouts total **80 s**. On a healthy,
+  fully-configured server any turn past 8 s was killed, shown as "something went wrong, please try
+  again", and the user would re-record — **re-running the whole billed vendor chain while the first
+  was still in flight.** The ceiling is now sized to the server; the old 8 s shows a "Still working…"
+  hint and keeps waiting.
+- **A server with voice switched off stops telling people to try again.** `404 / 501 /
+  503-with-not_configured` now reads as *"Voice is not switched on for this server yet. Ask your admin
+  to turn it on."* **This is what every user sees today**, because production answers 404.
+- **`cgpe-api`'s two disclosures were verified against their real code and both cost us nothing** —
+  `audio.mode:"base64"` was already parsed; their 503 is now a first-class case.
+- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1297 / 77 files** (was 1289, +8) ·
+  cache-free `npx eslint` **0 errors** on every touched file · `npx expo export -p web` **exit 0** ·
+  i18n orphan scan **18, unchanged**, at **448** keys — zero dead copy added.
+- **Two backend items filed** to `contracts/INBOX.md` (819,033 → 828,750 bytes; `.bak` taken before
+  each write, both greped back afterwards).
 
 ## Files changed
 
-- `src/lib/binaryUpload.ts` — **NEW.** The native binary `PUT` behind one seam. `fetch` cannot stream
-  a `file://` body on React Native, so this wraps `expo-file-system`'s upload task; it also exists so
-  the path is testable at all (see Decisions).
-- `src/lib/fileUpload.ts` — the pure seam: `parsePresignTarget` / `classifyPresignResponse` /
-  `classifyPutStatus` / `parseDownloadUrl`, plus a new `'not_linked'` failure and its copy.
-- `src/data/api.ts` — presign-first `uploadFile` with the legacy fallback; `recordFileAttachment`
-  sends `storage_key` with an empty `file_url`; new `listAttachments` + `getAttachmentDownloadUrl`.
-- `src/app/claim/[id].tsx` — the register's document list + open-via-signed-URL; the record is
-  **awaited** on the presigned path; the "cannot link a file to a claim yet" caption is now
-  conditional, because the list below it would otherwise contradict it.
-- `src/app/claim-new.tsx` — the same await/report rule on the presigned path.
-- `src/data/__tests__/api-resilience.test.ts`, `api-file-attachments.test.ts`,
-  `src/lib/__tests__/fileUpload.test.ts` — +35 tests.
-- `docs/OPS-SERVER-HANDOVER.md` — **NEW.** The running list for the production server developer.
-- `docs/PHASES.md` — Phase 86 in `## Now`; **Phase Ω** added, gated. `CLAUDE.md` — presign marked
-  adopted; the lazy-`require` trap written up as the third native-module trap.
+- `src/voice/constants.ts` — `CEILING_MS` 8 s → **80 s, derived** (STT 30 + brain 20 + TTS 30, cited at
+  the constant); the old 8 s becomes `SLOW_MS`, a hint threshold that does **not** abort.
+- `src/voice/client.ts` — new pure `isPermanentVoiceOutage()`; a non-2xx body is now read so a
+  permanent gap can be told apart from a transient fault; new `transport:'unconfigured'`.
+- `src/ui/voice/useVoiceTurn.ts` — the "Still working…" toast at `SLOW_MS`, and the third failure
+  branch. `clearTimeout` in the existing `finally`.
+- `src/voice/__tests__/client.test.ts` — +8 tests (the permanent/transient matrix, both 503 spellings,
+  the conservative fall-through, a body that will not parse). Two stale "8 s" titles corrected.
+- `src/i18n/index.tsx` + `__tests__/dictionaries.test.ts` — `voice.notSetUp` / `voice.stillWorking`,
+  parity **446 → 448**.
+- `docs/OPS-SERVER-HANDOVER.md` — **§9 corrected** (it said the voice proxy "does not exist yet" — it
+  exists, it is undeployed) + new **§2b**, the deploy-day ordering note.
+- `docs/PHASES.md` — Phase 87 recorded; **Phase 88 written up as the resume point**.
+- `CLAUDE.md` — the 80 s derivation and the `unconfigured` rule, so neither gets "fixed" back.
 
 ## Decisions made
 
-- **A missing route is not a failure.** `presign` answering **404 / 501 / 503** falls back to the
-  legacy multipart path, unchanged. That is what makes shipping ahead of the backend deploy inert
-  rather than a field outage — production is **404 today**, so every upload still takes the old path.
-  A **415 deliberately does not fall back**: a rejected type can only fail again.
-- **A `403` on the PUT is `'server'`, never `'unauthorized'`.** That request carries no session at
-  all, so a 403 means a signature mismatch or an expired 300 s window — which a retry fixes.
-  `'unauthorized'` copy would have sent the user to their branch admin for nothing.
-- **The `/file-attachments` write is awaited and reported on the presigned path** (new
-  `'not_linked'`), and stays fire-and-forget on the legacy path. The reasoning inverts between them:
-  legacy has a durable URL already, so a failed record must not read as a failed upload; with
-  presign that row is the **only** thing naming the object, so a silent failure would be an
-  unreachable file wearing a green tick.
-- **`?entity_id=` is filtered twice.** The server-side filter is backend Phase 94 and is not
-  deployed, so an older build answers with the **whole collection**. Filtering again on the value the
-  server echoes back yields an honestly-empty list instead of one claim showing another claim's
-  documents. **Keep the client-side filter after the deploy lands.**
-- **The native call went behind our own module rather than a test stub.** A lazy `require()` resolves
-  through **Node, not Vite** — so a `vitest.config.mts` alias cannot redirect it and `vi.mock()`
-  cannot intercept it. Both were tried and backed out; a probe proved the `require` reaches the real
-  `node_modules` copy. Now in `CLAUDE.md` as the third native-module trap.
-- **Phase Ω exists and is blocked by design** (owner instruction, 2026-08-31): the production
-  developer's message is written **only** when no phase is pending, blocked, or built-but-unverified.
+- **A client timeout must be sized to the PRODUCER's real timeouts, never to a UX wish.** 80 s is
+  derived from `services/voiceService.js:54-56`, not chosen. 80 s is a bad wait, but that is a
+  **server budget** problem — filed as an ask — and waiting beats discarding an answer already paid for.
+- **A bare 503 stays transient.** Only a 503 whose body names `not_configured` is permanent; an
+  unrecognised body falls through to `'server'`. The conservative direction merely over-offers a
+  retry; the other tells someone to give up on a service that was about to come back.
+- **The two new keys ship in ENGLISH in all five dictionaries.** Not machine translation — the
+  2026-08-27 waiver covered one batch and is not standing permission, and PHASE-19 DONE-4 says an
+  honest English fallback beats a wrong romanised guess. Same precedent as `tab.search`; filed as
+  **Batch 6h** with translator notes.
+- **The Phase 101 finding was filed, not fixed.** It is app-side work (Phase 88) and the session's
+  remaining instruction was to file backend asks and hand off.
 
 ## Known broken / deliberately skipped
 
-- **Nothing from this phase has run on a handset.** The EAS free-plan quota still blocks any APK, so
-  the whole flow is code-verified only. The list, the signed-URL open and the `'not_linked'` path all
-  need a device walk-through in the next build.
-- **It is inert in the field until OPS acts** — `S3_*` and `BACKEND_URL` are unset and the backend
-  deploy is **29 commits behind**, so presign 404s and uploads still land on droplet disk. That is
-  expected, not a regression.
-- **`docs/OPS-SERVER-HANDOVER.md` is the list, not the message.** It is written in our vocabulary and
-  must not be sent as-is; Phase Ω turns it into something a server developer can act on.
-- **One pre-existing lint warning** on `claim/[id].tsx` (`nonce` dep) left alone — it predates this
-  work and touching it is unrelated churn.
+- 🔴 **PHASE 88 IS NOT STARTED, and it is a real defect.** `cgpe-api`'s Phase 101 (`9a74c9a`) made the
+  legacy `POST /api/upload` return a **short-lived** `url` plus a durable `storage_key`. Our legacy
+  path reads only `data.url` (`src/data/api.ts:3640-3642`) and records it as `file_url` — so once
+  Phase 101 deploys **and** `S3_*` is set, legacy uploads persist a link that expires. Phase 86's
+  presigned path is already correct; only the fallback is wrong.
+- ⚠️ **Shipping that fix does not fix the phones.** The newest APK in the field is **`093a3b33`
+  (25 Aug)**, which predates Phase 86 entirely; ~21 handsets are on it. This is fixed by getting a
+  **new APK out**, which the EAS quota gates until **1 Sep**.
+- **Nothing from Phase 87 has run on a handset**, and it is inert in production anyway — `/voice/ask`
+  is 404 until the backend deploys.
 - **Untracked repo-root files left alone** (`*.mp3`, `*.txt`, the staff JSON, the store spec,
-  `.claude/settings.json`) — the owner's local files.
+  `.claude/settings.json`, `.gitignore`) — the owner's local files, unchanged from boot.
+- **One pre-existing lint warning** in `src/i18n/index.tsx` (a ref in an effect cleanup, line ~2392)
+  left alone — it predates this work.
 
 ## Next session starts here
 
-- **Phase: voice go-live** — still blocked on `cgpe-api` building `POST /api/voice/ask` (**404**
-  probed today). If it is still 404, the next unblocked work is the i18n residue, all of which needs
-  the owner's copy: hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.
-- **First command:** `npm test` (expect **1289** green), then
-  `grep -n "voice/ask" ../contracts/INBOX.md` for the `cgpe-api` reply.
-- **Watch out for:** **Phase Ω must not be started early.** It is the message that goes to the person
-  who runs production, they will act on it once, and a message sent while work is still moving is
-  stale the next day. Check every phase is Done first — "built but device-unverified" is **not** Done.
-  Second trap: after the backend deploy lands, do **not** remove the client-side `entity_id` filter.
+- **Phase 88: stop the legacy upload path persisting a URL that expires** — in `uploadFile`'s legacy
+  branch, when `storage_key` is present **and `url_expires_in` is a number**, return it as `storageKey`
+  so the existing presigned plumbing takes over. **Check `contracts/INBOX.md` first**: the exact field
+  to key on is an open question to `cgpe-api` at the top of the file — build to their answer if it has
+  arrived, and to the two-part discriminator if it has not.
+- **First command:** `npm test` (expect **1297** green), then
+  `grep -n "url_expires_in" ../contracts/INBOX.md` for the `cgpe-api` reply.
+- **Watch out for:** **the EAS quota resets 1 Sep — that APK is now the highest-value action in the
+  project.** It carries i18n Phases 80–85, the boundary fix (which still owes a device walk-through),
+  the version reconcile, the whole voice track, Phase 86's upload flow and Phase 87 — and it is the
+  only way the Phase 88 fix reaches the ~21 phones. Consider adding EAS Update (OTA) in that same
+  build. Second trap: **Phase Ω must not be started** — Phase 88 is open, so the gate is shut.
 
 ---
 ---

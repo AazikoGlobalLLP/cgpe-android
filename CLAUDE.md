@@ -442,6 +442,27 @@ module's own top level stays native-free so the Vitest graph is still safe. The 
 the reasoning is written in its header. **Do not add a `test/stubs/*` entry for a module reached by
 `require` — it will silently do nothing.**
 
+## Read the sibling's UNDEPLOYED commits, not just the items addressed to you (2026-08-31)
+
+⚠️ **A backend change to a route THE APP ALREADY USES can land with no INBOX item at all.** Phase 87's
+handoff sweep ran `git -C ../cgpe-backend-main log --oneline origin/main..origin/Shivam` — 29 commits —
+and found **Phase 101 (`9a74c9a`)**, which changed what the legacy `POST /api/upload` returns: a
+**short-lived presigned GET** as `url`, plus `key`/`storage_key`/`url_expires_in`. The app reads only
+`data.url` (`src/data/api.ts:3640-3642`) and records it as `file_url`, so on the day that deploys **and**
+`S3_*` is set, every legacy upload persists a link that expires — the exact trap D-122 warned about.
+**Nobody filed it to us**, because from `cgpe-api`'s side it was a bug fix to their own route, not a
+contract change. `INBOX.md` alone would never have surfaced it.
+- **So at `/boot` and at `/handoff`, list the sibling's undeployed commits and read any that touch a
+  route the app calls.** The commit list is cheap; the commit MESSAGE is not enough (Phase 101's says
+  "finish MinIO", which reads as internal). Open the diff for the routes you consume.
+- **The same sweep is how you find undeployed SECURITY work** — that window also held a `password_hash`
+  leak fix, an unauthenticated arbitrary file read, and an AI-query exfiltration path, none of them
+  running in production. Worth naming to the owner, since "written" reads as "done" on every board.
+- **A deploy can therefore be a REGRESSION RISK for builds already on phones**, not just an
+  improvement. The newest field APK is `093a3b33` (25 Aug); a fix shipped in `src/` today does not
+  reach it. When a backend change would break an installed build, say so, and give the sibling the
+  ordering choice rather than assuming they know.
+
 ## Verifying the backend WITHOUT guessing (2026-08-26)
 
 - **`GET https://cgpe.in/internal/api/upload` reports the live storage state** —

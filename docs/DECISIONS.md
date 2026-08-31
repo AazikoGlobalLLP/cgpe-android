@@ -6,6 +6,58 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-31 — A client timeout is sized to the PRODUCER's real timeouts, not to a UX wish (Phase 87)
+
+**Context.** `VOICE.CEILING_MS` was **8 s**, written into our own A1.3 contract *before* the backend
+voice proxy existed. `cgpe-api` then built that proxy (Phase 99, `a926650`) as three sequential vendor
+calls whose own timeouts are **STT 30 s + brain 20 s + TTS 30 s**
+(`cgpe-backend-main/services/voiceService.js:54-56`, all env-overridable) — and **our own brief**
+(`docs/spec/VOICE-BACKEND-PROXY-BRIEF.md:75`) had predicted the brain **alone** at 2–6 s. So on a
+perfectly healthy, fully-configured server, any turn slower than 8 s was aborted, reported as
+"something went wrong, please try again", and the user would re-record — running the entire billed
+vendor chain a second time while the first was still in flight. `tsc`, `npm test` and `eslint` were
+**all green** on this, and production answers 404, so neither a gate nor a device could have caught
+it. Only reading the producer's real code did.
+
+**Decision.** `CEILING_MS` is **80 s = 30 + 20 + 30**, **derived and cited at the constant**, so the
+app never discards an answer the server is still producing. The old 8 s survives as **`SLOW_MS`**,
+which shows a "Still working…" hint and **keeps waiting**. 80 s is a bad thing to sit through, but
+that is a **server budget** problem, not an app one: an ask to tighten the three stage timeouts is
+filed to `cgpe-api` (INBOX 2026-08-31). If they tighten it, we lower the ceiling to match.
+
+**Consequence.** **Do not "fix" 80 s back to 8 s** — it will read like a typo and it is not. The
+general rule now written into `CLAUDE.md`: a client timeout must be sized to the producer's real
+timeouts. Related: `request_id` idempotency stops earning its keep the moment the client aborts early,
+because the user's retry generates a new id — the long ceiling is what keeps the dedupe meaningful.
+
+---
+
+## 2026-08-31 — A permanently-off server never gets retry copy; a bare 503 stays transient (Phase 87)
+
+**Context.** `cgpe-api` disclosed one deliberate exception to the voice proxy's always-200 rule: an
+unconfigured server answers **`503 {code:'not_configured', missing:[…]}`**. The app collapsed every
+non-2xx into `transport:'server'` → *"Something went wrong. Please try again."* Production also
+answers **404** (the proxy is built but undeployed), which is the same class of thing: permanent until
+a human acts. So the commonest voice outcome in the field was an instruction to keep retrying
+something that could never work.
+
+**Decision.** New pure `isPermanentVoiceOutage()` (`src/voice/client.ts`): **404 / 501 /
+503-with-`not_configured`** → a distinct `transport:'unconfigured'` → *"Voice is not switched on for
+this server yet. Ask your admin to turn it on."* A **bare 503 stays transient** (an overloaded proxy is
+not an unconfigured one), both documented spellings are accepted (`{code:'not_configured'}` and a bare
+`{not_configured:true}`, since `/clients/generate-report` uses the second), and an unrecognised body
+falls through to `'server'`. The two new keys ship in **English in all five dictionaries** — not
+machine-translated; the 2026-08-27 waiver covered one batch and PHASE-19 DONE-4 prefers an honest
+English fallback to a wrong romanised guess. Filed as copy **Batch 6h**.
+
+**Consequence.** Keep the classification **conservative in that direction**: over-offering a retry for
+a real outage is harmless, while the reverse tells someone to give up on a service that was about to
+come back. Same defect family as the upload path before `classifyUploadFailureBody` and as
+`ReportFailure`'s `not_configured` — that is now three occurrences, so treat "does this failure name
+its own fix?" as a standing review question on any new network path.
+
+---
+
 ## 2026-08-31 — Phase Ω: the production developer's message is a GATED final phase, not a running document
 
 **Context.** The owner asked that everything the app side needs from the person who runs the

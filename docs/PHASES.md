@@ -14,6 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🔜 NEXT — PHASE 88: THE LEGACY UPLOAD PATH MUST STOP PERSISTING A URL THAT EXPIRES.** Found
+2026-08-31 while filing the backend asks, by reading `cgpe-api`'s **Phase 101** (`9a74c9a`,
+`routes/upload.js:160-198`) rather than its commit message. **Not yet built — this is the resume point.**
+- **THE DEFECT.** Phase 101 changed the legacy multipart `POST /api/upload` to return a **short-lived
+  presigned GET** as `url`, plus `key`, **`storage_key`** and **`url_expires_in`** (the old public-style
+  URL 403s against the now-private bucket). Our legacy path reads **only `data.url`**
+  (`src/data/api.ts:3640-3642`) and records it as `file_url`, ignoring `storage_key` — so the day
+  Phase 101 deploys **and** `S3_*` is set, every legacy-path upload saves a link that **dies when the
+  signature expires**. That is precisely the trap D-122 warned about: persist the KEY, never the URL.
+- **PHASE 86'S PRESIGNED PATH IS ALREADY CORRECT** — it records `storageKey`, leaves `file_url` empty
+  and re-signs per render. **Only the legacy fallback is wrong**, and the fallback is what runs today
+  (prod presign is 404).
+- **PLANNED FIX (one file + tests):** in `uploadFile`'s legacy branch, when `storage_key` is present
+  **and `url_expires_in` is a number**, return it as `storageKey` so the existing presigned-path
+  plumbing takes over. `url_expires_in` is `null` in Phase 101's signing-failure branch, where `url`
+  IS durable — hence the two-part discriminator rather than "`storage_key` present". **The exact field
+  to key on is an open question filed to `cgpe-api` (INBOX 2026-08-31, top);** build to their answer.
+- ⚠️ **SHIPPING CODE DOES NOT FIX THE PHONES.** The newest APK in the field is **`093a3b33` (25 Aug)**,
+  which predates Phase 86 and has **no `storage_key` handling at all**; ~21 handsets are on it. The
+  deploy-day ordering note is filed to `cgpe-api` and appended to `OPS-SERVER-HANDOVER.md` §2 — but the
+  honest summary is that this is fixed by **getting a new APK out**, which the EAS quota gates.
+
+---
+
 **✅ 2026-08-31 — PHASE 87 SHIPPED: A VOICE TURN NO LONGER DIES BEFORE THE SERVER CAN ANSWER, AND A
 SERVER WITH VOICE SWITCHED OFF STOPS SAYING "TRY AGAIN".** Gates: `tsc` **0** · `npm test` **1297**
 (was 1289, +8) · cache-free `npx eslint` **0 errors** on every touched file · `npx expo export -p web`
@@ -57,13 +81,17 @@ copy added). **Device-unverified**, and inert in the field until the backend dep
   Added the env-var names it reads and the 80 s budget note. Live state re-probed: `/voice/ask` **404**
   · `/voice/status` **404** · `/upload/presign` **404** · `cloudStorageConfigured:false` ·
   backend `origin/main` still **`990c660`**, **29 behind** `origin/Shivam`.
-- **🔑 NEXT 3, and all three are still blocked on somebody else:** (1) **the post-quota APK** — the EAS
-  free-plan quota resets **1 Sep 2026**, i.e. tomorrow; it would carry i18n Phases 80–85, the boundary
-  fix (owes a device walk-through), the version reconcile, the whole voice track, Phase 86's upload
-  flow and this. Consider adding EAS Update (OTA) in that same build to end the rebuild-per-fix cycle.
-  (2) **Voice go-live** — needs the `origin/main` merge + `:3001` restart + the owner's
-  `SARVAM_API_KEY` / `CGPE_VOICE_SECRET` / `N8N_VOICE_BRAIN_URL`. (3) **i18n Batches 6h/6f/5/6b** —
-  owner copy; hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.
+- **🔑 NEXT 3 (revised after the backend-ask sweep the same day):** (1) **Phase 88** — the legacy
+  upload path persisting an expiring URL, written up above. **The only one that is unblocked**, and it
+  is buildable now; check the INBOX for `cgpe-api`'s answer on which field to key on first.
+  (2) **The post-quota APK** — the EAS free-plan quota resets **1 Sep 2026**. It carries i18n Phases
+  80–85, the boundary fix (owes a device walk-through), the version reconcile, the whole voice track,
+  Phase 86's upload flow, Phase 87 and Phase 88 — **and it is the only way any of it reaches the ~21
+  phones**, which are still on `093a3b33` (25 Aug). Consider adding EAS Update (OTA) in that same
+  build to end the rebuild-per-fix cycle. (3) **Voice go-live** — needs the `origin/main` merge +
+  `:3001` restart + the owner's `SARVAM_API_KEY` / `CGPE_VOICE_SECRET` / `N8N_VOICE_BRAIN_URL`.
+  *(Then: i18n Batches 6h/6f/5/6b — all owner-copy-blocked; hand over
+  `docs/i18n/COPY-REQUEST-2026-08-26.md`.)*
 
 ---
 
@@ -1378,6 +1406,7 @@ session back-filling it — the information already exists in a better-maintaine
 | # | Phase | Status |
 |---|---|---|
 | **Ω** | **FINAL — the production/server developer's message. GATED: runs only when every other phase is Done.** | 🔒 **BLOCKED BY DESIGN** — owner-mandated 2026-08-31. See "Phase Ω" below. The running list it draws from is `docs/OPS-SERVER-HANDOVER.md`, which every phase appends to. **Not startable while any phase is Planned / Built-but-unverified / blocked.** |
+| 86–88 | see `## Now` | **86, 87 Built** 2026-08-31 — the presigned MinIO upload flow; then the voice turn timeout sized to the real proxy + `unconfigured` honesty. Both device-unverified (no APK before 1 Sep). **88 PLANNED, not started** — the legacy upload path persists an expiring URL once backend Phase 101 deploys |
 | 77–80 | see `## Now` | **Built** 2026-08-26/27 — splash + LIC + storage-clear; i18n Batch 2 sweep + hourly GPS + video evidence; sign-in token leak + error boundary + backend Phase 94 consumed; the i18n free-wins sweep (73 sites) + Batch 6 extraction + the owner relay sheet. All device-unverified — no APK possible until 1 Sep 2026 |
 | 1 | Write-path honesty | **Built** — handset verification outstanding |
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
