@@ -14,6 +14,59 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-31 — PHASE 87 SHIPPED: A VOICE TURN NO LONGER DIES BEFORE THE SERVER CAN ANSWER, AND A
+SERVER WITH VOICE SWITCHED OFF STOPS SAYING "TRY AGAIN".** Gates: `tsc` **0** · `npm test` **1297**
+(was 1289, +8) · cache-free `npx eslint` **0 errors** on every touched file · `npx expo export -p web`
+**exit 0** · i18n orphan scan **18, unchanged** at **448** keys (both new keys have readers — zero dead
+copy added). **Device-unverified**, and inert in the field until the backend deploys.
+- **WHY THIS PHASE EXISTED.** `cgpe-api` **built** the voice proxy on 2026-08-29 (Phase 99, `a926650`)
+  and disclosed two deltas from our brief. Checking them against their **real** source rather than
+  their summary found a third thing nobody had disclosed, because it was **ours**.
+- 🔴 **THE REAL BUG: THE APP ABORTED AT 8 s; THE SERVER'S OWN WORST CASE IS 80 s.** `VOICE.CEILING_MS`
+  was 8 s, written into the A1.3 contract before the proxy existed. The proxy is three sequential
+  vendor calls whose own timeouts are **STT 30 s + brain 20 s + TTS 30 s**
+  (`cgpe-backend-main/services/voiceService.js:54-56` at `a926650`), and **our own brief predicted the
+  brain ALONE at 2–6 s**. So on a perfectly healthy, fully-configured server, any turn slower than 8 s
+  was killed, shown as "Something went wrong, please try again", and the user would re-record —
+  **running the whole vendor chain, and its billing, a second time while the first was still in
+  flight.** No local gate could see this: `tsc`, `npm test` and `eslint` were all green on it, and prod
+  answers 404 so no device could have caught it either. Only reading the producer's real code did.
+- **THE FIX, DERIVED NOT CHOSEN.** `CEILING_MS` is now **80 s = 30 + 20 + 30**, cited at the constant,
+  so the app never discards an answer the server is still producing. The old 8 s survives as
+  **`SLOW_MS`**, which now only shows a "Still working…" hint and **keeps waiting**. 80 s is a bad
+  thing to sit through — that is a **server budget** problem, and an ask to tighten the three
+  env-overridable stage timeouts is filed to `cgpe-api` (INBOX 2026-08-31, top).
+- **PERMANENT ≠ TRANSIENT.** New pure `isPermanentVoiceOutage()` (`src/voice/client.ts`) classifies
+  **404 / 501 / 503-with-`not_configured`** as a distinct `transport:'unconfigured'` → *"Voice is not
+  switched on for this server yet. Ask your admin to turn it on."* instead of "please try again".
+  **This is what every user sees today**, since prod is 404. A **bare 503 stays transient** — an
+  overloaded proxy is not an unconfigured one — and an unrecognised body falls through to `'server'`;
+  the conservative direction only over-offers a retry, the other direction tells people to give up on
+  a service that was about to come back. Same defect family as the upload path before
+  `classifyUploadFailureBody`, and as `ReportFailure`'s `not_configured`.
+- ⚠️ **THE TWO NEW KEYS SHIP IN ENGLISH IN ALL FIVE DICTIONARIES, ON PURPOSE.** `voice.notSetUp` /
+  `voice.stillWorking` are **NOT machine-translated**: the 2026-08-27 waiver covered one batch and is
+  not standing permission, and PHASE-19 DONE-4 says an honest English fallback beats a wrong romanised
+  guess. Same sanctioned precedent as `tab.search`. Filed as **Batch 6h** in
+  `docs/i18n/COPY-REQUEST-2026-08-26.md`, with translator notes. Parity count bumped **446 → 448**.
+- **`cgpe-api`'s two disclosures were both correct and cost us nothing**, verified not assumed:
+  `audio.mode:"base64"` is already parsed (`src/voice/response.ts:137`), and their `503
+  not_configured` is now a first-class case rather than a generic failure.
+- **`docs/OPS-SERVER-HANDOVER.md` §9 CORRECTED** — it said the voice proxy "does not exist yet", which
+  was **stale and would have sent the wrong instruction to production**. It exists; it is undeployed.
+  Added the env-var names it reads and the 80 s budget note. Live state re-probed: `/voice/ask` **404**
+  · `/voice/status` **404** · `/upload/presign` **404** · `cloudStorageConfigured:false` ·
+  backend `origin/main` still **`990c660`**, **29 behind** `origin/Shivam`.
+- **🔑 NEXT 3, and all three are still blocked on somebody else:** (1) **the post-quota APK** — the EAS
+  free-plan quota resets **1 Sep 2026**, i.e. tomorrow; it would carry i18n Phases 80–85, the boundary
+  fix (owes a device walk-through), the version reconcile, the whole voice track, Phase 86's upload
+  flow and this. Consider adding EAS Update (OTA) in that same build to end the rebuild-per-fix cycle.
+  (2) **Voice go-live** — needs the `origin/main` merge + `:3001` restart + the owner's
+  `SARVAM_API_KEY` / `CGPE_VOICE_SECRET` / `N8N_VOICE_BRAIN_URL`. (3) **i18n Batches 6h/6f/5/6b** —
+  owner copy; hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.
+
+---
+
 **✅ 2026-08-31 — PHASE 86 SHIPPED: THE APP IS ON THE PRESIGNED MinIO UPLOAD FLOW.** Commit `4d1c31a`,
 `aaziko/Shivam`. Gates: `tsc` **0** · `npm test` **1289** (was 1254, +35) · cache-free `npx eslint`
 **0 errors** on every touched file · `npx expo export -p web` **exit 0** (boot-safety, a native

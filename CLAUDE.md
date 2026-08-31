@@ -582,6 +582,21 @@ the reasoning is written in its header. **Do not add a `test/stubs/*` entry for 
   none), accepts `success` as an alias for `ok`, and a `success:false` is SPEAKABLE (play the reason,
   never navigate). Don't "fix" absent-confidence back to a refusal — it would stop every reply navigating.
 - **Writes are DARK** in v1 (`src/voice/dispatch.ts` `VOICE_WRITES_ENABLED=false`) — reads + navigate only.
+- ⚠️ **`VOICE.CEILING_MS` IS 80 s AND THAT IS DERIVED, NOT A TYPO — DO NOT "FIX" IT BACK TO 8 s (Phase 87,
+  2026-08-31).** The proxy is three sequential vendor calls whose own timeouts are STT 30 + brain 20 +
+  TTS 30 (`cgpe-backend-main/services/voiceService.js:54-56` at `a926650`), so 80 s is the SERVER's
+  declared worst case. The old 8 s ceiling aborted healthy turns on a working server, showed "try
+  again", and made the user re-record — **re-running the whole billed vendor chain while the first was
+  still in flight**. `tsc`/`npm test`/`eslint` were all green on it and prod 404s, so no gate and no
+  device could have caught it; only reading the producer's real code did. The 8 s lives on as
+  `SLOW_MS`, which shows a hint and keeps waiting. **General rule: a client timeout must be sized to
+  the producer's real timeouts, never to a UX wish.** An ask to tighten the server budget is filed.
+- **A voice `404`/`501`/`503-with-`not_configured`` is `transport:'unconfigured'`, NOT `'server'`**
+  (`isPermanentVoiceOutage`) — it must never show retry copy, because no retry can switch the service
+  on. **A bare 503 stays transient**, and an unrecognised body falls through to `'server'`; keep it
+  conservative in that direction. `voice.notSetUp`/`voice.stillWorking` ship in **English in all five
+  dictionaries on purpose** (the `tab.search` precedent, not machine translation) — copy is owed as
+  Batch 6h.
 - **🔴 THE HEAVY UI ADDS THREE NATIVE DEPS behind probes:** `@shopify/react-native-skia`, `expo-blur`,
   `lottie-react-native`. They are loaded ONLY via `hasSkia/hasBlur/hasLottie` (`src/lib/voiceGraphics.ts`)
   + `React.lazy` + an error boundary in `VoiceCharacter`. **Never static-import any of them from a file a

@@ -15,9 +15,29 @@ export const VOICE = {
   /** Advisory upload cap — audio only, mono AAC, compressed on the phone to ~1 MB (A1.2). */
   MAX_AUDIO_BYTES: 1_048_576,
 
-  /** Round-trip target; past the ceiling the app aborts to the transcript + a retry (A1.3 timing). */
+  /** Round-trip target - the aim, not a deadline (A1.3 timing). */
   TARGET_MS: 3_000,
-  CEILING_MS: 8_000,
+  /**
+   * Past this a turn is SLOW, not failed: the UI says so and KEEPS WAITING. This value was A1.3's
+   * `CEILING_MS`, written before the proxy existed and before anyone knew its stage timeouts.
+   */
+  SLOW_MS: 8_000,
+  /**
+   * The hard abort. It must NOT be shorter than an answer the server can still produce, or the app
+   * throws away work a vendor was already paid for and tells the user to "try again" while the proxy
+   * is still running - the user then re-records, and the whole chain runs twice.
+   *
+   * DERIVED, not chosen: the proxy is three sequential vendor calls whose own timeouts are
+   * STT 30 s + brain 20 s + TTS 30 s (`cgpe-backend-main/services/voiceService.js:54-56` at `a926650`,
+   * each env-overridable), so 80 s is the server's own declared worst case. Our brief predicted the
+   * brain ALONE at 2-6 s (`docs/spec/VOICE-BACKEND-PROXY-BRIEF.md:75`), which is why the old 8 s
+   * ceiling would have aborted healthy turns on a perfectly working server.
+   *
+   * 80 s is a bad thing to sit through, and that is a SERVER budget problem, not an app one - an ask
+   * to tighten the three stage timeouts is filed to `cgpe-api`. Until it lands, waiting is strictly
+   * better than discarding: `SLOW_MS` keeps the user informed, and closing the overlay abandons it.
+   */
+  CEILING_MS: 80_000,
 
   /** Multi-turn memory (§7): turns kept on the phone, and the last N text-only turns sent to the NLU. */
   HISTORY_KEEP: 6,

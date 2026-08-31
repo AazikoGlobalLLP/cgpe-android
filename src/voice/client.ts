@@ -8,7 +8,8 @@
  *  - a voice turn is a WRITE: it must fire EXACTLY ONCE. A silently retried voice command is a double
  *    clock-in waiting to happen, so there is no retry loop here (the contract also makes `request_id`
  *    the idempotency key so a manual retry dedupes server-side).
- *  - it aborts at the A1.3 hard ceiling (`VOICE.CEILING_MS`, 8 s), not the 30 s upload timeout.
+ *  - it aborts at `VOICE.CEILING_MS`, not the 30 s upload timeout. That ceiling is sized to the
+ *    PROXY's own three stage timeouts, not to a UX wish — see the derivation in `constants.ts`.
  *
  * It mirrors the proven multipart shape of `uploadFile()` in `api.ts`: build a `FormData`, DO NOT set
  * `Content-Type` (let `fetch` set the boundary), attach the bearer token, single attempt. On a non-200
@@ -30,12 +31,42 @@ import type { Turn } from '@/voice/session';
 /**
  * A failure BEFORE we ever got a usable reply — distinct from a `VoiceReplyError` (a 200 whose body was
  * bad, which still carries a transcript to show). `unauthenticated` means we never sent it (no session).
+ *
+ * `unconfigured` is deliberately separate from `server`, and the distinction is the whole point: it is
+ * a PERMANENT gap that no amount of retrying can close, so it must never be shown with "try again"
+ * copy. It is the same reasoning as `ReportFailure`'s `not_configured` in `api.ts`, and the same
+ * mistake the upload path made before `classifyUploadFailureBody`.
  */
 export type VoiceTransportError = {
   ok: false;
-  transport: 'timeout' | 'network' | 'server' | 'unauthenticated';
+  transport: 'timeout' | 'network' | 'server' | 'unconfigured' | 'unauthenticated';
   status?: number;
 };
+
+/**
+ * Which non-2xx statuses mean "this server will never answer until a human changes something", as
+ * opposed to a fault that may clear on its own.
+ *
+ *  - `404` — the route is not on the deployed build. This is prod TODAY: the proxy is built
+ *    (`cgpe-api` Phase 99, `a926650`) but sits on `Shivam`, and prod deploys `origin/main`. It is
+ *    also this backend's established quiet answer for "not deployed", already excluded from
+ *    `isRetryableStatus` alongside 501 for exactly that reason.
+ *  - `501` — same family, stated explicitly by the backend.
+ *  - `503` ONLY when the body names it — `cgpe-api` documented `{ code: 'not_configured', missing: [] }`
+ *    as its ONE deliberate exception to the always-200 rule, for a server whose voice keys are unset.
+ *    A bare `503` with no such marker is an ordinary overload and stays transient; the reports path
+ *    reads a differently-shaped `not_configured` flag, so both spellings are accepted here.
+ *
+ * Conservative by construction: an unrecognised body or status falls through to `'server'`. Getting it
+ * wrong in that direction merely shows retry copy for a real outage; the other direction would tell a
+ * user to give up on a service that was about to come back.
+ */
+export function isPermanentVoiceOutage(status: number, body: unknown): boolean {
+  if (status === 404 || status === 501) return true;
+  if (status !== 503) return false;
+  const b = body as { code?: unknown; not_configured?: unknown } | null;
+  return b?.code === 'not_configured' || b?.not_configured === true;
+}
 
 export type AskVoiceResult = VoiceReply | VoiceReplyError | VoiceTransportError;
 
@@ -94,8 +125,13 @@ export async function askVoice(a: AskVoiceInput): Promise<AskVoiceResult> {
       signal: controller.signal,
     });
 
-    // A non-200 is an outage per the contract — never a parseable reply.
-    if (!res.ok) return { ok: false, transport: 'server', status: res.status };
+    // A non-200 is an outage per the contract — never a parseable reply. But WHICH outage matters:
+    // the body is read here purely to separate a permanent, human-fixable gap from a transient fault.
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      const transport = isPermanentVoiceOutage(res.status, body) ? 'unconfigured' : 'server';
+      return { ok: false, transport, status: res.status };
+    }
 
     const json = await res.json().catch(() => null);
     // parseVoiceReply turns a null / empty / malformed 200 body into a VoiceReplyError (with transcript

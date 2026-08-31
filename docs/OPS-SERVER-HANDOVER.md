@@ -29,7 +29,7 @@ production developer without re-deriving anything.
 | Object storage | `GET /internal/api/upload` | **`cloudStorageConfigured: false`** | `S3_*` is **unset**. Every upload falls back to droplet disk. |
 | Presigned upload | `POST /internal/api/upload/presign` | **404** | Backend Phase 95 is **not deployed**. |
 | Presigned download | `GET /internal/api/upload/download-url` | **404** | Same. |
-| Voice proxy | `POST /internal/api/voice/ask` | **404** | The voice backend proxy is **not deployed** (and not yet built). |
+| Voice proxy | `POST /internal/api/voice/ask` | **404** | The voice backend proxy is **built** (`a926650`) but **not deployed**. Re-probed 2026-08-31. |
 | Deployed code | `git ls-remote origin refs/heads/main` | **`990c660`** ("Merge Shivam into main: Phases 88-90") | Production auto-deploys `origin/main` ONLY. |
 | Deploy gap | `rev-list --count origin/main..origin/Shivam` | **29 commits** | 29 commits of backend work are written, CI-green, and **not running**. |
 
@@ -106,12 +106,28 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
   There is no clean app-side fix for this; please do not send it back to the app team.
 
 ### 9. Voice assistant — server-side, not app-side
-- `POST /api/voice/ask` (speech-to-text → the n8n brain → text-to-speech) **does not exist yet**; the
-  brief is `docs/spec/VOICE-BACKEND-PROXY-BRIEF.md` and the ask is filed at the top of `contracts/INBOX.md`.
-  The app records audio and has nothing to talk to until it is built and deployed.
+> **Corrected 2026-08-31 (mobile Phase 87).** This section previously said the proxy "does not exist
+> yet". That is **no longer true** and would have sent the wrong instruction: it was **built** on
+> 2026-08-29 and is waiting on the same deploy as everything else in §1.
+
+- `POST /api/voice/ask` (speech-to-text → the n8n brain → text-to-speech) **is built** — `cgpe-api`
+  Phase 99, commit `a926650`, with `GET /api/voice/status` alongside it for OPS. It is **not
+  deployed**: `a926650` is on `origin/Shivam`, and `merge-base --is-ancestor a926650 origin/main`
+  fails. Probed live 2026-08-31: `POST /api/voice/ask` → **404**, `GET /api/voice/status` → **404**.
+  So this needs **no new work** — it needs §1.
+- **Env the proxy reads (names only):** `SARVAM_API_KEY` · `CGPE_VOICE_SECRET` · `N8N_VOICE_BRAIN_URL` ·
+  optional `ELEVENLABS_API_KEY` (+ its voice id). Values are the **owner's** to supply, not the server
+  developer's to invent. Until they are set the route answers `503 not_configured` naming the missing
+  keys — and the app now says "voice is not switched on yet, ask your admin" instead of "try again",
+  so an unconfigured server is honest rather than confusing.
+- ⚠️ **The three stage timeouts are worth a look while deploying** (`services/voiceService.js`,
+  env-overridable): `VOICE_STT_TIMEOUT_MS` 30 s + `VOICE_BRAIN_TIMEOUT_MS` 20 s +
+  `VOICE_TTS_TIMEOUT_MS` 30 s = an **80 s** worst case for one spoken question. The app now waits the
+  full 80 s rather than abandoning an answer the server is still producing, but 80 s is not a
+  usable voice experience. Tightening these is a server-side `.env` change; the ask is filed to
+  `cgpe-api` (INBOX 2026-08-31).
 - The n8n brain webhook secret (`vbk_…`) **was pasted into a chat window** and should be **rotated**. It
   must live server-side only — it must never ship inside the app.
-- The speech keys for that proxy are owed by the owner, not by the server developer.
 
 ### 10. Per-role UI config is unseeded in production
 - The per-role documents (`PUT /rbac/app-ui/:roleKey`) have **never been seeded**. The app therefore
@@ -142,6 +158,10 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
 
 ## Change log for this file
 
+- **2026-08-31 (later, mobile Phase 87)** — §9 corrected: the voice proxy is BUILT (`a926650`), not
+  missing, and its blocker is the §1 deploy. Added the env-var names it reads and the 80 s stage-timeout
+  budget. Live state re-probed the same day (`/voice/ask` 404, `/voice/status` 404, `/upload/presign` 404,
+  `cloudStorageConfigured:false`, `origin/main` still `990c660`) — the table above is unchanged as a result.
 - **2026-08-31** — created, at the owner's instruction, after mobile Phase 86 (the presigned upload
   adoption) made the storage items app-blocking rather than theoretical. Live state re-probed the same
   day. Items drawn from `contracts/INBOX.md` (D-122, D-128, D-135, D-136), `CLAUDE.md`, and this

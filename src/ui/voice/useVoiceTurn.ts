@@ -19,6 +19,7 @@ import { haptics } from '@/lib/haptics';
 import { useI18n } from '@/i18n';
 import * as voiceAudio from '@/lib/voiceAudio';
 import { askVoice, isTransportError } from '@/voice/client';
+import { VOICE } from '@/voice/constants';
 import { langForVoice, isRecordingTooShort } from '@/voice/request';
 import { isAllowedVoiceRoute } from '@/voice/routes';
 import { historyForNlu, recordAssistantTurn, recordUserTurn } from '@/voice/session';
@@ -143,6 +144,10 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       return;
     }
 
+    // The proxy chains three vendor calls (STT -> brain -> TTS), so a healthy turn can genuinely run
+    // past SLOW_MS. Say so, rather than leaving the character sitting in 'thinking' looking hung. The
+    // alternative - aborting - discards an answer the server is still producing and bills it twice.
+    const slow = setTimeout(() => toast(t('voice.stillWorking'), 'info'), VOICE.SLOW_MS);
     try {
       const result = await askVoice({
         audioUri: uri,
@@ -154,7 +159,15 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       });
 
       if (isTransportError(result)) {
-        fail(result.transport === 'timeout' || result.transport === 'server' ? t('voice.failed') : t('voice.offline'));
+        // Three different fixes, so three different sentences. `unconfigured` is the one that must
+        // NOT carry "please try again": voice is off at the server and no retry can turn it on.
+        fail(
+          result.transport === 'unconfigured'
+            ? t('voice.notSetUp')
+            : result.transport === 'timeout' || result.transport === 'server'
+              ? t('voice.failed')
+              : t('voice.offline'),
+        );
         return;
       }
       if (!result.ok) {
@@ -187,6 +200,7 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
     } catch {
       fail(t('voice.failed'));
     } finally {
+      clearTimeout(slow);
       busy.current = false;
     }
   }, [recorder, state, screen, lang, t, toast, fail, onClose, router]);

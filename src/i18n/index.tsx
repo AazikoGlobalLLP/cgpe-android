@@ -546,6 +546,13 @@ const en = {
   'voice.offline': 'Voice needs a connection right now.',
   'voice.failed': 'Something went wrong. Please try again.',
   'voice.notUnderstood': "I didn't catch that. Please try again.",
+  // The two keys below ship the ENGLISH sentence in all five dictionaries on purpose. They are
+  // NOT machine-translated: the 2026-08-27 waiver covered one batch and is not standing
+  // permission, and PHASE-19 DONE-4 is explicit that an honest English fallback beats a wrong
+  // romanised guess. Owner copy is requested (COPY-REQUEST Batch 6h); this is the `tab.search`
+  // precedent, not a translation.
+  'voice.notSetUp': 'Voice is not switched on for this server yet. Ask your admin to turn it on.',
+  'voice.stillWorking': 'Still working…',
   'voice.whichOne': 'Which one?',
   'voice.female': 'Female',
   'voice.male': 'Male',
@@ -953,6 +960,8 @@ const gu: Dict = {
   'voice.offline': 'વૉઇસ માટે અત્યારે કનેક્શન જરૂરી છે.',
   'voice.failed': 'કંઈક ખોટું થયું. ફરી પ્રયત્ન કરો.',
   'voice.notUnderstood': 'સમજાયું નહીં. ફરી પ્રયત્ન કરો.',
+  'voice.notSetUp': 'Voice is not switched on for this server yet. Ask your admin to turn it on.',
+  'voice.stillWorking': 'Still working…',
   'voice.whichOne': 'કઈ?',
   'voice.female': 'સ્ત્રી',
   'voice.male': 'પુરુષ',
@@ -1351,6 +1360,8 @@ const hi: Dict = {
   'voice.offline': 'वॉइस के लिए अभी कनेक्शन चाहिए।',
   'voice.failed': 'कुछ गड़बड़ हो गई। फिर कोशिश करें।',
   'voice.notUnderstood': 'समझ नहीं आया। फिर कोशिश करें।',
+  'voice.notSetUp': 'Voice is not switched on for this server yet. Ask your admin to turn it on.',
+  'voice.stillWorking': 'Still working…',
   'voice.whichOne': 'कौन सा?',
   'voice.female': 'महिला',
   'voice.male': 'पुरुष',
@@ -1756,6 +1767,8 @@ const hiEn: Dict = {
   'voice.offline': 'Voice ke liye abhi connection chahiye.',
   'voice.failed': 'Kuch gadbad ho gayi. Dobara try karein.',
   'voice.notUnderstood': 'Samajh nahi aaya. Dobara try karein.',
+  'voice.notSetUp': 'Voice is not switched on for this server yet. Ask your admin to turn it on.',
+  'voice.stillWorking': 'Still working…',
   'voice.whichOne': 'Kaunsa?',
   'voice.female': 'Female',
   'voice.male': 'Male',
@@ -2161,6 +2174,8 @@ const guEn: Dict = {
   'voice.offline': 'Voice mate atyare connection jaruri chhe.',
   'voice.failed': 'Kaink khotu thayu. Fari try karo.',
   'voice.notUnderstood': 'Samjaayu nahi. Fari try karo.',
+  'voice.notSetUp': 'Voice is not switched on for this server yet. Ask your admin to turn it on.',
+  'voice.stillWorking': 'Still working…',
   'voice.whichOne': 'Kai?',
   'voice.female': 'Female',
   'voice.male': 'Male',

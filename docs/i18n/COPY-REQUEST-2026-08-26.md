@@ -830,6 +830,30 @@ keys and need nothing.)*
 as the "Overdue" tag on the tasks widget. They are pre-existing untranslated peers to sweep in a
 later batch, and they do **not** hold up the Notes header that Phase 85 wired.
 
+### 6h — Two voice-assistant sentences shipping in ENGLISH right now (Phase 87, 2026-08-31 — 2 strings)
+
+**These two are already live in the app, in English, in all five languages.** That is deliberate, not
+an oversight: the rest of the voice screen is translated, so a Gujarati user will see two English
+sentences among Gujarati ones until this batch comes back. We chose that over guessing, for the
+reason written into the i18n spec — *an honest English fallback beats a wrong romanised string* — and
+it is the same call that was made for `Search` on the bottom tab bar.
+
+They are worth translating soon because both appear at the exact moment something has gone wrong,
+which is the worst moment to make someone read a second language.
+
+| Key | English (live today) | Where it appears |
+|---|---|---|
+| `voice.notSetUp` | `Voice is not switched on for this server yet. Ask your admin to turn it on.` | Voice mode, when the server has no voice service configured. **This is what every user sees today**, because the voice service is built but not yet running on the live server. It must NOT say "try again" — no amount of retrying will turn it on. |
+| `voice.stillWorking` | `Still working…` | A small toast while a spoken question is taking longer than usual. Reassurance only — nothing has failed. Keep it short; it sits in a toast. |
+
+**Notes for the translator**
+- `voice.notSetUp` — "admin" here means the person who runs the system, the same word already used in
+  `clients.restrictedBody` ("Ask an administrator…"). Please keep that consistent.
+- `voice.stillWorking` — the `…` is a real ellipsis character, matching `voice.thinking` ("Listening…",
+  "Thinking…", "Speaking…"). Please match those three in tone; it is the fourth member of that family.
+
+---
+
 ### What is deliberately NOT in Batch 6, and why
 
 - **Task categories** (Follow-up, Claim, Renewal, Meeting, Documentation, Collection, Training,

@@ -85,7 +85,12 @@ describe('i18n dictionaries — parity and value quality', () => {
     // CLAUDE translations under the 2026-08-27 waiver (labelled in the code); owner to confirm the
     // gu/hi/hi-en/gu-en copy. `Cancel`/`Confirm`/`Try again` reuse the existing common.* keys.
     // Bumped 444 → 446 for `voice.female`/`voice.male` (2026-08-29): the voice-mode persona toggle.
-    expect(EN_KEYS.length).toBe(446);
+    // Bumped 446 → 448 for `voice.notSetUp`/`voice.stillWorking` (2026-08-31, Phase 87): the
+    // permanently-off-server sentence and the slow-turn hint. These ship the ENGLISH string in all
+    // five dictionaries — NOT machine-translated. The 2026-08-27 waiver covered one batch and is not
+    // standing permission, and DONE-4 above says an honest English fallback beats a wrong romanised
+    // guess. Same sanctioned precedent as `tab.search`; owner copy requested as Batch 6h.
+    expect(EN_KEYS.length).toBe(448);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

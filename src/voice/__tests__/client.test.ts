@@ -1,7 +1,8 @@
 /**
  * The voice client is a WRITE path (a retried voice command is a double clock-in), so the tests pin
  * the things that keep it safe and correct: exactly one fetch, no Content-Type (so the multipart
- * boundary survives), the bearer token attached, the snake_case fields, the 8 s abort, and that every
+ * boundary survives), the bearer token attached, the snake_case fields, the abort at the ceiling, and
+ * that every
  * failure mode returns a typed result instead of throwing. It touches api.ts's mutable token state, so
  * it follows the house `vi.resetModules()` + dynamic-import pattern.
  */
@@ -125,6 +126,73 @@ describe('outcomes', () => {
     expect(r).toEqual({ ok: false, transport: 'server', status: 502 });
   });
 
+  it('a body that will not parse still classifies, and stays transient', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 500, json: async () => { throw new Error('not json'); },
+    })));
+    const client = await load('real-jwt-token');
+    const r = await client.askVoice(INPUT);
+    expect(r).toEqual({ ok: false, transport: 'server', status: 500 });
+  });
+});
+
+/**
+ * The permanent/transient split. Retry copy on a permanently-off server is the exact defect the
+ * upload path had before `classifyUploadFailureBody`: the user is told to try again forever, for a
+ * thing only an admin can fix. Prod is a live example TODAY — `POST /api/voice/ask` answers 404
+ * because the proxy is built but not on `origin/main`.
+ */
+describe('permanent vs transient outage', () => {
+  it('treats a not-deployed route (404 / 501) as permanent', async () => {
+    const { isPermanentVoiceOutage } = await load();
+    expect(isPermanentVoiceOutage(404, null)).toBe(true);
+    expect(isPermanentVoiceOutage(501, null)).toBe(true);
+  });
+
+  it('treats a 503 as permanent ONLY when the body names it, in either documented spelling', async () => {
+    const { isPermanentVoiceOutage } = await load();
+    expect(isPermanentVoiceOutage(503, { code: 'not_configured', missing: ['SARVAM_API_KEY'] })).toBe(true);
+    expect(isPermanentVoiceOutage(503, { not_configured: true })).toBe(true);
+  });
+
+  it('leaves a bare 503 transient — an overloaded proxy is not an unconfigured one', async () => {
+    const { isPermanentVoiceOutage } = await load();
+    expect(isPermanentVoiceOutage(503, null)).toBe(false);
+    expect(isPermanentVoiceOutage(503, {})).toBe(false);
+    expect(isPermanentVoiceOutage(503, { code: 'busy' })).toBe(false);
+  });
+
+  it('leaves every ordinary fault transient (the conservative direction)', async () => {
+    const { isPermanentVoiceOutage } = await load();
+    for (const s of [400, 401, 403, 408, 429, 500, 502, 504]) {
+      expect({ s, permanent: isPermanentVoiceOutage(s, { code: 'not_configured' }) })
+        .toEqual({ s, permanent: false });
+    }
+  });
+
+  it('askVoice reports a 404 as unconfigured, not as a retryable server fault', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404, json: async () => null })));
+    const client = await load('real-jwt-token');
+    const r = await client.askVoice(INPUT);
+    expect(r).toEqual({ ok: false, transport: 'unconfigured', status: 404 });
+  });
+
+  it('askVoice reports the documented 503 not_configured as unconfigured', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false, status: 503, json: async () => ({ code: 'not_configured', missing: ['SARVAM_API_KEY'] }),
+    })));
+    const client = await load('real-jwt-token');
+    const r = await client.askVoice(INPUT);
+    expect(r).toEqual({ ok: false, transport: 'unconfigured', status: 503 });
+  });
+
+  it('askVoice keeps a bare 503 transient', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 503, json: async () => ({}) })));
+    const client = await load('real-jwt-token');
+    const r = await client.askVoice(INPUT);
+    expect(r).toEqual({ ok: false, transport: 'server', status: 503 });
+  });
+
   it('a thrown fetch is a network transport error', async () => {
     const fetchSpy = vi.fn(async () => { throw new Error('down'); });
     vi.stubGlobal('fetch', fetchSpy);
@@ -134,7 +202,7 @@ describe('outcomes', () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1); // exactly once — never retried
   });
 
-  it('an abort at the 8 s ceiling is a timeout transport error', async () => {
+  it('an abort at the ceiling is a timeout transport error', async () => {
     vi.useFakeTimers();
     vi.stubGlobal('fetch', vi.fn((_u: string, opts: RequestInit) => new Promise((_res, rej) => {
       opts.signal?.addEventListener('abort', () => rej(new Error('aborted')));
