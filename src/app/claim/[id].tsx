@@ -337,12 +337,16 @@ export default function ClaimDetail() {
     });
 
     // WHY THIS BRANCHES, AND WHY THE SAME CALL IS FIRE-AND-FORGET ABOVE IT.
-    // On the legacy path the file already lives behind a durable public URL, so this record is
-    // a nicety: failing it must NOT read as a failed upload, or the user re-uploads a file that
-    // is already safely stored. On the PRESIGNED path the row is the only thing on the server
-    // that names the object — no row, no way to ever reach the bytes — so there it is awaited
-    // and a failure is reported honestly. Calling that case a success would be the "captures
-    // vanish" bug with a green tick on it.
+    // When the upload came back with a durable public URL, this record is a nicety: failing it
+    // must NOT read as a failed upload, or the user re-uploads a file that is already safely
+    // stored. When it came back with a KEY, the row is the only thing on the server that names
+    // the object — no row, no way to ever reach the bytes — so there it is awaited and a failure
+    // is reported honestly. Calling that case a success would be the "captures vanish" bug with
+    // a green tick on it.
+    //
+    // The test is the `storageKey` FIELD, not which path ran. Since Phase 88 the LEGACY path can
+    // return a key too — backend Phase 101 made its url a short-lived signed one — so that
+    // response lands here and is awaited, which is the point of the fix.
     if (up.storageKey) {
       const saved = await record;
       if (!mounted.current) return;

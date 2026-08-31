@@ -349,6 +349,75 @@ export function parseDownloadUrl(body: unknown): string | null {
   return url || null;
 }
 
+/* ------------------------------ the LEGACY route learned to return a key too (Phase 88) */
+
+/**
+ * What the legacy multipart `POST /api/upload` actually gave us.
+ *
+ * WHY THIS EXISTS - it is a defect fix, not a tidy-up. `cgpe-api`'s Phase 101 (`9a74c9a`,
+ * `routes/upload.js:174-196`) changed that route's SUCCESS body. Once the bucket is private the
+ * public-style URL it used to return 403s for every caller, so it now hands back a **short-lived
+ * presigned GET** as `url`, alongside `key`, `storage_key` and `url_expires_in`. Their own
+ * comment states it plainly: *"`url` is short-lived when presigned. `key` is the durable handle
+ * - store THIS."*
+ *
+ * The app read only `url` and recorded it as `file_url`. So on the day Phase 101 deploys **and**
+ * `S3_*` is set, every legacy-path upload would persist a link that dies when the signature
+ * expires - trap (a) of the D-122 contract above ("persist the KEY, never the URL"), arriving
+ * through the one path that contract did not cover. Phase 86's presigned path was already right;
+ * only this fallback was wrong, and the fallback is what runs today.
+ *
+ * THE DISCRIMINATOR IS TWO-PART, AND THE SECOND PART IS THE LOAD-BEARING ONE.
+ * `storage_key` on its own is NOT enough. Phase 101 has a documented signing-failure branch that
+ * still sets `storage_key` but falls back to the public URL and sets **`url_expires_in: null`**.
+ * There the `url` is the durable thing and the key is NOT dependably re-signable - the signer
+ * just failed - so keying on the key alone would throw away the only working link. A FINITE
+ * `url_expires_in` is the server saying "this url is signed, and here is how long it lives";
+ * that, and only that, means the url is disposable.
+ *
+ * Any older build answers with neither field and falls through to exactly today's behaviour,
+ * which is what makes this safe to ship ahead of the deploy - production still 404s the presign
+ * route and reports `cloudStorageConfigured:false`, so this branch cannot fire there yet.
+ *
+ * (Whether both fields are ALWAYS present on the configured path is filed as an open question to
+ * `cgpe-api` at the top of `contracts/INBOX.md`, 2026-08-31. If they answer with a different
+ * field to key on, change it HERE - this function is the only place that decides.)
+ */
+export type LegacyUploadResult = {
+  /** The durable public URL to report. **Empty when `storageKey` is set** - see above. */
+  url: string;
+  /** The server's own `key`, passed through unchanged. */
+  key?: string;
+  /**
+   * Set ONLY when the server signed `url` - i.e. the object is in real storage and the key is
+   * the durable handle. Its presence moves the caller onto the presigned plumbing: record the
+   * key, leave `file_url` empty, re-sign per render.
+   */
+  storageKey?: string;
+};
+
+/** Read a legacy `/upload` success body. `null` = nothing usable came back, which the caller
+ *  must report as `'server'` rather than as a success with an empty URL. */
+export function parseLegacyUploadResult(body: unknown): LegacyUploadResult | null {
+  const b = body as any;
+  const d = b?.data ?? b;
+  if (!d || typeof d !== 'object') return null;
+  const url = typeof d.url === 'string' ? d.url.trim() : '';
+  const key = typeof d.key === 'string' && d.key.trim() ? d.key.trim() : undefined;
+  const storageKey = typeof d.storage_key === 'string' ? d.storage_key.trim() : '';
+  // `Number.isFinite`, not `typeof === 'number'`: NaN is a number and would otherwise read as
+  // "signed". It also refuses a numeric STRING, deliberately - a shape we were not promised is
+  // safer treated as the old one. No `> 0` test: a zero TTL is not a shape the server emits, and
+  // if it ever were, "the url is already dead" is the safe reading of it, not the dangerous one.
+  if (storageKey && Number.isFinite(d.url_expires_in)) {
+    // `key ?? storageKey`: Phase 101 sets both from the same `uploadResult.key`, so they agree;
+    // the fallback only matters if a future build ever sends one and not the other.
+    return { url: '', key: key ?? storageKey, storageKey };
+  }
+  if (!url) return null;
+  return { url, key };
+}
+
 /**
  * True when the server handed back a throwaway local-disk URL. That is the signature of the
  * "captures vanish" bug: with DigitalOcean Spaces unset (or a transient Spaces failure),

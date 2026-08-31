@@ -14,6 +14,7 @@ import {
   classifyPresignResponse,
   classifyPutStatus,
   parseDownloadUrl,
+  parseLegacyUploadResult,
   parsePresignTarget,
   type UploadFailure,
 } from '@/lib/fileUpload';
@@ -403,5 +404,74 @@ describe('the not_linked copy — the presigned flow’s own failure mode', () =
     expect(d.tone).toBe('danger');
     expect(d.title.toLowerCase()).toContain('attached');
     expect(d.message.toLowerCase()).toContain('again');
+  });
+});
+
+describe('parseLegacyUploadResult — the legacy route now returns a key too (Phase 88)', () => {
+  /** A configured server on backend Phase 101: the url is SIGNED and the key is the durable one. */
+  const signed = (over: Record<string, unknown> = {}) => ({
+    success: true,
+    data: {
+      url: 'https://minio.example/cgpe/u1/general/x.jpg?X-Amz-Signature=deadbeef',
+      key: 'u1/general/x.jpg',
+      storage_key: 'u1/general/x.jpg',
+      url_expires_in: 300,
+      ...over,
+    },
+  });
+
+  it('THE FIX: a signed url is reported as a KEY with an EMPTY url, so nothing expiring is stored', () => {
+    // The whole defect in one assertion. Before this, `url` was handed to the caller and written
+    // to `file_url`, and it dies when the signature does.
+    expect(parseLegacyUploadResult(signed())).toEqual({
+      url: '', key: 'u1/general/x.jpg', storageKey: 'u1/general/x.jpg',
+    });
+  });
+
+  it('KEEPS the url when signing FAILED (url_expires_in: null) — there the url is the durable one', () => {
+    // Phase 101's documented fallback branch: `storage_key` is still set, but the url is the
+    // public one and the signer just failed, so the key is not dependably re-signable. Keying on
+    // the key alone would throw away the only working link. This is why the test is two-part.
+    expect(parseLegacyUploadResult(signed({ url: 'https://cdn/x.jpg', url_expires_in: null }))).toEqual({
+      url: 'https://cdn/x.jpg', key: 'u1/general/x.jpg',
+    });
+  });
+
+  it('leaves a pre-Phase-101 body exactly as it behaved before — neither field present', () => {
+    expect(parseLegacyUploadResult({ success: true, data: { url: 'https://cdn/x.jpg', key: 'x' } }))
+      .toEqual({ url: 'https://cdn/x.jpg', key: 'x' });
+  });
+
+  it('ignores a storage_key that arrives with NO url_expires_in at all', () => {
+    // A shape we were not promised. Falling through to today's behaviour is the safe reading:
+    // the url still works, and nothing that expires gets written down.
+    expect(parseLegacyUploadResult({ success: true, data: { url: 'https://cdn/x.jpg', storage_key: 'k' } }))
+      .toEqual({ url: 'https://cdn/x.jpg' });
+  });
+
+  it('refuses a NaN and a numeric STRING as "signed" — only a real finite number counts', () => {
+    // `typeof NaN === 'number'`, so a loose test would read a garbled body as signed and drop a
+    // working url. A numeric string is likewise a shape the contract does not promise.
+    const url = 'https://minio.example/cgpe/u1/general/x.jpg?X-Amz-Signature=deadbeef';
+    expect(parseLegacyUploadResult(signed({ url_expires_in: NaN }))).toEqual({ url, key: 'u1/general/x.jpg' });
+    expect(parseLegacyUploadResult(signed({ url_expires_in: '300' }))).toEqual({ url, key: 'u1/general/x.jpg' });
+  });
+
+  it('takes the key even when the signed body carries no url at all', () => {
+    // Strictly better than reporting a server failure: the object exists and the key names it.
+    expect(parseLegacyUploadResult({ success: true, data: { storage_key: 'k', url_expires_in: 300 } }))
+      .toEqual({ url: '', key: 'k', storageKey: 'k' });
+  });
+
+  it('reads an unwrapped body as well as a `data`-wrapped one', () => {
+    expect(parseLegacyUploadResult({ url: 'https://cdn/x.jpg' })).toEqual({ url: 'https://cdn/x.jpg' });
+  });
+
+  it('returns null when nothing usable came back, so the caller reports a server failure', () => {
+    // NOT `{url:''}`: an empty url with no key would read as a success with nothing attached.
+    expect(parseLegacyUploadResult({ success: true, data: {} })).toBeNull();
+    expect(parseLegacyUploadResult({ success: true, data: { url: '   ' } })).toBeNull();
+    expect(parseLegacyUploadResult(null)).toBeNull();
+    expect(parseLegacyUploadResult('nope')).toBeNull();
   });
 });

@@ -195,6 +195,50 @@ describe('uploadFile — a typed outcome, not {url,key}|null (Point 11)', () => 
     if (!r.ok) expect(r.reason).toBe('network');
   });
 
+  /* --- PHASE 88: the legacy route learned to return a key, and the url it returns expires --- */
+
+  it('THE PHASE 88 FIX: a signed legacy url is reported as a KEY with an empty url', async () => {
+    // Backend Phase 101 turned this route's `url` into a short-lived presigned GET, with
+    // `storage_key` as the durable handle beside it. Reading only `url` (what the app did) meant
+    // `recordFileAttachment` persisted a link that dies with the signature — the exact trap
+    // D-122 warned about, arriving through the one path that contract did not cover.
+    presignAbsent();
+    fetchSpy.mockResolvedValue(reply(200, { success: true, data: {
+      url: 'https://minio.example/cgpe/u1/general/x.jpg?X-Amz-Signature=deadbeef',
+      key: 'u1/general/x.jpg',
+      storage_key: 'u1/general/x.jpg',
+      url_expires_in: 300,
+    } }));
+    // `ephemeral: false` is a fact: Phase 101 sets those two fields only inside its
+    // `cloudStorage.isConfigured()` branch, so the bytes are in a real bucket.
+    expect(await api.uploadFile('file:///tmp/a.jpg', 'a.jpg')).toEqual({
+      ok: true, url: '', key: 'u1/general/x.jpg', storageKey: 'u1/general/x.jpg', ephemeral: false,
+    });
+  });
+
+  it('KEEPS the url when Phase 101 could not sign it (url_expires_in: null)', async () => {
+    // That branch falls back to the public URL, which IS durable, and the signer that just
+    // failed is the same one a later re-sign would need. Keying on `storage_key` alone would
+    // discard the only working link.
+    presignAbsent();
+    fetchSpy.mockResolvedValue(reply(200, { success: true, data: {
+      url: 'https://cdn/x.jpg', key: 'k', storage_key: 'k', url_expires_in: null,
+    } }));
+    expect(await api.uploadFile('file:///tmp/a.jpg', 'a.jpg')).toEqual({
+      ok: true, url: 'https://cdn/x.jpg', key: 'k', ephemeral: false,
+    });
+  });
+
+  it('still flags the droplet-disk fallback as ephemeral — it returns neither new field', async () => {
+    // The local-disk branch is untouched by Phase 101, so the "captures vanish" warning must
+    // survive this change rather than being swallowed by the new key path.
+    presignAbsent();
+    fetchSpy.mockResolvedValue(reply(200, { success: true, data: { url: 'https://cgpe.in/uploads/general/x.jpg' } }));
+    expect(await api.uploadFile('file:///tmp/a.jpg', 'a.jpg')).toEqual({
+      ok: true, url: 'https://cgpe.in/uploads/general/x.jpg', ephemeral: true,
+    });
+  });
+
   it('never leaves the handset without a real session — returns not_signed_in, no fetch', async () => {
     api.setAuthToken('demo-abc');   // a `demo-` token disables real network calls
     const p = api.uploadFile('file:///tmp/a.jpg', 'a.jpg');

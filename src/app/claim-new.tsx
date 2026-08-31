@@ -299,10 +299,12 @@ function ClaimNewScreen() {
       description: 'Attached while creating a claim',
     });
 
-    // On the PRESIGNED path the record is not a nicety — it is the only thing that names the
-    // object in storage, so a failure means the bytes are unreachable and the row below would
-    // be a lie. Awaited and reported there; still fire-and-forget on the legacy path, where the
-    // file is already behind a durable URL. Same reasoning as `claim/[id].tsx`.
+    // WHEN THERE IS A KEY, the record is not a nicety — it is the only thing that names the
+    // object in storage, so a failure means the bytes are unreachable and the row below would be
+    // a lie. Awaited and reported in that case; fire-and-forget only when the upload came back
+    // with a durable URL instead. The test is the `storageKey` FIELD, never a guess at which
+    // path ran: since Phase 88 the legacy path can return a key too (backend Phase 101 signs its
+    // url), and that response needs exactly this branch. Same reasoning as `claim/[id].tsx`.
     if (up.storageKey) {
       const saved = await record;
       if (!mounted.current) return;

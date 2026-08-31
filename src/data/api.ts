@@ -51,7 +51,7 @@ import { decideRead, mergeById } from '@/lib/offlineCache';
 import { putBinary } from '@/lib/binaryUpload';
 import {
   classifyPresignResponse, classifyPutStatus, classifyUploadFailureBody, isEphemeralUrl,
-  parseDownloadUrl, type PresignedTarget, type UploadFailure,
+  parseDownloadUrl, parseLegacyUploadResult, type PresignedTarget, type UploadFailure,
 } from '@/lib/fileUpload';
 // PHASE 57b — the safe offline write queue. Pure decisions in `lib/writeQueue`; the reactive
 // in-memory mirror the UI renders from is `data/pendingWrites`.
@@ -3517,17 +3517,22 @@ export type UploadOutcome =
   | {
       ok: true;
       /**
-       * The legacy multipart path's DURABLE public URL. **Empty string on the presigned path**
-       * — and that is not an oversight. A presigned object has no durable URL at all; every
-       * signed link dies in 300 s, so handing one out here would invite a caller to persist a
-       * link that is broken before anyone opens it. Presigned callers use `storageKey`.
+       * A DURABLE public URL. **Empty string whenever `storageKey` is set** — and that is not an
+       * oversight. A presigned object has no durable URL at all; every signed link dies in 300 s,
+       * so handing one out here would invite a caller to persist a link that is broken before
+       * anyone opens it. Those callers use `storageKey` instead.
        */
       url: string;
       key?: string;
       /**
-       * Set ONLY by the presigned flow. Its presence is the discriminator: a caller with a
+       * The durable object handle. Its presence is the discriminator: a caller with a
        * `storageKey` must record it via `recordFileAttachment({ storageKey })` and leave
        * `fileUrl` empty, and must AWAIT that call — see the note on `recordFileAttachment`.
+       *
+       * ⚠️ NO LONGER PRESIGN-ONLY (Phase 88). It used to say "set only by the presigned flow",
+       * and building on that would now be wrong: backend Phase 101 made the LEGACY multipart
+       * route return a `storage_key` beside a short-lived url too, so path 2 sets this as well.
+       * Branch on the FIELD, never on which path you think ran.
        */
       storageKey?: string;
       ephemeral: boolean;
@@ -3584,6 +3589,11 @@ async function putSignedBytes(uri: string, t: PresignedTarget): Promise<{ ok: tr
  *      which is every server that has not deployed Phase 95 or has no `S3_*` set — i.e.
  *      production today. That fallback is why adopting this ahead of the deploy is inert:
  *      until the merge lands, every upload takes path 2 and behaves exactly as it did before.
+ *
+ * ⚠️ PATH 2 CAN ALSO PRODUCE A KEY NOW (Phase 88), so the two paths are no longer "key" vs
+ * "url". Backend Phase 101 made the legacy route return a SHORT-LIVED signed url plus a durable
+ * `storage_key` once storage is configured, and reading only the url would persist a link that
+ * expires. The outcome is therefore discriminated by the `storageKey` FIELD, not by the path.
  */
 export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 'image/jpeg'): Promise<UploadOutcome> {
   // No real session: nothing may leave the handset, and reporting a fake success would put a
@@ -3603,7 +3613,8 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
     return { ok: true, url: '', key: presigned.target.key, storageKey: presigned.target.key, ephemeral: false };
   }
 
-  // PATH 2 — legacy multipart, unchanged.
+  // PATH 2 — legacy multipart. The TRANSPORT here is unchanged; what the server sends back is
+  // not (see the Phase 88 note where the response is read).
   // PHASE 55: an AbortController so a stalled upload FAILS at UPLOAD_TIMEOUT instead of hanging the
   // screen forever (the old code had none). A multipart POST is non-idempotent → a single attempt,
   // never retried; an abort surfaces as a caught throw and is reported as a 'timeout' below.
@@ -3638,9 +3649,28 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
       return { ok: false, reason: classifyUploadFailureBody(res.status, serverMsg, mimeType) };
     }
     const json = await res.json().catch(() => null);
-    const data = json?.data ?? json;
-    if (!data?.url) return { ok: false, reason: 'server' };
-    return { ok: true, url: data.url, key: data.key, ephemeral: isEphemeralUrl(data.url) };
+    // PHASE 88. This used to read `data.url` and nothing else. Backend Phase 101 made that url a
+    // SHORT-LIVED signed GET whenever the bucket is configured, with `storage_key` as the durable
+    // handle beside it -- so reading only the url would persist a link that expires, on the one
+    // path the D-122 contract did not cover. The two-part discriminator lives in
+    // `parseLegacyUploadResult`; the reasoning for it is written there.
+    const parsed = parseLegacyUploadResult(json);
+    if (!parsed) return { ok: false, reason: 'server' };
+    // The server signed the url, so the KEY is what is worth keeping. Reporting it as `storageKey`
+    // with an EMPTY url puts this response onto exactly the presigned path's existing plumbing,
+    // with no call-site change: `recordFileAttachment` writes `storage_key` and an empty
+    // `file_url`, both claim screens AWAIT that row (it is now the only thing on the server naming
+    // the object) and each render re-signs through `getAttachmentDownloadUrl`.
+    //
+    // `ephemeral: false` is a FACT here, not an assumption, for the same reason it is on the
+    // presigned path: `storage_key` and a signed url are set only inside Phase 101's
+    // `cloudStorage.isConfigured()` branch, so the bytes are in a real bucket. The droplet-disk
+    // fallback below it returns neither field, so it still goes through `isEphemeralUrl` and can
+    // still warn the user their file will not be kept.
+    if (parsed.storageKey) {
+      return { ok: true, url: '', key: parsed.key, storageKey: parsed.storageKey, ephemeral: false };
+    }
+    return { ok: true, url: parsed.url, key: parsed.key, ephemeral: isEphemeralUrl(parsed.url) };
   } catch {
     return { ok: false, reason: timedOut ? 'timeout' : 'network' };
   } finally { clearTimeout(timer); }
