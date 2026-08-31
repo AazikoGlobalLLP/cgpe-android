@@ -428,6 +428,20 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
 - Corollary for any new native dependency: check whether it does work at module scope before
   importing it, and prefer keeping it behind a lazy require in a module only screens import.
 
+⚠️ **AND A THIRD, SMALLER TRAP THE LAZY REQUIRE CREATES: IT IS UNTESTABLE (Phase 86, 2026-08-31).**
+A lazy `require()` resolves through **Node**, not through Vite — so a `vitest.config.mts` alias
+**cannot** redirect it (the alias only rewrites Vite's own module graph) and a `vi.mock()` factory
+**cannot** intercept it either (Vitest's module mocking is ESM-only). Both were tried; a probe test
+proved the `require` reaches the real `node_modules` copy and dies on
+`Stripping types is currently unsupported for files under node_modules`. So the code path behind
+the require is reachable in tests **only as a caught throw** — which looks green and pins nothing.
+**The fix is a seam, not a stub: put the native call in its own tiny module that exposes a plain
+function, and let callers `import` THAT.** `vi.mock('@/lib/<seam>')` then works normally, and the
+module's own top level stays native-free so the Vitest graph is still safe. The live example is
+`src/lib/binaryUpload.ts` (the presigned PUT — `fetch` cannot stream a `file://` body on RN), and
+the reasoning is written in its header. **Do not add a `test/stubs/*` entry for a module reached by
+`require` — it will silently do nothing.**
+
 ## Verifying the backend WITHOUT guessing (2026-08-26)
 
 - **`GET https://cgpe.in/internal/api/upload` reports the live storage state** —
@@ -456,15 +470,27 @@ The Vitest trap below (`__DEV__ is not defined`) is documented under `npm test`.
   like the local-disk fallback to `isEphemeralUrl` and warn users their files will not be kept. The
   host-scoped narrowing was deliberately NOT taken (it would turn a harmless false alarm into a false
   reassurance); the reasoning is written at the function and pinned by a test.
-- 🔑 **THE PRESIGNED MinIO FLOW IS THE CONTRACT NOW, AND THE APP HAS NOT ADOPTED IT (open as of
-  2026-08-29).** `cgpe-api` Phase 95 (INBOX 2026-08-27) superseded the multipart upload with a
+- ✅ **THE PRESIGNED MinIO FLOW IS ADOPTED — Phase 86, 2026-08-31 (`4d1c31a`). This entry used to say
+  the app had NOT adopted it; it has.** `src/lib/binaryUpload.ts` + the pure seam in
+  `lib/fileUpload.ts` (`parsePresignTarget`/`classifyPresignResponse`/`classifyPutStatus`/
+  `parseDownloadUrl`), wired through `uploadFile`/`recordFileAttachment`/`listAttachments`/
+  `getAttachmentDownloadUrl` and consumed by both claim screens. **Three decisions not to
+  re-litigate:** a `presign` answering **404/501/503 falls back to the legacy multipart path**
+  (which is why shipping ahead of the deploy is inert — prod is 404 today), a **415 does not**;
+  a **`403` on the PUT is `'server'`, never `'unauthorized'`** (no session on that request — it is
+  a signature mismatch or an expired 300 s window, which a retry fixes); and the
+  `/file-attachments` write is **awaited and reported** on the presigned path (`'not_linked'`)
+  because that row is the ONLY thing naming the object, while staying fire-and-forget on the
+  legacy path where the file already has a durable URL. `?entity_id=` is **filtered again on the
+  client** — the server-side filter is undeployed, so an old build returns the whole collection;
+  keep the second filter after the deploy. The contract below is retained as the reference:
+- 🔑 **THE CONTRACT ITSELF (`cgpe-api` Phase 95, INBOX 2026-08-27).** `cgpe-api` Phase 95 (INBOX 2026-08-27) superseded the multipart upload with a
   **three-call presigned flow**: `POST /upload/presign` `{content_type, filename?, folder?}` →
   `{key, url, method:'PUT', headers:{'Content-Type'}, expiresIn:300, maxBytes:10485760}`; **PUT the
   bytes to that url with NO auth header** (the signature is the auth); then `POST /file-attachments`
   with **`storage_key`** and an EMPTY `file_url`. Render later via `GET /upload/download-url?key=…`.
-  The `cgpe-mobile` box is **unticked** and `grep -rn "presign\|storage_key\|download-url" src/`
-  returns **zero hits** — the app is still on multipart `/upload` + `/file-attachments`. **Do not
-  re-derive this contract; read the INBOX item.** Two traps written into the contract itself:
+  The `cgpe-mobile` box is now **ticked** with a full reply underneath. **Do not re-derive this
+  contract; read the INBOX item.** Two traps written into the contract itself:
   **(a) persist the KEY, never the URL** — signed URLs expire in 300 s, so a stored URL ships a dead
   link; **(b) the PUT is SIGNED against the exact `Content-Type` `presign` returned** — any other
   value, or omitting the header, **403s at MinIO**. Adopting it early is inert-safe: all three routes
