@@ -390,6 +390,12 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 ', nl)`) — or just use the Edit tool, which handles it. The
   write-to-a-temp-file-and-assert-it-is-larger rule is what makes a failure here a **no-op instead of
   damage**; keep it on every scripted write, not only on `INBOX.md`.
+- ℹ️ **A docs edit in this CRLF tree shows up as a WHOLE-FILE diff, and that is cosmetic.** The Edit
+  tool writes LF, so git rewrites the file's line endings and `--stat` reports something like
+  `CLAUDE.md | 1915 +++----`. Before assuming you clobbered something, run
+  `git diff HEAD~1 HEAD --ignore-cr-at-eol --stat` — Phase 89's 1116/959 collapsed to the **167/10**
+  that was actually intended. Check the line COUNT too (`git show HEAD~1:<f> | wc -l`), which is the
+  cheap proof nothing was lost.
 - ⚠️ **A root cause recorded in `docs/` is a HYPOTHESIS until someone re-reads the code.** Phase 77
   inherited three documents all naming `Appear`'s `cancelAnimation` as the More→Today blank screen,
   and it is **wrong**: `Appear`'s effect deps are constants at every Home call site so its cleanup

@@ -1,98 +1,102 @@
-# HANDOFF — CGPE Connect (Android) — Phase 88 (the legacy upload path stops persisting an expiring URL) — 2026-08-31
+# HANDOFF — CGPE Connect (Android) — Phase 89 (the sibling's undeployed commits, read) — 2026-08-31
 
-> Phase 88 is **shipped and pushed** (`eb9760f` + docs `554fd6d` on `aaziko/Shivam`). **Phase 89 is
-> written up and NOT started** — it is the resume point, and it is the same kind of sweep that found
-> Phase 88 in the first place.
+> Phase 89 is **shipped and pushed** (`968955e` on `aaziko/Shivam`). It found that **team
+> notifications are silently broken on production right now** — a server-side bug, already fixed in
+> `cgpe-api`'s undeployed window, that the app cannot detect and owes no code for.
+>
+> **The next action is the APK, not another phase.** The EAS free-plan quota resets **1 Sep**.
 >
 > ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM. Do not delete it** — it is still
 > the only record of the Skia / Lottie / web-stub traps.
 
 ## Done
 
-- **An ordinary document upload will no longer save a link that expires.** Backend Phase 101 turned
-  the legacy upload route's `url` into a **short-lived signed link** and put the durable handle in
-  `storage_key` beside it. The app read only the url and wrote it down as the attachment's permanent
-  address — so on the day storage is switched on, every attachment made through that path would have
-  become unopenable once the signature lapsed. The app now keeps the **key** and re-signs a fresh link
-  each time the file is opened.
-- **It needed no change on either claim screen.** A "signed" answer is reported with an empty url and
-  a key, which is exactly the shape the presigned flow already produces — so the existing plumbing
-  (write the key, leave the url empty, await the row, re-sign per render) took over unchanged.
-- **The "this file will not be kept" warning still works.** The droplet-disk fallback returns neither
-  new field, so it is untouched by the fix; a test pins it, because quietly losing that warning would
-  have been a worse bug than the one being fixed.
-- **The `cgpe-api` box was answered under the item that is blocking**, with what we built and why, and
-  an explicit note that the tick does **not** mean the deploy-day window is closed.
-- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1308 / 77 files** (was 1297, **+11**)
-  · cache-free `npx eslint` **0 errors** on all six touched files (3 pre-existing warnings untouched).
+- **We now know that the "send a notice to the team" button does nothing, and why.** On the backend
+  running in production today, dispatching a notification writes each row under the app's `USR-…` id,
+  while the read behind every notification bell looks the rows up by the Profile `_id` hex string. The
+  two never match. The server inserts the rows, counts them, and tells the app it sent them to N
+  people — and not one person can ever see them. Nobody had reported it, because it looks like a
+  success from the sending end and like silence from the receiving end.
+- **It is already fixed on the backend, and needs no app change** — it is repaired by the pending
+  merge and a `:3001` restart alone. Unusually for this queue, that means it helps the ~21 handsets
+  **already in the field** without waiting for a new APK.
+- **Every other undeployed backend commit was read and cleared, with a reason recorded for each** —
+  so the next session does not have to wonder whether the window holds another surprise. Seven
+  commits (backend Phases 102–106), every touched route the app actually calls, read as diffs rather
+  than from their commit messages.
+- **One dead field removed from the app's upload request** — a value the server now stamps itself and
+  which the app could only ever have sent empty.
+- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1309 / 77 files** (was 1308, **+1**)
+  · cache-free `npx eslint` **0 errors** on all three touched files (2 pre-existing warnings in
+  `api.ts` untouched).
 
 ## Files changed
 
-- `src/lib/fileUpload.ts` — new pure `parseLegacyUploadResult` + `LegacyUploadResult`. The **only**
-  place that decides whether the legacy route's `url` is disposable. The two-part discriminator and
-  its reasoning are written at the function.
-- `src/data/api.ts` — `uploadFile`'s legacy branch reads the body through that seam and reports
-  `storageKey` with an empty `url` when the server signed it. Three stale doc-comments corrected:
-  `UploadOutcome.url`, `UploadOutcome.storageKey` (it said "presign-only", which is now false), and
-  the "PATH 2 — legacy multipart, **unchanged**" header.
-- `src/app/claim/[id].tsx`, `src/app/claim-new.tsx` — **comments only, no behaviour change.** Both
-  explained their await-vs-fire-and-forget branch in terms of *which path ran*; they now say the test
-  is the `storageKey` **field**, because the legacy path can produce one now.
-- `src/lib/__tests__/fileUpload.test.ts` — +8 (all six body shapes: signed, signing-failed,
-  pre-Phase-101, key-without-TTL, NaN/numeric-string, key-without-url, unwrapped, unusable).
-- `src/data/__tests__/api-resilience.test.ts` — +3 wiring tests (the fix, the signing-failure
-  fallback, and the ephemeral warning surviving).
-- `../contracts/INBOX.md` — reply filed under the blocking item; 828,750 → 831,630 bytes, `.bak`
-  taken first, reply greped back afterwards.
-- `docs/PHASES.md`, `CLAUDE.md`, `docs/OPS-SERVER-HANDOVER.md` §2b, `docs/DECISIONS.md`,
-  `docs/STATUS.md`.
+- `src/data/api.ts` — `recordFileAttachment` no longer sends `uploaded_by`, and the dead `uploadedBy`
+  input is gone from `FileAttachmentInput`. Backend Phase 104 stamps that field from the token and
+  ignores the body; on the *deployed* build the handler reads `b.uploaded_by || ''`, and no call site
+  here ever set it — so omitting the key stores byte-identically to sending it, on **both** builds.
+  The type now carries a warning explaining why adding it back would do nothing.
+- `src/app/claim-new.tsx` — comment only. It explained a trade-off ("we chose not to thread the
+  signed-in user down from the access-gate wrapper") that **no longer exists**; the server's value is
+  now the trustworthy one. Phase-79 rule: a fix is not done while something still says the old thing.
+- `src/data/__tests__/api-file-attachments.test.ts` — the whitelist pin drops to 9 keys, plus one new
+  test asserting `uploaded_by` is **not** sent. Pinned separately on purpose: re-adding it is the
+  tempting "fix" for a file that shows no uploader, and it would change nothing at all.
+- `docs/OPS-SERVER-HANDOVER.md` — new **§11** (the deploy repairs team notifications); §5 strengthened
+  with the code-level proof that `CORS_STRICT=true` cannot break the app; change log entry.
+- `docs/PHASES.md`, `docs/DECISIONS.md`, `CLAUDE.md` — the sweep is recorded as **recurring**, with
+  the two rules it earned (below).
+- `../contracts/INBOX.md` — two items filed: the dispatch bug, and a per-commit "nothing owed"
+  verification so `cgpe-api` does not have to re-derive it. 831,630 → 839,917 bytes, `.bak-p89` taken
+  first, both items greped back afterwards.
 
 ## Decisions made
 
-- **The discriminator is TWO-PART and must stay that way.** `storage_key` alone is not enough: Phase
-  101's documented signing-failure branch **still sets it** while falling back to the public URL with
-  `url_expires_in: null` — and there the url is the durable thing, while the signer that just failed
-  is the one a later re-sign would need. Keying on the key alone would discard the only working link
-  in exactly the case where signing is broken. `Number.isFinite`, not `typeof === 'number'`, so a
-  `null`, a `NaN` or a numeric *string* all fall back to today's behaviour.
-- **Shipped without waiting for `cgpe-api`'s answer.** The question of which field to key on is still
-  open at the top of `INBOX.md`. Building to our own proposed reading was the right call because it is
-  a one-line change in one function if they disagree, and holding the phase would have left a known
-  data-loss defect unfixed over a confirmation.
-- **Verified the producer before building, not after.** The fix only works if a key minted by the
-  *legacy* route survives `mayAccessKey` + the Phase 104 HeadObject confirm. It does — Phase 101
-  passes `ownerTag` into `cloudStorage.uploadFile`. Had it not, this "fix" would have converted a
-  silent expiry into a loud "not attached" on **every** upload.
-- **`ephemeral: false` on the new branch is a fact, not an assumption** — those two fields are set
-  only inside Phase 101's `cloudStorage.isConfigured()` branch, so the bytes are in a real bucket.
+- **The undeployed-commit sweep is a recurring step, not a task that completes.** It has returned a
+  real finding on **both** of its two runs — Phase 87's found backend Phase 101, Phase 89's found the
+  dispatch bug. Both were filed under commit messages that read as internal tidying.
+- **When the finding is server-only, the deliverable is the report, not a code change.** Filed under
+  the item that blocks, and written into `OPS-SERVER-HANDOVER.md` so the person who runs production
+  reads it as a reason to deploy rather than as trivia.
+- **Shipped the `uploaded_by` removal as part of the sweep rather than inventing a Phase 90.** It is
+  four lines, provably inert on both builds, and it removes a misleading affordance a future session
+  would otherwise wire up believing it worked.
+- **Did NOT weaken the app's role gates on the strength of backend Phase 102.** That RBAC sweep widens
+  `role !== 'admin'` to `!isAtLeast(role,'admin')`, and `ROLE_RANK` keeps `leader` at 2 below `admin`
+  at 3 — so the documented leader-403 split our gates depend on is **preserved, not blurred**. Checked
+  the rank table rather than trusting the word "sweep".
 
 ## Known broken / deliberately skipped
 
-- 🔴 **THIS DOES NOT REACH THE PHONES, and that is the honest headline.** The field APK is still
-  `093a3b33` (**25 Aug**), which predates Phase 86 and has **no `storage_key` handling at all**; ~21
-  handsets are on it. Until a new APK is installed, a deployed Phase 101 + `S3_*` still means expiring
-  links **from those builds**. `OPS-SERVER-HANDOVER.md` §2b now says so explicitly, so "the app fixed
-  it" cannot be read as "the window is closed".
-- **Nothing from Phase 88 has run on a handset**, and it is inert in production anyway — presign is
-  404 and `cloudStorageConfigured` is `false`, so the new branch cannot fire there yet.
-- **Six `cgpe-api` commits are still unread** (Phases 102–106) — that is Phase 89, not a defect.
+- 🔴 **Nothing in this phase reaches a phone, and neither does anything from Phases 80–88.** The field
+  APK is still `093a3b33` (**25 Aug**); ~21 handsets are on it. The EAS free-plan quota resets
+  **1 Sep 2026** — that build is now the single highest-value action in the project.
+- **The dispatch bug is not fixed by us and cannot be.** It is repaired only by the backend merge to
+  `origin/main` + a `:3001` restart. Until then, every team notification sent from the app is written
+  and read by nobody. The owner should be told, because it is a live feature that does nothing.
+- **The whole backend window is still unshipped** — `origin/main` is `990c660`, **29 commits** behind
+  `origin/Shivam`, re-probed today. Storage (`cloudStorageConfigured:false`), presign (404) and the
+  voice proxy (404) are all still off, so mobile Phases 86–89 and the entire voice track are inert.
+- **Nothing from this phase has run on a handset**, and the one code change is unobservable by design.
 - **Untracked repo-root files left alone** (`*.mp3`, `*.txt`, the staff JSON, the store spec,
   `.claude/settings.json`, `.gitignore`) — the owner's local files, unchanged from boot.
 
 ## Next session starts here
 
-- **Phase 89: read the sibling's six undeployed commits and find the next Phase 101.** `e3156d2`
-  (**Phase 102, admin-TIER RBAC** — the likeliest to touch us), `c6b00bc` + `ccae449` (security),
-  `d4fad85` (Phase 104), `ca4db88` (Phase 105 — client phone search), `d9d9d85`/`85d55c5` (CORS/CI).
-  **Open the diff for every route the app calls — the commit message is not enough**, which is the
-  entire lesson of Phase 88 (`9a74c9a` was filed as "finish MinIO").
+- **Phase 90: build the APK.** The quota resets 1 Sep; check it *before* promising one (a doomed
+  attempt still costs a ~317 MB upload). It carries i18n Phases 80–85, the boundary-attribution fix,
+  the version reconcile, the whole voice track, and Phases 86–89. Consider adding **EAS Update (OTA)**
+  in the same build to end the rebuild-per-fix cycle.
 - **First command:**
-  `git -C ../cgpe-backend-main log --oneline origin/main..origin/Shivam`
-- **Watch out for:** 🔴 **the EAS quota resets 1 Sep — today or tomorrow — and that APK is now the
-  highest-value action in the project.** It is the only way Phases 80–88 reach the ~21 phones.
-  Consider adding EAS Update (OTA) in the same build to end the rebuild-per-fix cycle. Second trap:
-  **Phase Ω must not be started** — Phase 89 is open and device-unverified work exists, so the gate
-  is shut.
+  `npx eas-cli build:list --platform android --limit 3 --json --non-interactive`
+  (confirms the quota state and the newest build before spending twenty minutes on an upload)
+- **Watch out for:** 🔴 **the Windows fingerprint trap** — if the build dies locally at "Computing
+  project fingerprint" with an `UNKNOWN: unknown error` on a `react-native-reanimated` file, relaunch
+  with `EAS_SKIP_AUTO_FINGERPRINT=1`; the code is fine. Second trap: **a session teardown kills the
+  local "waiting for build" process but NOT the remote build** — on resume use `build:view <id>
+  --json`, never a relaunch. Third: **Phase Ω must not be started** — device-unverified work exists,
+  so that gate is shut.
 
 ---
 ---

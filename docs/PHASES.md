@@ -14,8 +14,10 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**🔜 NEXT — THE POST-QUOTA APK.** The EAS free-plan Android quota resets **1 Sep 2026** (tomorrow, or
-today depending on the hour). That build is now the highest-value action in the project: it is the only
+**🔜 NEXT — PHASE 90: THE POST-QUOTA APK. Not started.** The EAS free-plan Android quota resets
+**1 Sep 2026** (tomorrow, or today depending on the hour). **First command:**
+`npx eas-cli build:list --platform android --limit 3 --json --non-interactive` — confirm the quota
+state and the newest build *before* spending twenty minutes on a ~317 MB upload. That build is now the highest-value action in the project: it is the only
 way i18n Phases 80–85, the boundary-attribution fix, the version reconcile, the whole voice track and
 Phases 86–89 reach the **~21 handsets still on `093a3b33` (25 Aug)**. Check the quota before promising
 one — a doomed attempt still costs a ~317 MB upload. Consider adding **EAS Update (OTA)** in the same
