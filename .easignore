@@ -38,3 +38,31 @@ playwright-report/
 # Owner scratch recordings in the repo root (~3.4 MB). The app bundles no audio
 # assets, so nothing in src/ can reference these.
 /*.mp3
+
+# ---------------------------------------------------------------------------
+# 🔴 SECRETS. These are all in .gitignore — and that is NOT enough, because of
+# the rule stated above: .easignore REPLACES .gitignore for the archive. A
+# gitignored secret sitting in the working tree is uploaded to EAS on every
+# build unless it is ALSO listed here. Measured 2026-08-31: five gitignored
+# files were in the archive, four of them secret — both Android signing
+# keystores, the plaintext keystore/key passwords, and the Firebase FCM V1
+# service-account private key.
+#
+# Why it matters even though EAS already holds the keystore: the build archive
+# is a separate artifact with its own retention and download path, it is
+# extracted on a build worker, and the FCM service-account key is NOT something
+# EAS holds in this form — it belongs only in `eas credentials`.
+#
+# ⚠️ IF YOU ADD A SECRET PATTERN TO .gitignore, ADD IT HERE TOO.
+# ---------------------------------------------------------------------------
+credentials.json
+credentials/
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+*-firebase-adminsdk-*.json
+google-service-account*.json
+.env*.local
