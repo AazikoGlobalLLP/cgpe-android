@@ -14,6 +14,49 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-08-31 — PHASE 86 SHIPPED: THE APP IS ON THE PRESIGNED MinIO UPLOAD FLOW.** Commit `4d1c31a`,
+`aaziko/Shivam`. Gates: `tsc` **0** · `npm test` **1289** (was 1254, +35) · cache-free `npx eslint`
+**0 errors** on every touched file · `npx expo export -p web` **exit 0** (boot-safety, a native
+`require` was added). The `cgpe-mobile` box on the D-122 INBOX item is now `[x]`, with a full reply
+underneath, and both were grepped back after writing. **Device-unverified — no APK can be built
+until the EAS quota resets.**
+- **WHAT SHIPPED.** `POST /upload/presign` → a signed `PUT` straight to MinIO → `POST
+  /file-attachments` with `storage_key` and an EMPTY `file_url` → render via `GET
+  /upload/download-url?key=`, signed **fresh per open**. The bytes no longer pass through the API
+  server and the app never holds storage credentials. New files: `src/lib/binaryUpload.ts` (the
+  native PUT behind one seam) and a pure seam in `lib/fileUpload.ts`
+  (`parsePresignTarget` / `classifyPresignResponse` / `classifyPutStatus` / `parseDownloadUrl`).
+- **THE READ PATH IS WIRED, NOT JUST THE WRITE.** `claim/[id].tsx` now lists the documents the
+  REGISTER holds against the claim and opens each through a freshly signed URL — so the flow has a
+  real consumer rather than a `download-url` helper nobody calls (the zero-consumer defect Phases
+  79–81 were spent removing). `listAttachments` + `getAttachmentDownloadUrl` in `data/api.ts`.
+- ⚠️ **THREE DECISIONS WORTH NOT RE-LITIGATING**, each written at the code:
+  (a) **A missing route is not a failure** — `presign` answering 404/501/503 falls back to the
+  legacy multipart path unchanged, which is what makes shipping ahead of the backend deploy inert;
+  production is 404 today, so every upload still takes the old path. A **415 does NOT fall back**.
+  (b) **A `403` on the PUT is `'server'`, never `'unauthorized'`** — that request carries no
+  session, so a 403 is a signature mismatch or an expired 300 s window, which a retry fixes;
+  `'unauthorized'` copy would send the user to their branch admin for nothing.
+  (c) **The `file-attachments` write is AWAITED on the presigned path and its failure is shown**
+  (new `'not_linked'` reason). On the legacy path it stays fire-and-forget — there the file already
+  has a durable URL — but with presign that row is the ONLY thing naming the object, so a silent
+  failure would be an unreachable file wearing a green tick.
+- ⚠️ **`?entity_id=` IS FILTERED TWICE, DELIBERATELY.** The server-side filter is backend Phase 94
+  and is **not deployed**, so an older build answers with the WHOLE collection; the rows are
+  filtered again on the `entity_id` the server echoes back. On prod today that yields an empty list
+  — honestly empty, rather than one claim showing another claim's documents. **Keep the client-side
+  filter after the deploy lands.**
+- **🔑 NEXT 3:** (1) **Voice go-live** — still blocked on the backend building `POST /api/voice/ask`
+  (404 today; `main` is 28 commits behind). (2) **The post-quota APK** — it now carries i18n Phases
+  80–85, the boundary fix (needs its device walk-through), the version reconcile, the whole voice
+  track AND this upload flow; consider adding EAS Update (OTA) in that same build. (3) **i18n Batch
+  6f/5/6b** — all owner-copy-blocked; hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.
+- **STILL OPS-BLOCKED, unchanged by this phase:** `S3_*` + `BACKEND_URL` on the droplet, the
+  `origin/main` merge, and **the bucket must not be named `uploads`** (`isEphemeralUrl` would warn
+  users their durable files will not be kept — that narrowing was refused on purpose).
+
+---
+
 **🔑 2026-08-29 — PHASE 86 IS NEXT: ADOPT THE PRESIGNED MinIO UPLOAD FLOW. A full read-only audit found
 a fully-specified, sibling-owed item that NOBODY HAD STARTED and that was not on this board.** Gates
 re-run live this session (not quoted): `tsc` **0** · `npm test` **1254 / 77 files** · dictionary **446
