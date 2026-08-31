@@ -5407,3 +5407,77 @@ upload.** When a secret pattern goes into `.gitignore`, it goes into `.easignore
 The general form is worth remembering past this repo — a second ignore mechanism that *replaces*
 rather than *extends* the first will silently un-protect everything the first one was trusted for,
 and the failure is invisible because the file is still, correctly, not in git.
+
+---
+
+## 2026-08-31 (Phase 91) — the cross-repo requests, and the two that dissolved on contact with the code
+
+Owner-directed: send the outstanding front-end and back-end requests, and specifically make the admin
+panel's **Relationship map** readable. No `src/` change; two items filed to `../contracts/INBOX.md`.
+
+**A — the Relationship map is not readable, and the first defect is objective rather than aesthetic.**
+`cgpe-front-main-RECOVERED/src/components/admin-panel/sections/AndroidApplication.tsx:684-743`. **Every
+branch heading counts ONE array while the body renders TWO**: `Dashboard · ${visible.length} shown`
+above *all* widgets including the off ones (`:722/:723`), `Navigation · ${cfg.nav.tabs.length} tabs`
+above `tabs` **+** `hidden` (`:731/:732-733`), `Features · ${enabledFeatures.length} enabled` above
+the flags **+** `global_search_scopes` (`:736/:738-739`). On the owner's own screenshot that reads as
+"Navigation · **5 tabs**" over **7** chips and "Features · **5 enabled**" over **11**. Anyone who
+counts the chips stops trusting the panel — which is precisely what was reported. Six more followed:
+colour is the only state encoding and has no legend, and it is not one-to-one (**gold** = mandatory
+widget *and* landing tab; **blue** = visible widget *and* search scope); the `·` suffix carries five
+unrelated kinds of value including a **bare unlabelled `max_items`** ("KPI Strip · 4"); it draws no
+edges despite being called a map; it shows one role at a time when the question the panel exists to
+answer is how two roles differ; and it has no saved-vs-default provenance, which matters because the
+per-role documents are still unseeded in production.
+
+**B — the contribution only this side could make: the map can display a config the PHONE WILL NOT
+OBEY.** Verified in our source rather than recalled. An **omitted** feature key inherits a schema
+default, not `false`, and **four of those are `true`** (`can_clock_in`, `can_create_task`,
+`can_create_claim`, `can_claim_ticket` — `store/appUi.tsx:96-112`); `global_search_scopes` omitted
+defaults to four scopes, not none; and an **empty `dashboard.widgets` array re-opens the entire
+default dashboard** (`appUi.tsx:458`). The panel computes "enabled" from `!!cfg.features[k]`, so a
+document that merely omits a key shows OFF in the editor and is ON on the handset. Asked them to save
+every key explicitly — the same reasoning, and the same fix, as our own `departmentUi`
+(`appUi.tsx:248-255`).
+
+**C — TWO OF THE THREE `[admin]` ITEMS WERE NOT REAL, AND ESTABLISHING THAT WAS THE MORE VALUABLE
+HALF.** They had sat on our board since 2026-08-26. Re-reading the sibling's actual code before
+sending them:
+- **"Admin can see staff live location" is FIXED END-TO-END and is now CLOSED.** The app was always
+  correct (`store/roles.ts:72-74`, real `super_admin` only, immune to the folded `leader` tier and to
+  view-as); the backend returns **403** to a non-`super_admin` at `routes/timeTracker.js:1008`, and
+  that line was confirmed **on deployed `origin/main`**, not merely on `Shivam` — backend Phase 69
+  `[sec]` closed it, and the route's own comment records that it used to be ungated. And the panel has
+  **no live-location view at all**: the only staff coordinates in that repo are the payroll geofence
+  *anchor* input (`Payroll.tsx:447-451`), a policy setting, not a position read. The owner's report
+  simply predates the backend fix.
+- **"The Assign Task button shows Create Task" is real but was described imprecisely.** There is no
+  such button. It is `TeamTasks.tsx`, whose assign-to-someone-else dialog says "New task" (`:260`,
+  `:303`, `:365`) and "Create task" (`:391`) while carrying an **"Assign to"** field (`:372`).
+- **Per-department RBAC seeding** was already filed twice over and is the owner's to run
+  (`scripts/seedAppRolePreferences.js`).
+
+**🔑 The rule this establishes, and it is broader than the existing one.** CLAUDE.md already says a
+root cause recorded in `docs/` is a hypothesis until someone re-reads the code. **The cross-repo case
+is worse, because the cost is paid by another team**: filing all three as written would have sent
+`cgpe-admin` chasing a view that does not exist in their repo and a button that does not exist on
+their screen, and would have left an already-fixed security item open on the board. **Verify a
+cross-repo item against the sibling's real source immediately before filing it — the doc that records
+it is exactly as stale as the day it was written.** Two of three is not a good hit rate.
+
+**D — filed NOTHING new backend-side, deliberately.** Every outstanding server ask is already
+assembled and ordered in `docs/OPS-SERVER-HANDOVER.md` §1–11 (merge + `:3001` restart, `S3_*`, the
+bucket-name constraint, `BACKEND_URL`, CORS, nginx, the MSS fix, the voice env keys, per-role seeding,
+the notifications repair). Re-filing that into `INBOX.md` would be duplication, and the existing items
+already carry the detail. **Phase Ω — actually sending that message — stays shut by its own rule**,
+since device-unverified work exists. Whether to send §1 (merge + deploy) early as a standalone
+instruction was put to the owner as an open question and is **not yet answered**; §1 is the one item
+that cannot become stale, and it alone repairs the production notifications bug on the builds already
+installed.
+
+**E — a `CLAUDE.md` line was corrected because it was provably wrong, not merely stale.**
+`SCHEMA_FEATURE_DEFAULTS` was described as "mostly `true`"; counted against `appUi.tsx:96-112` it is
+**4 true / 10 false**. The fail-open warning it supports is unchanged and still correct — the four
+`true` ones are exactly the create affordances that warning is about — but "mostly true" invites
+reasoning about a flag without looking it up, and the same fact is what bites the admin panel from the
+other side.

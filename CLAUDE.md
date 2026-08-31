@@ -442,6 +442,22 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   to `loaded`; and reanimated 4.5's `FORCE_REACT_RENDER_FOR_SETTLED_ANIMATIONS` bakes a settled
   `opacity: 1` into React's committed props within ~1 s. **Shipping the "fix" would have spent an
   APK on a no-op and handed the owner another confident-but-wrong "fixed".** Do not re-file it.
+- ⚠️ **AND THE CROSS-REPO CASE IS WORSE, BECAUSE ANOTHER TEAM PAYS FOR IT — VERIFY AN `[admin]` /
+  `[api]` ITEM AGAINST THE SIBLING'S REAL SOURCE IMMEDIATELY BEFORE FILING IT (Phase 91, 2026-08-31).**
+  Three `[admin]` items had sat on our board since 2026-08-26. Re-read against the sibling's actual
+  code, **two of the three did not survive**: *"an admin can see staff live location"* was **already
+  fixed end-to-end** (the app was always right, the backend 403s a non-`super_admin` at
+  `routes/timeTracker.js:1008` **on deployed `origin/main`**, and `cgpe-front-main-RECOVERED` has **no
+  live-location view at all** — its only staff coordinates are the payroll geofence *anchor* input at
+  `Payroll.tsx:447-451`), and *"the Assign Task button shows Create Task"* names a button that **does
+  not exist** (it is a label in `TeamTasks.tsx`, whose assign-to-others dialog says "New task" /
+  "Create task" at `:260`/`:365`/`:391` while carrying an "Assign to" field at `:372`). Filing all
+  three as written would have sent `cgpe-admin` chasing a screen they do not have **and left an
+  already-closed security item open on the board.** A board entry is exactly as stale as the day it
+  was written, and one `grep` in the sibling repo settles it. **Two of three is not a good hit rate —
+  check every time, and say plainly which items you are CLOSING rather than filing.** State the
+  caveat you cannot resolve, too: we read `cgpe-front-main-RECOVERED`, so "no such view exists" is
+  only true of the checkout we can see.
 - ⚠️ **A `|| fallback` on a field the BACKEND already defaults is DEAD CODE — check the producer.**
   The LIC "Unnamed" fix was written twice for this reason: `plan_name` is `null` in the seed file,
   but `services/productIngestion.js:121` substitutes `String(d.plan_name || 'Unnamed plan')` on

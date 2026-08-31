@@ -1,101 +1,118 @@
-# HANDOFF — CGPE Connect (Android) — Phase 90 (the post-quota APK) — 2026-08-31
+# HANDOFF — CGPE Connect (Android) — Phases 90a + 91 — 2026-08-31
 
-> **The APK was NOT built. The EAS free-plan quota was still exhausted on 31 Aug** — it resets on
-> **1 Sep**, and "1 Sep" does not mean the evening of the 31st. Nothing is wrong with the code; the
-> gates were green going in. **Phase 90 is unfinished and stays the next phase.**
+> **The APK still does not exist, and Phase 90 is still the resume point.** The EAS free-plan quota
+> resets on **1 Sep** and this session ran on **31 Aug**, so no build was attempted — the refusal the
+> day before said "resets in 18 hours", and re-attempting only burns the upload again.
 >
-> The attempt was not wasted: chasing why it cost a 320 MB upload found that **every EAS build ever
-> made has uploaded 338 MB of Playwright run output**. Fixed and pushed — tomorrow's upload is ~6 MB.
+> Two phases were completed instead, both of which make that build safer: **90a** pre-flighted the
+> tree the APK will upload and **found the archive was shipping the app's signing keys**; **91** filed
+> the owner's cross-repo requests, and found that two of the three items we were about to send another
+> team were not real.
+>
+> **No `src/` file was touched in either phase.** The app is byte-identical to Phase 89's.
 >
 > ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM. Do not delete it** — it is still
 > the only record of the Skia / Lottie / web-stub traps.
 
 ## Done
 
-- **We now know the build archive was 58x bigger than it needed to be, and it is fixed.** Every EAS
-  build this project has ever made uploaded the entire Playwright test-output folder — 338 MB of
-  screen recordings and traces that have nothing to do with the app. The upload is now **5.9 MB
-  instead of 347.1 MB**. This does not change the app; it makes every future build start faster and
-  makes a refused attempt cheap instead of costly.
-- **The reason it happened is now written down**, because it is genuinely counter-intuitive and would
-  otherwise be re-discovered the hard way: the `.easignore` file **replaces** `.gitignore` for the
-  build upload rather than adding to it, so the project's ordinary ignore rules were never applied.
-  That file has existed since the project's first commit on 7 Aug, which is why nobody looked at it.
-- **A secret-protection rule that was sitting uncommitted is now committed.** `eas credentials` writes
-  the Android signing key *and its passwords* into `credentials.json` in plain text; the rule keeping
-  that out of git existed only in the local working copy.
-- **Nothing reached a phone, and nothing in the app changed.** No `src/` file was touched this phase.
-- **Gates, run live before the attempt:** `npx tsc --noEmit` **0** · `npm test` **1309 / 77 files**.
-  Unchanged by this phase — no source file was modified.
+- **The build is verified ready, on the exact tree it will upload.** Four gates re-run live:
+  `npx tsc --noEmit` **0** · `npm test` **1309 / 77 files** · cache-free `npx eslint src` **0 errors,
+  12 warnings** (the documented baseline) · `npx expo export -p web` **exit 0**. `package.json` ↔
+  `package-lock.json` root deps confirmed **in sync**, so EAS's `npm ci` will not hard-fail. The three
+  voice native deps were re-checked against the module-scope-throw rule and are correctly behind
+  `React.lazy` + probes.
+- **🔴 The build archive was uploading both Android signing keystores, their plaintext passwords, and
+  the Firebase push key — and it is now fixed.** Phase 90 discovered that `.easignore` *replaces*
+  `.gitignore` for the archive and applied that only to the 338 MB of test video. The rule was left
+  one-sided, so every **secret** `.gitignore` protects was still being uploaded. Four secret files,
+  all sitting on disk since 21/29 Aug, were in the next build's archive.
+- **We know it already happened.** The archive uploads *before* the quota check refuses, so the 31 Aug
+  attempt shipped all four, and the 25 Aug build (`093a3b33`) shipped the Firebase key.
+- **The admin panel's Relationship map now has a written, evidenced defect list.** The owner reported
+  it as unreadable; seven defects were filed, and the first is objective rather than taste — every
+  section heading counts one array while the body renders two, so on the owner's own screenshot
+  "Navigation · 5 tabs" sits above 7 chips and "Features · 5 enabled" above 11.
+- **Two of the three `[admin]` items we had been carrying for another team were not real, and saying
+  so was the more valuable half.** The "admin can see staff location" report is **fixed end-to-end and
+  now closed** — the app was always correct, the backend 403s a non-`super_admin` **on deployed
+  `origin/main`**, and the panel has no live-location view at all. "Assign Task" is real but is a
+  label in `TeamTasks.tsx`, not a button.
+- **A provably wrong line in `CLAUDE.md` was corrected**: `SCHEMA_FEATURE_DEFAULTS` is **4 true / 10
+  false**, not "mostly `true`". The fail-open warning that line supports is unchanged and still right.
 
 ## Files changed
 
-- `.easignore` — adds `e2e/`, `test-results/`, `playwright-report/`, `.playwright/` and root `/*.mp3`,
-  with a header explaining that this file **replaces** `.gitignore` for the archive. Excluding `e2e/`
-  wholesale is safe and is what the harness already documents: tsconfig excludes it, eslint ignores
-  `e2e/**`, Vitest is scoped to `src/`, and it is never bundled into the APK.
-- `.gitignore` — commits the pre-existing but uncommitted `credentials.json` / `credentials/` rule.
-- `CLAUDE.md` — two lines corrected because they were provably wrong, not merely stale: "consider an
-  `.easignore` at some point" (one has existed all along, and was the cause) and the "~317 MB upload"
-  cost quoted in the quota section. Adds the measurement recipe.
-- `docs/PHASES.md` — `## Now` records the refused attempt, the resume command, and the open OTA
-  decision; a new `## Next 3` supersedes the 2026-08-29 one.
-- `docs/DECISIONS.md` — appended (D-123, D-124).
-- **No `src/` change, no test change, no contract change.**
+- `.easignore` — mirrors `.gitignore`'s secret patterns (`credentials.json`, `credentials/`, `*.jks`,
+  `*.p8`, `*.p12`, `*.key`, `*.pem`, `*.mobileprovision`, `*-firebase-adminsdk-*.json`,
+  `google-service-account*.json`, `.env*.local`) under a header saying why `.gitignore` alone is not
+  enough. **`google-services.json` is the client config and deliberately still ships.**
+- `CLAUDE.md` — the secrets half of the `.easignore` trap, and the `SCHEMA_FEATURE_DEFAULTS`
+  correction.
+- `docs/PHASES.md` — `## Now` + `## Next 3` rewritten; Phase 90a and 91 entries; a superseded note on
+  the three `[admin]` items so the two dead ones are never re-filed.
+- `docs/DECISIONS.md` — appended (Phase 90a, Phase 91).
+- `docs/STATUS.md` — rewritten for the 31 Aug position.
+- `../contracts/INBOX.md` — **two new items to `cgpe-admin`** (839,917 → 850,279 B, 151 headers, both
+  replies grepped back, `.bak-p91` taken first). Not version-controlled by anyone.
+- **No `src/` change. No test change. No contract-shape change.**
 
 ## Decisions made
 
-- **Did NOT add EAS Update (OTA) to the tree ahead of this build.** It is the standing recommendation
-  and it would end the rebuild-per-fix cycle, but it adds a native module and changes the boot path,
-  and the build it would ride on is the one that finally reaches 21 handsets after six days. The free
-  quota resets **monthly, not once**, so shipping the known-good APK first and OTA in a second build
-  costs nothing. **Owner's call, recorded as open rather than taken quietly.**
-- **Excluded the whole of `e2e/` rather than just `e2e/artifacts/`.** The specs are ~40 KB, so
-  narrowing buys nothing measurable, and a rule that names the directory the harness lives in is
-  harder to get wrong later than one that names a subfolder created at runtime.
-- **Committed the `.gitignore` secret rule rather than leaving it as a local-only change.** It only
-  adds ignore rules, and leaving a keystore-password guard uncommitted is a real risk on any other
-  clone. Called out explicitly since it was the owner's uncommitted edit.
-- **Reported the refusal as a blocked phase rather than re-attempting or working around it.** Switching
-  Expo accounts would issue a new keystore and cost all 21 users their session; that trap is already
-  documented and was not re-litigated.
+- **Did not re-attempt the build on 31 Aug.** The refusal said "resets in 18 hours" and CLAUDE.md
+  already records that "1 Sep" does not mean the evening of the 31st. A refused attempt is cheap now
+  (~6 MB) but still pointless.
+- **Rotate the Firebase key; do NOT rotate the keystore.** The Firebase service-account key can be
+  regenerated in one click with no user impact, and it is the one credential EAS has no legitimate
+  reason to hold. Rotating the *signing* keystore would force all 21 handsets to uninstall before
+  updating — losing login, clock keys and the offline queue — and the exposure is to Expo's own
+  storage under the owner's account, which already legitimately holds that exact keystore.
+  **Owner's call; recorded, not taken.**
+- **Left `expo-env.d.ts` in the archive.** It is the fifth gitignored file found, but it is generated
+  and harmless; excluding files that are not secrets only adds risk to a build that matters.
+- **Filed one admin item instead of three, and closed one outright.** Re-reading the sibling's real
+  code before sending was what caught it. Filing all three as written would have sent another team on
+  two wild-goose chases and left a fixed bug open on the board.
+- **Filed nothing new backend-side.** Every server ask is already assembled and ordered in
+  `docs/OPS-SERVER-HANDOVER.md` §1–11; duplicating it into `INBOX.md` would be noise.
+- **Did not start Phase Ω.** Its gate is shut by its own rule — device-unverified work exists. Whether
+  to send §1 (merge + deploy) early, as a standalone instruction, is **an open owner question asked at
+  the end of the session and not yet answered.**
 
 ## Known broken / deliberately skipped
 
-- 🔴 **THE APK STILL DOES NOT EXIST.** The field build is `093a3b33` (**25 Aug**). Phases 80–89 — the
-  i18n work, the presigned upload path, the boundary-attribution fix, the version reconcile and the
-  entire voice track — reach **no phone** until it is built.
-- **The quota is the only blocker and it is billing, not engineering.** Wait for 1 Sep (zero cost, same
-  keystore) or `eas billing:subscribe starter --account shivam-bhadoriya`.
-- **The archive fix is unverified against a real build** — it was verified by replicating eas-cli's own
-  `Ignore.createForCopyingAsync` filter (347.1 MB / 820 files → 5.9 MB / 302 files) plus a check that
-  zero build-essential files are excluded, but no actual build has consumed it. If tomorrow's build
-  fails on a missing file, `.easignore` is the first suspect and `git revert 4a12899` is the fallback.
-- **The whole backend window is still unshipped** — re-probed today: `origin/main` still `990c660`,
-  `cloudStorageConfigured:false`, `/upload/presign` **404**, `/voice/ask` **404**, and
-  `GET /api/users/test` still **200** (the route backend Phase 105 deletes — the live discriminator
-  proving prod predates the merge). So mobile Phases 86–89 and the voice track remain inert.
-- **Team notifications are still silently broken in production** (Phase 89's find). Repaired only by
-  the backend merge + a `:3001` restart. Unchanged today.
+- 🔴 **THE APK STILL DOES NOT EXIST.** The field build is `093a3b33` (**25 Aug**). Phases 80–91 reach
+  **no phone** until it is built. The quota is the only blocker and it is billing, not engineering.
+- 🔴 **The two signing keystores and the Firebase key have already been uploaded at least once** — the
+  fix prevents future uploads, it cannot recall past ones. See the rotation decision above.
+- **The `.easignore` change is still unverified against a real build** (now doubly so — two commits
+  touch it). Verified only by replicating eas-cli's filter: 301 → 297 files, exactly four secrets
+  removed, zero newly included, every build-essential path intact. **If tomorrow's build fails on a
+  missing file, `.easignore` is the first suspect**; `git revert 954a0a4` then `4a12899`.
+- **The whole backend window is still unshipped** — `origin/main` still `990c660`, 29 commits behind.
+  Mobile Phases 86–89 and the entire voice track stay inert, and **team notifications remain silently
+  broken in production**.
+- **Item 1 of the admin sweep and all 7 map defects are unacknowledged** — filed today, no reply yet.
+- **The `cgpe-front-main-RECOVERED` caveat is stated in the INBOX item, not hidden:** if the deployed
+  panel is built from a newer tree, "no live-location view exists" is only true of the checkout we can
+  see.
 - **Untracked repo-root files left alone** (`*.mp3`, the `.txt` files, the staff JSON, the store spec,
-  `.claude/settings.json`) — the owner's local files, unchanged from boot. The two `.mp3`s are now
-  excluded from the *upload* but remain on disk untouched.
+  `.claude/settings.json`) — the owner's local files. The secret files were **not deleted**, only
+  excluded from the upload; removing an owner's keystore is not ours to do.
 
 ## Next session starts here
 
-- **Phase 90 (unchanged): build the APK.** The quota should have reset. Everything else is ready.
+- **Phase 90 (unchanged): build the APK.** The quota should have reset on 1 Sep.
 - **First command:**
   `npx eas-cli build:list --platform android --limit 3 --json --non-interactive`
-  (confirms the rollover and that `093a3b33` is still the newest), then
+  (confirms the rollover and that `093a3b33` is still newest), then
   `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android --profile preview --non-interactive`
-- **Watch out for:** 🔴 **do not re-attempt before 1 Sep** — the refusal on the 31st said "resets in 18
-  hours", so an early retry just burns the attempt again. Then the three known build traps, in order of
-  likelihood: **(1)** if it dies locally at "Computing project fingerprint" with an `UNKNOWN: unknown
-  error` on a `react-native-reanimated` file, that is the Windows trap — `EAS_SKIP_AUTO_FINGERPRINT=1`
-  is already in the command above; **(2)** a session teardown kills the local "waiting for build"
-  process but **NOT** the remote build — on resume use `build:view <id> --json`, never a relaunch;
-  **(3)** if the build fails on a file it cannot find, suspect this phase's `.easignore` change first.
-  And **Phase Ω must not be started** — device-unverified work exists, so that gate is shut.
+- **Watch out for:** the single biggest trap is **treating a session teardown as a build failure** — it
+  kills the local "waiting for build" process but **NOT** the remote build, so on resume use
+  `build:view <id> --json`, never a relaunch. Then, in order: if it dies locally at "Computing project
+  fingerprint" with an `UNKNOWN: unknown error` on a `react-native-reanimated` file, that is the
+  Windows trap and `EAS_SKIP_AUTO_FINGERPRINT=1` is already in the command; and if it fails on a file
+  it cannot find, suspect this session's `.easignore` edit first.
 
 ---
 ---

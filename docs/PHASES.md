@@ -50,6 +50,13 @@ from the Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2
   `.gitignore` protects was still being uploaded. Four secret files, all on disk since 29 Aug, were
   in tomorrow's archive. Fixed in `954a0a4`; verified by diffing the archive file list before/after —
   exactly those four leave, **zero** files newly included, every build-essential path survives.
+- **Two OWNER decisions came out of 2026-08-31 and are unanswered.** **(a) Rotate the Firebase FCM
+  service-account key** — Phase 90a found it had been uploaded in at least two build archives;
+  regenerating it is one click and has no user impact. **The signing keystore must NOT be rotated** —
+  that would force all 21 handsets to uninstall before updating. **(b) Send
+  `OPS-SERVER-HANDOVER.md` §1 (merge + `:3001` restart) early?** It cannot go stale, and it alone
+  repairs the production notifications bug on the builds already installed — but Phase Ω's rule says
+  wait. Recorded rather than decided.
 *(Phase Ω stays SHUT: device-unverified work exists.)*
 
 ---
@@ -899,7 +906,33 @@ Upload was probed live — `POST /upload` → **401**, so the route IS deployed;
 session by design** — Phase 77 is where fixing starts.
 
 
-## Next 3 — as of 2026-08-31 (after Phase 90's refused build attempt)
+## Next 3 — as of 2026-08-31 (after Phases 90a + 91)
+
+1. **BUILD THE APK — Phase 90, still unfinished and still the highest-value action in the project.**
+   Quota-blocked until **1 Sep**; not attempted on the 31st, because the refusal that day said "resets
+   in 18 hours". Everything else is ready: all four gates re-run green on the exact tree that will be
+   uploaded, `package-lock` is in sync, and the archive is now **297 files / 5.85 MB**. First command:
+   `npx eas-cli build:list --platform android --limit 3 --json --non-interactive`, then
+   `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android --profile preview --non-interactive`.
+   It is the only way Phases 80–91 reach the **~21 handsets still on `093a3b33`** (25 Aug).
+2. **Two owner decisions that are blocking nothing else but should not be lost.** **(a) Rotate the
+   Firebase FCM service-account key** — it was uploaded in at least two build archives (see Phase
+   90a); regenerating it in Firebase Console costs nothing and has no user impact, and the signing
+   keystore deliberately must NOT be rotated. **(b) Whether to send `OPS-SERVER-HANDOVER.md` §1
+   (merge + `:3001` restart) early**, as a standalone instruction rather than waiting for Phase Ω —
+   §1 cannot go stale and it alone repairs the production notifications bug on builds already
+   installed. Asked at the end of Phase 91; **unanswered**.
+3. **The next undeployed-commit sweep** — it has found something real on both of its two runs
+   (backend Phase 101, then the live notifications-dispatch bug). Recurring, not done. Pair it with
+   a re-probe of the live state, since `origin/main` has not moved in this window.
+
+*(Then: the `cgpe-admin` replies to the two Phase 91 items — the Relationship map defects and the
+`TeamTasks` assign label. And i18n Batches 6h/6f/5/6b, all owner-copy-blocked; hand over
+`docs/i18n/COPY-REQUEST-2026-08-26.md`.)*
+
+---
+
+## Superseded — Next 3 as of 2026-08-31 (after Phase 90's refused build attempt)
 
 1. **BUILD THE APK — Phase 90, unchanged and unfinished.** Attempted 31 Aug, refused: free-plan quota
    still exhausted, *"resets in 18 hours (on Tue Sep 01 2026)"*, **no build created**. ⚠️ **Do not
@@ -1653,7 +1686,8 @@ session back-filling it — the information already exists in a better-maintaine
 | # | Phase | Status |
 |---|---|---|
 | **Ω** | **FINAL — the production/server developer's message. GATED: runs only when every other phase is Done.** | 🔒 **BLOCKED BY DESIGN** — owner-mandated 2026-08-31. See "Phase Ω" below. The running list it draws from is `docs/OPS-SERVER-HANDOVER.md`, which every phase appends to. **Not startable while any phase is Planned / Built-but-unverified / blocked.** |
-| 86–88 | see `## Now` | **86, 87 Built** 2026-08-31 — the presigned MinIO upload flow; then the voice turn timeout sized to the real proxy + `unconfigured` honesty. Both device-unverified (no APK before 1 Sep). **88 PLANNED, not started** — the legacy upload path persists an expiring URL once backend Phase 101 deploys |
+| 86–88 | see `## Now` | **All three Built** 2026-08-31 — 86 the presigned MinIO upload flow (`4d1c31a`); 87 the voice turn timeout sized to the real proxy + `unconfigured` honesty (`fd28c70`); **88 SHIPPED** (`eb9760f`, +11 tests) — the legacy upload path no longer persists an expiring URL. All three **device-unverified** (no APK since 25 Aug) and **inert in production** until the backend merge |
+| 89–91 | see `## Now` | **Done** 2026-08-31. **89** (`968955e`) the sibling-commit sweep — found `POST /notifications/dispatch` silently broken on prod, no app code owed. **90 BLOCKED** — the APK; EAS free-plan quota refused it, resets 1 Sep. **90a** (`954a0a4`) build pre-flight: four gates green, and the archive was found to be uploading both signing keystores, their plaintext passwords and the Firebase key — fixed. **91** (`b709796`) cross-repo requests filed; two of three `[admin]` items proved not real. **No `src/` change in 90a or 91** |
 | 77–80 | see `## Now` | **Built** 2026-08-26/27 — splash + LIC + storage-clear; i18n Batch 2 sweep + hourly GPS + video evidence; sign-in token leak + error boundary + backend Phase 94 consumed; the i18n free-wins sweep (73 sites) + Batch 6 extraction + the owner relay sheet. All device-unverified — no APK possible until 1 Sep 2026 |
 | 1 | Write-path honesty | **Built** — handset verification outstanding |
 | 2 | Test runner + pure logic | **Done** 2026-08-10 — 140 tests green |
