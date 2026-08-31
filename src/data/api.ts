@@ -3737,7 +3737,14 @@ export type FileAttachmentInput = {
   entityId?: string;
   /** What `entityId` refers to. `'claim'` is the only kind the app sends today. */
   entityType?: string;
-  uploadedBy?: string;
+  /**
+   * ⚠️ THERE IS DELIBERATELY NO `uploadedBy` HERE, AND ADDING ONE BACK WOULD DO NOTHING.
+   * Backend Phase 104 (`routes/fileAttachments.js`) stamps `uploaded_by` from the caller's own
+   * token and IGNORES the body value — trusting the body let any caller attribute a file to
+   * anyone, and made the `GET /?uploaded_by=` filter meaningless. It was already inert on the
+   * deployed build too, because no call site here ever set it: the field existed, the request
+   * carried it, and it only ever transmitted the empty string.
+   */
   description?: string;
 };
 export async function recordFileAttachment(input: FileAttachmentInput): Promise<{ id: string } | null> {
@@ -3760,7 +3767,10 @@ export async function recordFileAttachment(input: FileAttachmentInput): Promise<
         // backend falls back to `category` for legacy rows either way.
         entity_id: input.entityId || '',
         entity_type: input.entityType || '',
-        uploaded_by: input.uploadedBy || '',
+        // `uploaded_by` is NOT sent. It is server-stamped from the token as of backend Phase 104,
+        // and on the build deployed today the handler reads `b.uploaded_by || ''` — so a key we
+        // could only ever populate with `''` stores exactly what omitting it stores. Identical on
+        // both builds, one less field that reads like a feature.
         description: input.description || '',
       }),
     });

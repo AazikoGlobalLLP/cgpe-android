@@ -110,8 +110,23 @@ describe('recordFileAttachment — the claim↔file link on the wire', () => {
 
     expect(Object.keys(sent().body).sort()).toEqual([
       'category', 'description', 'entity_id', 'entity_type',
-      'file_size', 'file_type', 'file_url', 'filename', 'storage_key', 'uploaded_by',
+      'file_size', 'file_type', 'file_url', 'filename', 'storage_key',
     ]);
+  });
+
+  it('does NOT send uploaded_by — the server stamps it from the token (backend Phase 104)', async () => {
+    // Trusting the body let any caller attribute a file to anyone, so `routes/fileAttachments.js`
+    // now ignores it outright. On the build deployed today it reads `b.uploaded_by || ''`, and the
+    // app could only ever have sent `''` (no call site set it), so omitting the key stores exactly
+    // what sending it stored. Pinned separately from the whitelist above because re-adding it is
+    // the tempting "fix" for a file that shows no uploader — and it would change nothing at all.
+    fetchSpy.mockResolvedValue(created());
+
+    await api.recordFileAttachment({
+      filename: 'a.jpg', fileUrl: 'https://cgpe.in/uploads/general/a.jpg', category: 'claim',
+    });
+
+    expect('uploaded_by' in sent().body).toBe(false);
   });
 
   /* ---- the presigned flow (Phase 86 / backend Phase 95, D-122) ---- */

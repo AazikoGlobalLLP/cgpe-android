@@ -382,8 +382,8 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
 `-joined
   text WILL find nothing (Phase 88, 2026-08-31).** The first attempt at every edit this session failed
   its `anchor in src` assertion for this reason alone, on a string copied verbatim out of the file.
-  Normalise the anchor to the file's own line ending first (`nl = '
-' if '
+  Normalise the anchor to the file's own line ending first (`nl = '
+' if '
 ' in src else '
 '`,
   then `anchor.replace('
@@ -474,6 +474,19 @@ contract change. `INBOX.md` alone would never have surfaced it.
   improvement. The newest field APK is `093a3b33` (25 Aug); a fix shipped in `src/` today does not
   reach it. When a backend change would break an installed build, say so, and give the sibling the
   ordering choice rather than assuming they know.
+- ⚠️ **THE SWEEP IS RECURRING, NOT A ONE-OFF — it has found something on BOTH runs.** Phase 87's found
+  Phase 101; **Phase 89's found that `POST /api/notifications/dispatch` is broken on production right
+  now**: it stamps rows `user_id: r.user_id` (the app `USR-…` id) while `GET /notifications` filters
+  `user_id: req.user.id` (the Profile `_id` hex), so every team notice an admin sends is written,
+  counted, reported back as delivered — and read by **nobody**. Fixed in `d4fad85`, undeployed.
+- 🔑 **THAT CLASS OF BUG IS UNDETECTABLE FROM THE APP, WHICH IS THE ARGUMENT FOR THE SWEEP.** The write
+  returns 201 and the reader is a *different query* — there is no response to inspect, no status to
+  branch on, and no honest-empty-state convention that helps. `tsc`, `npm test`, `eslint` and a device
+  walk-through are all blind to it. **Only reading the producer's diff finds it.**
+- 🔎 **A DELETED ROUTE IS A FREE LIVE DISCRIMINATOR FOR "WHICH BUILD IS RUNNING".** Backend Phase 105
+  deletes `GET /api/users/test`; it still answers **200** on prod, so the deployed build predates it —
+  one no-auth `curl`, no token, no guessing. Reuse the trick: pick a route the pending window *removes*
+  and probe it, rather than inferring the deploy state from a commit graph alone.
 
 ## Verifying the backend WITHOUT guessing (2026-08-26)
 

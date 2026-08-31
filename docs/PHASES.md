@@ -14,8 +14,69 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**🔜 NEXT — PHASE 89: READ `cgpe-api`'s SIX UNDEPLOYED COMMITS AND FIND THE NEXT PHASE 101.**
-**Not started.** Phase 88 exists only because a routine sweep of the sibling's undeployed commits
+**🔜 NEXT — THE POST-QUOTA APK.** The EAS free-plan Android quota resets **1 Sep 2026** (tomorrow, or
+today depending on the hour). That build is now the highest-value action in the project: it is the only
+way i18n Phases 80–85, the boundary-attribution fix, the version reconcile, the whole voice track and
+Phases 86–89 reach the **~21 handsets still on `093a3b33` (25 Aug)**. Check the quota before promising
+one — a doomed attempt still costs a ~317 MB upload. Consider adding **EAS Update (OTA)** in the same
+build to end the rebuild-per-fix cycle. *(Phase Ω stays SHUT: device-unverified work exists.)*
+
+---
+
+**✅ 2026-08-31 — PHASE 89 CLOSED: THE SIBLING'S UNDEPLOYED COMMITS ARE READ. ONE FINDING, AND IT IS A
+FEATURE THAT IS SILENTLY BROKEN IN PRODUCTION RIGHT NOW.** Gates: `tsc` **0** · `npm test` **1309**
+(was 1308, **+1**) · cache-free `npx eslint` **0 errors** on all three touched files (2 pre-existing
+warnings in `api.ts` untouched).
+- 🔴 **THE FIND — `POST /api/notifications/dispatch` writes notices nobody can ever read.** It is live
+  on deployed `origin/main` (`routes/notifications.js:240`) and stamps each row `user_id: r.user_id`,
+  the app `USR-…` id — while `GET /notifications`, the read every bell uses, filters
+  `user_id: req.user.id`, the Profile **`_id` hex string**. The two id-kinds never match. So an admin
+  sends a notice to the team, the server inserts N rows and returns `created: N`, the app reports that
+  number honestly, and **not one recipient ever sees it.** `cgpe-api` fixed it in `d4fad85` (Phase 104)
+  under the commit line *"notifications: recipient id-kind made consistent"* — which reads as internal
+  tidying and is in fact the repair of a user-facing lie. **Exactly the Phase-101 class this sweep
+  exists to catch.**
+- **THE APP OWES NO CODE FOR IT, AND THAT IS THE POINT.** The write returns 201; the reader is a
+  different query. There is no response the app could inspect and no symptom it could surface —
+  `dispatchNotification` already refuses to assume success and reports the server's own count. **A
+  client cannot detect this class of bug at all**, which is the argument for the sweep itself.
+  Filed to `cgpe-api` (keep it in the merge; one question about re-keying the existing rows) and
+  recorded as **§11 of `docs/OPS-SERVER-HANDOVER.md`** — it is repaired by the merge + `:3001` restart
+  alone, and it helps the **installed** builds without waiting for a new APK.
+- **EVERYTHING ELSE: NOTHING OWED, VERIFIED RATHER THAN ASSUMED.** All seven commits (Phases 102–106),
+  every touched `routes/*` the app calls, read as diffs: **`e3156d2`** admin-tier RBAC is a pure
+  widening — `ROLE_RANK` keeps `leader` at 2 below `admin` at 3, so **the documented leader-403 split
+  our gates depend on is preserved, not blurred**; **`ccae449`**'s `LEAD_WRITABLE` mass-assignment
+  whitelist was the one that could have bitten silently, and all eight fields the app sends on
+  `POST /leads` + `PUT /leads/:id` are on it; `checkTeamAccess`'s leader fail-closed fix is mounted on
+  **zero routes**; **`c6b00bc`** hardened `GET /uploads/:folder/:filename` **in place** rather than
+  gating it, which matters because the app renders those with a plain `Image` and cannot send a bearer
+  token; **`ca4db88`**'s four deleted debug endpoints have zero app consumers (re-verified from our
+  side, not taken on their grep); **`d4fad85`**'s `team_tasks` assignee-by-id change re-resolves
+  `assignedTo` on **every** reassign and clears it when the name does not resolve, so a rename cannot
+  strand a task under its previous owner; **`d9d9d85`** CORS is safe for the app in strict mode because
+  `originAllowed` short-circuits on `!origin` and React Native sends no `Origin` header.
+- **THE ONE APP-SIDE CHANGE IS A DEAD FIELD, REMOVED.** Phase 104 server-stamps `uploaded_by` from the
+  token and ignores the body. The app was sending it — and had an optional `uploadedBy` input for it
+  with **zero call sites**, so it could only ever transmit `''`. On the deployed build the handler reads
+  `b.uploaded_by || ''`, so omitting the key stores byte-identically to sending it: **inert on both
+  builds, in both directions.** Removed the field, the input, and a `claim-new.tsx` comment that
+  explained a trade-off which no longer exists (the Phase-79 rule). A test pins that we do **not** send
+  it, because re-adding it is the tempting "fix" for a file that shows no uploader — and it would change
+  nothing at all.
+- **LIVE STATE RE-PROBED (read-only):** `origin/main` still **`990c660`**, still **29 commits** behind
+  `origin/Shivam` · `cloudStorageConfigured:false` · `/upload/presign` **404** · `/voice/ask` **404** ·
+  `/health` 200 in 0.14 s · and **`GET /api/users/test` → 200**, a route backend Phase 105 deletes —
+  a cheap live discriminator proving which build is running, worth reusing.
+- **🔑 NEXT 3:** (1) **the post-quota APK**, above. (2) **Voice go-live** — needs the `origin/main`
+  merge + `:3001` restart + the owner's `SARVAM_API_KEY` / `CGPE_VOICE_SECRET` / `N8N_VOICE_BRAIN_URL`.
+  (3) **The next sweep** — it found something in each of its two runs; treat it as recurring, not done.
+  *(Then: i18n Batches 6h/6f/5/6b — all owner-copy-blocked; hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.)*
+
+---
+
+**✅ 2026-08-31 — PHASE 89 (the brief it was run from).**
+Phase 88 exists only because a routine sweep of the sibling's undeployed commits
 found a change to a route the app already calls, filed under a commit message ("finish MinIO") that
 read as internal. **Six more commits have landed since that sweep was taken** and none has been read:
 `e3156d2` **Phase 102 — an admin-TIER RBAC sweep** (the likeliest to touch us: the app's own

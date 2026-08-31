@@ -6,6 +6,37 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-08-31 — The undeployed-commit sweep is RECURRING, and it reports bugs the app cannot see (Phase 89)
+
+**Context.** Phase 87 introduced a sweep of `cgpe-api`'s undeployed commits and found Phase 101, a
+response-shape change to a route the app consumes, filed under the message "finish MinIO". Phase 89 ran
+the same sweep over the seven commits nobody had read (Phases 102–106). Six of them are inert for the
+app, each for a checkable reason. The seventh is not: `POST /api/notifications/dispatch`, which is **live
+on production today**, stamps every row `user_id: r.user_id` — the app `USR-…` id — while
+`GET /notifications`, the read behind every bell, filters `user_id: req.user.id`, the Profile `_id` hex
+string. The ids never match. An admin sends a notice to the team, the server inserts N rows and answers
+`created: N`, the app reports that number, and no recipient ever sees it. `cgpe-api` fixed it in
+`d4fad85` under the line *"notifications: recipient id-kind made consistent"*.
+
+**Decision.** Treat the sweep as a **standing, recurring step at `/boot` and `/handoff`, not a task that
+completes** — it has now returned a real finding on both of its two runs. And when a finding is
+**server-only**, the deliverable is the report, not a code change: filed to `cgpe-api` under the item
+that blocks (keep it in the merge, plus one question on re-keying the existing rows), and written into
+`docs/OPS-SERVER-HANDOVER.md` as §11 so the person who runs production sees it as a reason to deploy.
+
+**Consequence.** This bug class is **undetectable from the client**, and that is the argument for the
+sweep itself: the write returns 201, the reader is a *different query*, and there is no status to branch
+on. `tsc`, `npm test`, `eslint` and a device walk-through are all blind to it — as is the app's
+outage-honesty convention, which only helps when the server tells us something. Also recorded: a route
+the pending window **deletes** is a free live discriminator for which build is running — backend Phase
+105 removes `GET /api/users/test` and prod still answers it **200**, which settles the deploy state in
+one no-auth `curl`. The one app-side change this phase made is unrelated and tiny: `uploaded_by` is
+server-stamped as of backend Phase 104, the app's optional `uploadedBy` input had zero call sites, and
+on the deployed build `b.uploaded_by || ''` means omitting the key stores exactly what sending it stored
+— so the field was removed as dead on both builds, with a test pinning that it is not sent.
+
+---
+
 ## 2026-08-31 — A client timeout is sized to the PRODUCER's real timeouts, not to a UX wish (Phase 87)
 
 **Context.** `VOICE.CEILING_MS` was **8 s**, written into our own A1.3 contract *before* the backend

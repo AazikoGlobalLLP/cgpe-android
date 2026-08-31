@@ -100,6 +100,10 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
   also be nasty to debug: `routes/auth.js` splits both origins correctly, so **login would keep working
   while every other route failed.**
 - No action for the mobile app either way — React Native sends no `Origin` and enforces no CORS.
+  **Confirmed at the code, not assumed (mobile Phase 89, 2026-08-31):** `originAllowed` in `app.js`
+  short-circuits on `!origin`, so a request carrying no `Origin` header is allowed *even in strict
+  mode*. Expo web (our test harness, port 8090) sends `http://localhost:8090`, which `isLocalOrigin`
+  allows. **`CORS_STRICT=true` is safe for the app once the deploy has landed.**
 
 ### 6. Two env vars that are DEAD CONFIG — do not set them
 - `N8N_CLAIM_WEBHOOK_URL` — **zero callers** repo-wide. `N8N_WEBHOOK_URL` — **zero callers**.
@@ -153,6 +157,21 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
   gates in the app are written as `capability AND flag` rather than on the flag alone.
 - Not urgent, and **not** a blocker for anything shipped. Listed so it is a known state, not a surprise.
 
+### 11. ⚠️ The deploy REPAIRS a feature that is silently broken today — team notifications (added 2026-08-31)
+- **This is not a new task. It is a reason §1 is worth doing this week, and something the owner should
+  be told before someone else notices.**
+- On the code running in production right now, `POST /api/notifications/dispatch` — the "send a notice
+  to the team" button — writes each row keyed by the app `USR-…` id, while the read every notification
+  bell uses filters on the Profile `_id` hex string. The two never match. **So a notice is written,
+  counted, reported back to the sender as delivered to N people, and seen by nobody.**
+- The app has been faithfully reporting the server's own count, which is why nothing looked wrong. There
+  is **no app-side fix and no app-side symptom** — the write succeeds and the reader is a different query.
+- `cgpe-api` already fixed it in the undeployed window (Phase 104, `d4fad85`). **Nothing to configure —
+  it is repaired by the §1 merge + restart alone**, and unlike most of that window it helps the ~21
+  handsets **already in the field** without waiting for a new app build.
+- One question is with `cgpe-api` (INBOX 2026-08-31): whether to leave the already-written unreadable
+  rows alone, or re-key them — in which case a backlog of old notices appears on the day of the deploy.
+
 ---
 
 ## NOT for the server developer — tracked here only so it is not confused with the above
@@ -176,6 +195,12 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
 
 ## Change log for this file
 
+- **2026-08-31 (later still, mobile Phase 89)** — new **§11**: the deploy repairs team notifications,
+  which are silently broken on production today (backend `d4fad85` fixes it; no configuration needed).
+  §5 strengthened with the code-level confirmation that `CORS_STRICT=true` cannot break the app. Live
+  state re-probed: unchanged — `origin/main` still `990c660`, still **29 commits** behind `origin/Shivam`,
+  `cloudStorageConfigured:false`, presign and `/voice/ask` still 404, and `GET /api/users/test` still
+  **200** (a route backend Phase 105 deletes — a cheap live proof of which build is running).
 - **2026-08-31 (later, mobile Phase 87)** — §9 corrected: the voice proxy is BUILT (`a926650`), not
   missing, and its blocker is the §1 deploy. Added the env-var names it reads and the 80 s stage-timeout
   budget. Live state re-probed the same day (`/voice/ask` 404, `/voice/status` 404, `/upload/presign` 404,

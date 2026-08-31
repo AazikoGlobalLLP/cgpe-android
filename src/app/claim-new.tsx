@@ -293,9 +293,11 @@ function ClaimNewScreen() {
       fileType: resolveMime(file) || '',
       category: 'claim',
       entityType: 'claim',
-      // `uploaded_by` is deliberately left to the server's default. The signed-in user lives in
-      // the outer access-gate wrapper, not in this screen, and threading it down just to label a
-      // record would mean touching the gate — a security surface — for a cosmetic field.
+      // `uploaded_by` is not passed and there is nothing to decide any more: backend Phase 104
+      // stamps it from the caller's token and ignores whatever the body says. (This used to
+      // explain why we chose not to thread the signed-in user down from the outer access-gate
+      // wrapper to label the record — that trade-off no longer exists, and the server's value
+      // is the more trustworthy one.)
       description: 'Attached while creating a claim',
     });
 
