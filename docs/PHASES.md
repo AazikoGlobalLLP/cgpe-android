@@ -84,6 +84,15 @@ production and device-unverified**, by construction — see the last bullet.
   always present on the configured path is filed to `cgpe-api` (INBOX top, 2026-08-31, still `[ ]`).
   We built to the two-part discriminator; if they answer with a different field, `parseLegacyUploadResult`
   is the **only** place that decides.
+- **🔑 NEXT 3 (current, superseding the Phase-87 list below):** (1) **Phase 89** — read the sibling's
+  six unread commits, written up under `## Now`. Unblocked, cheap, and the method that found this
+  phase. (2) **The post-quota APK** — the EAS free-plan quota resets **1 Sep 2026**; it carries i18n
+  Phases 80–85, the boundary fix (still owes a device walk-through), the version reconcile, the whole
+  voice track, and Phases 86–88. **It is the only way any of it reaches the ~21 phones**, which are
+  still on `093a3b33` (25 Aug). Consider adding EAS Update (OTA) in that same build. (3) **Voice
+  go-live** — needs the `origin/main` merge + `:3001` restart + the owner's `SARVAM_API_KEY` /
+  `CGPE_VOICE_SECRET` / `N8N_VOICE_BRAIN_URL`. *(Then: i18n Batches 6h/6f/5/6b — all owner-copy-blocked;
+  hand over `docs/i18n/COPY-REQUEST-2026-08-26.md`.)*
 
 ---
 

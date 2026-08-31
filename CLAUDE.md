@@ -378,6 +378,18 @@ is left uncommitted and it looks like a git failure when it is a quoting failure
   bit twice more in Phase 79 on `CLAUDE.md` and `PHASES.md` — harmlessly both times, because the
   script wrote to a **temp file and asserted on size first**. Paste the literal emoji character, or
   use the Edit tool. **The write-to-temp-then-assert rule is what makes this a non-event; keep it.**
+- ⚠️ **EVERY SOURCE FILE IN THIS TREE IS CRLF — a scripted splice that anchors on `
+`-joined
+  text WILL find nothing (Phase 88, 2026-08-31).** The first attempt at every edit this session failed
+  its `anchor in src` assertion for this reason alone, on a string copied verbatim out of the file.
+  Normalise the anchor to the file's own line ending first (`nl = '
+' if '
+' in src else '
+'`,
+  then `anchor.replace('
+', nl)`) — or just use the Edit tool, which handles it. The
+  write-to-a-temp-file-and-assert-it-is-larger rule is what makes a failure here a **no-op instead of
+  damage**; keep it on every scripted write, not only on `INBOX.md`.
 - ⚠️ **A root cause recorded in `docs/` is a HYPOTHESIS until someone re-reads the code.** Phase 77
   inherited three documents all naming `Appear`'s `cancelAnimation` as the More→Today blank screen,
   and it is **wrong**: `Appear`'s effect deps are constants at every Home call site so its cleanup

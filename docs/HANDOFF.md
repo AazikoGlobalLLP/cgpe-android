@@ -1,94 +1,98 @@
-# HANDOFF — CGPE Connect (Android) — Phase 87 (voice timeout + unconfigured-server honesty) — 2026-08-31
+# HANDOFF — CGPE Connect (Android) — Phase 88 (the legacy upload path stops persisting an expiring URL) — 2026-08-31
 
-> Phase 87 is **shipped and pushed** (`fd28c70`). Two backend items were then filed to
-> `contracts/INBOX.md`, one of which is a **deploy-day warning that affects phones already in the
-> field**. **Phase 88 is written up and NOT started** — it is the resume point.
+> Phase 88 is **shipped and pushed** (`eb9760f` + docs `554fd6d` on `aaziko/Shivam`). **Phase 89 is
+> written up and NOT started** — it is the resume point, and it is the same kind of sweep that found
+> Phase 88 in the first place.
 >
 > ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM. Do not delete it** — it is still
 > the only record of the Skia / Lottie / web-stub traps.
 
 ## Done
 
-- **A voice question no longer dies before the server can answer it.** The app aborted every turn at
-  **8 s**; the proxy is three sequential vendor calls whose own timeouts total **80 s**. On a healthy,
-  fully-configured server any turn past 8 s was killed, shown as "something went wrong, please try
-  again", and the user would re-record — **re-running the whole billed vendor chain while the first
-  was still in flight.** The ceiling is now sized to the server; the old 8 s shows a "Still working…"
-  hint and keeps waiting.
-- **A server with voice switched off stops telling people to try again.** `404 / 501 /
-  503-with-not_configured` now reads as *"Voice is not switched on for this server yet. Ask your admin
-  to turn it on."* **This is what every user sees today**, because production answers 404.
-- **`cgpe-api`'s two disclosures were verified against their real code and both cost us nothing** —
-  `audio.mode:"base64"` was already parsed; their 503 is now a first-class case.
-- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1297 / 77 files** (was 1289, +8) ·
-  cache-free `npx eslint` **0 errors** on every touched file · `npx expo export -p web` **exit 0** ·
-  i18n orphan scan **18, unchanged**, at **448** keys — zero dead copy added.
-- **Two backend items filed** to `contracts/INBOX.md` (819,033 → 828,750 bytes; `.bak` taken before
-  each write, both greped back afterwards).
+- **An ordinary document upload will no longer save a link that expires.** Backend Phase 101 turned
+  the legacy upload route's `url` into a **short-lived signed link** and put the durable handle in
+  `storage_key` beside it. The app read only the url and wrote it down as the attachment's permanent
+  address — so on the day storage is switched on, every attachment made through that path would have
+  become unopenable once the signature lapsed. The app now keeps the **key** and re-signs a fresh link
+  each time the file is opened.
+- **It needed no change on either claim screen.** A "signed" answer is reported with an empty url and
+  a key, which is exactly the shape the presigned flow already produces — so the existing plumbing
+  (write the key, leave the url empty, await the row, re-sign per render) took over unchanged.
+- **The "this file will not be kept" warning still works.** The droplet-disk fallback returns neither
+  new field, so it is untouched by the fix; a test pins it, because quietly losing that warning would
+  have been a worse bug than the one being fixed.
+- **The `cgpe-api` box was answered under the item that is blocking**, with what we built and why, and
+  an explicit note that the tick does **not** mean the deploy-day window is closed.
+- **Gates, all run live:** `npx tsc --noEmit` **0** · `npm test` **1308 / 77 files** (was 1297, **+11**)
+  · cache-free `npx eslint` **0 errors** on all six touched files (3 pre-existing warnings untouched).
 
 ## Files changed
 
-- `src/voice/constants.ts` — `CEILING_MS` 8 s → **80 s, derived** (STT 30 + brain 20 + TTS 30, cited at
-  the constant); the old 8 s becomes `SLOW_MS`, a hint threshold that does **not** abort.
-- `src/voice/client.ts` — new pure `isPermanentVoiceOutage()`; a non-2xx body is now read so a
-  permanent gap can be told apart from a transient fault; new `transport:'unconfigured'`.
-- `src/ui/voice/useVoiceTurn.ts` — the "Still working…" toast at `SLOW_MS`, and the third failure
-  branch. `clearTimeout` in the existing `finally`.
-- `src/voice/__tests__/client.test.ts` — +8 tests (the permanent/transient matrix, both 503 spellings,
-  the conservative fall-through, a body that will not parse). Two stale "8 s" titles corrected.
-- `src/i18n/index.tsx` + `__tests__/dictionaries.test.ts` — `voice.notSetUp` / `voice.stillWorking`,
-  parity **446 → 448**.
-- `docs/OPS-SERVER-HANDOVER.md` — **§9 corrected** (it said the voice proxy "does not exist yet" — it
-  exists, it is undeployed) + new **§2b**, the deploy-day ordering note.
-- `docs/PHASES.md` — Phase 87 recorded; **Phase 88 written up as the resume point**.
-- `CLAUDE.md` — the 80 s derivation and the `unconfigured` rule, so neither gets "fixed" back.
+- `src/lib/fileUpload.ts` — new pure `parseLegacyUploadResult` + `LegacyUploadResult`. The **only**
+  place that decides whether the legacy route's `url` is disposable. The two-part discriminator and
+  its reasoning are written at the function.
+- `src/data/api.ts` — `uploadFile`'s legacy branch reads the body through that seam and reports
+  `storageKey` with an empty `url` when the server signed it. Three stale doc-comments corrected:
+  `UploadOutcome.url`, `UploadOutcome.storageKey` (it said "presign-only", which is now false), and
+  the "PATH 2 — legacy multipart, **unchanged**" header.
+- `src/app/claim/[id].tsx`, `src/app/claim-new.tsx` — **comments only, no behaviour change.** Both
+  explained their await-vs-fire-and-forget branch in terms of *which path ran*; they now say the test
+  is the `storageKey` **field**, because the legacy path can produce one now.
+- `src/lib/__tests__/fileUpload.test.ts` — +8 (all six body shapes: signed, signing-failed,
+  pre-Phase-101, key-without-TTL, NaN/numeric-string, key-without-url, unwrapped, unusable).
+- `src/data/__tests__/api-resilience.test.ts` — +3 wiring tests (the fix, the signing-failure
+  fallback, and the ephemeral warning surviving).
+- `../contracts/INBOX.md` — reply filed under the blocking item; 828,750 → 831,630 bytes, `.bak`
+  taken first, reply greped back afterwards.
+- `docs/PHASES.md`, `CLAUDE.md`, `docs/OPS-SERVER-HANDOVER.md` §2b, `docs/DECISIONS.md`,
+  `docs/STATUS.md`.
 
 ## Decisions made
 
-- **A client timeout must be sized to the PRODUCER's real timeouts, never to a UX wish.** 80 s is
-  derived from `services/voiceService.js:54-56`, not chosen. 80 s is a bad wait, but that is a
-  **server budget** problem — filed as an ask — and waiting beats discarding an answer already paid for.
-- **A bare 503 stays transient.** Only a 503 whose body names `not_configured` is permanent; an
-  unrecognised body falls through to `'server'`. The conservative direction merely over-offers a
-  retry; the other tells someone to give up on a service that was about to come back.
-- **The two new keys ship in ENGLISH in all five dictionaries.** Not machine translation — the
-  2026-08-27 waiver covered one batch and is not standing permission, and PHASE-19 DONE-4 says an
-  honest English fallback beats a wrong romanised guess. Same precedent as `tab.search`; filed as
-  **Batch 6h** with translator notes.
-- **The Phase 101 finding was filed, not fixed.** It is app-side work (Phase 88) and the session's
-  remaining instruction was to file backend asks and hand off.
+- **The discriminator is TWO-PART and must stay that way.** `storage_key` alone is not enough: Phase
+  101's documented signing-failure branch **still sets it** while falling back to the public URL with
+  `url_expires_in: null` — and there the url is the durable thing, while the signer that just failed
+  is the one a later re-sign would need. Keying on the key alone would discard the only working link
+  in exactly the case where signing is broken. `Number.isFinite`, not `typeof === 'number'`, so a
+  `null`, a `NaN` or a numeric *string* all fall back to today's behaviour.
+- **Shipped without waiting for `cgpe-api`'s answer.** The question of which field to key on is still
+  open at the top of `INBOX.md`. Building to our own proposed reading was the right call because it is
+  a one-line change in one function if they disagree, and holding the phase would have left a known
+  data-loss defect unfixed over a confirmation.
+- **Verified the producer before building, not after.** The fix only works if a key minted by the
+  *legacy* route survives `mayAccessKey` + the Phase 104 HeadObject confirm. It does — Phase 101
+  passes `ownerTag` into `cloudStorage.uploadFile`. Had it not, this "fix" would have converted a
+  silent expiry into a loud "not attached" on **every** upload.
+- **`ephemeral: false` on the new branch is a fact, not an assumption** — those two fields are set
+  only inside Phase 101's `cloudStorage.isConfigured()` branch, so the bytes are in a real bucket.
 
 ## Known broken / deliberately skipped
 
-- 🔴 **PHASE 88 IS NOT STARTED, and it is a real defect.** `cgpe-api`'s Phase 101 (`9a74c9a`) made the
-  legacy `POST /api/upload` return a **short-lived** `url` plus a durable `storage_key`. Our legacy
-  path reads only `data.url` (`src/data/api.ts:3640-3642`) and records it as `file_url` — so once
-  Phase 101 deploys **and** `S3_*` is set, legacy uploads persist a link that expires. Phase 86's
-  presigned path is already correct; only the fallback is wrong.
-- ⚠️ **Shipping that fix does not fix the phones.** The newest APK in the field is **`093a3b33`
-  (25 Aug)**, which predates Phase 86 entirely; ~21 handsets are on it. This is fixed by getting a
-  **new APK out**, which the EAS quota gates until **1 Sep**.
-- **Nothing from Phase 87 has run on a handset**, and it is inert in production anyway — `/voice/ask`
-  is 404 until the backend deploys.
+- 🔴 **THIS DOES NOT REACH THE PHONES, and that is the honest headline.** The field APK is still
+  `093a3b33` (**25 Aug**), which predates Phase 86 and has **no `storage_key` handling at all**; ~21
+  handsets are on it. Until a new APK is installed, a deployed Phase 101 + `S3_*` still means expiring
+  links **from those builds**. `OPS-SERVER-HANDOVER.md` §2b now says so explicitly, so "the app fixed
+  it" cannot be read as "the window is closed".
+- **Nothing from Phase 88 has run on a handset**, and it is inert in production anyway — presign is
+  404 and `cloudStorageConfigured` is `false`, so the new branch cannot fire there yet.
+- **Six `cgpe-api` commits are still unread** (Phases 102–106) — that is Phase 89, not a defect.
 - **Untracked repo-root files left alone** (`*.mp3`, `*.txt`, the staff JSON, the store spec,
   `.claude/settings.json`, `.gitignore`) — the owner's local files, unchanged from boot.
-- **One pre-existing lint warning** in `src/i18n/index.tsx` (a ref in an effect cleanup, line ~2392)
-  left alone — it predates this work.
 
 ## Next session starts here
 
-- **Phase 88: stop the legacy upload path persisting a URL that expires** — in `uploadFile`'s legacy
-  branch, when `storage_key` is present **and `url_expires_in` is a number**, return it as `storageKey`
-  so the existing presigned plumbing takes over. **Check `contracts/INBOX.md` first**: the exact field
-  to key on is an open question to `cgpe-api` at the top of the file — build to their answer if it has
-  arrived, and to the two-part discriminator if it has not.
-- **First command:** `npm test` (expect **1297** green), then
-  `grep -n "url_expires_in" ../contracts/INBOX.md` for the `cgpe-api` reply.
-- **Watch out for:** **the EAS quota resets 1 Sep — that APK is now the highest-value action in the
-  project.** It carries i18n Phases 80–85, the boundary fix (which still owes a device walk-through),
-  the version reconcile, the whole voice track, Phase 86's upload flow and Phase 87 — and it is the
-  only way the Phase 88 fix reaches the ~21 phones. Consider adding EAS Update (OTA) in that same
-  build. Second trap: **Phase Ω must not be started** — Phase 88 is open, so the gate is shut.
+- **Phase 89: read the sibling's six undeployed commits and find the next Phase 101.** `e3156d2`
+  (**Phase 102, admin-TIER RBAC** — the likeliest to touch us), `c6b00bc` + `ccae449` (security),
+  `d4fad85` (Phase 104), `ca4db88` (Phase 105 — client phone search), `d9d9d85`/`85d55c5` (CORS/CI).
+  **Open the diff for every route the app calls — the commit message is not enough**, which is the
+  entire lesson of Phase 88 (`9a74c9a` was filed as "finish MinIO").
+- **First command:**
+  `git -C ../cgpe-backend-main log --oneline origin/main..origin/Shivam`
+- **Watch out for:** 🔴 **the EAS quota resets 1 Sep — today or tomorrow — and that APK is now the
+  highest-value action in the project.** It is the only way Phases 80–88 reach the ~21 phones.
+  Consider adding EAS Update (OTA) in the same build to end the rebuild-per-fix cycle. Second trap:
+  **Phase Ω must not be started** — Phase 89 is open and device-unverified work exists, so the gate
+  is shut.
 
 ---
 ---

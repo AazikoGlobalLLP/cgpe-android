@@ -5207,3 +5207,54 @@ this session went dead within minutes (absent from `action: list`). Re-published
 before sharing. A parallel session had also published its own owner-facing page on the same account
 (`CGPE Connect Panch Din Ka Kaam`); it was **left untouched** and the choice handed to the owner
 rather than overwritten.
+
+## 2026-08-31 (Phase 88) — the legacy upload path stops persisting a URL that expires
+
+*(Phases 86 and 87 shipped the same day and their decisions are recorded in `docs/PHASES.md` and the
+handoffs rather than here; this section is Phase 88's and does not restate them.)*
+
+**Decision — the discriminator for "is this url disposable" is TWO-PART, and simplifying it is a
+regression.** Backend Phase 101 (`9a74c9a`, `routes/upload.js:174-196`) made the legacy multipart
+`POST /api/upload` return a short-lived presigned GET as `url`, plus `key` / `storage_key` /
+`url_expires_in`. The obvious reading — "a `storage_key` came back, so keep the key" — is **wrong**,
+because that route has a documented signing-failure branch which **still sets `storage_key`** while
+falling back to the public URL and setting `url_expires_in: null`. In that branch the url is the
+durable thing, and the signer that just failed is the same one a later re-sign would need, so keying
+on the key alone would discard the only working link precisely when signing is broken. The rule is
+`storage_key` **AND** a **finite** `url_expires_in` — `Number.isFinite`, not `typeof === 'number'`,
+because NaN is a number and a numeric string is a shape we were not promised. It lives in exactly one
+function, `parseLegacyUploadResult` (`src/lib/fileUpload.ts`), so a different answer from `cgpe-api`
+is a one-line change.
+
+**Decision — ship without waiting for the sibling's confirmation.** The question of which field to key
+on was filed to `cgpe-api` on 2026-08-31 and is still open. Holding the phase would have left a known
+data-loss defect unfixed over a confirmation that costs one line to act on. The reply filed under
+their box says explicitly what we built and offers to change it.
+
+**Decision — verify the producer BEFORE building, not after.** The fix only works if a key minted by
+the *legacy* route survives `mayAccessKey` and the Phase 104 HeadObject confirm on
+`POST /file-attachments`. It does, but only because Phase 101's D-128 change passes `ownerTag` into
+`cloudStorage.uploadFile` so the proxy path builds the same owner-scoped key shape as the presigned
+path (`services/cloudStorage.js:78-89, 188-206`). Had that not been true, this "fix" would have turned
+a silent expiry into a loud `not_linked` on **every** upload. That check was not the headline of the
+commit and would have been missed by reading the message.
+
+**Decision — branch on the FIELD, never on which path ran.** `UploadOutcome.storageKey` was documented
+as "set ONLY by the presigned flow", and both claim screens explained their await-vs-fire-and-forget
+branch in the same terms. All three are now false, and code written against them would reintroduce the
+bug. They were corrected in the same commit — the Phase-79 rule that a fix is not done until every
+place saying the wrong thing reads the new value.
+
+**Decision — the ephemeral-disk warning is protected by a test rather than trusted.** The droplet-disk
+fallback returns neither new field, so it is untouched; but quietly losing "this server will not keep
+your file" while fixing an expiring-link bug would have been the worse defect of the two. Pinned.
+
+**Note — the app-side fix does NOT close the deploy-day window, and `OPS-SERVER-HANDOVER.md` §2b now
+says so.** The phones in the field run `093a3b33` (25 Aug), which predates Phase 86 and has no
+`storage_key` handling at all. "The app fixed it" must not be read as "the exposure is over"; only a
+new APK on those handsets does that.
+
+**Note — every source file in this tree is CRLF.** A scripted splice that anchors on `\n`-joined text
+finds nothing and fails the assertion (it did, first try). Normalise the anchor to the file's own line
+ending before matching. The write-to-temp-then-assert-larger rule is what turned that into a no-op
+instead of damage.
