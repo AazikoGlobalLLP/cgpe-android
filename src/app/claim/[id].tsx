@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -159,6 +159,10 @@ export default function ClaimDetail() {
   const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
   /** Bumped to re-run the focus effect after a retry. */
   const [nonce, setNonce] = useState(0);
+  /** Documents the REGISTER holds against this claim — not the local checklist above it. */
+  const [attachments, setAttachments] = useState<api.StoredAttachment[]>([]);
+  /** The key currently being resolved to a signed URL, so one row can show a spinner. */
+  const [opening, setOpening] = useState<string | null>(null);
 
   /* The camera and the upload both outlive a back-press, so the handlers below check this
    * before they touch state. The FETCH uses its own per-run flag instead: the focus effect
@@ -174,9 +178,48 @@ export default function ClaimDetail() {
       if (!alive) return;
       setClaim(cl ?? null);
       setLoading(false);
+      // The register's own document list, fetched AFTER the claim so it never delays the
+      // screen. It resolves to [] on any failure and on every server that has not deployed
+      // the entity link, so an empty list here means "nothing recorded", never "load failed" —
+      // the section below only renders when there is something real to show.
+      const files = await api.listAttachments(String(id));
+      if (alive) setAttachments(files);
     })();
     return () => { alive = false; };
   }, [id, nonce]));
+
+  /** Re-read the register's document list after an upload lands. Quiet on failure: the
+   *  upload's own result has already been reported, and a stale list is not a second error. */
+  const refreshAttachments = useCallback(async () => {
+    const files = await api.listAttachments(String(id));
+    if (mounted.current) setAttachments(files);
+  }, [id]);
+
+  /**
+   * Open one stored document.
+   *
+   * A presigned object has no permanent address, so the URL is signed FRESH here, on the tap,
+   * and used immediately — never stored, never cached in state. Legacy rows still carry a
+   * durable `fileUrl` and open straight from it.
+   */
+  const openAttachment = useCallback(async (a: api.StoredAttachment) => {
+    haptics.tap();
+    if (!a.storageKey) { Linking.openURL(a.fileUrl).catch(() => {}); return; }
+    setOpening(a.storageKey);
+    const url = await api.getAttachmentDownloadUrl(a.storageKey);
+    if (!mounted.current) return;
+    setOpening(null);
+    if (!url) {
+      haptics.warn();
+      setNotice({
+        tone: 'warning',
+        title: "Couldn't open that document",
+        message: 'The server did not hand back a link for this file. Check your connection and try again.',
+      });
+      return;
+    }
+    Linking.openURL(url).catch(() => {});
+  }, []);
 
   const retry = useCallback(() => { setLoading(true); setNonce((k) => k + 1); }, []);
 
@@ -281,9 +324,10 @@ export default function ClaimDetail() {
     // 🔴 Phase 94 is on `origin/Shivam` and NOT on the deployed `origin/main`, so on prod today
     // both fields are still discarded. Sending them is harmless on the old build and correct on
     // the new one; the checklist tick below therefore still stays local (see next comment).
-    void api.recordFileAttachment({
+    const record = api.recordFileAttachment({
       filename: file.name,
       fileUrl: up.url,
+      storageKey: up.storageKey,
       fileSize: file.size,
       fileType: resolveMime(file) || '',
       category: 'claim',
@@ -291,6 +335,21 @@ export default function ClaimDetail() {
       entityType: 'claim',
       description: 'Attached from the claim screen',
     });
+
+    // WHY THIS BRANCHES, AND WHY THE SAME CALL IS FIRE-AND-FORGET ABOVE IT.
+    // On the legacy path the file already lives behind a durable public URL, so this record is
+    // a nicety: failing it must NOT read as a failed upload, or the user re-uploads a file that
+    // is already safely stored. On the PRESIGNED path the row is the only thing on the server
+    // that names the object — no row, no way to ever reach the bytes — so there it is awaited
+    // and a failure is reported honestly. Calling that case a success would be the "captures
+    // vanish" bug with a green tick on it.
+    if (up.storageKey) {
+      const saved = await record;
+      if (!mounted.current) return;
+      if (!saved) { showUploadFailure('not_linked'); return; }
+      await refreshAttachments();
+      if (!mounted.current) return;
+    }
 
     // Until that merge lands, the register still has no DEPLOYED endpoint that links a file to a
     // claim, so the ONLY thing recorded here is the local checklist tick, and the group footer
@@ -516,9 +575,54 @@ export default function ClaimDetail() {
               loading={uploading}
               onPress={() => setSourceOpen(true)}
             />
+            {/* The caveat is CONDITIONAL now, because it is not always true. On a server that
+                has not deployed the entity link, a file reaches storage but nothing ties it to
+                this claim — so the advisor must still quote the reference by hand, and the
+                caption says so. Once rows DO come back for this claim, that sentence would be
+                contradicted by the list rendered directly beneath it. */}
             <Txt size={font.cap} color={c.faint} numberOfLines={3} style={{ textAlign: 'center', lineHeight: 17 }}>
-              Files go to the CGPE server. The register cannot link a file to a claim yet, so quote the reference when you tell the claims desk.
+              {attachments.length > 0
+                ? 'Files go to the CGPE server and are listed below.'
+                : 'Files go to the CGPE server. The register cannot link a file to a claim yet, so quote the reference when you tell the claims desk.'}
             </Txt>
+
+            {/* WHAT THE REGISTER ACTUALLY HOLDS — rendered only when it holds something.
+                This is deliberately NOT an empty state: on every server that has not deployed
+                the entity link the list is empty for a reason that has nothing to do with this
+                claim, and an "no documents attached" panel there would state something the app
+                cannot know. When rows do exist they are real, server-side records — unlike the
+                checklist above, which is a local working note. */}
+            {attachments.length > 0 ? (
+              <ListSection
+                title="Documents on the register"
+                footer="Held by the server against this claim. Tap one to open it — the link is created fresh each time and expires shortly after."
+              >
+                {attachments.map((a) => (
+                  <Pressable
+                    key={a.id}
+                    onPress={() => { void openAttachment(a); }}
+                    disabled={opening === a.storageKey}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open ${a.filename || 'document'}`}
+                    style={({ pressed }) => [{
+                      flexDirection: 'row', alignItems: 'center', gap: spacing.md,
+                      minHeight: 52, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
+                      backgroundColor: pressed ? c.cardAlt : 'transparent',
+                    }]}
+                  >
+                    <Ionicons name="document-text-outline" size={22} color={c.muted} />
+                    <Txt size={14.5} weight="600" numberOfLines={1} style={{ flex: 1 }}>
+                      {a.filename || 'Document'}
+                    </Txt>
+                    <Ionicons
+                      name={opening === a.storageKey ? 'hourglass-outline' : 'open-outline'}
+                      size={18}
+                      color={c.faint}
+                    />
+                  </Pressable>
+                ))}
+              </ListSection>
+            ) : null}
           </View>
         </Appear>
 

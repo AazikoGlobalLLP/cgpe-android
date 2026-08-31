@@ -48,7 +48,11 @@ import * as offlineStore from './offlineStore';
 import { decideRead, mergeById } from '@/lib/offlineCache';
 // POINT 11 (Document picker) — the pure upload decision seam: classify a failure by status,
 // spot the ephemeral-disk "vanishes" URL. Copy + client-side precheck live there too.
-import { classifyUploadFailureBody, isEphemeralUrl, type UploadFailure } from '@/lib/fileUpload';
+import { putBinary } from '@/lib/binaryUpload';
+import {
+  classifyPresignResponse, classifyPutStatus, classifyUploadFailureBody, isEphemeralUrl,
+  parseDownloadUrl, type PresignedTarget, type UploadFailure,
+} from '@/lib/fileUpload';
 // PHASE 57b — the safe offline write queue. Pure decisions in `lib/writeQueue`; the reactive
 // in-memory mirror the UI renders from is `data/pendingWrites`.
 import {
@@ -3510,15 +3514,96 @@ export async function generateReport(clientName: string): Promise<GenerateReport
  * storage is not configured, so it must NOT be presented as durably stored.
  */
 export type UploadOutcome =
-  | { ok: true; url: string; key?: string; ephemeral: boolean }
+  | {
+      ok: true;
+      /**
+       * The legacy multipart path's DURABLE public URL. **Empty string on the presigned path**
+       * — and that is not an oversight. A presigned object has no durable URL at all; every
+       * signed link dies in 300 s, so handing one out here would invite a caller to persist a
+       * link that is broken before anyone opens it. Presigned callers use `storageKey`.
+       */
+      url: string;
+      key?: string;
+      /**
+       * Set ONLY by the presigned flow. Its presence is the discriminator: a caller with a
+       * `storageKey` must record it via `recordFileAttachment({ storageKey })` and leave
+       * `fileUrl` empty, and must AWAIT that call — see the note on `recordFileAttachment`.
+       */
+      storageKey?: string;
+      ephemeral: boolean;
+    }
   | { ok: false; reason: UploadFailure };
 
-/** Upload a captured/selected file -> POST /api/upload (multipart). */
+/**
+ * Ask for a signed PUT target. Returns `null` when this server has no presigned flow —
+ * a 404/501 (route not on the deployed build) or a 503 (`S3_*` unset) — so the caller
+ * retries the legacy multipart path and nothing about today's behaviour changes.
+ */
+async function presignTarget(name: string, mimeType: string): Promise<
+  { kind: 'target'; target: PresignedTarget } | { kind: 'failed'; reason: UploadFailure } | null
+> {
+  try {
+    // An explicit method: ONE attempt, never retried. A retried presign would mint a second
+    // owner-scoped key and orphan the first in the bucket.
+    const { status, json } = await req('/upload/presign', {
+      method: 'POST',
+      body: JSON.stringify({ content_type: mimeType, filename: name }),
+    });
+    const outcome = classifyPresignResponse(status, json, mimeType);
+    return outcome.kind === 'fallback' ? null : outcome;
+  } catch {
+    // Never reached the server. Fall through to the legacy attempt rather than failing here:
+    // it costs one request, and a single dropped packet should not cost the user the upload.
+    // If the network really is down, the legacy attempt reports 'network' honestly.
+    return null;
+  }
+}
+
+/**
+ * PUT the bytes straight at MinIO with the signed URL, then say what it meant.
+ *
+ * The transport lives in `lib/binaryUpload` (see its header for why it has to be a separate
+ * module); everything here is classification, which is where it belongs.
+ */
+async function putSignedBytes(uri: string, t: PresignedTarget): Promise<{ ok: true } | { ok: false; reason: UploadFailure }> {
+  const out = await putBinary({ url: t.url, fileUri: uri, contentType: t.contentType, timeoutMs: UPLOAD_TIMEOUT });
+  if (out.kind === 'timeout') return { ok: false, reason: 'timeout' };
+  if (out.kind === 'network') return { ok: false, reason: 'network' };
+  if (out.status < 200 || out.status >= 300) return { ok: false, reason: classifyPutStatus(out.status) };
+  return { ok: true };
+}
+
+/**
+ * Upload a captured/selected file.
+ *
+ * TWO PATHS, and which one runs is decided by the SERVER, not by a flag here:
+ *   1. **Presigned** (`cgpe-api` Phase 95 — the current contract). `POST /upload/presign` →
+ *      a direct signed `PUT` to MinIO → the caller records `storageKey`. The bytes never pass
+ *      through the API server.
+ *   2. **Legacy multipart** (`POST /upload`) whenever the presign route answers 404/501/503,
+ *      which is every server that has not deployed Phase 95 or has no `S3_*` set — i.e.
+ *      production today. That fallback is why adopting this ahead of the deploy is inert:
+ *      until the merge lands, every upload takes path 2 and behaves exactly as it did before.
+ */
 export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 'image/jpeg'): Promise<UploadOutcome> {
   // No real session: nothing may leave the handset, and reporting a fake success would put a
   // "document attached" on screen that no server is holding. (Was a `demo://` URL the screens
   // then had to special-case; a typed reason is cleaner and honest.)
   if (!sessionReal || FORCE_DEMO) { await wait(500); return { ok: false, reason: 'not_signed_in' }; }
+
+  // PATH 1 — presigned. `null` means this server does not offer it; anything else is decided.
+  const presigned = await presignTarget(name, mimeType);
+  if (presigned) {
+    if (presigned.kind === 'failed') return { ok: false, reason: presigned.reason };
+    const put = await putSignedBytes(uri, presigned.target);
+    if (!put.ok) return { ok: false, reason: put.reason };
+    // `ephemeral: false` is a fact, not an assumption: `/upload/presign` answers 503 unless
+    // `cloudStorage.isConfigured()`, so a signed target can only exist when a real bucket does.
+    // There is no local-disk fallback on this path — that is the whole point of it.
+    return { ok: true, url: '', key: presigned.target.key, storageKey: presigned.target.key, ephemeral: false };
+  }
+
+  // PATH 2 — legacy multipart, unchanged.
   // PHASE 55: an AbortController so a stalled upload FAILS at UPLOAD_TIMEOUT instead of hanging the
   // screen forever (the old code had none). A multipart POST is non-idempotent → a single attempt,
   // never retried; an abort surfaces as a caught throw and is reported as a 'timeout' below.
@@ -3580,13 +3665,35 @@ export async function uploadFile(uri: string, name = 'document.jpg', mimeType = 
  * than waiting: the day the owner merges and deploys, existing app builds start linking with
  * no further change. Do NOT tell anyone claim↔file linking works until that merge lands.
  *
- * FAILS QUIETLY ON PURPOSE. The binary is already safely on the server by the time this runs, so
- * a failure here must not tell the user their upload failed — that would be a lie that makes them
- * upload it again. It reports nothing and returns null.
+ * FAILS QUIETLY ON PURPOSE — ON THE LEGACY PATH ONLY. The binary is already safely on the
+ * server behind a durable public URL by the time this runs, so a failure here must not tell the
+ * user their upload failed; that would be a lie that makes them upload it again. It reports
+ * nothing and returns null.
+ *
+ * 🔴 THAT REASONING INVERTS ON THE PRESIGNED PATH, AND THE CALL SITES MUST TREAT IT DIFFERENTLY.
+ * A presigned object has no URL anyone can reconstruct — the `storage_key` recorded here is the
+ * ONLY thing on the server that names it. If this call fails, the bytes sit in the bucket with
+ * nothing pointing at them: unreachable, and invisible to the claim. So a caller passing
+ * `storageKey` must AWAIT this and surface `null` as `'not_linked'` rather than fire-and-forget.
+ * A retry re-uploads under a fresh key, which is correct and cheap.
+ *
+ * The backend CONFIRMS a `storage_key` before recording it (Phase 104): HeadObject proves the
+ * object exists, and the key's owner segment must match the caller. So the failures that reach
+ * the `null` above are real — `404 OBJECT_NOT_FOUND` means the PUT did not land despite its 2xx.
  */
 export type FileAttachmentInput = {
   filename: string;
+  /**
+   * The legacy path's durable URL. **Leave it empty when `storageKey` is set** — the contract
+   * says so explicitly, and storing a signed URL beside the key is exactly the mistake that
+   * ships a link which is dead 300 seconds later.
+   */
   fileUrl: string;
+  /**
+   * The presigned flow's durable handle (`data.key` from `/upload/presign`). Persisting THIS,
+   * and re-signing per render via `getAttachmentDownloadUrl`, is what the whole phase is for.
+   */
+  storageKey?: string;
   fileSize?: number;
   fileType?: string;
   /** Coarse grouping, kept for the legacy rows the panel's file manager still reads. */
@@ -3611,7 +3718,9 @@ export async function recordFileAttachment(input: FileAttachmentInput): Promise<
       method: 'POST',
       body: JSON.stringify({
         filename: input.filename,
-        file_url: input.fileUrl,
+        // Empty whenever a key is present — the two are alternatives, never both.
+        file_url: input.storageKey ? '' : input.fileUrl,
+        storage_key: input.storageKey || '',
         file_size: input.fileSize ?? null,
         file_type: input.fileType || '',
         category: input.category || '',
@@ -3630,6 +3739,64 @@ export async function recordFileAttachment(input: FileAttachmentInput): Promise<
   } catch {
     return null;
   }
+}
+
+/** One recorded document, as the register holds it. Field names are the backend's own
+ *  (`routes/fileAttachments.js` `toAttachment`), camel-cased at this boundary and nowhere else. */
+export type StoredAttachment = {
+  id: string;
+  filename: string;
+  fileType: string;
+  fileSize: number | null;
+  /** Present on presigned rows. Empty on legacy rows, which carry `fileUrl` instead. */
+  storageKey: string;
+  fileUrl: string;
+  entityId: string;
+  createdAt: string | null;
+};
+
+/**
+ * The documents recorded against one record (a claim id).
+ *
+ * ⚠️ FILTERED TWICE, ON PURPOSE. `?entity_id=` is a Phase 94 filter and is **not on the
+ * deployed build** — an older server ignores the parameter and answers with the WHOLE
+ * collection, which would list some other claim's documents under this one. So the rows are
+ * filtered again here on the value the server echoes back. On the old build every row's
+ * `entity_id` is `''`, so the list comes back empty — honestly empty, rather than wrong. Do
+ * not remove the client-side filter when the deploy lands; it costs nothing and it is the only
+ * thing standing between a stale server and a cross-claim data leak.
+ */
+export async function listAttachments(entityId: string): Promise<StoredAttachment[]> {
+  if (!entityId) return [];
+  const rows = await tryReal<any[]>(`/file-attachments?entity_id=${encodeURIComponent(entityId)}`, {}, Array.isArray);
+  if (!rows) return [];
+  return rows
+    .filter((r) => r && typeof r === 'object' && String(r.entity_id || '') === entityId)
+    .map((r) => ({
+      id: String(r.id || ''),
+      filename: String(r.filename || r.file_name || ''),
+      fileType: String(r.file_type || ''),
+      fileSize: typeof r.file_size === 'number' ? r.file_size : null,
+      storageKey: String(r.storage_key || ''),
+      fileUrl: String(r.file_url || ''),
+      entityId: String(r.entity_id || ''),
+      createdAt: r.created_at ? String(r.created_at) : null,
+    }))
+    .filter((r) => r.id && (r.storageKey || r.fileUrl));
+}
+
+/**
+ * A FRESH signed GET URL for one private object. Called per open, never cached — the URL
+ * expires in 300 s, which is precisely why the app stores the key and not the link.
+ *
+ * Returns null on any refusal, including the `403 OBJECT_FORBIDDEN` that means the key is not
+ * this user's. That should never happen in the normal flow (you only hold keys you uploaded),
+ * so a null here is worth showing as "couldn't open", not swallowing.
+ */
+export async function getAttachmentDownloadUrl(key: string): Promise<string | null> {
+  if (!key || !sessionReal || FORCE_DEMO) return null;
+  const json = await tryReal<any>(`/upload/download-url?key=${encodeURIComponent(key)}`, {}, isObj);
+  return json ? parseDownloadUrl(json) : null;
 }
 
 /* -------------------------------------------------------------- Campaigns */

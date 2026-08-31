@@ -11,6 +11,10 @@ import {
   describeUploadFailure,
   MAX_VIDEO_UPLOAD_BYTES,
   classifyUploadFailureBody,
+  classifyPresignResponse,
+  classifyPutStatus,
+  parseDownloadUrl,
+  parsePresignTarget,
   type UploadFailure,
 } from '@/lib/fileUpload';
 
@@ -259,5 +263,145 @@ describe('classifyUploadFailureBody — reading the server own words, not guessi
     const d = describeUploadFailure('video_not_accepted');
     expect(d.message.toLowerCase()).not.toContain('try again');
     expect(d.title.length).toBeGreaterThan(0);
+  });
+});
+
+/* ------------------------------------------------------------------------------------------ *
+ * The presigned MinIO flow (Phase 86 / backend Phase 95, D-122).
+ *
+ * These pins mirror `cgpe-backend-main/routes/upload.js`'s presign + download-url handlers. The
+ * two traps written into the contract itself are what most of them exist for: the KEY is the
+ * durable thing (never the URL), and the PUT's Content-Type is SIGNED.
+ * ------------------------------------------------------------------------------------------ */
+
+const presignBody = (over: Record<string, unknown> = {}) => ({
+  success: true,
+  data: {
+    key: 'u123/general/1724-abc.jpg',
+    url: 'https://minio.example/cgpe/u123/general/1724-abc.jpg?X-Amz-Signature=abc',
+    method: 'PUT',
+    headers: { 'Content-Type': 'image/jpeg' },
+    expiresIn: 300,
+    maxBytes: 10485760,
+    ...over,
+  },
+});
+
+describe('parsePresignTarget — the server’s own values, or nothing', () => {
+  it('reads the documented shape', () => {
+    expect(parsePresignTarget(presignBody())).toEqual({
+      key: 'u123/general/1724-abc.jpg',
+      url: 'https://minio.example/cgpe/u123/general/1724-abc.jpg?X-Amz-Signature=abc',
+      contentType: 'image/jpeg',
+      expiresInSec: 300,
+      maxBytes: 10485760,
+    });
+  });
+
+  it('accepts an already-unwrapped `data` object, since callers differ on that', () => {
+    expect(parsePresignTarget(presignBody().data)?.key).toBe('u123/general/1724-abc.jpg');
+  });
+
+  it('REFUSES a target with no signed Content-Type rather than substituting the requested MIME', () => {
+    // Substituting would 403 at MinIO only AFTER the whole file had uploaded — a failure a long
+    // way from its cause, paid for over mobile data. Refusing falls back to the path that works.
+    expect(parsePresignTarget(presignBody({ headers: {} }))).toBeNull();
+    expect(parsePresignTarget(presignBody({ headers: undefined }))).toBeNull();
+  });
+
+  it('refuses a key-less or url-less target', () => {
+    expect(parsePresignTarget(presignBody({ key: '' }))).toBeNull();
+    expect(parsePresignTarget(presignBody({ url: '   ' }))).toBeNull();
+  });
+
+  it('refuses a verb the contract does not name — that is a different flow, not this one', () => {
+    expect(parsePresignTarget(presignBody({ method: 'POST' }))).toBeNull();
+  });
+
+  it('defaults only the ADVISORY numbers, never the signed ones', () => {
+    const t = parsePresignTarget(presignBody({ expiresIn: undefined, maxBytes: undefined }));
+    expect(t).toMatchObject({ expiresInSec: 300, maxBytes: MAX_UPLOAD_BYTES });
+  });
+
+  it('survives junk without throwing', () => {
+    expect(parsePresignTarget(null)).toBeNull();
+    expect(parsePresignTarget('nope')).toBeNull();
+    expect(parsePresignTarget({})).toBeNull();
+  });
+});
+
+describe('classifyPresignResponse — a missing route is not a failure', () => {
+  it('hands back the target on a 2xx', () => {
+    expect(classifyPresignResponse(200, presignBody(), 'image/jpeg').kind).toBe('target');
+  });
+
+  it('falls back on 404 / 501 / 503 — the three ways a server says "not this flow"', () => {
+    // 404/501: the route is not on this build (production, as of 2026-08-29). 503: deployed but
+    // `S3_*` is unset. None is a user-visible failure; all three mean "use the legacy path",
+    // which is exactly what makes adopting this ahead of the backend deploy inert.
+    for (const status of [404, 501, 503]) {
+      expect(classifyPresignResponse(status, { success: false }, 'image/jpeg')).toEqual({ kind: 'fallback' });
+    }
+  });
+
+  it('does NOT fall back on a 415 — a rejected type can never succeed on the legacy path either', () => {
+    expect(classifyPresignResponse(415, { code: 'UNSUPPORTED_MEDIA_TYPE' }, 'application/zip'))
+      .toEqual({ kind: 'failed', reason: 'type_rejected' });
+  });
+
+  it('names a rejected VIDEO separately, in step with classifyUploadFailureBody', () => {
+    expect(classifyPresignResponse(415, {}, 'video/mp4')).toEqual({ kind: 'failed', reason: 'video_not_accepted' });
+  });
+
+  it('maps 401/403 to unauthorized — this call IS session-authenticated, unlike the PUT', () => {
+    expect(classifyPresignResponse(401, {}, 'image/jpeg')).toEqual({ kind: 'failed', reason: 'unauthorized' });
+    expect(classifyPresignResponse(403, {}, 'image/jpeg')).toEqual({ kind: 'failed', reason: 'unauthorized' });
+  });
+
+  it('treats a 2xx it cannot use as a server fault, not a silent fallback', () => {
+    expect(classifyPresignResponse(200, { success: true, data: {} }, 'image/jpeg'))
+      .toEqual({ kind: 'failed', reason: 'server' });
+  });
+});
+
+describe('classifyPutStatus — these statuses come from MinIO, not from our API', () => {
+  it('does NOT read a 403 as unauthorized — it is a signature, not a role', () => {
+    // The signed PUT carries no session at all. 'unauthorized' copy sends the user to their
+    // branch admin; a 403 here means a Content-Type mismatch or an expired 300 s window, which
+    // a retry fixes. Getting this wrong sends people to the wrong person for the wrong reason.
+    expect(classifyPutStatus(403)).toBe('server');
+    expect(describeUploadFailure(classifyPutStatus(403)).message.toLowerCase()).toContain('try again');
+  });
+
+  it('maps a 413 to too_large — the ingress cap the phone-side compress step exists for', () => {
+    expect(classifyPutStatus(413)).toBe('too_large');
+  });
+
+  it('falls through to server for anything else', () => {
+    expect(classifyPutStatus(400)).toBe('server');
+    expect(classifyPutStatus(500)).toBe('server');
+  });
+});
+
+describe('parseDownloadUrl', () => {
+  it('reads the signed url from either the wrapped or the unwrapped body', () => {
+    expect(parseDownloadUrl({ success: true, data: { url: 'https://minio/x?sig=1', expiresIn: 300 } })).toBe('https://minio/x?sig=1');
+    expect(parseDownloadUrl({ url: 'https://minio/x?sig=1' })).toBe('https://minio/x?sig=1');
+  });
+
+  it('returns null rather than an empty string, so a caller cannot try to open nothing', () => {
+    expect(parseDownloadUrl({ success: true, data: { url: '' } })).toBeNull();
+    expect(parseDownloadUrl(null)).toBeNull();
+  });
+});
+
+describe('the not_linked copy — the presigned flow’s own failure mode', () => {
+  it('says the file is NOT attached, rather than reporting a success', () => {
+    // On the presigned path the metadata row is the only thing that names the object. Calling
+    // this a success would be the "captures vanish" bug with a green tick on it.
+    const d = describeUploadFailure('not_linked');
+    expect(d.tone).toBe('danger');
+    expect(d.title.toLowerCase()).toContain('attached');
+    expect(d.message.toLowerCase()).toContain('again');
   });
 });

@@ -137,6 +137,8 @@ export type UploadFailure =
   | 'unauthorized'   // 401/403 — role or session
   | 'not_signed_in'  // no real session on this handset
   | 'not_stored'     // uploaded, but to ephemeral disk (cloud storage not configured)
+  | 'not_linked'     // PRESIGNED flow only: the bytes are in the bucket, but the row that names
+                     // the key could not be written, so nothing on the server points at them
   | 'video_not_accepted'; // the SERVER said it does not accept this video type (yet)
 
 /**
@@ -220,6 +222,131 @@ export function classifyUploadStatus(status: number): UploadFailure {
   // supports, and after Phase 94 deploys it would be false.
   if (status === 415) return 'type_rejected';
   return 'server';                             // 400 (rejected/no-file) or 5xx (write failed)
+}
+
+/* ------------------------------------------------------ the presigned MinIO flow (Phase 86) */
+
+/**
+ * THE CONTRACT, so nobody has to re-derive it: `cgpe-api` Phase 95 (D-122, filed to
+ * `contracts/INBOX.md` 2026-08-27) replaced the multipart proxy upload with three calls —
+ *
+ *   1. `POST /api/upload/presign` (Bearer) `{ content_type, filename?, folder? }`
+ *      → `{ data: { key, url, method:'PUT', headers:{'Content-Type'}, expiresIn, maxBytes } }`
+ *   2. `PUT` the bytes straight at `data.url` — **no Authorization header** (the signature IS
+ *      the auth) and the `Content-Type` **exactly** as returned.
+ *   3. `POST /api/file-attachments` with `storage_key: data.key` and an EMPTY `file_url`;
+ *      render later via `GET /api/upload/download-url?key=…`, signed fresh per render.
+ *
+ * The bytes never pass through the API server and the app never holds storage credentials.
+ *
+ * ⚠️ TWO TRAPS, both written into the contract itself:
+ * (a) **Persist the KEY, never the URL.** Every signed URL dies in `expiresIn` (300 s), so a
+ *     stored URL is a link that is broken by the time anyone opens it — the exact shape of the
+ *     "captures vanish" complaint this flow exists to fix.
+ * (b) **The PUT is signed over the Content-Type.** Sending any other value, or omitting the
+ *     header and letting the platform pick one, **403s at MinIO** — which is why
+ *     `PresignedTarget` carries the server's string rather than the caller's MIME.
+ */
+export type PresignedTarget = {
+  /** The DURABLE handle. This is what gets persisted, and it is owner-scoped server-side. */
+  key: string;
+  /** Short-lived signed PUT URL. Dead in `expiresInSec`; must never be stored. */
+  url: string;
+  /** The EXACT string the signature was computed over — send it back verbatim. */
+  contentType: string;
+  expiresInSec: number;
+  /** ADVISORY. A presigned PUT cannot cap the body server-side, so the phone-side
+   *  compress-to-fit step (`precheckUpload` + `compressIfNeeded`) is still the real limit. */
+  maxBytes: number;
+};
+
+/**
+ * What a `/upload/presign` response means for the caller.
+ *
+ * `fallback` is the one worth explaining: on the deployed backend today the route does not
+ * exist (`origin/main` is 28 commits behind — verified 2026-08-29) and, even once it does, it
+ * answers `503 STORAGE_NOT_CONFIGURED` until OPS sets `S3_*`. Neither is a user-visible
+ * failure — both mean "this server is still on the old multipart path", so the caller retries
+ * the legacy `POST /upload` and behaviour is byte-identical to before this phase. That is what
+ * makes adopting the flow ahead of the deploy inert-safe.
+ */
+export type PresignOutcome =
+  | { kind: 'target'; target: PresignedTarget }
+  | { kind: 'fallback' }
+  | { kind: 'failed'; reason: UploadFailure };
+
+/**
+ * Read a presign body into a target, or null if it is not usable.
+ *
+ * Strict on purpose: a missing `Content-Type` header is NOT recoverable by substituting the
+ * MIME we asked for. The signature is computed over whatever the server normalised the type
+ * to (it lower-cases and trims), so guessing would 403 at MinIO after the whole upload — a
+ * confusing failure a long way from its cause. Refusing here falls back to the legacy path,
+ * which still works.
+ */
+export function parsePresignTarget(body: unknown): PresignedTarget | null {
+  const b = body as any;
+  const d = b?.data ?? b;
+  if (!d || typeof d !== 'object') return null;
+  const key = typeof d.key === 'string' ? d.key.trim() : '';
+  const url = typeof d.url === 'string' ? d.url.trim() : '';
+  const headers = d.headers && typeof d.headers === 'object' ? d.headers : null;
+  const ct = headers && typeof headers['Content-Type'] === 'string' ? headers['Content-Type'].trim() : '';
+  if (!key || !url || !ct) return null;
+  // The contract fixes the verb at PUT. A different verb means we are talking to something
+  // other than the flow we were built against, so fall through rather than guess.
+  if (typeof d.method === 'string' && d.method.toUpperCase() !== 'PUT') return null;
+  const expiresIn = typeof d.expiresIn === 'number' && d.expiresIn > 0 ? d.expiresIn : 300;
+  const maxBytes = typeof d.maxBytes === 'number' && d.maxBytes > 0 ? d.maxBytes : MAX_UPLOAD_BYTES;
+  return { key, url, contentType: ct, expiresInSec: expiresIn, maxBytes };
+}
+
+/**
+ * Classify a `/upload/presign` response. `mime` is the type we ASKED for, used only to tell a
+ * rejected video apart from a rejected document in the 415 branch — the same distinction
+ * `classifyUploadFailureBody` makes, kept in step with it deliberately.
+ */
+export function classifyPresignResponse(status: number, body: unknown, mime?: string): PresignOutcome {
+  if (status >= 200 && status < 300) {
+    const target = parsePresignTarget(body);
+    return target ? { kind: 'target', target } : { kind: 'failed', reason: 'server' };
+  }
+  // 404 = the route is not on this build. 501 is this backend's OTHER quiet "not deployed"
+  // answer (see the `isRetryableStatus` note in CLAUDE.md — it is deliberately NOT treated as
+  // a transient fault anywhere else either). 503 = deployed but `S3_*` unset, or the whole
+  // server is down; in both cases the legacy attempt is the honest next move — if the server
+  // really is down it fails there and reports a network/server reason, which is what the user
+  // would have seen before this phase existed.
+  if (status === 404 || status === 501 || status === 503) return { kind: 'fallback' };
+  if (status === 415) {
+    return { kind: 'failed', reason: isVideoMime(mime || '') ? 'video_not_accepted' : 'type_rejected' };
+  }
+  if (status === 401 || status === 403) return { kind: 'failed', reason: 'unauthorized' };
+  return { kind: 'failed', reason: 'server' };
+}
+
+/**
+ * Classify a failed signed `PUT` — the response comes from MinIO, NOT from our API, so its
+ * statuses mean different things than `classifyUploadStatus`'s.
+ *
+ * ⚠️ A 403 here is NOT `'unauthorized'`. There is no session on this request at all; a 403
+ * means the signature did not verify — a `Content-Type` mismatch, or the 300-second window
+ * expired mid-upload. Telling the user "this account can't upload here" would send them to
+ * their admin over what a retry fixes, so it maps to `'server'`, whose copy is "try again in
+ * a moment". Keep it that way.
+ */
+export function classifyPutStatus(status: number): UploadFailure {
+  if (status === 413) return 'too_large';   // MinIO ingress hard cap (128 MB), or a proxy's own
+  return 'server';                          // 403 signature/expiry, 400 malformed, 5xx storage
+}
+
+/** Read `GET /api/upload/download-url`'s body into a URL, or null. Never cached by callers:
+ *  it expires, which is the whole reason the KEY is what gets stored. */
+export function parseDownloadUrl(body: unknown): string | null {
+  const b = body as any;
+  const d = b?.data ?? b;
+  const url = d && typeof d.url === 'string' ? d.url.trim() : '';
+  return url || null;
 }
 
 /**
@@ -321,6 +448,18 @@ export function describeUploadFailure(reason: UploadFailure): {
         tone: 'warning',
         title: "Uploaded, but the server won't keep it",
         message: "Document storage isn't switched on for this server, so this file won't be saved. Ask your admin to enable it before relying on it.",
+      };
+    case 'not_linked':
+      // PRESIGNED FLOW ONLY, and the reason it is not silent like the legacy path's
+      // fire-and-forget record: with a presigned upload the metadata row is the ONLY thing
+      // that names the object key. The bytes are in the bucket, but if that row is not
+      // written, nothing on the server points at them — the file is unreachable and the user
+      // must attach it again. Reporting this as success would be the "captures vanish" bug
+      // wearing a green tick. A retry re-uploads under a fresh key, which is correct.
+      return {
+        tone: 'danger',
+        title: "The file wasn't attached",
+        message: 'It reached storage, but the register did not record it, so it is not linked to this claim. Attach it again.',
       };
     case 'video_not_accepted':
       // A PERMANENT condition, so the copy must not say "try again" — the server told us it

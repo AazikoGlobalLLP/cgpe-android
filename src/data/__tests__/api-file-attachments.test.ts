@@ -110,8 +110,40 @@ describe('recordFileAttachment — the claim↔file link on the wire', () => {
 
     expect(Object.keys(sent().body).sort()).toEqual([
       'category', 'description', 'entity_id', 'entity_type',
-      'file_size', 'file_type', 'file_url', 'filename', 'uploaded_by',
+      'file_size', 'file_type', 'file_url', 'filename', 'storage_key', 'uploaded_by',
     ]);
+  });
+
+  /* ---- the presigned flow (Phase 86 / backend Phase 95, D-122) ---- */
+
+  it('sends the storage_key and an EMPTY file_url — the two are alternatives, never both', async () => {
+    // The contract is explicit: record the KEY, leave `file_url` empty. Storing a signed URL
+    // beside the key ships a link that is dead 300 seconds later — the "captures vanish" bug
+    // in a new costume. This pins that a caller cannot accidentally send both.
+    fetchSpy.mockResolvedValue(created());
+
+    await api.recordFileAttachment({
+      filename: 'a.jpg',
+      fileUrl: 'https://minio.example/bucket/u123/general/a.jpg',   // must be discarded
+      storageKey: 'u123/general/1724-abc.jpg',
+      category: 'claim',
+      entityId: 'CLM-1',
+      entityType: 'claim',
+    });
+
+    expect(sent().body.storage_key).toBe('u123/general/1724-abc.jpg');
+    expect(sent().body.file_url).toBe('');
+  });
+
+  it('sends an empty storage_key on the legacy path, so the backend confirm step is not triggered', async () => {
+    // `routes/fileAttachments.js` runs HeadObject + an ownership check only for a NON-EMPTY
+    // `storage_key`. An empty string keeps every legacy caller on exactly the old code path.
+    fetchSpy.mockResolvedValue(created());
+
+    await api.recordFileAttachment({ filename: 'a.jpg', fileUrl: 'https://cgpe.in/uploads/general/a.jpg' });
+
+    expect(sent().body.storage_key).toBe('');
+    expect(sent().body.file_url).toBe('https://cgpe.in/uploads/general/a.jpg');
   });
 
   it('is a single attempt — a create must never double-fire on a retry', async () => {

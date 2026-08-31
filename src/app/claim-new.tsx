@@ -285,9 +285,10 @@ function ClaimNewScreen() {
     // The claim does not exist yet on this screen, so there is no id to put in `entity_id` —
     // and an empty one is the honest value. `entity_type` is still true and is sent, so the
     // record says "a claim document, not yet attached to a claim" rather than pretending.
-    void api.recordFileAttachment({
+    const record = api.recordFileAttachment({
       filename: file.name,
       fileUrl: up.url,
+      storageKey: up.storageKey,
       fileSize: file.size,
       fileType: resolveMime(file) || '',
       category: 'claim',
@@ -297,6 +298,16 @@ function ClaimNewScreen() {
       // record would mean touching the gate — a security surface — for a cosmetic field.
       description: 'Attached while creating a claim',
     });
+
+    // On the PRESIGNED path the record is not a nicety — it is the only thing that names the
+    // object in storage, so a failure means the bytes are unreachable and the row below would
+    // be a lie. Awaited and reported there; still fire-and-forget on the legacy path, where the
+    // file is already behind a durable URL. Same reasoning as `claim/[id].tsx`.
+    if (up.storageKey) {
+      const saved = await record;
+      if (!mounted.current) return;
+      if (!saved) { showUploadFailure('not_linked'); return; }
+    }
 
     haptics.success();
     setDocs((prev) => [...prev, { id: `d${Date.now()}`, name: file.name, received: true }]);
