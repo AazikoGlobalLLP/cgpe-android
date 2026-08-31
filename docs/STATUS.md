@@ -2,44 +2,42 @@
 
 **Updated:** 31 August 2026
 
-**Working on right now:** Getting the first app build since 25 August ready, now that the review of
-the server team's unreleased work is finished.
+**Working on right now:** Waiting for the app-build allowance to reset tomorrow so the first build
+since 25 August can be produced.
 
 **Done this week:**
-- **We found that the "send a notice to the team" feature does not work, and has not for some time.**
-  When a manager sends a notice from the app, the server saves it, counts it, and tells the app it
-  went to everyone — but nobody can actually see it. The saving and the reading use two different
-  ways of identifying a person, so the notices go into a place no one's app ever looks. **Nothing was
-  showing as an error at either end, which is why nobody reported it.** The server team had already
-  fixed this without realising how visible the problem was; the fix is written but not yet switched
-  on. Once the server team releases their work, it starts working — with no app update needed, so it
-  will reach the 21 phones already in use straight away.
-- **We read every piece of unreleased server work and confirmed nothing else affects the app.** Seven
-  batches of changes, checked one by one against the parts of the app that use them, with the reason
-  written down for each. This is the second time this review has caught something real, so it is now
-  a permanent step rather than a one-off.
-- **We checked that a security setting the server team is about to switch on cannot break the app.**
-  It cannot — confirmed by reading the actual server code rather than assuming.
-- **We fixed a problem before it reached anyone (earlier this week).** The server is changing how it
-  hands file links to the app. Those links now expire after a few minutes, and the app was saving
-  them as if they were permanent — so documents attached from that point on would have quietly
-  stopped opening. The app now saves the file's permanent reference and asks for a fresh link each
-  time someone opens it.
-- **The voice assistant would have failed on a working server, and now it will not.** The app gave up
-  waiting after 8 seconds, but a spoken question genuinely takes longer — so it was throwing away
-  good answers, saying "something went wrong, please try again", and running the whole thing again at
-  extra cost. It now waits properly and shows a short "still working" note.
-- Every automated check is passing: **1,309 checks**, all green.
+- **We tried to produce the new app build today, and the allowance had not reset yet.** Our account's
+  monthly quota of free builds runs out and refills on 1 September; today it told us there were 18
+  hours to go. Nothing is wrong with the app — every check passes and it is ready to build. We simply
+  cannot start one until tomorrow. The alternative is to pay for a month, which is your decision;
+  waiting costs nothing and keeps everything else identical.
+- **That failed attempt turned out to be worth it — we found the app package has been 58 times larger
+  than it needed to be, every single time.** Every build was sending 338 MB of test recordings — video
+  of automated tests running, useful to nobody outside our own checks — up to the build service along
+  with the app. The cause was one settings file that quietly overrides the normal rules about what to
+  leave out, and it has been doing so since the project's first week. Now fixed: what we send has gone
+  from 347 MB to under 6 MB. This does not change the app itself; it makes every future build start
+  much faster, and it means a failed attempt no longer wastes several minutes.
+- **We closed a small security gap in our own housekeeping.** The tool that manages the app's signing
+  key can write that key and its passwords into a plain text file. The rule that keeps such a file out
+  of our shared code had been written but never saved properly, so it only existed on one computer. It
+  is now saved for everyone.
+- **We wrote down why the large-package problem happened**, because it is genuinely surprising and
+  would otherwise be rediscovered the hard way in a few months. Three sensible-sounding explanations
+  were all wrong; the answer came from measuring rather than reasoning.
+- Every automated check still passing: **1,309 checks**, all green. No part of the app was changed
+  this week in a way a user would see.
 
 **Blocked on:**
-1. **The app-store build allowance**, which resets on 1 September. **Nothing from the last three
-   weeks is on anyone's phone** — the last build was 25 August. One build carries all of it, and it
-   is now the single most valuable thing we can do.
+1. **The build allowance, until 1 September.** **Nothing from the last three weeks is on anyone's
+   phone** — the last build was 25 August. One build carries all of it, and it remains the single most
+   valuable thing we can do.
 2. **The server team.** A large batch of finished server work is written but not yet live — including
-   the team-notices fix above, the new file storage settings, three security fixes and the voice
-   service. A full written list is ready for the server developer.
+   the team-notices fix found last week, the new file storage settings, three security fixes and the
+   voice service. We re-checked today: still not switched on. A full written list is ready for the
+   server developer.
 3. **Translations.** Several screens are waiting on Gujarati and Hindi wording that only you can
    supply. Two voice messages are showing in English until that comes back.
 
-**Next:** Produce the first app build since 25 August, so three weeks of finished work finally
-reaches the team's phones.
+**Next:** Produce the app build tomorrow, so three weeks of finished work finally reaches the team's
+phones.
