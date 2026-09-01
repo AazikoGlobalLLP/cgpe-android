@@ -14,6 +14,92 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🔴🔴 2026-09-01 — READ THIS FIRST: THE BACKEND DEPLOYED, AND TWO THINGS CAME WITH IT THAT ARE NOT
+OURS TO FIX ALONE.**
+
+**(1) PRODUCTION SECRETS ARE COMMITTED AND PUSHED TO GITHUB.** `cgpe-backend`'s
+`docs/OPS-ENV-HANDOVER.md` (commit `1624f8a`, 31 Aug, *"env handover with real values, ready to
+paste"*) carries **21 real production values** and is on **three pushed branches** — `origin/main`,
+`origin/Shivam`, `origin/ved` of `github.com/Aaziko1Market1/cgpe-backend`. Among them **`JWT_SECRET`
+(64 chars)**, which signs every session token in the product: whoever holds it can mint a valid token
+for **any** user, super_admin included, with no password. Also `CGPE_VOICE_SECRET`,
+`CGPE_REPORT_SECRET`, seven `N8N_*` webhook URLs + two tokens, `ANALYTICS_PASSWORD`,
+`CLAIM_INTAKE_TOKEN`. **Deleting the file is not the fix — git history keeps it; these have to be
+ROTATED.** Rotating `JWT_SECRET` logs every user out, so the owner picks the moment. **No value is
+reproduced in our docs or commits — names only.** Owner-owned; recorded here so it is not lost.
+*(Same class as Phase 90a's keystore find, one repo over: a secret is only as protected as the
+**least** careful place it is written.)*
+
+**(2) THE DEPLOY BROKE FILE UPLOADS ON THE APK THAT IS ACTUALLY IN THE FIELD.** `origin/main` moved
+`990c660` → **`0324dfc`** (now 1 commit behind `origin/Shivam`), and `cloudStorageConfigured` is
+**`true`** at last. So backend Phase 101's legacy `POST /api/upload` is live: it now returns a
+**presigned GET that expires in 300 seconds** (`PRESIGN_TTL_SECONDS`, `services/cloudStorage.js:10`)
+as `url`, with the durable handle in `storage_key`. **The 25 Aug build (`093a3b33`) reads only
+`data.url` and persists it as `file_url`** — so every photo or document uploaded from a field handset
+**since this deploy** is recorded as a link that is dead five minutes later. Our Phase 88 (`eb9760f`)
+fixed this in `src/`, and that fix **is on no phone**. This is now the strongest argument for the
+APK — it is not a nice-to-have any more, it is repairing live data loss.
+- **Live state re-probed 2026-09-01 (read-only):** `GET /api/users/test` → **404** (was 200 — backend
+  Phase 105 deletes it, so this is proof the new build is running) · `POST /upload/presign` → **401**
+  (was 404) · `POST /voice/ask` → **401** (was 404) · `cloudStorageConfigured:true` (was false) ·
+  `/health` 200. The users/test discriminator has now been spent; pick a new one next time.
+
+**❓ VOICE: NO — it cannot be used yet, and the reason is two env vars, not code.** App side is
+complete and will ship in the APK; the route is deployed (401, not 404); and the n8n brain is **live
+and correctly secured** — an unauthenticated probe of `https://ai.cgpe.in/webhook/cgpe-voice-brain`
+returns `{"success":false,"reason":"bad_secret",…}` in exactly the shape `src/voice/response.ts`
+expects. But `voiceConfig()` (`services/voiceService.js:71-88`) computes **`ready = stt && brain`**,
+and the backend's own handover doc puts **`SARVAM_API_KEY` and `N8N_VOICE_BRAIN_URL` in "Group 2 —
+voice assistant. *Can wait; the owner is arranging these.*"** Only `CGPE_VOICE_SECRET` was handed
+over. Until those two are set and `:3001` restarts, `/voice/ask` answers **503 `not_configured`**,
+which the app already handles honestly — the launcher appears and says *"Voice is not switched on for
+this server yet."* **Voice needs BOTH the env AND the new APK** (the 25 Aug build has no voice code
+at all). We could not probe `GET /api/voice/status` ourselves: it sits behind `protect`, and this
+session holds no credentials.
+
+---
+
+**✅ 2026-09-01 — PHASE 92: THE SWEEP, RUN AGAINST THE *DEPLOYED* WINDOW — AND THE ONE THING IT FOUND
+IS A REAL-LOOKING ZERO ON THE MASTER DASHBOARD.** Commit `5775918`. Gates: `tsc` **0** · `npm test`
+**1313 / 78 files** (was 1309/77, **+4**) · cache-free `npx eslint` **0 errors** on both touched files
+(the 2 `api.ts` warnings are pre-existing and untouched).
+- **THE FIND.** Backend Phase 110 (D-140) replaced `.catch(() => [])` on `GET /dashboard/overview`'s
+  source reads with a `softRead` that answers **200** with the failed source's KPIs **zeroed** and
+  says so *inside* `data`: `partial:true` + `degraded:['claims', …]`. **The app read neither field.**
+  So a claims collection that errored server-side reached `getOrgSnapshot()` as a well-formed 200 —
+  `isObj` passes it, and `req()` had already cleared the endpoint via `reportSuccess` — and the
+  Master/Admin dashboard printed **"0 claims, ₹0 settled"** as though it were true. Convention #4's
+  exact failure mode, on the most trusted surface in the app.
+- 🔑 **NO CLIENT COULD HAVE DETECTED THIS.** The status is fine, the body is valid, there is nothing
+  to retry. **The server is the only party that knows, and `partial` is how it tells us** — the same
+  argument as Phase 89's notification id-kind bug, arriving from the opposite direction.
+- **THE FIX** re-reports the endpoint to `data/health` when `partial === true`, so the global banner
+  raises and screens branch on `useDataHealth().degraded` as they already do for a transport failure.
+  **The data is still returned in full** — a successful clients read really is 4,994 and is shown;
+  only the zeroed block is untrustworthy, and the banner is what says so. Kind is `'server'`: what
+  failed is the collection read, not the transport. A body with **no** `partial` key is treated as
+  healthy, so this was safe before the deploy and stays safe if anything rolls back.
+- **EVERYTHING ELSE IN `d4fad85..origin/main` (Phases 107–112): NOTHING OWED, VERIFIED NOT ASSUMED.**
+  **`capped()` is a 28 s `maxTimeMS` budget, NOT a row limit** — checked in `utils/dbQuery.js` before
+  believing it, because a cap on `team_tasks` / `Profile.find({})` / the app-UI config would have
+  silently truncated lists we render as complete; it cannot, and our own 12 s client timeout fires
+  first anyway. The deleted `GET /users/test` and `/whatsapp/test*` stubs have **zero** call sites
+  here (we use `/whatsapp/hub/*` only). The sales/commissions money-field authorisation cannot reach
+  us — `api.ts` has no `POST`/`PUT`/`DELETE` to `/commissions` and never calls `/sales`. The rest
+  (`timeTracker`, `leads`, `users`, `rbac`, `team`, `attendance`, `tasks`, `reminders`, `clients`,
+  `prospects`, `settings`, `userPortal`, `advisor`, `adminTime`) is logging redaction, `$in`
+  batching, `asyncHandler` wrapping and the reminder-store refactor — **no consumed response shape
+  changed.**
+- **THE TRIAGE LINE WE CORRECTED.** `cgpe-api` marked this item *"cgpe-mobile — FYI only, no app
+  change"*. It was not. Filed back with the evidence, our box ticked, plus a note to `cgpe-admin`
+  arguing `partial` should not stay "optional" on their side — their overview is a whole-org money
+  surface and their exposure is larger than ours. INBOX 948,532 → 954,539 B, both writes grepped back.
+- **STILL UNCHECKABLE FROM HERE:** the **MinIO bucket name**. Storage is path-style, so a bucket
+  named `uploads` would make every durable object read as the local-disk fallback to `isEphemeralUrl`
+  and warn users their evidence will not be kept. Asked in the INBOX item.
+
+---
+
 **🔜 NEXT — PHASE 90: THE POST-QUOTA APK. ATTEMPTED 2026-08-31 AND REFUSED; RESUME ON 1 SEP.** The
 build was launched with gates green and the quota **was still exhausted**: *"used its Android builds
 from the Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2026)"* →
@@ -22,6 +108,17 @@ from the Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2
 - **First command on resume:** `npx eas-cli build:list --platform android --limit 3 --json
   --non-interactive` (confirms the quota rolled over and what the newest build is), then
   `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android --profile preview --non-interactive`.
+- **2026-09-01 status: NOT yet attempted — the owner asked to be asked before the build is spent, and
+  then asked for verification first (that verification became Phase 92 and the two 🔴 findings above).
+  Gates re-run green on this exact tree: `tsc` 0 · `npm test` 1313/78 · `build:list` clean, newest
+  still `093a3b33`.** ⚠️ **`build:list` does NOT prove the quota rolled over** — the plan is checked
+  only when a build is *created*, and only **after** the archive uploads. So the rollover stays
+  unconfirmed until an attempt is made; that attempt now costs ~5.9 MB, not 320 MB.
+- **One decision to settle at launch, because it cannot be changed afterwards:** `eas.json`'s
+  `preview` profile has no `autoIncrement` and `appVersionSource` is `remote`, so this APK ships as
+  **v1.10.0 / versionCode 1 again** — the same name as the build already on the 21 handsets, with
+  only an APK hash to tell them apart. Adding `"autoIncrement": true` to the profile makes it
+  versionCode 2 and installs cleanly over the old one. **Owner's call; put to them 2026-09-01.**
 - **Still the highest-value action in the project:** it is the only way i18n Phases 80–85, the
   boundary-attribution fix, the version reconcile, the whole voice track and Phases 86–89 reach the
   **~21 handsets still on `093a3b33`**.

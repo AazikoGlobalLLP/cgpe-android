@@ -5481,3 +5481,41 @@ installed.
 `true` ones are exactly the create affordances that warning is about — but "mostly true" invites
 reasoning about a flag without looking it up, and the same fact is what bites the admin panel from the
 other side.
+
+## 2026-09-01 — Phase 92
+
+**D-1. A `partial:true` answer raises the outage banner, and the data is still returned.**
+The alternative was to discard a partial overview and return `null`, which is what a failed read
+normally gets. Rejected: the body is genuinely mixed — if the clients read succeeded, 4,994 is a real
+number, and throwing it away would replace a wrong zero with an empty screen for numbers that were
+never in doubt. Returning the data and raising the banner is what the app's own convention already
+does everywhere else, so screens needed no change. Kind is `'server'` because the collection read is
+what failed, not the transport.
+
+**D-2. Branch on `partial === true`, not on truthiness.**
+`partial` is a boolean on the wire and is present as `false` on every healthy response. A truthy test
+would behave identically today, but a strict comparison means a future non-boolean value cannot
+silently start flagging healthy polls as an outage. Pinned by a test that sends `partial: 0`.
+
+**D-3. A body with no `partial` field at all is healthy, not suspect.**
+Servers that predate backend Phase 110 send no such key. Treating "absent" as degraded would have
+made the app cry outage against every un-migrated deployment — including, at the moment this was
+written, any rollback. This is the same reasoning that made sending `entity_id` early safe.
+
+**D-4. Corrected another session's triage rather than accepting it.**
+`cgpe-api` marked their `partial` item *"cgpe-mobile — FYI only, no app change"*, and it was wrong
+for us. Their grep of our tree was not at fault: the change is invisible unless you know the app's
+outage-honesty convention exists. Filed back with the evidence and ticked our own box. **A "nothing
+owed" from a sibling is a hypothesis about OUR code, and only we can check it** — the mirror image of
+CLAUDE.md's rule that a `[admin]`/`[api]` item must be verified against the sibling's real source
+before filing.
+
+**D-5. Did NOT attempt the APK build in this phase.**
+The owner asked to be asked first, and then asked for verification before spending it. Both findings
+above changed what the build means — it now repairs live data loss on the installed handsets rather
+than merely delivering features — so it is worth stating that before spending the quota, not after.
+
+**D-6. Recorded the committed-secrets finding; took no action on it.**
+`JWT_SECRET` and 20 other real values are committed and pushed in the sibling backend repo. Rotation
+is the only real fix and rotating the JWT secret logs out every user, so the timing is the owner's.
+No value was copied into our tree, our commits, or our docs — names only.
