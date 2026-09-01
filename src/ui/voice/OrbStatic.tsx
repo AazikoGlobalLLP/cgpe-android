@@ -30,7 +30,30 @@ export interface OrbStaticProps {
 }
 
 /* -- tiny colour helpers (local; no dependency hunting) -- */
-function clamp01(n: number): number { return n < 0 ? 0 : n > 1 ? 1 : n; }
+/**
+ * ⚠️ `'worklet'` IS LOAD-BEARING. This is called from `useDerivedValue` below, whose body runs on the
+ * UI THREAD. Reanimated cannot call a plain JS function from there: it raises "Tried to synchronously
+ * call a non-worklet function on the UI thread", and in a RELEASE build (no LogBox) that is fatal —
+ * the app exits, which to a user is indistinguishable from a native crash.
+ *
+ * This is not hypothetical. Its absence is the best explanation for two shipped builds
+ * (`372cd790` vc2, `577a4ec5` vc3) exiting the moment voice mode opened, and the evidence is the
+ * asymmetry it created: the IDENTICAL helper in the sibling `OrbSkia.tsx:27` has always carried the
+ * directive, and `VoiceWaveform`'s `Bar` avoids the problem by inlining its clamp by hand. Only this
+ * copy was left plain. `OrbStatic` renders in BOTH cases — as the Skia orb's `Suspense`/boundary
+ * fallback, and as the only character once Skia is switched off — so both builds reached it.
+ *
+ * ⚠️ AND NOTHING IN THE GATE CHAIN CAN SEE IT: `tsc` types it fine, `npm test` never renders it,
+ * `eslint` has no rule for it, and `expo export -p web` passes because the web build does not run
+ * Reanimated's UI thread this way. Only a handset does.
+ *
+ * A `'worklet'` function is still perfectly callable from the JS thread, which is what `alpha()` and
+ * `mix()` below do during render. Marking it costs nothing and removes the whole class.
+ */
+function clamp01(n: number): number {
+  'worklet';
+  return n < 0 ? 0 : n > 1 ? 1 : n;
+}
 function alpha(hex: string, a: number): string {
   if (hex.length !== 7 || hex[0] !== '#') return hex;
   return hex + Math.round(clamp01(a) * 255).toString(16).padStart(2, '0');
@@ -58,7 +81,13 @@ export function OrbStatic({ persona, state, level, glow, size = 200, muted, redu
   const phase = useSharedValue(0);
   const shake = useSharedValue(0);
   const err = useSharedValue(0);
-  const amp = useDerivedValue(() => (muted ? 0 : clamp01(level.value)));
+  // Clamped INLINE rather than by calling `clamp01`, for the same reason `VoiceWaveform`'s `Bar`
+  // does it by hand: a worklet that calls nothing cannot possibly reach across the thread boundary.
+  // `clamp01` is marked `'worklet'` above as well, so both defences hold independently.
+  const amp = useDerivedValue(() => {
+    const v = level.value;
+    return muted ? 0 : v < 0 ? 0 : v > 1 ? 1 : v;
+  });
 
   useEffect(() => {
     cancelAnimation(phase);

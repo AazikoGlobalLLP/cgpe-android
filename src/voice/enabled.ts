@@ -1,36 +1,43 @@
 /**
  * The master switch for the whole voice feature.
  *
- * 🔴 OFF since 2026-09-01, and this is a deliberate product decision, not a workaround.
+ * ✅ BACK ON since 2026-09-01, because the crash finally has a NAMED CAUSE rather than a suspect.
  *
- * THREE FACTS, TOGETHER:
+ * ── THE HISTORY, BECAUSE IT IS THE ARGUMENT FOR NOT TOUCHING THIS CASUALLY ────────────────────
+ * Two builds exited to "CGPE Connect keeps stopping" the moment the mic was pressed —
+ * `372cd790` (vc2) and `577a4ec5` (vc3). Two rounds of containment failed: switching off the Skia
+ * orb and the blur backend, then wrapping both components in a `FeatureBoundary`. Voice was then
+ * switched off outright (vc4) rather than guessing a third time.
  *
- *  1. **It crashes the app.** Two builds (`372cd790` vc2, `577a4ec5` vc3) exit to "CGPE Connect keeps
- *     stopping" when the mic is pressed. Two rounds of containment — switching off the Skia orb and
- *     the blur backend (`lib/voiceGraphics.ts`), then wrapping both components in a
- *     `FeatureBoundary` — did NOT stop it.
- *  2. **It cannot work even when it does not crash.** `/api/voice/ask` is deployed but answers
- *     `503 not_configured`: `voiceConfig()` needs `ready = stt && brain`, and OPS has not set
- *     `SARVAM_API_KEY` or `N8N_VOICE_BRAIN_URL` (the backend's own env handover parks both under
- *     "Group 2 — can wait; the owner is arranging these"). So today the button's BEST possible
- *     outcome is a polite "voice is not switched on for this server yet".
- *  3. **It cannot be diagnosed from here.** A native abort leaves nothing in JS to inspect, and there
- *     is no device access and no crash reporting in the build. Every remaining hypothesis would cost
- *     one APK to test, on 21 handsets that need a working app more than they need this.
+ * ── THE ACTUAL BUG ───────────────────────────────────────────────────────────────────────────
+ * `OrbStatic`'s `clamp01` was missing its `'worklet'` directive while being called from a
+ * `useDerivedValue` body, which runs on the **UI thread**. Reanimated cannot call a plain JS
+ * function from there — it raises "Tried to synchronously call a non-worklet function on the UI
+ * thread", and in a release build (no LogBox) that is FATAL: the process exits, which to a user is
+ * indistinguishable from a native crash. **No React error boundary can catch it**, which is exactly
+ * why the `FeatureBoundary` added in between changed nothing.
  *
- * A feature that cannot work, crashes the app, and cannot be diagnosed does not belong on the
- * screen. With this `false`, `VoiceLauncher` renders nothing (no mic button exists to press) and
- * `VoiceModeInner` — and therefore `expo-audio`'s `useAudioRecorder`, Reanimated's voice surfaces and
- * every other voice import — is never mounted at all. The crash is not contained; the code path
- * ceases to exist. That is the only guarantee available without a handset.
+ * The evidence is an asymmetry, not a hunch: the IDENTICAL helper in the sibling `OrbSkia.tsx:27`
+ * has always carried `'worklet'`, and `VoiceWaveform`'s `Bar` sidesteps it by inlining its clamp by
+ * hand. Only this one copy was left plain — and it is the ONLY such call site in the entire app
+ * (`'worklet'` appears exactly once in `src/`, and every other animated style is self-contained).
+ * It also explains BOTH builds: `OrbStatic` renders as the Skia orb's `Suspense`/boundary fallback
+ * *and* as the sole character once Skia is off, so vc2 and vc3 both reached it.
  *
- * ⚠️ NOTHING ELSE IN THE APP IS AFFECTED. The voice modules stay in the tree, tested and ready.
+ * ── WHAT IS STILL TRUE, AND MUST STAY TRUE ───────────────────────────────────────────────────
+ *  • **Skia, blur and Lottie stay OFF** (`lib/voiceGraphics.ts`). They were never proven on a
+ *    handset, they are pure decoration, and the fixed `OrbStatic` is the character. Turning them
+ *    back on is a separate decision that needs its own device test.
+ *  • **Voice still cannot ANSWER until OPS sets `SARVAM_API_KEY` + `N8N_VOICE_BRAIN_URL` and
+ *    restarts `:3001`.** `/api/voice/ask` is deployed and answers `503 not_configured` today
+ *    (`voiceConfig()` needs `ready = stt && brain`). Until then the honest outcome is
+ *    "Voice is not switched on for this server yet" — no crash, no retry offered.
+ *  • **NOTHING in the gate chain can see a fault of this class.** `tsc` types it, `npm test` never
+ *    renders it, `eslint` has no rule for it, and `expo export -p web` passes because the web build
+ *    does not drive Reanimated's UI thread this way. Only a handset can confirm it.
  *
- * TO TURN IT BACK ON, both must be true:
- *   (a) OPS has set `SARVAM_API_KEY` + `N8N_VOICE_BRAIN_URL` and restarted `:3001` — otherwise you
- *       are shipping a button that apologises; and
- *   (b) someone can open voice mode on a REAL handset before it reaches the team. `tsc`, `npm test`,
- *       `eslint` and `expo export -p web` were all green on both crashing builds. They cannot see
- *       this class of fault and never will.
+ * ⚠️ IF IT CRASHES AGAIN, set this to `false` — one line, and the mic button and the entire voice
+ * subtree (including `expo-audio`) stop mounting. Do not spend another build on a new guess without
+ * either a device or the crash dialog's "View summary".
  */
-export const VOICE_ENABLED = false;
+export const VOICE_ENABLED = true;
