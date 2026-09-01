@@ -23,10 +23,17 @@ export function VoiceGlass({ children, style }: { children: React.ReactNode; sty
     <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.25)' }} />
   );
 
+  // ⚠️ `hasBlur()` is FALSE for now — see the header of `lib/voiceGraphics.ts`. This branch is one of
+  // the two suspects for the 2026-09-01 mic-button crash and is switched off until a real handset
+  // proves it. Kept (not deleted) so re-enabling is one flag; two things must stay right when it is:
+  //   • `blurMethod`, NOT `experimentalBlurMethod` — the latter is `@deprecated`/`@hidden` in
+  //     expo-blur 57 and only aliases the former, so shipping it merely dates the call site.
+  //   • this library renders a real backdrop blur in native code; if it aborts, it aborts the
+  //     PROCESS. No try/catch and no error boundary around it means anything.
   if (hasBlur()) {
     return (
       <View style={[box, style]}>
-        <BlurView intensity={38} tint={dark ? 'dark' : 'light'} experimentalBlurMethod="dimezisBlurView" style={FILL} />
+        <BlurView intensity={38} tint={dark ? 'dark' : 'light'} blurMethod="dimezisBlurView" style={FILL} />
         {/* contrast tint over the blur so text stays legible even where the blur is weak */}
         <View pointerEvents="none" style={{ ...FILL, backgroundColor: dark ? 'rgba(15,23,36,0.34)' : 'rgba(255,255,255,0.36)' }} />
         {topHighlight}
