@@ -1,3 +1,111 @@
+# HANDOFF — CGPE Connect (Android) — Phase 96 — 2026-09-01 (later)
+
+> **The mic crash is GONE — confirmed on the owner's handset.** Build 5 (`a9583d51`) opens voice
+> mode and holds the mic without exiting. The `'worklet'` diagnosis was right.
+>
+> **What replaced it were two REAL bugs, both ours, both now fixed** — and the owner's own screenshots
+> named them. No APK was built this session: the fixes are in `src/`, device-unverified, waiting on a
+> voice test the owner can now run in one command.
+>
+> 🔑 **The lesson of the day: three separate times the answer was "read the producer's real code, stop
+> guessing" — and twice the guesser was me.** The Expo Go failure, the login field and the brain
+> header were all settled by opening someone else's source, never by reasoning from this repo.
+>
+> ⚠️ **Do not delete the handoffs below this one.** Phases 92–95 and the archived parallel voice-track
+> handoff are still the only record of the Skia / Lottie / web-stub traps.
+
+## Done
+
+- **The mic crash is confirmed fixed on a real phone.** Voice mode opens, the orb renders, the mic
+  holds. Two APKs died there; build 5 does not.
+- **The recorder can no longer outlive the press.** `finishCapture` gated on React `state`, but on the
+  first press `startCapture` is parked on the Android permission dialog and has not called
+  `setState` yet — so the release did nothing, and when the user tapped "Allow", recording began
+  **with no finger on the button and nothing left to stop it.** That is the green mic dot in the
+  owner's 2:40 PM screenshot, still lit at 2:42. The next press then hit `expo-audio`'s own guard
+  (`AudioRecorder.kt:84`) and reported *"AudioRecorder has already been prepared"*.
+- **The 15-second recording cap is actually enforced.** `VOICE.MAX_RECORD_MS` had **zero consumers** —
+  the contract specified a hard cap and nothing anywhere applied it, so a capture that lost its
+  release grew without bound. That is the likeliest cause of the second screenshot's status-less
+  `network` failure.
+- **A build can finally be identified on the phone.** The owner's MIUI *App info* shows only
+  "Version: 1.10.0" — no build number — and the app's own Settings row showed a hard-coded string
+  identical in every build ever made. **Nothing on the handset could tell build 3 from build 5**,
+  which is exactly the question the whole day turned on. Settings now reads `1.10.0 (6)`.
+- **A failed voice turn names its own cause.** `askVoice`'s `catch` discarded the exception, so the
+  owner's second screenshot explained itself with the single word "network".
+- **Voice can now be tested from a terminal with only a login** — no phone, no APK, no build, and
+  **no server secret**. `scripts/voice-probe.mjs` signs in, prints `GET /voice/status` (which legs the
+  server has configured), and runs eight spoken clips through the real STT → brain → TTS chain.
+  `scripts/make-voice-clips.ps1` generates those clips with Windows' built-in speech engine — free,
+  local, no vendor and no credits.
+- **The brain's REAL wire shape is pinned as tests** (`brainShapes.test.ts`, 6 tests), transcribed
+  verbatim from a live probe rather than imagined.
+
+## Files changed
+
+- `src/ui/voice/useVoiceTurn.ts` — the lifecycle rewrite: `heldRef`/`liveRef` refs instead of React
+  state, one idempotent `teardown()` on every exit path, permission pre-warmed when voice mode opens,
+  an already-prepared recorder reclaimed by stopping first, `MAX_RECORD_MS` enforced.
+- `src/voice/recorderError.ts` + test — the pure `isAlreadyPreparedError`, split out because
+  `useVoiceTurn` is native and the suite cannot reach it.
+- `src/voice/client.ts` / `cause.ts` — a thrown fetch keeps its message; `describeTransport` shows it.
+- `src/voice/__tests__/brainShapes.test.ts` — real captured responses.
+- `src/voice/__tests__/client.test.ts` — one test deliberately updated: it pinned the old discarding shape.
+- `src/lib/buildInfo.ts` + test, `src/app/settings.tsx` — the real native build number.
+- `package.json` / `package-lock.json` — `expo-application`, lock synced in the same commit.
+- `scripts/voice-probe.mjs`, `scripts/make-voice-clips.ps1` — the terminal test path.
+- `docs/TESTING-WITHOUT-A-BUILD.md` — Expo Go vs OTA, with the limits of each.
+- `docs/OPS-SERVER-HANDOVER.md` §13, `../contracts/INBOX.md` — the nginx questions.
+- `.gitignore` + `.easignore` — `e2e/voice-probe/`, both in the same commit.
+
+## Decisions made
+
+- **Did NOT build an APK.** The owner asked for "no more errors" and a voice test first. Building
+  before the voice chain has been exercised once would repeat the day's mistake.
+- **Did NOT upgrade the 24 drifting SDK-57 packages** to make Expo Go work. `react-native` and
+  `reanimated` are in that list, and reanimated is where today's crash came from. Upgrading them for
+  a dev tool, on the day the release build finally stabilised, is the wrong trade.
+- **Did not file a backend priority-1 task**, because nothing proved a backend fault. Screenshot 1
+  never left the phone; screenshot 2 returned no status. Filed two cheap nginx questions instead —
+  and `cgpe-api` has **already acted**: `GET /voice/status` now reports `budget_ms`, citing our item.
+- **Used Windows' speech engine rather than a paid TTS** to make test audio — free, local, and the
+  backend's upload filter already accepts `.wav`.
+- **Told the owner plainly that "multiple commands in one query" is a contract limit**, not something
+  to loop on: one reply carries one `action`. Pinned by a test so nobody reads it as a parser bug.
+
+## Known broken / deliberately skipped
+
+- 🔴 **The two voice fixes are DEVICE-UNVERIFIED.** They are JS-only and there is still no OTA, so
+  they reach a phone only in the next APK.
+- 🔴 **Voice has never been observed working end to end by anyone.** The owner says the two server
+  keys are set; `GET /voice/status` sits behind `protect` and this session holds no credentials, so
+  it could not be confirmed. **The probe answers this in one command.**
+- **Expo Go does not work here and was abandoned.** First it was a client-version mismatch (the phone
+  needed Expo Go ≥ 57.0.9); after updating, the tunnel failed to deliver the 15 MB bundle
+  (`java.io.IOException: Failed to download remote update`). LAN mode works but needs the same WiFi.
+  **Expo Go could never have proven release safety anyway** — it runs a dev bundle with LogBox, so
+  today's fatal worklet error would have been a dismissible red box.
+- **Hindi/Hinglish voice clips cannot be generated here** — this machine has only en-US voices. The
+  probe tests the English half of the battery; the Hinglish staff actually speak still needs a Hindi
+  voice pack or a human recording.
+- **`exceedsAudioCap` still has no consumer.** The duration cap bounds clips to ~250 KB, so it is not
+  urgent, but the byte check remains dead code.
+- **The committed production secrets (`JWT_SECRET`) are still unrotated** — owner-owned, unchanged.
+
+## Next session starts here
+
+- **Phase 97: read the probe output, then build.** If `ready: true` and the clips navigate correctly,
+  build 6 with the voice fixes **+ EAS Update (OTA)** — the owner has asked for OTA three times, and
+  the baseline is now known-good, which is what was missing when it was last deferred.
+- **First command:** ask the owner for the `node scripts/voice-probe.mjs` output (they have it
+  queued), or if they have already pasted it, read `e2e/voice-probe/voice-status.json`.
+- **Watch out for:** **guessing another producer's wire format.** This session got the brain header,
+  the login field and the Expo Go failure wrong by reasoning instead of reading, three times in a row.
+  Second trap: **do not "fix" Expo Go by upgrading reanimated.**
+
+---
+
 # HANDOFF — CGPE Connect (Android) — Phases 92–95 — 2026-09-01
 
 > **Four APKs shipped today. The first three were the story: `372cd790` (vc2) and `577a4ec5` (vc3)

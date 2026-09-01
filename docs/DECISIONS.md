@@ -5650,3 +5650,83 @@ runs. **The containment reflex is right when a user is on a broken build, but it
 and three rounds of it cost more than one careful read would have.** The specific blind spot: an
 error boundary was assumed to cover a failure it structurally cannot — it catches render and commit,
 never event handlers, promise rejections or UI-thread worklets.
+
+---
+
+## 2026-09-01 (later) — Phase 96: the crash was real and fixed; what it was hiding was two bugs of ours
+
+**D-1. React state cannot gate a handler that races it — and the microphone permission dialog is the
+race.** `finishCapture` opened with `if (state !== 'listening') return`. On the FIRST press that is
+always false, because `startCapture` is parked on `ensureMicPermission()` and has not reached
+`setState('listening')` yet. The user's finger comes up, the release does nothing, the permission
+resolves, and recording starts **with no finger on the button and nothing left to stop it**. The
+owner's screenshot showed the green microphone dot still lit two minutes later, and the next press
+died on `expo-audio`'s own guard (`AudioRecorder.kt:84`: `if (recorder != null || isPrepared ||
+isRecording || isPaused) throw AlreadyPreparedException`). The lifecycle now lives in refs
+(`heldRef`, `liveRef`) plus one idempotent `teardown()` reachable from every exit path.
+**Generalisation: any handler that must undo work started by an `await`ed sibling has to read a ref,
+not state.** The same shape explains the owner's "pehli baar hold hi nahi kar paaye" — the first
+press was consumed by the dialog, which is why permission is now requested when voice mode OPENS.
+
+**D-2. A recovery path must distinguish a STATE failure from a CONFIGURATION failure.** The existing
+`prepareToRecordAsync` fallback re-prepared with the vendor preset when our modified options were
+refused — correct for an encoder that will not take mono/metering, and **useless for
+"already prepared"**, where nothing changed between the two calls and the second throw is identical.
+It therefore reported failure twice and recovered never. `isAlreadyPreparedError` (pure, tested,
+matched on the sentence expo-audio actually throws) now routes the two cases apart: stop and reclaim
+vs re-prepare with the preset. Deliberately narrow — an unrecognised error falls through to the
+options fallback, which is the safe direction.
+
+**D-3. A constant with zero consumers is not a policy.** `VOICE.MAX_RECORD_MS` (15 s) was written
+into the contract, documented as a "hard cap … with a visible countdown ring", and **enforced
+nowhere**. A capture that lost its release grew without bound, and the oversized upload that followed
+is the likeliest cause of the second screenshot's status-less `network` failure. Same defect family
+as the Phase-79 `channel` field and the Phase-77 dead `||` fallback: `tsc` and `npm test` are blind
+to a value nobody reads. `exceedsAudioCap` is still unconsumed and is now recorded as such rather
+than assumed to be doing something.
+
+**D-4. "Ask which build is installed" was an instruction nobody could follow.** `CLAUDE.md` has said
+to check `Settings › Apps › CGPE Connect → 1.10.0 (N)` before believing a bug report. The owner sent
+that exact screen from a Redmi: **MIUI prints no build number at all**, and the app's own Settings row
+showed `APP.version`, a hard-coded string identical in every build ever made. So on the day the only
+question was "is the fix installed?", **nothing on the handset could answer it**. Settings now reads
+the real native `versionCode` via `expo-application`, behind a lazy require with a pure, tested
+formatter. **An instruction that cannot be executed on the user's actual device is not a process.**
+
+**D-5. Read the producer. Three times in one session, and twice I was the one guessing.**
+(a) Expo Go's "app exits on the splash" was not our code — Metro's own log said *"Project is
+incompatible with this version of Expo Go"*, and Expo's version API confirmed SDK 57 needs client
+≥ 57.0.9. (b) The probe's login failed 400 because the field is `email_or_phone`, not `email`
+(`routes/auth.js:820`) — **the app had always been right** (`api.ts:980`); only the script assumed.
+(c) The probe's first draft invented `X-CGPE-Secret` plus a `secret` body field; the backend's real
+call is `{transcript, authToken}` with `X-CGPE-Webhook-Secret` (`voiceService.js:206-213`), so it
+would have reported `bad_secret` for all twelve commands and read as a broken brain.
+**Every one was settled by opening someone else's source; none by reasoning from this repo.**
+
+**D-6. Refused to upgrade 24 packages to make a dev tool work.** `expo install --check` reports the
+project a patch-set behind SDK 57, and that is a plausible cause of the Expo Go failure — but
+`react-native` and `react-native-reanimated` are on that list, and **reanimated is where the crash
+that cost four APKs came from**. Upgrading them to fix Expo Go, on the day the release build finally
+stabilised, trades a known-good baseline for a dev convenience. Expo Go was abandoned instead.
+Recorded because the temptation will return: it is one command and it looks harmless.
+
+**D-7. Did not escalate to the backend without evidence, and it held up.** The owner asked for a
+priority-1 backend task if the fault was theirs. Screenshot 1 never left the phone; screenshot 2
+returned no HTTP status at all, and a backend fault produces a status. So two cheap nginx questions
+were filed instead of a task — `client_max_body_size` and `proxy_read_timeout` against the proxy's
+own declared 80 s budget. **`cgpe-api` has already acted**: `GET /voice/status` now returns
+`timeouts.budget_ms` with a comment citing our item. Same discipline as Phase 91, same result.
+
+**D-8. Test speech can be generated locally for nothing.** Exercising `POST /api/voice/ask` needs
+real audio, and the obvious routes cost money (a TTS vendor) or a person (recording by hand).
+Windows ships `System.Speech`, the backend's upload filter already accepts `.wav`
+(`routes/voice.js:47`), and **the audio path needs only a login — the backend holds the brain secret
+and makes that call itself**. So the whole feature is testable from a terminal by someone who cannot
+see the droplet's `.env`. Limit stated at the file: this machine has only en-US voices, so the
+Hinglish half still needs a voice pack or a human.
+
+**D-9. "Multiple commands in one query" is a contract limit, and saying so beat looping on it.** A
+reply carries exactly one `action` (`voice/response.ts`), so a two-instruction sentence can only ever
+produce one outcome; supporting it needs the brain to return a list and the app to execute in order.
+Writes are dark in v1 regardless, so the "create a task" half would not run either. Pinned by a test
+so a later reader does not mistake it for a parser bug and try to fix it in the wrong repo.

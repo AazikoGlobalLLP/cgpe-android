@@ -14,6 +14,85 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-09-01 (later) — PHASE 96: THE CRASH IS CONFIRMED FIXED ON A REAL HANDSET.** Build 5
+(`a9583d51`, versionCode 5) opens voice mode, renders the orb and holds the mic without exiting. The
+`'worklet'` diagnosis was right. **No new APK was built this session** — see "Next 3".
+
+**What the fix uncovered were two REAL bugs, both ours, both now fixed (`e54e95e`).** The owner's own
+screenshots named them:
+
+- 🔑 **`AudioRecorder has already been prepared` — a leaked recorder.** `finishCapture` gated on React
+  `state`, but on the FIRST press `startCapture` is parked on the Android microphone permission
+  dialog and has not called `setState('listening')` yet. The release therefore did nothing, and when
+  the user tapped "Allow", recording started **with no finger on the button and nothing left to stop
+  it** — the green mic dot in the 2:40 PM screenshot, still lit at 2:42. The next press then hit
+  `expo-audio`'s own guard (`AudioRecorder.kt:84`). The lifecycle now lives in refs (`heldRef`,
+  `liveRef`) with one idempotent `teardown()` on every exit path, and **permission is requested when
+  voice mode OPENS**, which is also why the first hold never worked.
+- 🔑 **`VOICE.MAX_RECORD_MS` (15 s) had ZERO consumers.** The contract specified a hard cap and
+  nothing enforced it, so the leaked capture grew without bound. That oversized upload is the
+  likeliest cause of the second screenshot's status-less `network` error. Enforced now.
+
+**And a failed turn now names its own cause** — `askVoice`'s `catch` discarded the exception, so that
+second screenshot explained itself with the single word "network".
+
+---
+
+**🔎 VOICE IS NOW TESTABLE FROM A TERMINAL — no phone, no APK, and NO SERVER SECRET.**
+`node scripts/voice-probe.mjs` (needs only `CGPE_EMAIL` + `CGPE_PASSWORD`) signs in, prints
+`GET /voice/status` — the definitive answer to "are the voice keys set?" — and runs eight spoken
+clips through the real STT → brain → TTS chain. **The audio path needs only a login because the
+BACKEND holds the brain secret and makes that call itself.** Clips are generated locally and free by
+`scripts/make-voice-clips.ps1` (Windows' built-in speech engine; the backend already accepts `.wav`).
+⚠️ Only en-US voices exist on this machine, so it tests the English half; Hinglish still needs a voice
+pack or a human recording. **The owner has this queued — the output is the next thing to read.**
+
+---
+
+**🆔 A BUILD CAN FINALLY BE IDENTIFIED ON THE PHONE (`9ecaa9e`).** `CLAUDE.md` has long said "ask which
+build is installed before believing a bug report" and pointed at `Settings › Apps → 1.10.0 (N)`. The
+owner sent that exact screen from a Redmi: **MIUI prints no build number**, and the app's own Settings
+row showed a hard-coded string identical in every build ever made. On the one day the only question
+was "is the fix installed?", nothing on the handset could answer it. **Settings now reads the real
+native versionCode.**
+
+---
+
+**🔴 STILL TRUE:** the two voice fixes are **device-unverified** (JS-only, and there is still no OTA),
+**nobody has yet observed voice working end to end**, and the committed production `JWT_SECRET`
+remains unrotated (owner-owned).
+
+---
+
+## Next 3 — as of 2026-09-01 (after Phase 96)
+
+1. **READ THE PROBE OUTPUT, THEN BUILD — in that order.** `GET /voice/status` settles whether the
+   server's voice keys are actually set (`ready: true` vs `missing: [...]`), and the eight clips show
+   what each command is heard as and which screen it opens. **If `ready` is false, it is an OPS task
+   and no APK will fix it.** Building before this runs would repeat the day's mistake.
+2. **THEN BUILD 6 = the voice fixes + EAS UPDATE (OTA).** The owner has now asked for OTA three
+   times. It was deliberately kept out of all four 1 Sep builds because it adds a native module and
+   changes the boot path, and those were builds fixing a crash — **that objection is now spent: the
+   baseline is known-good on a handset.** After it, a JS fix reaches all 21 phones in ~30 seconds.
+3. 🔴 **THE COMMITTED PRODUCTION SECRETS — unchanged and still the most serious open item.**
+   `Aaziko1Market1/cgpe-backend` `docs/OPS-ENV-HANDOVER.md` (`1624f8a`), 21 real values including
+   `JWT_SECRET`, on three pushed branches. Rotation, not deletion. Owner picks the moment.
+
+*(Then: Hindi test clips; re-enabling Skia/blur/Lottie, each needing its own device test; the
+unexplained "view as preview" report; and i18n Batches 6h/6f/5/6b, all owner-copy-blocked.)*
+
+⚠️ **Two traps for whoever runs Phase 97.** First: **do not "fix" Expo Go by upgrading the 24 drifting
+SDK-57 packages** — `react-native` and `reanimated` are on that list, and reanimated is where the
+crash that cost four APKs came from. Expo Go was abandoned on purpose (client-version mismatch, then
+a tunnel that could not deliver the 15 MB bundle) and **could never have proven release safety
+anyway**: it runs a dev bundle with LogBox, so today's fatal error would have been a dismissible red
+box. Second: **do not guess another producer's wire format** — this session got the brain header, the
+login field and the Expo Go failure wrong by reasoning instead of reading, three times in a row.
+
+---
+
+## Superseded — Now, as of 2026-09-01 (after Phase 95)
+
 **✅ 2026-09-01 — PHASE 95: THE MIC CRASH HAS A NAMED CAUSE, AND IT IS FIXED. Shipped as
 `a9583d51` (v1.10.0 / **versionCode 5**, from `5b46e7b`) —
 `https://expo.dev/artifacts/eas/GJi0qKe07rj51-Cce7uH09rpXXtsvLD7-_Vh2MTtupc.apk`
@@ -57,7 +136,7 @@ evidence they are unset, **not confirmation**. One command settles it:
 
 ---
 
-## Next 3 — as of 2026-09-01 (after Phases 92–95)
+## Superseded — Next 3 as of 2026-09-01 (after Phases 92–95)
 
 1. **CONFIRM `a9583d51` (vc5) ON A REAL HANDSET.** Everything else is blocked behind this. Two builds
    shipped today that crashed, and **all four gates were green on both** — `tsc`, `npm test`,

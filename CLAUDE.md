@@ -563,6 +563,60 @@ the failure occurs in first.** `ui/FeatureBoundary.tsx` is still correct for ren
 an optional feature (it removes the feature instead of unmounting the React root and erasing the
 back stack) and its limits are written at the file. Do not widen the claim.
 
+## Testing voice WITHOUT a phone, an APK, or a server secret (2026-09-01, Phase 96)
+
+`node scripts/voice-probe.mjs` — needs only `CGPE_EMAIL` + `CGPE_PASSWORD` in the shell. It signs in,
+prints **`GET /voice/status`** (which legs the server has configured — the definitive answer to "are
+the voice keys set?", names only, never values), then runs every clip in `e2e/voice-probe/audio/`
+through the real **STT → brain → TTS** chain and prints what was heard, which screen would open, and
+what it said back. Generate the clips first, free and locally:
+`powershell -ExecutionPolicy Bypass -File scripts\make-voice-clips.ps1`.
+- 🔑 **The audio path needs NO `CGPE_VOICE_SECRET`** — the backend holds the brain secret and makes
+  that call itself. The secret only unlocks the extra text-only battery straight to the brain.
+- **Windows' `System.Speech` writes the test clips for nothing** (no vendor, no credits), and the
+  backend's own filter already accepts `.wav` (`routes/voice.js:47`). ⚠️ This machine has only en-US
+  voices, so it tests the ENGLISH half; the Hinglish staff speak needs a voice pack or a human.
+- ⚠️ **Multi-command in one query is a CONTRACT limit, not a bug** — one reply carries one `action`
+  (`voice/response.ts`), and writes are dark in v1. Pinned by `brainShapes.test.ts`; do not "fix" it.
+- `src/voice/__tests__/brainShapes.test.ts` holds responses **transcribed verbatim from the wire**,
+  with the capturing command beside each. `response.test.ts` proves we handle JSON we *imagined* —
+  a weaker claim, since parser and fixtures share an author. Add real captures here, not there.
+
+🔴 **EXPO GO IS A DEAD END HERE — do not spend a session on it again.** Two independent failures on
+2026-09-01: the phone's client was older than SDK 57 (needs Expo Go Android **≥ 57.0.9**, confirmed
+against `https://api.expo.dev/v2/versions/latest`), and after updating, the tunnel could not deliver
+the 15 MB bundle (`java.io.IOException: Failed to download remote update`). LAN mode works but needs
+the same WiFi. **And it could never prove release safety anyway**: Expo Go runs a DEV bundle with
+LogBox, so the fatal worklet error that cost four APKs would have been a dismissible red box.
+⚠️ **`expo install --check` reports 24 packages behind the SDK-57 patch set, and upgrading them is the
+obvious "fix" — DON'T.** `react-native` and `react-native-reanimated` are on that list, and reanimated
+is where the crash came from. Do not trade a known-good release baseline for a dev tool. Full
+write-up, with the honest limits of each route: `docs/TESTING-WITHOUT-A-BUILD.md`.
+
+## React state cannot gate a handler that races an `await` (2026-09-01, Phase 96)
+
+`finishCapture` opened with `if (state !== 'listening') return`. On the **first** press that is always
+false, because `startCapture` is parked on the Android microphone permission dialog and has not
+reached `setState('listening')`. The release did nothing; the permission then resolved and recording
+began **with no finger on the button and nothing left to stop it** — a microphone left open for
+minutes, and the next press dying on `expo-audio`'s own guard (`AudioRecorder.kt:84`,
+*"AudioRecorder has already been prepared"*).
+- **Any handler that must undo work an `await`ed sibling started has to read a REF, not state.**
+  `useVoiceTurn` now uses `heldRef` (button down *now*) + `liveRef` (recorder needs teardown) and one
+  **idempotent `teardown()` reachable from every exit path** — released button, thrown prepare,
+  `close()`, unmount. There was previously no single place that guaranteed teardown, so every path
+  that did not go through `finishCapture` simply leaked.
+- **Ask for a permission when the SURFACE OPENS, not on first use.** The dialog is modal and eats the
+  gesture, which is why the owner's very first hold never worked.
+- ⚠️ **A recovery path must separate a STATE failure from a CONFIGURATION one.** The preset-fallback
+  re-prepare is right when the encoder refuses our mono/metering options and **useless** for
+  "already prepared", where nothing changed and the second throw is identical. `isAlreadyPreparedError`
+  (`src/voice/recorderError.ts`, pure + tested) routes them apart. Keep it narrow — an unrecognised
+  error must fall through to the options fallback.
+- ⚠️ **`VOICE.MAX_RECORD_MS` had ZERO consumers** until this phase: a documented "hard cap" that
+  nothing enforced, so a leaked capture grew without bound. Same family as the Phase-79 `channel`
+  field. **`exceedsAudioCap` is STILL unconsumed** — know that before relying on it.
+
 ## Voice: two switches, and why both are where they are (2026-09-01)
 
 - **`VOICE_ENABLED`** (`src/voice/enabled.ts`) — the whole feature. `false` means `VoiceLauncher`
@@ -589,10 +643,18 @@ back stack) and its limits are written at the file. Do not widen the claim.
 - ✅ **`eas.json`'s `preview` profile carries `autoIncrement`.** versionCode went 1 → 2 → 3 → 4 → 5 on
   2026-09-01. Before that **every** preview build was versionCode 1 and only an APK SHA-256 could
   tell two builds apart. **The next build is versionCode 6 — never describe it as fixed.**
-- ⚠️ **ASK WHICH BUILD IS INSTALLED BEFORE BELIEVING A BUG REPORT:**
-  `Settings › Apps › CGPE Connect → 1.10.0 (N)`. This was never confirmed for vc3, and the owner
-  reported the APK link **opening in a browser** on some handsets — which makes re-installing an
-  older downloaded file easy, and leaves a whole debugging round unfalsifiable.
+- ⚠️ **ASK WHICH BUILD IS INSTALLED BEFORE BELIEVING A BUG REPORT — but ask INSIDE THE APP, at
+  `Settings › Version`, NOT in Android's App info.** 🔴 **This line used to send you to
+  `Settings › Apps › CGPE Connect → 1.10.0 (N)`, and on the owner's Redmi that screen prints NO BUILD
+  NUMBER AT ALL — just "Version: 1.10.0" (screenshot, 2026-09-01).** MIUI hides `versionCode`. Worse,
+  the app's own Settings row showed `APP.version`, a **hard-coded string identical in every build ever
+  made**, so on the one day the entire question was "is the fix installed?", *nothing on the handset
+  could answer it* and a whole debugging round was unfalsifiable. Fixed in `9ecaa9e`:
+  `src/lib/buildInfo.ts` reads `expo-application`'s `nativeBuildVersion` behind a lazy require (native
+  module — the module-scope-throw trap) with the pure, tested `formatBuild` beside it, so **Settings
+  now reads `1.10.0 (6)`**. Keep that row working; it is the only build discriminator a user can read.
+  🔑 **General rule this bought: an instruction that cannot be executed on the user's actual device is
+  not a process. If you write "ask the user to check X", confirm X exists on THEIR phone.**
 - 📊 **THE FREE-PLAN QUOTA IS 15 ANDROID BUILDS PER MONTH — measured, not quoted.** August ran
   **15** and then refused; July ran 13 and did not. Four were used on 1 Sep. **The old "quota is
   precious" anxiety was out of proportion — but the discipline it produced is still right for a
