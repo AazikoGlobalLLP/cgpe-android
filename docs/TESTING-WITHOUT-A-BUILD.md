@@ -50,6 +50,41 @@ for Node on first run, allow it on private networks or the phone cannot reach po
 2. Scan the QR code the command prints, or open the `exp://…` link it shows.
 3. The app loads over the network. **Edit a file, save, and the phone reloads by itself.**
 
+### 🔴 FIRST FAILURE MODE, AND IT LOOKS EXACTLY LIKE AN APP CRASH
+
+**Symptom (owner, 2026-09-01):** the logo appears, something flashes on the splash, the app exits.
+Five or six times in a row. It reads as a boot crash in our code. **It is not.** Metro's own log said:
+
+```
+ERROR  Project is incompatible with this version of Expo Go
+This project requires a newer version of Expo Go.
+```
+
+The phone's Expo Go was older than the project's SDK. Expo Go supports **one SDK at a time**, and this
+project is **SDK 57**, which needs Expo Go Android client **57.0.9 or newer** (confirmed against
+`https://api.expo.dev/v2/versions/latest`, not from memory). Fix: **Play Store → Expo Go → Update.**
+
+🔑 **The reusable lesson: when Expo Go misbehaves, READ THE METRO LOG BEFORE READING THE CODE.** The
+phone shows a flash you cannot photograph; the terminal running `expo start` prints the actual reason.
+That one line saved a debugging round, exactly as `voice/cause.ts` was written to do for the app.
+
+### Connecting from a DIFFERENT network (phone on mobile data, PC on ethernet)
+
+`--tunnel` is the answer, and **it works** — the 2026-09-01 failure was a transient ngrok outage; the
+identical command succeeded minutes later ("Tunnel connected. Tunnel ready."). Verified end to end
+from the public internet: `HTTP 200`, `runtimeVersion: exposdk:57.0.0`.
+
+The URL looks like `exp://<randomness>-<expo-account>-<port>.exp.direct` and is printed as a QR code in
+an interactive terminal. From a non-interactive shell, read it instead:
+
+```
+cat .expo/settings.json          # -> {"urlRandomness":"a3wWP2I"}
+curl -s http://localhost:<port> -H "expo-platform: android"   # -> launchAsset.url carries the host
+```
+
+`urlRandomness` is **persisted in `.expo/settings.json`**, so the tunnel URL stays the same across
+restarts of the dev server. It changes only if that file is deleted (`.expo/` is gitignored).
+
 ### What Expo Go runs perfectly well here
 
 Everything the voice feature needs: `expo-audio` (the recorder, the microphone permission flow, the
