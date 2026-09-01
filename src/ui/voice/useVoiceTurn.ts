@@ -122,6 +122,7 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   }, []);
 
   const startCapture = useCallback(async () => {
+    let firstPrepareError: unknown = null;
     if (busy.current) return;
     setError(null);
     setCause(null);
@@ -137,12 +138,26 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       setState('listening');
       startedAtRef.current = Date.now();
       await voiceAudio.beginCaptureSession();
-      await recorder.prepareToRecordAsync();
+      // The hook is prepared with HIGH_QUALITY *modified* — mono, plus metering for the waveform.
+      // Mono was a bandwidth optimisation, not a requirement, and Android's AAC encoder is entitled
+      // to refuse a channel/sample-rate/bitrate combination the vendor never shipped as a preset.
+      // So: try our options, and if the encoder rejects them, prepare again with the UNMODIFIED
+      // preset before giving up. `prepareToRecordAsync` takes per-call overrides, so this costs one
+      // extra call only on a device that would otherwise have failed outright. Speech-to-text does
+      // not care how many channels it gets; a user who cannot record at all does.
+      try {
+        await recorder.prepareToRecordAsync();
+      } catch (optErr) {
+        // Keep the FIRST error: it names the option the encoder objected to, which is the useful
+        // one. If the fallback also throws, the outer catch reports that instead.
+        firstPrepareError = optErr;
+        await recorder.prepareToRecordAsync(RecordingPresets.HIGH_QUALITY);
+      }
       recorder.record();
     } catch (e) {
       // The recorder is the likeliest thing to fail on a handset we have never tested on, and it is
       // the one failure the user CAN see. Keep what it actually said.
-      fail(t('voice.failed'), describeCause(e));
+      fail(t('voice.failed'), describeCause(firstPrepareError ?? e));
     }
   }, [recorder, toast, t, fail]);
 
