@@ -193,12 +193,16 @@ describe('permanent vs transient outage', () => {
     expect(r).toEqual({ ok: false, transport: 'server', status: 503 });
   });
 
-  it('a thrown fetch is a network transport error', async () => {
-    const fetchSpy = vi.fn(async () => { throw new Error('down'); });
+  // CHANGED 2026-09-01: this used to assert the exception was DISCARDED. An owner screenshot showed a
+  // failed turn whose whole on-screen explanation was the word "network" — no status to read (there
+  // is none for a transport failure) and no message, so nobody could tell a dropped connection from a
+  // missing file. The thrown message now rides along; the transport kind is unchanged.
+  it('a thrown fetch is a network transport error, and KEEPS what was thrown', async () => {
+    const fetchSpy = vi.fn(async () => { throw new Error('Network request failed'); });
     vi.stubGlobal('fetch', fetchSpy);
     const client = await load('real-jwt-token');
     const r = await client.askVoice(INPUT);
-    expect(r).toEqual({ ok: false, transport: 'network' });
+    expect(r).toEqual({ ok: false, transport: 'network', detail: 'Network request failed' });
     expect(fetchSpy).toHaveBeenCalledTimes(1); // exactly once — never retried
   });
 

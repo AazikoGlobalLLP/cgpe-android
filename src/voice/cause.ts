@@ -46,6 +46,10 @@ export function describeCause(e: unknown): string | null {
  * already explains itself, because knowing the status behind it (404 = not deployed vs 503 = keys
  * unset) is exactly the distinction OPS needs and the sentence deliberately hides.
  */
-export function describeTransport(transport: string, status?: number): string {
-  return status ? `${transport} (HTTP ${status})` : transport;
+export function describeTransport(transport: string, status?: number, detail?: string | null): string {
+  const head = status ? `${transport} (HTTP ${status})` : transport;
+  const tail = (detail ?? '').replace(/\s+/g, ' ').trim();
+  if (!tail) return head;
+  const line = `${head} — ${tail}`;
+  return line.length > MAX ? `${line.slice(0, MAX - 1)}…` : line;
 }

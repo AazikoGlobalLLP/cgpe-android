@@ -54,3 +54,38 @@ describe('describeTransport', () => {
     expect(describeTransport('timeout')).toBe('timeout');
   });
 });
+
+/**
+ * The `detail` arm — added 2026-09-01 after an owner screenshot showed a failed voice turn whose
+ * entire explanation was the word "network". A transport failure never has a status to print, so
+ * without the thrown message there is nothing on screen to act on.
+ */
+describe('describeTransport — the detail arm', () => {
+  it('appends the real fetch message to a network failure', () => {
+    expect(describeTransport('network', undefined, 'Network request failed'))
+      .toBe('network — Network request failed');
+  });
+
+  it('keeps the status AND the detail when both exist', () => {
+    expect(describeTransport('server', 502, 'upstream closed'))
+      .toBe('server (HTTP 502) — upstream closed');
+  });
+
+  it('is unchanged when there is no detail — the old behaviour is preserved exactly', () => {
+    expect(describeTransport('unconfigured', 503)).toBe('unconfigured (HTTP 503)');
+    expect(describeTransport('network')).toBe('network');
+    expect(describeTransport('network', undefined, null)).toBe('network');
+    expect(describeTransport('network', undefined, '   ')).toBe('network');
+  });
+
+  it('collapses a multi-line native message so the banner stays a banner', () => {
+    expect(describeTransport('network', undefined, 'failed\n  at okhttp\n  at java'))
+      .toBe('network — failed at okhttp at java');
+  });
+
+  it('truncates rather than letting a stack take over the screen', () => {
+    const out = describeTransport('network', undefined, 'x'.repeat(500));
+    expect(out.length).toBeLessThanOrEqual(160);
+    expect(out.endsWith('…')).toBe(true);
+  });
+});

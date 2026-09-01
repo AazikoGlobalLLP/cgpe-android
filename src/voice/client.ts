@@ -25,6 +25,7 @@ import { API_BASE_URL, APP, FORCE_DEMO } from '@/constants/config';
 import { getAuthToken, isRealSession } from '@/data/api';
 import { VOICE } from '@/voice/constants';
 import { parseVoiceReply, type VoiceReply, type VoiceReplyError } from '@/voice/response';
+import { describeCause } from '@/voice/cause';
 import type { VoiceLangCode } from '@/voice/request';
 import type { Turn } from '@/voice/session';
 
@@ -41,6 +42,15 @@ export type VoiceTransportError = {
   ok: false;
   transport: 'timeout' | 'network' | 'server' | 'unconfigured' | 'unauthenticated';
   status?: number;
+  /**
+   * What the `fetch` actually threw, when it threw. A `network` result means we never received a
+   * status — the connection failed — and until 2026-09-01 the `catch` discarded the exception, so
+   * the banner showed the user the bare word "network" and a screenshot carried nothing anyone
+   * could act on. This is the same mistake `voice/cause.ts` was written to end, still living in the
+   * one place `cause.ts` could not reach. `Network request failed`, a DNS error and a broken pipe
+   * are different faults with different owners; the message is what tells them apart.
+   */
+  detail?: string;
 };
 
 /**
@@ -137,8 +147,12 @@ export async function askVoice(a: AskVoiceInput): Promise<AskVoiceResult> {
     // parseVoiceReply turns a null / empty / malformed 200 body into a VoiceReplyError (with transcript
     // if present) — so a broken n8n reply is a handled failure, not a throw.
     return parseVoiceReply(json);
-  } catch {
-    return { ok: false, transport: timedOut ? 'timeout' : 'network' };
+  } catch (e) {
+    // A timeout aborts through the same catch, but there the reason is already known and the
+    // abort's own message ("Aborted") would be noise — so only a genuine network fault reports one.
+    return timedOut
+      ? { ok: false, transport: 'timeout' }
+      : { ok: false, transport: 'network', detail: describeCause(e) ?? undefined };
   } finally {
     clearTimeout(timer);
   }
