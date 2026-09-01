@@ -14,6 +14,43 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**🔴 2026-09-01 — PHASE 94: VOICE IS SWITCHED OFF. Two builds crashed, two rounds of containment
+failed, and the honest call was to stop shipping the feature rather than guess a third time.**
+Commit `4e55b70`.
+- **WHAT HAPPENED.** `372cd790` (vc2) and `577a4ec5` (vc3) both exit to *"CGPE Connect keeps
+  stopping"* when the mic is pressed. Phase 93 switched off the Skia orb and the blur backend and
+  wrapped both components in a `FeatureBoundary`; **neither stopped it.** So the two suspects Phase 93
+  named were, at best, not the whole story.
+- 🔑 **THE MECHANISM PHASE 93 MISSED, AND IT IS THE REUSABLE PART: A REACT ERROR BOUNDARY DOES NOT
+  CATCH AN EVENT HANDLER OR A PROMISE REJECTION.** It covers render and commit only. And a release
+  build has no LogBox, so an unhandled JS error is reported as **fatal** and takes the process down —
+  **to the user that is indistinguishable from a native crash.** `onPressIn`/`onPressOut` call `async`
+  functions without awaiting them, so that path was wide open the whole time and the boundary added
+  in Phase 93 could never have covered it. Both are now `.catch()`-ed. **Do not reason about "the
+  boundary protects this" without checking WHICH phase the code runs in.**
+- **WHY OFF AND NOT ANOTHER GUESS — three facts that only matter together.** (1) It crashes the app,
+  not the feature. (2) **It cannot work even when it does not crash**: `/api/voice/ask` is deployed
+  but answers `503 not_configured` — `voiceConfig()` needs `ready = stt && brain` and OPS has set
+  neither `SARVAM_API_KEY` nor `N8N_VOICE_BRAIN_URL`, so the button's BEST outcome today is a polite
+  apology. (3) It cannot be diagnosed from here — a native abort leaves nothing in JS, there is no
+  device access (the owner declined USB debugging) and no crash reporting in the build, so every
+  remaining hypothesis costs one APK tested on 21 handsets that need a working app more than they
+  need this.
+- **`VOICE_ENABLED = false` (`src/voice/enabled.ts`)** → `VoiceLauncher` renders **no button**, and
+  `VoiceModeInner` is never mounted, so `expo-audio`, the Reanimated voice surfaces and every other
+  voice import never load. **The crash is not contained; the code path ceases to exist.** That is the
+  only guarantee available without a handset.
+- **TWO STRUCTURAL FIXES THAT OUTLIVE THE SWITCH.** `VoiceMode` is split into a shell reading ONE
+  context value and an inner component holding every other hook — `useVoiceTurn` → `useAudioRecorder`
+  used to sit **above** the `if (!isOpen) return null`, so a native recorder was constructed on
+  **every app boot** for a screen almost nobody opens. And the async event handlers are caught.
+- **TO RE-ENABLE, BOTH MUST HOLD:** OPS has set the two env keys and restarted `:3001`, **and**
+  someone opens voice mode on a real handset before it reaches the team. All four gates were green on
+  both crashing builds and always will be — **they cannot see this class of fault.**
+- ⚠️ **UNRESOLVED, AND SAID PLAINLY: we still do not know what crashes.** Skia and blur remain off
+  from Phase 93, so if the fault was theirs it is gone; if it was not, it is now merely unreachable.
+  The `cause.ts` breadcrumb from Phase 93 is still in place for whenever voice is turned back on.
+
 **🔴 2026-09-01 — PHASE 93: THE VOICE APK CRASHED ON EVERY HANDSET, AND THE GATES WERE ALL GREEN ON
 IT. The build `372cd790` shipped and tapping the mic button killed the app to "CGPE Connect keeps
 stopping".** Fixed across four commits (`265ba83`, `6a8c408`, `6acfa54`, `5885792`) and shipped as

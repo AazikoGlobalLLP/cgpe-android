@@ -5573,3 +5573,42 @@ August ran 15 Android builds and then refused; July ran 13 and did not. So the f
 15/month, and September has used one. The earlier sessions' anxiety about the quota was not
 proportionate to the real limit — but the discipline it produced (verify before spending) was right
 for a different reason, and should survive knowing the number.
+
+## 2026-09-01 — Phase 94 (voice switched off)
+
+**D-1. Stopped guessing after two failed containments.**
+Phase 93 named Skia and expo-blur as the only two surfaces that first render on tap, switched both
+off, and the crash survived. At that point a third hypothesis would have cost another APK on 21
+handsets, tested by a user who has already lost a working app twice today. The correct move was to
+remove the feature from the screen, not to keep betting.
+
+**D-2. The deciding argument is that the feature cannot work anyway.**
+`/api/voice/ask` answers `503 not_configured` because OPS has set neither `SARVAM_API_KEY` nor
+`N8N_VOICE_BRAIN_URL`. So switching voice off costs the user **nothing they currently have** — the
+best case today was a button that apologises. Had voice been working, this would have been a much
+harder call and I would have put it to the owner rather than taken it.
+
+**D-3. Off means NOT MOUNTED, not hidden.**
+`VoiceLauncher` returning `null` removes the button, and the `VoiceMode` shell returning `null`
+before `VoiceModeInner` means `expo-audio`, Reanimated's voice surfaces and every voice import never
+load. Hiding the button while leaving the subtree mounted would have left the boot-time
+`useAudioRecorder` in place — a native module still being constructed for a feature nobody can reach.
+
+**D-4. A React error boundary was the wrong tool and I said otherwise in Phase 93.**
+Boundaries cover render and commit. They do **not** cover event handlers or promise rejections, and
+`onPressIn`/`onPressOut` call `async` functions unawaited. In a release build (no LogBox) an
+unhandled JS error is reported as fatal and kills the process, which looks exactly like a native
+crash. So Phase 93's `FeatureBoundary` could never have protected this path, and my description of
+it as containment for "our bugs" was wrong in the one place it mattered. Both handlers are now
+caught. The boundary stays — it is still right for render-phase faults.
+
+**D-5. Split `VoiceMode` rather than adding another guard.**
+`useVoiceTurn` → `useAudioRecorder` sat above the `if (!isOpen) return null`, so a native audio
+recorder was constructed on every app boot for a screen almost nobody opens. Hooks cannot be
+conditional, so the fix is structural: a shell that reads one context value, and an inner component
+that holds everything else. This is worth keeping whatever happens to the switch.
+
+**D-6. Did not claim the crash is fixed.**
+It is unreachable, which is not the same thing. Skia and blur remain off from Phase 93; if the fault
+was theirs it is gone, and if it was not, it is simply no longer reachable. Saying "fixed" here would
+be the third confident-but-unverified claim in one day.
