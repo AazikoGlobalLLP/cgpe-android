@@ -1,33 +1,32 @@
 # Status — CGPE Connect (Android)
+**Updated:** 1 September 2026
 
-**Updated:** 31 August 2026
-
-**Working on right now:** Getting the updated app onto the team's phones — everything is built and
-checked, and we are waiting for the monthly build allowance to reset tomorrow.
+**Working on right now:** The new app build is finished and ready to install on the team's phones.
 
 **Done this week:**
-- Finished and checked all the app work that has been waiting since 25 August — the extra languages,
-  the document-upload fix, the voice assistant, and the travel-tracking correction. All of it is
-  ready; none of it is on anyone's phone yet.
-- Found and fixed a serious security problem in how the app is packaged for release: every build we
-  sent to the build service was also sending the app's signing key, its passwords, and the key that
-  lets us send notifications. None of this was ever public, and nothing was stolen — but it should
-  never have been travelling with the build, and it no longer does.
-- Discovered our build uploads had been 58 times larger than necessary for months, because a settings
-  file was quietly overriding another. Fixed — uploads are now seconds instead of minutes.
-- Reviewed the admin panel's "Relationship map" screen that was reported as hard to read, and sent the
-  panel team a precise list of what is wrong. The main problem is that its headings show the wrong
-  counts — it says "5 tabs" above 7 items — so nobody can trust what they are reading.
-- Checked three long-standing complaints about the admin panel before passing them on, and found two
-  of them were no longer true: one had already been fixed weeks ago, and one had been described
-  inaccurately. That saved the panel team from chasing problems that do not exist.
+- The new version of the app is built and can be installed today. It is the first update the team
+  has had since 25 August, and it carries about six weeks of work — the five-language screens, the
+  travel-tracking fix, the file-upload repair, and the voice assistant.
+- This build is also the first one a person can identify on their own phone. Every previous build
+  showed the same version number, so nobody could tell which one they had. This one shows a
+  different number, so it is obvious whether a phone has been updated.
+- The main office server was updated today as well, and we checked the whole of that update against
+  the app before anything went out. One real problem turned up and was fixed the same morning: when
+  part of the server was struggling, the manager dashboard was quietly showing "0 claims" as if that
+  were the true figure. It now says plainly that the number could not be loaded.
+- We also found that the server update had broken file uploads for anyone still on the old app —
+  photos and documents saved a link that stopped working after five minutes. The new build fixes it,
+  which is a large part of why installing it matters.
 
-**Blocked on:** Two things, both outside the app team. The monthly allowance for building the app
-resets tomorrow, 1 September — until then the updated app cannot reach any phone. And the server
-changes written over the past two weeks have still not been put live, so the document uploads and the
-voice assistant will not work on the phones even after the app is installed. One of those pending
-server changes also fixes a problem we found this week: notices sent to the team are currently
-recorded and reported as delivered, but nobody actually receives them.
+**Blocked on:**
+- **Two passwords for the server.** The voice assistant is completely built and installed in this
+  new version, but it cannot talk until the server engineer adds two missing keys and restarts the
+  service. Until then it politely says it has not been switched on yet. Nothing more is needed from
+  the app side.
+- **A security clean-up that only you can approve.** A file in the other team's code repository
+  contains real production passwords, including the one that protects every user's login. It needs
+  to be replaced rather than just deleted. Changing it will sign everybody out once, so you should
+  pick the moment.
 
-**Next:** Build the updated app tomorrow morning and get it onto the 21 handsets, then confirm the
-server changes are put live.
+**Next:** Get the new app onto a phone and walk through the main screens to confirm everything
+behaves as expected before it goes to the whole team.

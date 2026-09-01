@@ -100,7 +100,29 @@ IS A REAL-LOOKING ZERO ON THE MASTER DASHBOARD.** Commit `5775918`. Gates: `tsc`
 
 ---
 
-**🔜 NEXT — PHASE 90: THE POST-QUOTA APK. ATTEMPTED 2026-08-31 AND REFUSED; RESUME ON 1 SEP.** The
+**✅ 2026-09-01 — PHASE 90 IS DONE. THE APK EXISTS.** Build **`372cd790-5749-4a89-82c7-4912b81db2db`**,
+status **FINISHED**, from commit **`ae0b2c2`**. **v1.10.0 / versionCode 2** — the first preview build
+that is not versionCode 1, so it can be told apart from `093a3b33` on the phone itself instead of by
+hashing `base.apk`. Direct download:
+`https://expo.dev/artifacts/eas/16bu6Jxg2DlQmR8K4cRLTRz5dhL2qVlrfDBffWHJJJQ.apk`
+(**artifact expires 2026-09-15** — re-build or re-host after that).
+- **The quota really had reset**, and `EAS_SKIP_AUTO_FINGERPRINT=1` skipped the Windows fingerprint
+  trap as designed. **The archive uploaded at 7.1 MB** — the `.easignore` fix (`4a12899` + `954a0a4`)
+  held on a real build, which is the verification the previous session could not do: no
+  Playwright video, no keystores, no `credentials.json`, no Firebase key, and nothing
+  build-essential missing.
+- **It carries Phases 80–92** to the ~21 handsets that were on `093a3b33` (25 Aug), including the
+  Phase 88 upload fix that stops today's deploy persisting 300-second dead links, the whole voice
+  track (inert until the server env is set), the i18n work and the boundary-attribution fix.
+- **Next: device QA**, which is the gate everything built since 25 Aug has been waiting on.
+  `docs/DEVICE-TESTING-GUIDE-v1.10.0.md` is the walk-through; install over the old build (no
+  uninstall needed — versionCode 2 > 1, so sessions, clock keys and the offline queue survive).
+- ⚠️ **Voice will still say "not switched on"** on this APK until OPS sets `SARVAM_API_KEY` and
+  `N8N_VOICE_BRAIN_URL` and restarts `:3001`. That is expected and honest, not a build fault.
+
+---
+
+**✅ SUPERSEDED — PHASE 90 AS IT STOOD ON 2026-08-31: ATTEMPTED AND REFUSED.** The
 build was launched with gates green and the quota **was still exhausted**: *"used its Android builds
 from the Free plan this month, which will reset in **18 hours** (on Tue Sep 01 2026)"* →
 `Error: build command failed`, **no build created**, newest is still `093a3b33` (25 Aug). ⚠️ **"Resets
