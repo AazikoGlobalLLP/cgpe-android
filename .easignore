@@ -66,3 +66,6 @@ credentials/
 *-firebase-adminsdk-*.json
 google-service-account*.json
 .env*.local
+
+# Voice probe captures
+e2e/voice-probe/

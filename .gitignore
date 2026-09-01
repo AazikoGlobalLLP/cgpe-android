@@ -61,3 +61,6 @@ playwright-report/
 # here. The .jks is already ignored above; this file must never be committed either.
 credentials.json
 credentials/
+
+# Voice probe captures (raw responses; may contain live reply text)
+e2e/voice-probe/
