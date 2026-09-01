@@ -41,6 +41,7 @@ import { JobsProvider } from '@/store/jobs';
 import { AppUiProvider, useAppUi } from '@/store/appUi';
 import { JobPill } from '@/ui/JobPill';
 import { VoiceLauncher } from '@/ui/VoiceLauncher';
+import { FeatureBoundary } from '@/ui/FeatureBoundary';
 import { VoiceModeProvider } from '@/ui/voice/VoiceModeContext';
 import { VoiceMode } from '@/ui/voice/VoiceMode';
 import { HealthBanner } from '@/ui/health-banner';
@@ -268,7 +269,13 @@ function RootNav() {
       <JobPill />
       {/* Voice-mode launcher (floating mic → VoiceSheet). Beside JobPill so it inherits the live
           navigation context VoiceSheet needs. Native-only + signed-in-only, self-guarded. */}
-      <VoiceLauncher />
+      {/* Voice is the newest and least-proven surface in the app, and it is entirely optional. If it
+          throws in JS it now removes ITSELF rather than unmounting the React root and costing the
+          user their screen and back stack. (A NATIVE abort is a different thing and no boundary can
+          catch it — that is why the decorative renderers are off in `lib/voiceGraphics.ts`.) */}
+      <FeatureBoundary>
+        <VoiceLauncher />
+      </FeatureBoundary>
       {/* Mounted once here so every route inherits outage reporting. Sample data is gone,
           so this is the only thing distinguishing "nothing to show" from "could not load". */}
       <HealthBanner />
@@ -293,7 +300,9 @@ function RootNav() {
       <LocationBlock />
       {/* Full-screen voice-mode surface. zIndex 50 — BELOW LocationBlock(55)/AppLock(60), so a
           location wall or biometric lock always covers voice. Native-only, returns null when closed. */}
-      <VoiceMode />
+      <FeatureBoundary>
+        <VoiceMode />
+      </FeatureBoundary>
       <AppLock />
       {/* Hold the animated splash until the auth session AND the Geist faces are ready,
           so the first painted frame is never in the fallback system face. */}
