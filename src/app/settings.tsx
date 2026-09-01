@@ -20,6 +20,7 @@ import { LANGS, useI18n } from '@/i18n';
 import type { Lang } from '@/i18n';
 import { testConnection } from '@/data/api';
 import { APP, REQUEST_TIMEOUT } from '@/constants/config';
+import { buildLabel } from '@/lib/buildInfo';
 
 /* ------------------------------------------------------------------ *
  * Settings — grouped rows, real switches, honest failures.
@@ -492,7 +493,7 @@ export default function Settings() {
                 />
               </Appear>
               <Appear index={3}>
-                <DataRow icon="cube-outline" label="Version" value={APP.version} numeric />
+                <DataRow icon="cube-outline" label="Version" value={buildLabel()} numeric />
               </Appear>
             </ListSection>
           </>
