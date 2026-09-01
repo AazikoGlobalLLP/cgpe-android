@@ -1,3 +1,105 @@
+# HANDOFF — CGPE Connect (Android) — Phase 97 (SCOPED, no code) — 2026-09-01
+
+> **Nothing was built this session. It was orientation plus one cross-repo verification, and the
+> verification changed what the phase is.**
+>
+> The owner's instruction was *"clients ka data `clients` collection se `client` collection karo —
+> har jagah, everywhere, aur naye fields UI mein integrate karo."*
+>
+> 🔑 **Half of that ask is not app work at all, and is already built by `cgpe-api`. The other half is
+> real, is ours, and nobody has filed it.** Doing the literal find-and-replace would have broken every
+> client endpoint in the app for no gain.
+
+## Done
+
+- **Established that the collection rename is entirely backend-side and already done.** The app never
+  sends or receives a Mongo collection name — `grep -rn "collection" src/` returns only comments and
+  UI copy. It calls `/api/clients*`, whose URLs, request bodies and response shapes `cgpe-api` states
+  are byte-identical. Their Phase 118 (`644ff2b`) routes all 14 call sites through
+  `utils/clientCollection.js` → `CLIENT_COLLECTION = process.env.CLIENT_COLLECTION || 'client'`.
+  Their INBOX item says "cgpe-mobile — read; **nothing owed**".
+- **Established that Phase 118 is NOT deployed.** Prod deploys `origin/main` = `0324dfc`; `644ff2b`
+  exists only on `origin/Shivam`. Production still serves the OLD `clients` book today. So the new
+  data is not on any phone and cannot be device-verified yet.
+- **Found the part that IS ours, which their "nothing owed" line does not cover.** The wire *shape* is
+  identical; the *documents* are not. The owner's sample carries merged LIXXX columns that
+  `adaptClient` (`src/data/adapt.ts:139-199`) has no reader for:
+  - `Area` → the app derives city from `raw.address.city || raw.city`. The new doc has neither.
+    **City renders blank for the whole book.**
+  - `E_mail` → the app reads `raw.email`. **Email renders blank.**
+  - `groupName` / `Group Head` → the app reads `raw.familyName || raw.family`. **Family renders blank.**
+  - `annual_premium_sum` (3,642) vs `premium` (1,821, the half-yearly instalment) → `totalPremium`
+    currently shows the **instalment, not the annual figure**, for every non-yearly policy.
+  - Unread entirely: `Sex`, `Marriage Date` (anniversary), `No of Policies`, `Customer_Code`,
+    `Telephone(Residence)`/`(Office)`, `ppt`, `ecs`, `fprDate`, `lastPremiumPayingDate`, `dataAnalysis`.
+  - `AadhaarNo` / `PANNo` are present in the documents and are **PII — deliberately out of scope**.
+- **Confirmed those columns actually reach the app**, rather than assuming it. The list route projects
+  with `LIST_HEAVY_EXCLUDE` (an *exclusion* projection, so everything else flows) and `GET /clients/:id`
+  returns the full document. Non-schema fields survive the read — proven by the fact that `policyNo`
+  and `sumAssured` are absent from `models/Client.js` yet the app reads them today.
+- 🔎 **Found a real bug in the sibling's own code, by their own rule, and filed it.**
+  `greetingEngine.normalizeClient:195` was updated for the new book and now reads `c.Area` as a city
+  fallback — but `clientFlags.DERIVED_PROJECTION:329` and `DIRECTORY_FACET_PROJECTION:1124` still
+  project only `'address.city'` and `city`, **not `Area`**. That projection's own header says *"⚠️ If
+  you add a field (or a new alternate name) to normalizeClient, ADD IT HERE TOO"*. Their completeness
+  test (`auth.phase77.test.js`) carries no `Area` fixture, so it stays green. Consequence after the
+  deploy: **city is empty for the entire book on every derived read** — the person/household grouping
+  key (`clientFlags.js:268`), the directory city sort (`:1274`) and the search score (`:755`). The app
+  calls `/clients/segments`, so this reaches us too.
+
+## Files changed
+
+- `docs/HANDOFF.md` — this entry, **inserted above** the Phase 96 handoff, which is preserved verbatim.
+- `docs/PHASES.md` — `## Now` and `## Next 3` rewritten; **new row added** for Phase 97 as the owner asked.
+- `docs/DECISIONS.md` — appended D-1 … D-4 for this session.
+- `../contracts/INBOX.md` — one item appended (append-only `cat >>`, grepped back, size checked).
+- `CLAUDE.md` — the durable lesson, so the next session does not re-derive any of this.
+- **No file under `src/` was touched.** `tsc`, `npm test` and `eslint` are unchanged from Phase 96 and
+  were not re-run, because nothing could have changed them.
+
+## Decisions made
+
+- **Refused the literal find-and-replace.** `clients` → `client` across `src/` would rewrite
+  `/api/clients` request paths and 404 the entire client book. The owner's intent — "the app should
+  use the new data" — is served by reading the new fields, not by renaming a URL.
+- **Did not tick the Phase 118 box.** It is addressed to three recipients, so per the protocol the
+  reply goes underneath and the box stays open.
+- **Filed the `Area` projection gap rather than working around it app-side.** A client cannot detect
+  it (the response is a valid 200 with an empty string) and cannot fix it — only the producer can.
+- **Left `AadhaarNo` / `PANNo` out of scope.** They are on the documents; putting government ID on a
+  shared-handset screen is an owner decision under DPDP, not a UI detail to slip into a field sweep.
+
+## Known broken / deliberately skipped
+
+- 🔴 **Nothing was built. The phase is scoped, not started.** No `src/` change exists to verify.
+- 🔴 **Phase 118 is undeployed**, so even once built, the new fields stay absent on production and the
+  work is inert until the owner merges `origin/Shivam` → `origin/main`, deploys and restarts `:3001`.
+- **The owner must run the preflight before that deploy** (`cgpe-api`'s ask, still unticked):
+  `MONGODB_URI="<atlas uri>" node scripts/preflight-client-collection.js`. It checks the two failures
+  that hide themselves — a book with no `advisor_id` (every advisor's "My clients" returns zero while
+  an admin sees everything and it all looks fine), and `policy_number: null` duplicates that break the
+  unique index build.
+- **The voice items from Phase 96 are untouched and still open** — the probe output has not been read,
+  build 6 + OTA is not started, and the committed production `JWT_SECRET` is still unrotated.
+
+## Next session starts here
+
+- **Phase 97: make `adaptClient` read the new columns, then show them.** `Area`→city, `E_mail`→email,
+  `groupName`/`Group Head`→family, `annual_premium_sum`→`totalPremium`, plus gender / anniversary /
+  policy count on the detail screen. Pin the owner's exact sample document as a test fixture.
+- **First command:**
+  `npx tsc --noEmit && npm test -- src/data/__tests__/adapt.test.ts`
+  (establish the green baseline before touching `src/data/adapt.ts`.)
+- **Watch out for:** **`totalPremium` is a money figure on the dashboard.** Switching it from
+  `premium` to `annual_premium_sum` doubles a half-yearly client's number and multiplies a monthly
+  one by twelve. That is the *correct* value — `annual_premium_sum` is a PERSON aggregate the backend
+  warms, while `premium` is one instalment on one policy row — but it will read as a regression to
+  anyone watching the totals, and `annual_premium_sum` is **absent until the row has been warmed**.
+  Fall back to `premium × annualFactor(mode)`, never to a bare `premium`, and say the change out loud
+  before it ships.
+
+---
+
 # HANDOFF — CGPE Connect (Android) — Phase 96 — 2026-09-01 (later)
 
 > **The mic crash is GONE — confirmed on the owner's handset.** Build 5 (`a9583d51`) opens voice

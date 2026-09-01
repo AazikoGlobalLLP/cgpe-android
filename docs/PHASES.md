@@ -14,6 +14,49 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**📋 2026-09-01 (later still) — PHASE 97 IS SCOPED, NOT STARTED. NO `src/` FILE WAS TOUCHED.**
+
+The owner asked to move the client book from the `clients` collection to `client` — *"har jagah,
+everywhere"* — and to integrate the new fields into the UI. **Those are two different jobs and only
+one of them is ours.**
+
+- 🔴 **The collection move is NOT app work, and `cgpe-api` already shipped it.** The app contains no
+  Mongo collection name anywhere (`grep -rn "collection" src/` finds only comments and the search
+  screen's own copy). It calls the REST path `/api/clients*`, and backend Phase 118 (`644ff2b`)
+  states every URL, body and response shape is **byte-identical** after routing all 14 call sites
+  through `utils/clientCollection.js` → `CLIENT_COLLECTION = process.env.CLIENT_COLLECTION || 'client'`.
+  **A literal `clients`→`client` sweep of `src/` would have rewritten the request paths and 404'd the
+  entire client book.** Their INBOX item is explicit: "cgpe-mobile — read; **nothing owed**".
+- ✅ **What IS ours is the part that line does not cover: the wire SHAPE is unchanged, the DOCUMENTS
+  are not.** Against the owner's own sample document, `adaptClient` (`src/data/adapt.ts:139-199`)
+  renders **city blank** (it reads `raw.address.city || raw.city`; the new doc carries only `Area`),
+  **email blank** (`raw.email` vs `E_mail`), **family blank** (`raw.familyName || raw.family` vs
+  `groupName` / `Group Head`), and `totalPremium` as the **half-yearly instalment ₹1,821** instead of
+  the annual ₹3,642 that `annual_premium_sum` carries. No reader at all for `Sex`, `Marriage Date`,
+  `No of Policies`, `Customer_Code`, `Telephone(Residence)`, `ppt`, `ecs`, `fprDate`,
+  `lastPremiumPayingDate`, `dataAnalysis`. `AadhaarNo`/`PANNo` are **deliberately out of scope** —
+  government ID on a shared handset is an owner/DPDP decision, not a field sweep.
+- **Verified, not assumed, that those columns reach the app.** The list route projects with
+  `LIST_HEAVY_EXCLUDE` (an *exclusion* projection) and `GET /clients/:id` returns the full document;
+  non-schema fields survive the read, proven by `policyNo`/`sumAssured` being absent from
+  `models/Client.js` yet read by the app today.
+- 🔴 **Blocked from the field regardless: Phase 118 is UNDEPLOYED.** Prod deploys `origin/main` =
+  `0324dfc`; `644ff2b` is on `origin/Shivam` only. Production still serves the OLD `clients` book, so
+  this work is buildable and testable but invisible on a phone until the owner merges + deploys +
+  restarts `:3001`. Adopting the new field names early is inert-safe — they are simply absent today.
+- 🔎 **One `[api]` finding filed, found by the sibling's own rule.**
+  `greetingEngine.normalizeClient:195` now reads `c.Area` as a city fallback (updated for the new
+  book), but `clientFlags.DERIVED_PROJECTION:329` and `DIRECTORY_FACET_PROJECTION:1124` still project
+  only `'address.city'` and `city` — **not `Area`** — while that projection's own header says *"⚠️ If
+  you add a field (or a new alternate name) to normalizeClient, ADD IT HERE TOO."* Their completeness
+  test's fixture predates `Area`, so it stays green. After the deploy, city empties across the whole
+  book on every derived read: the household grouping key (`clientFlags.js:268`), the directory city
+  sort (`:1274`) and the search score (`:755`). **Undetectable and unfixable from the app.**
+
+---
+
+### Previously, and still true — Phase 96
+
 **✅ 2026-09-01 (later) — PHASE 96: THE CRASH IS CONFIRMED FIXED ON A REAL HANDSET.** Build 5
 (`a9583d51`, versionCode 5) opens voice mode, renders the orb and holds the mic without exiting. The
 `'worklet'` diagnosis was right. **No new APK was built this session** — see "Next 3".
@@ -64,7 +107,19 @@ remains unrotated (owner-owned).
 
 ---
 
-## Next 3 — as of 2026-09-01 (after Phase 96)
+## Next 3 — as of 2026-09-01 (after Phase 97 was scoped)
+
+0. **BUILD PHASE 97 — the client-book field adoption.** `Area`→city, `E_mail`→email,
+   `groupName`/`Group Head`→family, `annual_premium_sum`→`totalPremium`, plus gender / anniversary /
+   policy count on the detail screen. Pin the owner's exact sample document as a fixture in
+   `src/data/__tests__/adapt.test.ts`. **First command:**
+   `npx tsc --noEmit && npm test -- src/data/__tests__/adapt.test.ts`.
+   ⚠️ **`totalPremium` is a money figure on the dashboard** — moving it to the annual sum doubles a
+   half-yearly client and ×12s a monthly one. That is the *correct* value, but it reads as a
+   regression, and `annual_premium_sum` is **absent until the backend has warmed the row**: fall back
+   to `premium × annualFactor(mode)`, never to a bare `premium`, and say the change out loud.
+   ⚠️ It is **inert on a phone until Phase 118 deploys** — do not describe it as fixing anything the
+   owner can see yet.
 
 1. **READ THE PROBE OUTPUT, THEN BUILD — in that order.** `GET /voice/status` settles whether the
    server's voice keys are actually set (`ready: true` vs `missing: [...]`), and the eight clips show
@@ -2045,6 +2100,8 @@ session back-filling it — the information already exists in a better-maintaine
 | # | Phase | Status |
 |---|---|---|
 | **Ω** | **FINAL — the production/server developer's message. GATED: runs only when every other phase is Done.** | 🔒 **BLOCKED BY DESIGN** — owner-mandated 2026-08-31. See "Phase Ω" below. The running list it draws from is `docs/OPS-SERVER-HANDOVER.md`, which every phase appends to. **Not startable while any phase is Planned / Built-but-unverified / blocked.** |
+| 97 | Client book reads the **`client`** collection's new fields | 📋 **SCOPED, NOT STARTED** 2026-09-01 — **no `src/` change.** The owner's "`clients` → `client` everywhere" is a BACKEND ask and `cgpe-api` already shipped it (Phase 118 `644ff2b`, `CLIENT_COLLECTION`); the app names no collection, so a find-and-replace would have 404'd every client endpoint. **What IS ours:** the new merged documents carry LIXXX columns `adaptClient` has no reader for — `Area`→city, `E_mail`→email, `groupName`/`Group Head`→family all render **blank**, and `totalPremium` shows the half-yearly *instalment* (₹1,821) instead of `annual_premium_sum` (₹3,642). `Sex`/`Marriage Date`/`No of Policies`/`Customer_Code`/`ppt`/`ecs`/`dataAnalysis` unread; `AadhaarNo`/`PANNo` deliberately out of scope (PII/DPDP). **Blocked from the field regardless:** Phase 118 is on `origin/Shivam`, prod `origin/main` is `0324dfc`. One `[api]` filed — `Area` is read by `normalizeClient:195` but absent from both projections |
+| 92–96 | see `## Now` | **Done** 2026-09-01 — the four-APK crash day and its aftermath. **92–95** the `'worklet'` fatal: two builds (`372cd790`, `577a4ec5`) exited on the mic, `2cb0e667` shipped voice off, `a9583d51` (versionCode 5) shipped the fix — **all four gates green on both crashing builds**. **96** (`e54e95e`, `9ecaa9e`) the crash confirmed fixed on a handset, and the two real bugs it was hiding: a recorder that outlived the press (React state cannot gate a handler racing an `await`) and `VOICE.MAX_RECORD_MS` with zero consumers. Plus `Settings › Version` now prints the real native build number, and `scripts/voice-probe.mjs` tests voice from a terminal with only a login. **The two voice fixes are device-unverified — JS-only, still no OTA** |
 | 86–88 | see `## Now` | **All three Built** 2026-08-31 — 86 the presigned MinIO upload flow (`4d1c31a`); 87 the voice turn timeout sized to the real proxy + `unconfigured` honesty (`fd28c70`); **88 SHIPPED** (`eb9760f`, +11 tests) — the legacy upload path no longer persists an expiring URL. All three **device-unverified** (no APK since 25 Aug) and **inert in production** until the backend merge |
 | 89–91 | see `## Now` | **Done** 2026-08-31. **89** (`968955e`) the sibling-commit sweep — found `POST /notifications/dispatch` silently broken on prod, no app code owed. **90 BLOCKED** — the APK; EAS free-plan quota refused it, resets 1 Sep. **90a** (`954a0a4`) build pre-flight: four gates green, and the archive was found to be uploading both signing keystores, their plaintext passwords and the Firebase key — fixed. **91** (`b709796`) cross-repo requests filed; two of three `[admin]` items proved not real. **No `src/` change in 90a or 91** |
 | 77–80 | see `## Now` | **Built** 2026-08-26/27 — splash + LIC + storage-clear; i18n Batch 2 sweep + hourly GPS + video evidence; sign-in token leak + error boundary + backend Phase 94 consumed; the i18n free-wins sweep (73 sites) + Batch 6 extraction + the owner relay sheet. All device-unverified — no APK possible until 1 Sep 2026 |

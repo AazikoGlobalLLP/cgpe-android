@@ -710,6 +710,56 @@ contract change. `INBOX.md` alone would never have surfaced it.
   one no-auth `curl`, no token, no guessing. Reuse the trick: pick a route the pending window *removes*
   and probe it, rather than inferring the deploy state from a commit graph alone.
 
+## The client book moved to the `client` collection — and the app's job is the FIELDS, not a rename (2026-09-01)
+
+🔴 **"Change `clients` to `client` everywhere" is NOT an app task, and a find-and-replace of `src/`
+would 404 the entire client book.** The app contains **no Mongo collection name at all** — `grep -rn
+"collection" src/` returns only source comments and the search screen's own copy. It calls the REST
+path `/api/clients*`, which did not move. `cgpe-api` did the whole job in their **Phase 118**
+(`644ff2b`): 14 call sites now route through `utils/clientCollection.js` →
+`CLIENT_COLLECTION = process.env.CLIENT_COLLECTION || 'client'`, every URL / body / response shape
+**byte-identical**, rollback without redeploy by setting the env var back to `clients`.
+- ⚠️ **Their INBOX item says "cgpe-mobile — nothing owed", and that is right about the SHAPE and
+  wrong about the DATA.** The wire did not change; the **documents** did. `adaptClient`
+  (`src/data/adapt.ts:139-199`) was written against the old import and has **no reader** for the
+  merged LIXXX columns: `Area` (the app reads `raw.address.city || raw.city` → **city blank**),
+  `E_mail` (reads `raw.email` → **email blank**), `groupName` / `Group Head` (reads
+  `raw.familyName || raw.family` → **family blank**), and `annual_premium_sum` (so `totalPremium`
+  shows the **half-yearly instalment**, ₹1,821, not the annual ₹3,642). Also unread: `Sex`,
+  `Marriage Date`, `No of Policies`, `Customer_Code`, `Telephone(Residence)`, `ppt`, `ecs`,
+  `fprDate`, `lastPremiumPayingDate`, `dataAnalysis`.
+- 🔴 **`AadhaarNo` / `PANNo` are on these documents. Do NOT surface them** in a field sweep —
+  government ID on a shared handset is an owner decision under DPDP, and the client book already has
+  a tighter audience by design (`canViewClients`, Point 9).
+- ⚠️ **`annual_premium_sum` is a PERSON aggregate the backend WARMS, and is absent until it has.**
+  `clientScoreWarmer` treats its presence as the "this row is warmed" marker. Never fall back to a
+  bare `premium` (an instalment) — fall back to `premium × annualFactor(mode)`. And **say the change
+  out loud**: switching `totalPremium` to the annual figure doubles a half-yearly client and ×12s a
+  monthly one, which reads as a regression on a dashboard money tile even though it is correct.
+- ✅ **Those columns DO reach the app — verified, not assumed.** The list route projects with
+  `LIST_HEAVY_EXCLUDE` (an *exclusion* projection) and `GET /clients/:id` returns the full document.
+  Non-schema fields survive the read: `policyNo` and `sumAssured` appear nowhere in `models/Client.js`
+  yet the app reads both today.
+- 🔎 **Filed `[api]` and still open: `normalizeClient` reads `Area`, but NEITHER projection sends it.**
+  `greetingEngine.js:195` resolves `(c.address && c.address.city) || c.city || c.Area`, while
+  `clientFlags.js:329` (`DERIVED_PROJECTION`) and `:1124` (`DIRECTORY_FACET_PROJECTION`) list only
+  `'address.city'` and `city` — breaking that projection's own written rule, and invisible to their
+  completeness test because its fixture predates `Area`. Their own preflight measured `Area` at
+  **98.8%** of the 9,018-row book, so this blanks city for ~8,900 rows on every derived read
+  (household grouping key `:268`, city sort `:1274`, search score `:755`). The app calls
+  `/clients/segments`, so it reaches us. **A client cannot detect it** — a valid 200 with an empty
+  string, nothing to retry.
+- 🔴 **`advisor_id` is on ZERO rows of BOTH books** (measured by `cgpe-api`, not inferred). So the
+  **P90 SALES-advisor carve-out (D-117)**, which is strict own-only *by design*, returns an **empty
+  client book** for that tier — today, on the legacy collection. **Do not weaken the carve-out to
+  hide it and do not file it as a backend bug**; it is the owner's data decision (stamp ownership, or
+  accept the book is admin-tier-only). Triage a "sales advisor sees no clients" report as this.
+- **Deploy state as of 2026-09-01: Phase 118 is NOT deployed.** `origin/main` = `0324dfc`; `644ff2b`
+  and `22dfbde` are on `origin/Shivam` only. Adopting the new field names early is **inert-safe** —
+  they are simply absent from the old book — but do not tell the owner it fixes anything they can see
+  until the merge + deploy + `:3001` restart. Their preflight has **already been run** (0 blockers);
+  do not re-ask for it.
+
 ## Verifying the backend WITHOUT guessing (2026-08-26)
 
 - **`GET https://cgpe.in/internal/api/upload` reports the live storage state** —

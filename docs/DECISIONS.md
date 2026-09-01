@@ -5730,3 +5730,52 @@ reply carries exactly one `action` (`voice/response.ts`), so a two-instruction s
 produce one outcome; supporting it needs the brain to return a list and the app to execute in order.
 Writes are dark in v1 regardless, so the "create a task" half would not run either. Pinned by a test
 so a later reader does not mistake it for a parser bug and try to fix it in the wrong repo.
+
+---
+
+## 2026-09-01 (later still) — Phase 97 SCOPED: the client-book collection move is not app work, but the new documents are
+
+**D-1. The owner's "change `clients` to `client` everywhere, har jagah" is a BACKEND ask, and it was
+already done before the request reached us.** The app has no Mongo collection name in it —
+`grep -rn "collection" src/` returns only source comments and the search screen's user-facing copy
+("Search could not reach every collection"). What the app has is the REST path `/api/clients*`, and
+`cgpe-api`'s Phase 118 (`644ff2b`) states every URL, body and response shape is byte-identical after
+the move. A literal find-and-replace of `clients` → `client` in `src/` would have rewritten the
+request paths and 404'd the entire client book. **Recorded because the instruction sounded like a
+mechanical sweep and was not one**: the honest reading of "the app should use the new data" is that
+the app must read the new *fields*, which is a different and larger job.
+
+**D-2. What the app genuinely owes: `adaptClient` has no reader for the merged LIXXX columns.** The
+wire *shape* did not change; the *documents* did. Against the owner's sample document,
+`src/data/adapt.ts:139-199` produces a blank city (it reads `raw.address.city || raw.city`; the new
+doc carries only `Area`), a blank email (`raw.email` vs `E_mail`), a blank family
+(`raw.familyName || raw.family` vs `groupName` / `Group Head`), and a `totalPremium` of the
+half-yearly *instalment* ₹1,821 rather than the annual ₹3,642 that `annual_premium_sum` carries.
+`Sex`, `Marriage Date`, `No of Policies`, `Customer_Code`, `Telephone(Residence)`, `ppt`, `ecs`,
+`fprDate`, `lastPremiumPayingDate` and `dataAnalysis` have no reader at all. **Verified that these
+columns do reach the app** rather than assuming it: the list route projects with `LIST_HEAVY_EXCLUDE`
+(an exclusion projection) and `GET /clients/:id` returns the full document, and non-schema fields
+demonstrably survive the read — `policyNo` and `sumAssured` appear nowhere in `models/Client.js` yet
+the app reads both today.
+
+**D-3. `AadhaarNo` / `PANNo` are deliberately out of scope.** They sit on the new documents and a
+field sweep would carry them onto the screen by default. Government ID on a shared handset is an
+owner decision under DPDP, not a UI detail — and this app's own client-book gate (`canViewClients`,
+Point 9) exists precisely because client PII has a tighter audience than the app's other data.
+
+**D-4. Filed an `[api]` finding rather than working around it: `Area` is read by `normalizeClient`
+but is not in either projection.** `services/greetingEngine.js:195` now resolves city as
+`(c.address && c.address.city) || c.city || c.Area` — updated for the new book — while
+`services/clientFlags.js:329` (`DERIVED_PROJECTION`) and `:1124` (`DIRECTORY_FACET_PROJECTION`) still
+project only `'address.city'` and `city`. The projection's own header carries the rule it breaks:
+*"⚠️ If you add a field (or a new alternate name) to computePolicy / normalizeClient / pickPhone, ADD
+IT HERE TOO."* Their completeness test `auth.phase77.test.js` compares a projected doc against a full
+doc, but its fixture predates `Area`, so it stays green. After the deploy this empties city across the
+whole book on every derived read — and city is the household grouping key (`clientFlags.js:268`), the
+directory city sort (`:1274`) and part of the search score (`:755`). **This is undetectable from the
+app** (a valid 200 carrying an empty string, nothing to retry) and unfixable from the app, which is
+the same argument the dashboard `partial` item made from the other direction. Same class as the
+Phase-79 `channel` field and the Phase-87 timeout: only reading the producer's real code finds it.
+
+**D-5. Did not tick the Phase 118 box.** It is addressed to `cgpe-admin`, `cgpe-mobile` and OWNER, so
+per the protocol the reply goes underneath and the box is left open for the other recipients.
