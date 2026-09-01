@@ -14,6 +14,7 @@ import { useAuth } from '@/store/auth';
 import { shadow, useTheme } from '@/theme/theme';
 import { useT } from '@/i18n';
 import { useVoiceMode } from '@/ui/voice/VoiceModeContext';
+import { VOICE_ENABLED } from '@/voice/enabled';
 
 export function VoiceLauncher() {
   const { user } = useAuth();
@@ -23,7 +24,9 @@ export function VoiceLauncher() {
   const { open } = useVoiceMode();
 
   // Hooks are all above this guard, so the guard never changes hook order.
-  if (Platform.OS === 'web' || !user) return null;
+  // VOICE_ENABLED is off: no mic button is rendered, so there is nothing to press and nothing to
+  // crash. See `voice/enabled.ts` — the feature also cannot work until OPS sets the two env keys.
+  if (!VOICE_ENABLED || Platform.OS === 'web' || !user) return null;
 
   return (
     <View pointerEvents="box-none" style={{ position: 'absolute', right: 18, bottom: insets.bottom + 96 }}>

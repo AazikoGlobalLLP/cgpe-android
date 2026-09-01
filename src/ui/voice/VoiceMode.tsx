@@ -29,6 +29,7 @@ import { VoiceWaveform } from '@/ui/voice/VoiceWaveform';
 import { PersonaToggle } from '@/ui/voice/PersonaToggle';
 import { VoiceGlass } from '@/ui/voice/GlassCards';
 import { formatDuration, personaBase, stateCopyKey, tierGlow } from '@/ui/voice/voiceVisual';
+import { VOICE_ENABLED } from '@/voice/enabled';
 
 function alpha(hex: string, a: number): string {
   if (hex.length !== 7 || hex[0] !== '#') return hex;
@@ -36,7 +37,21 @@ function alpha(hex: string, a: number): string {
   return hex + Math.round(v * 255).toString(16).padStart(2, '0');
 }
 
+/**
+ * The mounted shell. It reads ONE context value and nothing else, so that when voice is off — or
+ * simply closed — `VoiceModeInner` is never mounted and none of its hooks run. That matters beyond
+ * tidiness: `useVoiceTurn` calls `expo-audio`'s `useAudioRecorder`, and until this split that hook
+ * sat above the old `if (!isOpen) return null`, so a native recorder was constructed on EVERY app
+ * boot for a screen almost nobody opens. Now the whole voice subtree — expo-audio included — exists
+ * only while the user is actually looking at it.
+ */
 export function VoiceMode() {
+  const { isOpen } = useVoiceMode();
+  if (!VOICE_ENABLED || Platform.OS === 'web' || !isOpen) return null;
+  return <VoiceModeInner />;
+}
+
+function VoiceModeInner() {
   const { isOpen, close: closeCtx, persona, setPersona } = useVoiceMode();
   const c = useTheme();
   const { spacing, font } = c;
@@ -65,8 +80,19 @@ export function VoiceMode() {
     return () => clearInterval(id);
   }, [turn.state, turn.startedAtRef]);
 
-  const onPressIn = useCallback(() => { press.value = withTiming(1, { duration: 90 }); turn.startCapture(); }, [press, turn]);
-  const onPressOut = useCallback(() => { press.value = withTiming(0, { duration: 200 }); turn.finishCapture(); }, [press, turn]);
+  // ⚠️ Both are ASYNC and are called from an event handler without being awaited. A React error
+  // boundary does NOT catch either case — it covers render and commit, not handlers and not promise
+  // rejections — and in a release build (no LogBox) an unhandled JS error is reported as FATAL and
+  // takes the process down, which is indistinguishable to the user from a native crash. The `catch`
+  // is what keeps a bug in the voice pipeline from being able to close the app.
+  const onPressIn = useCallback(() => {
+    press.value = withTiming(1, { duration: 90 });
+    void Promise.resolve(turn.startCapture()).catch(() => { /* reported in-band by useVoiceTurn */ });
+  }, [press, turn]);
+  const onPressOut = useCallback(() => {
+    press.value = withTiming(0, { duration: 200 });
+    void Promise.resolve(turn.finishCapture()).catch(() => { /* reported in-band by useVoiceTurn */ });
+  }, [press, turn]);
 
   if (!isOpen || Platform.OS === 'web') return null;
 
