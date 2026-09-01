@@ -565,7 +565,18 @@ export async function getTasks(ownOnly = false): Promise<Task[]> {
 
 /** Live org dashboard counters (claims, tickets, tasks) — un-scoped. */
 export async function getDashboardOverview(): Promise<any | null> {
-  return await tryReal<any>('/dashboard/overview', {}, isObj);
+  const path = '/dashboard/overview';
+  const d = await tryReal<any>(path, {}, isObj);
+  // Backend Phase 110 (D-140, deployed 2026-09-01) stopped swallowing a failed source read: instead
+  // of `.catch(() => [])` it answers 200 with that source's KPIs ZEROED and names the damage INSIDE
+  // `data` — `partial:true` plus `degraded:['claims', …]`. That 200 has already cleared this
+  // endpoint through `reportSuccess`, so with no re-report the master dashboard renders "0 claims,
+  // ₹0 settled" as though it were the truth. That is convention #4's exact failure mode on the most
+  // trusted surface in the app, and the server is now the only party that can tell us — the body is
+  // well-formed, so no validator and no status code can. `'server'`, because what failed is the
+  // collection read and not the transport.
+  if (d && d.partial === true) reportFailure(healthKey(path), 'server');
+  return d;
 }
 
 /**
