@@ -5612,3 +5612,41 @@ that holds everything else. This is worth keeping whatever happens to the switch
 It is unreachable, which is not the same thing. Skia and blur remain off from Phase 93; if the fault
 was theirs it is gone, and if it was not, it is simply no longer reachable. Saying "fixed" here would
 be the third confident-but-unverified claim in one day.
+
+## 2026-09-01 — Phase 95 (the actual crash cause)
+
+**D-1. The crash was a missing `'worklet'` directive, and the diagnosis was accepted on evidence.**
+`OrbStatic`'s `clamp01` was called from a `useDerivedValue` body — the UI thread — without the
+directive. Three things made this a diagnosis rather than a fourth guess: the identical helper in
+`OrbSkia.tsx:27` has always carried it; `VoiceWaveform`'s `Bar` avoids the same problem by inlining
+its clamp by hand; and `'worklet'` appears exactly once in all of `src/`, so this is the only such
+call site in the app. It also explains BOTH crashing builds with one cause — `OrbStatic` renders as
+the Skia orb's `Suspense`/boundary fallback *and* as the sole character once Skia is off — which is
+why switching Skia off in Phase 93 changed nothing.
+
+**D-2. Fixed it twice over on purpose.**
+The directive is added AND the derived value clamps inline so the worklet calls nothing at all.
+Either alone is sufficient. Both together mean an edit to one cannot quietly reintroduce the fault,
+which matters for a bug no gate in this project can detect.
+
+**D-3. Re-enabled voice but left Skia, blur and Lottie off.**
+They were never the cause — but they were never proven on a handset either, and they are pure
+decoration. The fixed `OrbStatic` is the character. Re-enabling them is a separate decision that
+needs its own device test, and bundling it into the build that fixes a crash would repeat the exact
+mistake that started this.
+
+**D-4. Did not claim the env keys are missing.**
+`GET /api/voice/status` reports precisely which of `SARVAM_API_KEY` / `N8N_VOICE_BRAIN_URL` /
+`CGPE_VOICE_SECRET` are set (names only, never values) but sits behind `protect`, and this session
+holds no credentials — so it was probed and reported as **401, unverifiable from here**, not guessed.
+What *was* proven: the n8n brain is live and correctly rejects a bad secret. The backend's own
+handover doc parking both keys under "Group 2 — can wait" is evidence, not confirmation, and was
+labelled as such.
+
+**D-5. The three failed attempts are worth recording as a pattern, not just an outcome.**
+Round 1 disabled Skia and blur (the two surfaces that first render). Round 2 added a React error
+boundary. Round 3 switched the feature off. Only round 4 read the code that the fallback actually
+runs. **The containment reflex is right when a user is on a broken build, but it is not diagnosis,
+and three rounds of it cost more than one careful read would have.** The specific blind spot: an
+error boundary was assumed to cover a failure it structurally cannot — it catches render and commit,
+never event handlers, promise rejections or UI-thread worklets.

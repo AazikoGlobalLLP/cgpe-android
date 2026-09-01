@@ -128,6 +128,17 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
   There is no clean app-side fix for this; please do not send it back to the app team.
 
 ### 9. Voice assistant — server-side, not app-side
+
+> **2026-09-01 UPDATE — we could NOT verify whether these keys are set, and here is how anyone can.**
+> `GET /api/voice/status` reports exactly which are missing (**names only, never values**) but sits
+> behind `protect`; probed from the mobile session it returns **401**, and that session holds no
+> credentials. Two ways to settle it:
+> `grep -E "SARVAM_API_KEY|N8N_VOICE_BRAIN_URL|CGPE_VOICE_SECRET" .env` on the droplet, or open
+> `/api/voice/status` with any logged-in token. **Proven separately:** the n8n brain is live and
+> correctly answers `bad_secret` to an unauthenticated probe, so the brain half is ready.
+> The app ships voice ENABLED as of build `a9583d51` (vc5); with the keys unset it says
+> *"Voice is not switched on for this server yet"* — honest, no crash, and no retry offered.
+
 > **Corrected 2026-08-31 (mobile Phase 87).** This section previously said the proxy "does not exist
 > yet". That is **no longer true** and would have sent the wrong instruction: it was **built** on
 > 2026-08-29 and is waiting on the same deploy as everything else in §1.
@@ -171,6 +182,32 @@ A `401` would mean deployed-and-protected. That distinction is how every line ab
   handsets **already in the field** without waiting for a new app build.
 - One question is with `cgpe-api` (INBOX 2026-08-31): whether to leave the already-written unreadable
   rows alone, or re-key them — in which case a backlog of old notices appears on the day of the deploy.
+
+---
+
+### 12. 🔴🔴 ROTATE THE COMMITTED PRODUCTION SECRETS (added 2026-09-01 — the most serious item here)
+
+`Aaziko1Market1/cgpe-backend` contains `docs/OPS-ENV-HANDOVER.md` (commit `1624f8a`, 31 Aug,
+*"env handover with real values, ready to paste"*) carrying **21 real production values**, and it is
+pushed on **three** branches: `origin/main`, `origin/Shivam`, `origin/ved`.
+
+Names only, as this file's own rule requires: **`JWT_SECRET`** (64 chars), `CGPE_VOICE_SECRET`,
+`CGPE_REPORT_SECRET`, `CGPE_REPORT_WEBHOOK_URL`, `CGPE_REPORT_RENDER_URL`, `CLAIM_INTAKE_TOKEN`,
+`ANALYTICS_EMAIL`, `ANALYTICS_PASSWORD`, `N8N_WEBHOOK_AUTH_TOKEN`, `N8N_ATTENDANCE_WEBHOOK_TOKEN`
+and seven `N8N_*` webhook URLs, plus `BACKEND_URL`, `CORS_STRICT`, `JWT_EXPIRE`, `CA_DATA_COLLECTION`.
+
+**Why `JWT_SECRET` is the emergency:** it signs every session token in the product. Whoever holds it
+can mint a valid token for **any** user, `super_admin` included, with no password and no login.
+
+**Deleting the file does NOT fix this** — git history keeps it, on three branches and on GitHub.
+The values have to be **rotated**. Suggested order:
+1. Everything except `JWT_SECRET` — rotate now; no user impact.
+2. `JWT_SECRET` — rotating it **signs every user out at once**, so the owner picks the moment.
+3. Then remove the file from the repo and add its path to `.gitignore`.
+
+⚠️ **And the app-side lesson that applies here too:** a `.gitignore` rule does not protect a secret
+from an EAS build archive (see CLAUDE.md). Whatever ignore rule is added, check every place the file
+could still be copied.
 
 ---
 

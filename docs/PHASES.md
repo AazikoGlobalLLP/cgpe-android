@@ -14,6 +14,74 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-09-01 — PHASE 95: THE MIC CRASH HAS A NAMED CAUSE, AND IT IS FIXED. Shipped as
+`a9583d51` (v1.10.0 / **versionCode 5**, from `5b46e7b`) —
+`https://expo.dev/artifacts/eas/GJi0qKe07rj51-Cce7uH09rpXXtsvLD7-_Vh2MTtupc.apk`
+(expires 2026-09-15).** Voice is back ON; Skia/blur/Lottie stay off.
+- 🔑 **THE BUG: `OrbStatic`'s `clamp01` had no `'worklet'` directive while being called from a
+  `useDerivedValue` body, which runs on the UI THREAD.** Reanimated cannot call a plain JS function
+  from there; in a release build (no LogBox) that is **fatal** — the process exits, which to a user
+  is indistinguishable from a native crash. **No React error boundary can catch it**, which is
+  precisely why Phase 93's `FeatureBoundary` changed nothing.
+- **THE EVIDENCE IS AN ASYMMETRY, NOT A HUNCH.** The identical helper in the sibling
+  `OrbSkia.tsx:27` has always carried the directive; `VoiceWaveform`'s `Bar` sidesteps the same
+  problem by inlining its clamp by hand; and **`'worklet'` appears exactly ONCE in all of `src/`**,
+  so this was the only such call site in the app. **It explains BOTH crashing builds with one
+  cause** — `OrbStatic` renders as the Skia orb's `Suspense`/boundary fallback *and* as the sole
+  character once Skia is off, so vc2 (Skia on) and vc3 (Skia off) both reached it. **That is why
+  switching Skia off did not help: the fault was in the fallback all along.**
+- **FIXED TWICE OVER** — the directive is added *and* the derived value clamps inline, so the
+  worklet calls nothing at all. Either alone suffices; both survive a future edit to one.
+- ⚠️ **STILL DEVICE-UNVERIFIED. This is the THIRD attempt** — rounds 1 and 2 were containment and
+  both failed, round 3 switched voice off. **If it crashes again, `VOICE_ENABLED = false`
+  (`src/voice/enabled.ts`) is one line — and do NOT spend another build on a new guess** without a
+  handset or the crash dialog's "View summary". The owner has declined USB debugging.
+- 📊 **Builds today: vc2 `372cd790` (crashed) → vc3 `577a4ec5` (crashed) → vc4 `2cb0e667` (voice off)
+  → vc5 `a9583d51` (the fix). Quota 4/15 used, 11 left.** `preview` now carries `autoIncrement`, so
+  a build is finally identifiable from `Settings › Apps` instead of by hashing `base.apk`.
+- ⚠️ **ASK WHICH BUILD IS INSTALLED BEFORE BELIEVING A BUG REPORT.** It was never confirmed for vc3,
+  and the owner reported the APK link opening in a browser on some handsets — which makes
+  re-installing an older downloaded file easy.
+
+---
+
+**🗣️ VOICE STILL CANNOT ANSWER — and we could NOT verify the server env from here.**
+`/api/voice/ask` answers `503 not_configured` until OPS sets **`SARVAM_API_KEY`** +
+**`N8N_VOICE_BRAIN_URL`** and restarts `:3001` (`voiceConfig()` needs `ready = stt && brain`).
+`GET /api/voice/status` reports exactly which are missing — **names only, never values** — but sits
+behind `protect`, and this session holds no credentials: probed, **401**. What *was* proven: the n8n
+brain is live and correctly returns `bad_secret` to an unauthenticated probe. The backend's own
+handover doc parks both keys under *"Group 2 — can wait; the owner is arranging these"*, which is
+evidence they are unset, **not confirmation**. One command settles it:
+`grep -E "SARVAM_API_KEY|N8N_VOICE_BRAIN_URL|CGPE_VOICE_SECRET" .env` on the droplet.
+
+---
+
+## Next 3 — as of 2026-09-01 (after Phases 92–95)
+
+1. **CONFIRM `a9583d51` (vc5) ON A REAL HANDSET.** Everything else is blocked behind this. Two builds
+   shipped today that crashed, and **all four gates were green on both** — `tsc`, `npm test`,
+   `eslint` and `expo export -p web` cannot see a UI-thread worklet fault and never will. Ask for
+   `Settings › Apps › CGPE Connect → 1.10.0 (5)` first. Expected outcomes: voice mode opens (fix
+   worked), or it opens and says *"Voice is not switched on for this server yet"* (fix worked, server
+   keys still unset). **A crash means `VOICE_ENABLED = false` and no new guess.**
+2. **THEN ADD EAS UPDATE (OTA) — the owner has asked for it twice.** After it, a fix like today's
+   ships in seconds with no rebuild and no quota. It was deliberately kept out of all four of today's
+   builds because it adds a native module and changes the boot path, and those were the builds
+   fixing a native-looking crash. Sequence it once vc5 is proven.
+3. 🔴 **THE COMMITTED PRODUCTION SECRETS — still unanswered, and the most serious open item.**
+   `Aaziko1Market1/cgpe-backend` `docs/OPS-ENV-HANDOVER.md` (`1624f8a`) carries 21 real values,
+   including **`JWT_SECRET`**, on three pushed branches. Deleting the file does not fix it (git
+   history) — they must be **rotated**, and rotating `JWT_SECRET` signs every user out, so the owner
+   picks the moment. **Owner-owned; recorded, not taken.**
+
+*(Then: the unexplained "view as preview" crash report; Skia/blur/Lottie re-enablement, each needing
+its own device test; and i18n Batches 6h/6f/5/6b, all owner-copy-blocked.)*
+
+---
+
+## Superseded — Next 3 as of 2026-09-01 (after Phase 92)
+
 **🔴 2026-09-01 — PHASE 94: VOICE IS SWITCHED OFF. Two builds crashed, two rounds of containment
 failed, and the honest call was to stop shipping the feature rather than guess a third time.**
 Commit `4e55b70`.
@@ -1118,7 +1186,7 @@ Upload was probed live — `POST /upload` → **401**, so the route IS deployed;
 session by design** — Phase 77 is where fixing starts.
 
 
-## Next 3 — as of 2026-08-31 (after Phases 90a + 91)
+## Superseded — Next 3 as of 2026-08-31 (after Phases 90a + 91)
 
 1. **BUILD THE APK — Phase 90, still unfinished and still the highest-value action in the project.**
    Quota-blocked until **1 Sep**; not attempted on the 31st, because the refusal that day said "resets

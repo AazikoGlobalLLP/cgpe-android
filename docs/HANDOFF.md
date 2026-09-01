@@ -1,119 +1,130 @@
-# HANDOFF — CGPE Connect (Android) — Phases 90a + 91 — 2026-08-31
+# HANDOFF — CGPE Connect (Android) — Phases 92–95 — 2026-09-01
 
-> **The APK still does not exist, and Phase 90 is still the resume point.** The EAS free-plan quota
-> resets on **1 Sep** and this session ran on **31 Aug**, so no build was attempted — the refusal the
-> day before said "resets in 18 hours", and re-attempting only burns the upload again.
+> **Four APKs shipped today. The first three were the story: `372cd790` (vc2) and `577a4ec5` (vc3)
+> both EXITED THE APP when the mic was pressed, `2cb0e667` (vc4) shipped with voice switched off,
+> and `a9583d51` (vc5) ships the actual fix with voice back on.**
 >
-> Two phases were completed instead, both of which make that build safer: **90a** pre-flighted the
-> tree the APK will upload and **found the archive was shipping the app's signing keys**; **91** filed
-> the owner's cross-repo requests, and found that two of the three items we were about to send another
-> team were not real.
+> 🔑 **The lesson that outranks everything else here: `tsc` + `npm test` + `eslint` +
+> `expo export -p web` were ALL GREEN on both crashing builds, and always would have been.** The
+> fault was a missing `'worklet'` directive — a UI-thread runtime rule no gate in this project can
+> see. **A build carrying a surface that has never run on a handset must be treated as unverified,
+> and said so out loud before the build is spent.**
 >
-> **No `src/` file was touched in either phase.** The app is byte-identical to Phase 89's.
+> **THE BACKEND ALSO DEPLOYED TODAY** (`origin/main` `990c660` → `0324dfc`), which changed live app
+> behaviour and surfaced a production secret leak. See "Known broken" — it is not ours to fix.
 >
-> ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM. Do not delete it** — it is still
-> the only record of the Skia / Lottie / web-stub traps.
+> ⚠️ **The voice-track handoff below the rule is ARCHIVED VERBATIM from a parallel session. Do not
+> delete it** — it is still the only record of the Skia / Lottie / web-stub traps.
 
 ## Done
 
-- **The build is verified ready, on the exact tree it will upload.** Four gates re-run live:
-  `npx tsc --noEmit` **0** · `npm test` **1309 / 77 files** · cache-free `npx eslint src` **0 errors,
-  12 warnings** (the documented baseline) · `npx expo export -p web` **exit 0**. `package.json` ↔
-  `package-lock.json` root deps confirmed **in sync**, so EAS's `npm ci` will not hard-fail. The three
-  voice native deps were re-checked against the module-scope-throw rule and are correctly behind
-  `React.lazy` + probes.
-- **🔴 The build archive was uploading both Android signing keystores, their plaintext passwords, and
-  the Firebase push key — and it is now fixed.** Phase 90 discovered that `.easignore` *replaces*
-  `.gitignore` for the archive and applied that only to the 338 MB of test video. The rule was left
-  one-sided, so every **secret** `.gitignore` protects was still being uploaded. Four secret files,
-  all sitting on disk since 21/29 Aug, were in the next build's archive.
-- **We know it already happened.** The archive uploads *before* the quota check refuses, so the 31 Aug
-  attempt shipped all four, and the 25 Aug build (`093a3b33`) shipped the Firebase key.
-- **The admin panel's Relationship map now has a written, evidenced defect list.** The owner reported
-  it as unreadable; seven defects were filed, and the first is objective rather than taste — every
-  section heading counts one array while the body renders two, so on the owner's own screenshot
-  "Navigation · 5 tabs" sits above 7 chips and "Features · 5 enabled" above 11.
-- **Two of the three `[admin]` items we had been carrying for another team were not real, and saying
-  so was the more valuable half.** The "admin can see staff location" report is **fixed end-to-end and
-  now closed** — the app was always correct, the backend 403s a non-`super_admin` **on deployed
-  `origin/main`**, and the panel has no live-location view at all. "Assign Task" is real but is a
-  label in `TeamTasks.tsx`, not a button.
-- **A provably wrong line in `CLAUDE.md` was corrected**: `SCHEMA_FEATURE_DEFAULTS` is **4 true / 10
-  false**, not "mostly `true`". The fail-open warning that line supports is unchanged and still right.
+- **The mic-button crash has a NAMED CAUSE and it is fixed.** `OrbStatic`'s `clamp01` had no
+  `'worklet'` directive while being called from a `useDerivedValue` body, which runs on the **UI
+  thread**. Reanimated cannot call a plain JS function from there; in a release build (no LogBox)
+  that is **fatal** and the process exits, which to a user is indistinguishable from a native crash.
+  **No React error boundary can catch it** — which is exactly why Phase 93's `FeatureBoundary`
+  changed nothing.
+- **The evidence is an asymmetry, not a hunch.** The identical helper in the sibling `OrbSkia.tsx:27`
+  has always carried the directive, and `VoiceWaveform`'s `Bar` sidesteps it by inlining its clamp.
+  Only this copy was plain, and it is the **only** such call site in the app (`'worklet'` appears
+  exactly once in `src/`; every other animated style is self-contained). **It explains BOTH crashing
+  builds with one cause** — `OrbStatic` renders as the Skia orb's `Suspense`/boundary fallback *and*
+  as the sole character once Skia is off — which no earlier theory did.
+- **The dashboard no longer prints a failed read as a real zero.** Backend Phase 110 answers 200 with
+  `partial:true` + `degraded:[…]` and the KPIs zeroed; the app read neither field, so "0 claims,
+  ₹0 settled" appeared on the master dashboard as though true. It now raises the outage banner.
+- **A failed voice turn now says what actually failed.** Every path used to `catch { fail(…) }`
+  without binding the exception, and the banner hard-coded one sentence as both title and message —
+  so a screenshot carried zero diagnostic information. `src/voice/cause.ts` puts the real reason on
+  screen; the title is now the sentence the failure produced; and the retry action is withheld when
+  no retry can help.
+- **Voice mode no longer constructs a native audio recorder on every app boot.** `useVoiceTurn` →
+  `useAudioRecorder` sat *above* `if (!isOpen) return null`. `VoiceMode` is now a shell reading one
+  context value plus an inner component holding every other hook.
+- **Builds can be told apart on the phone.** `preview` gained `autoIncrement`; versionCode went
+  1 → 2 → 3 → 4 → 5. Previously every build was versionCode 1 and only an APK hash distinguished them.
+- **The `.easignore` fix is verified against real builds** — four archives uploaded at ~7 MB (was
+  347 MB), with no keystore, no plaintext passwords and no Firebase key.
+- **The backend's whole 29-commit window was swept against every route the app calls** (Phases
+  107–112). One app-side finding (the `partial` flag above); everything else verified as owed nothing.
 
 ## Files changed
 
-- `.easignore` — mirrors `.gitignore`'s secret patterns (`credentials.json`, `credentials/`, `*.jks`,
-  `*.p8`, `*.p12`, `*.key`, `*.pem`, `*.mobileprovision`, `*-firebase-adminsdk-*.json`,
-  `google-service-account*.json`, `.env*.local`) under a header saying why `.gitignore` alone is not
-  enough. **`google-services.json` is the client config and deliberately still ships.**
-- `CLAUDE.md` — the secrets half of the `.easignore` trap, and the `SCHEMA_FEATURE_DEFAULTS`
-  correction.
-- `docs/PHASES.md` — `## Now` + `## Next 3` rewritten; Phase 90a and 91 entries; a superseded note on
-  the three `[admin]` items so the two dead ones are never re-filed.
-- `docs/DECISIONS.md` — appended (Phase 90a, Phase 91).
-- `docs/STATUS.md` — rewritten for the 31 Aug position.
-- `../contracts/INBOX.md` — **two new items to `cgpe-admin`** (839,917 → 850,279 B, 151 headers, both
-  replies grepped back, `.bak-p91` taken first). Not version-controlled by anyone.
-- **No `src/` change. No test change. No contract-shape change.**
+- `src/data/api.ts` — `getDashboardOverview` re-reports to `data/health` when `partial === true`.
+- `src/data/__tests__/api-dashboard-partial.test.ts` — 4 tests, incl. a body with no `partial` key.
+- `src/ui/voice/OrbStatic.tsx` — **the fix**: `'worklet'` on `clamp01` *and* the derived value clamps
+  inline, so the worklet calls nothing at all. Either alone suffices; both together survive an edit.
+- `src/voice/enabled.ts` — new `VOICE_ENABLED` master switch (currently `true`), carrying the whole
+  crash history and the one-line kill instruction.
+- `src/lib/voiceGraphics.ts` / `.web.ts` — `VOICE_HEAVY_GRAPHICS_ENABLED = false`: Skia, blur and
+  Lottie stay off. **They were never the cause, but they were never device-proven either.**
+- `src/voice/cause.ts` + `__tests__/cause.test.ts` — the diagnostic breadcrumb, 7 tests.
+- `src/ui/voice/useVoiceTurn.ts` — `cause`/`permanent` state; the exception is kept; the recorder
+  retries with the vendor's unmodified `HIGH_QUALITY` preset if ours is refused.
+- `src/ui/voice/VoiceMode.tsx` — shell/inner split; banner title/message fixed; async event handlers
+  `.catch()`-ed (a boundary covers neither handlers nor promise rejections).
+- `src/ui/VoiceLauncher.tsx` — respects `VOICE_ENABLED`.
+- `src/ui/FeatureBoundary.tsx` — contains a JS **render** failure to one feature. Kept, with its real
+  limits written at the file.
+- `src/ui/voice/GlassCards.tsx` — `blurMethod` (the `experimental` prop is deprecated in expo-blur 57).
+- `eas.json` — `autoIncrement` on `preview`.
+- `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/STATUS.md`, `../contracts/INBOX.md` (one reply + one
+  ticked box, both grepped back; 948,532 → 954,539 B).
 
 ## Decisions made
 
-- **Did not re-attempt the build on 31 Aug.** The refusal said "resets in 18 hours" and CLAUDE.md
-  already records that "1 Sep" does not mean the evening of the 31st. A refused attempt is cheap now
-  (~6 MB) but still pointless.
-- **Rotate the Firebase key; do NOT rotate the keystore.** The Firebase service-account key can be
-  regenerated in one click with no user impact, and it is the one credential EAS has no legitimate
-  reason to hold. Rotating the *signing* keystore would force all 21 handsets to uninstall before
-  updating — losing login, clock keys and the offline queue — and the exposure is to Expo's own
-  storage under the owner's account, which already legitimately holds that exact keystore.
-  **Owner's call; recorded, not taken.**
-- **Left `expo-env.d.ts` in the archive.** It is the fifth gitignored file found, but it is generated
-  and harmless; excluding files that are not secrets only adds risk to a build that matters.
-- **Filed one admin item instead of three, and closed one outright.** Re-reading the sibling's real
-  code before sending was what caught it. Filing all three as written would have sent another team on
-  two wild-goose chases and left a fixed bug open on the board.
-- **Filed nothing new backend-side.** Every server ask is already assembled and ordered in
-  `docs/OPS-SERVER-HANDOVER.md` §1–11; duplicating it into `INBOX.md` would be noise.
-- **Did not start Phase Ω.** Its gate is shut by its own rule — device-unverified work exists. Whether
-  to send §1 (merge + deploy) early, as a standalone instruction, is **an open owner question asked at
-  the end of the session and not yet answered.**
+- **Fixed the worklet bug twice over** — directive *and* inline clamp — so a future edit to one cannot
+  reintroduce it.
+- **Re-enabled voice, but left Skia/blur/Lottie off.** They are decoration, were never proven on a
+  handset, and the fixed `OrbStatic` is the character. Turning them on is a separate device test.
+- **Switched voice off entirely for vc4 rather than guess a third time**, because it *also* cannot
+  work today (server keys unset) — so hiding it cost the user nothing. Had voice been working, that
+  would have been the owner's call, not mine.
+- **Did NOT add EAS Update (OTA) to any of today's builds**, though the owner asked for it twice. It
+  adds a native module and changes the boot path, and these were the builds fixing a crash. **It is
+  the agreed next step once a build is confirmed good on a phone.**
+- **Measured the quota instead of quoting it:** 15 Android builds/month (Aug ran 15 then refused; Jul
+  13). Four used today, **11 left**.
+- **Did not guess at the "view as preview" report.** `applyView` (`more.tsx:188`) only sets state and
+  toasts; without a log it was left explicitly unexplained.
 
 ## Known broken / deliberately skipped
 
-- 🔴 **THE APK STILL DOES NOT EXIST.** The field build is `093a3b33` (**25 Aug**). Phases 80–91 reach
-  **no phone** until it is built. The quota is the only blocker and it is billing, not engineering.
-- 🔴 **The two signing keystores and the Firebase key have already been uploaded at least once** — the
-  fix prevents future uploads, it cannot recall past ones. See the rotation decision above.
-- **The `.easignore` change is still unverified against a real build** (now doubly so — two commits
-  touch it). Verified only by replicating eas-cli's filter: 301 → 297 files, exactly four secrets
-  removed, zero newly included, every build-essential path intact. **If tomorrow's build fails on a
-  missing file, `.easignore` is the first suspect**; `git revert 954a0a4` then `4a12899`.
-- **The whole backend window is still unshipped** — `origin/main` still `990c660`, 29 commits behind.
-  Mobile Phases 86–89 and the entire voice track stay inert, and **team notifications remain silently
-  broken in production**.
-- **Item 1 of the admin sweep and all 7 map defects are unacknowledged** — filed today, no reply yet.
-- **The `cgpe-front-main-RECOVERED` caveat is stated in the INBOX item, not hidden:** if the deployed
-  panel is built from a newer tree, "no live-location view exists" is only true of the checkout we can
-  see.
-- **Untracked repo-root files left alone** (`*.mp3`, the `.txt` files, the staff JSON, the store spec,
-  `.claude/settings.json`) — the owner's local files. The secret files were **not deleted**, only
-  excluded from the upload; removing an owner's keystore is not ours to do.
+- 🔴 **The fix is DEVICE-UNVERIFIED, like the two crashing builds before it.** This is the third
+  attempt; the first two were containment and both failed. The diagnosis is strong (it explains both
+  builds with one cause) but **only a handset settles it**. If it crashes again:
+  `VOICE_ENABLED = false` in `src/voice/enabled.ts` — one line — and **do not spend another build on
+  a new guess** without a device or the crash dialog's "View summary".
+- 🔴 **PRODUCTION SECRETS ARE COMMITTED AND PUSHED** in `Aaziko1Market1/cgpe-backend` at
+  `docs/OPS-ENV-HANDOVER.md` (`1624f8a`) — on `origin/main`, `origin/Shivam` *and* `origin/ved`.
+  21 real values including **`JWT_SECRET` (64 chars)**, which signs every session token: it mints a
+  valid token for any user, super_admin included, with no password. **Deleting the file does not fix
+  it (git history) — these must be ROTATED**, and rotating `JWT_SECRET` signs everyone out, so the
+  owner picks the moment. **Owner-owned, unanswered, and the most serious open item in the project.**
+- **Voice cannot ANSWER until OPS sets `SARVAM_API_KEY` + `N8N_VOICE_BRAIN_URL` and restarts `:3001`.**
+  `/api/voice/ask` answers `503 not_configured` (`voiceConfig()` needs `ready = stt && brain`).
+  **We could not verify the env from here** — `GET /api/voice/status` reports exactly this (names
+  only, never values) but sits behind `protect`, and this session holds no credentials. The n8n brain
+  itself **is** live and correctly rejects a bad secret (probed). The backend's own handover doc parks
+  both keys under *"Group 2 — can wait; the owner is arranging these"*, so they are probably unset.
+- **The owner declined USB debugging**, so `adb logcat` is unavailable. `platform-tools` is in the
+  session scratchpad if that changes.
+- **Never confirmed which build was installed** when vc3 was reported as still crashing. The owner
+  reported the APK link opening in a browser on some handsets, which makes re-installing an older
+  file easy. **Ask for `Settings › Apps › CGPE Connect → 1.10.0 (N)` before believing a bug report.**
+- **The "view as preview" crash report is unexplained** (see Decisions).
+- **Everything since 25 Aug remains device-unverified**, which is what keeps Phase Ω shut.
 
 ## Next session starts here
 
-- **Phase 90 (unchanged): build the APK.** The quota should have reset on 1 Sep.
+- **Phase 96: confirm vc5 on a real handset, then add EAS Update (OTA).** OTA is what the owner has
+  asked for twice — after it, a fix like today's ships in seconds with no rebuild and no quota.
 - **First command:**
   `npx eas-cli build:list --platform android --limit 3 --json --non-interactive`
-  (confirms the rollover and that `093a3b33` is still newest), then
-  `EAS_SKIP_AUTO_FINGERPRINT=1 npx eas-cli build -p android --profile preview --non-interactive`
-- **Watch out for:** the single biggest trap is **treating a session teardown as a build failure** — it
-  kills the local "waiting for build" process but **NOT** the remote build, so on resume use
-  `build:view <id> --json`, never a relaunch. Then, in order: if it dies locally at "Computing project
-  fingerprint" with an `UNKNOWN: unknown error` on a `react-native-reanimated` file, that is the
-  Windows trap and `EAS_SKIP_AUTO_FINGERPRINT=1` is already in the command; and if it fails on a file
-  it cannot find, suspect this session's `.easignore` edit first.
-
+  (confirm `a9583d51` / versionCode 5 is newest), then ask the owner what the mic button did.
+- **Watch out for:** **treating a green gate chain as evidence.** It was green on both crashing
+  builds. The only evidence about this class of fault is a phone. Second trap: **do not re-enable
+  Skia/blur/Lottie** while chasing something else — they are off deliberately and are still unproven.
 ---
 ---
 

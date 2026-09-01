@@ -514,6 +514,106 @@ module's own top level stays native-free so the Vitest graph is still safe. The 
 the reasoning is written in its header. **Do not add a `test/stubs/*` entry for a module reached by
 `require` — it will silently do nothing.**
 
+## 🔴 THE FOURTH TRAP, AND IT COST FOUR APKs IN ONE DAY: a UI-thread worklet (2026-09-01)
+
+**A plain JS function called from a Reanimated worklet body KILLS THE APP IN RELEASE.**
+`useAnimatedStyle` / `useDerivedValue` / `useAnimatedProps` bodies run on the **UI thread**.
+Reanimated cannot call a non-`'worklet'` function from there — it raises *"Tried to synchronously
+call a non-worklet function on the UI thread"* — and a **release build has no LogBox, so an
+unhandled JS error is reported as FATAL and the process exits.** The user sees *"CGPE Connect keeps
+stopping"*, which is **indistinguishable from a native crash** and sends you hunting native modules.
+
+The live example: `OrbStatic`'s `clamp01` was missing its directive while
+`useDerivedValue(() => … clamp01(level.value))` called it. Two APKs (`372cd790`, `577a4ec5`) exited
+the moment voice mode opened.
+
+- ⚠️ **NO GATE IN THIS PROJECT CAN SEE IT, AND NONE EVER WILL.** `tsc` types it fine, `npm test`
+  never renders it, `eslint` has no rule for it, and `expo export -p web` passes because the web
+  build does not drive Reanimated's UI thread this way. **All four were green on both crashing
+  builds.** Only a handset finds it.
+- ⚠️ **NO ERROR BOUNDARY CATCHES IT.** See the next section — this is not a render-phase throw.
+- 🔎 **HOW TO AUDIT IT IN ONE COMMAND:** `grep -rn "'worklet'" src/` should account for **every**
+  function called from a worklet body. As of 2026-09-01 the answer is: `OrbSkia.tsx:27` and
+  `OrbStatic.tsx:34`, and **every other animated style in the app is self-contained** (only `Math.*`
+  built-ins and Reanimated's own `interpolate`, which are safe). **If you add a worklet that calls a
+  local helper, the helper needs the directive** — or inline the maths, which is what
+  `VoiceWaveform`'s `Bar` does and is the bulletproof option. `OrbStatic` now does **both**, on
+  purpose, so an edit to one cannot reintroduce the fault.
+- 🔑 **The general rule: an ASYMMETRY between sibling files is evidence.** The identical helper
+  existed in three places — workletized in `OrbSkia`, hand-inlined in `VoiceWaveform`, and plain in
+  `OrbStatic`. That inconsistency was the whole diagnosis, and it was visible from a `grep`.
+- 🔑 **And a fallback runs more often than the thing it backs.** `OrbStatic` renders as the Skia
+  orb's `Suspense`/boundary fallback **and** as the sole character once Skia is off — which is why
+  switching Skia off (twice) changed nothing. **When a component fails, read what its FALLBACK does
+  before blaming the component.**
+
+## What a React error boundary does NOT catch — checked before relying on one (2026-09-01)
+
+`_layout.tsx`'s exported `ErrorBoundary` (whole-app) and `ui/FeatureBoundary.tsx` (one subtree) both
+cover **render and commit only**. They do **not** cover:
+- **event handlers** — `onPress={…}`, and this app calls `async` handlers **unawaited**
+  (`VoiceMode`'s `onPressIn`/`onPressOut` now `.catch()` explicitly for exactly this reason);
+- **promise rejections** — anything after an `await`;
+- **UI-thread worklets** — the trap above;
+- **native aborts** — a `.so` that kills the process before any JS runs.
+
+⚠️ **Phase 93 added a boundary around voice and reported it as containment. It could not have helped
+with any of the four.** Adding a boundary is not a reliability answer on its own — **say which phase
+the failure occurs in first.** `ui/FeatureBoundary.tsx` is still correct for render-phase faults in
+an optional feature (it removes the feature instead of unmounting the React root and erasing the
+back stack) and its limits are written at the file. Do not widen the claim.
+
+## Voice: two switches, and why both are where they are (2026-09-01)
+
+- **`VOICE_ENABLED`** (`src/voice/enabled.ts`) — the whole feature. `false` means `VoiceLauncher`
+  renders **no button** and `VoiceModeInner` never mounts, so `expo-audio`, the Reanimated voice
+  surfaces and every voice import never load. **This is the one-line kill switch if voice crashes
+  again — use it instead of guessing.**
+- **`VOICE_HEAVY_GRAPHICS_ENABLED`** (`src/lib/voiceGraphics.ts`) — Skia orb, `expo-blur`, Lottie.
+  **`false`, and they were NOT the crash.** They stay off because they are decoration that has never
+  run on a handset; re-enabling is a separate decision needing its own device test. **Do not flip it
+  as a side effect of unrelated work.**
+- ⚠️ **`VoiceMode` is a SHELL + `VoiceModeInner`.** The shell reads one context value so the inner
+  hooks never run while closed. Before this split, `useVoiceTurn` → `useAudioRecorder` sat **above**
+  `if (!isOpen) return null`, so a native recorder was constructed on **every app boot**. Keep the
+  split; do not "simplify" it back into one component.
+- **A failed turn now reports its real cause** (`src/voice/cause.ts` → the banner's message line),
+  because every path used to `catch { fail(…) }` and discard the exception, leaving a screenshot with
+  zero diagnostic value. **When you write a `catch` that shows a friendly sentence, keep the real one
+  too.** The banner title is now the sentence the failure produced (it used to be hard-coded, so an
+  unconfigured server read "Something went wrong, please try again" **above** "Voice is not switched
+  on for this server yet"), and the retry action is withheld when `permanent`.
+
+## Builds are now identifiable, and the quota is a measured number (2026-09-01)
+
+- ✅ **`eas.json`'s `preview` profile carries `autoIncrement`.** versionCode went 1 → 2 → 3 → 4 → 5 on
+  2026-09-01. Before that **every** preview build was versionCode 1 and only an APK SHA-256 could
+  tell two builds apart. **The next build is versionCode 6 — never describe it as fixed.**
+- ⚠️ **ASK WHICH BUILD IS INSTALLED BEFORE BELIEVING A BUG REPORT:**
+  `Settings › Apps › CGPE Connect → 1.10.0 (N)`. This was never confirmed for vc3, and the owner
+  reported the APK link **opening in a browser** on some handsets — which makes re-installing an
+  older downloaded file easy, and leaves a whole debugging round unfalsifiable.
+- 📊 **THE FREE-PLAN QUOTA IS 15 ANDROID BUILDS PER MONTH — measured, not quoted.** August ran
+  **15** and then refused; July ran 13 and did not. Four were used on 1 Sep. **The old "quota is
+  precious" anxiety was out of proportion — but the discipline it produced is still right for a
+  better reason: the real cost of a bad build is 21 handsets on a broken app, not a build credit.**
+- **EAS Update (OTA) is STILL NOT INSTALLED**, so every JS fix needs a full rebuild. **The owner has
+  asked for it twice** ("aisa change karo ki nayi APK ki zaroorat na pade"). It was deliberately kept
+  out of all four 1 Sep builds — it adds a native module and changes the boot path, and those were
+  the builds fixing a crash. **It is the agreed next step once a build is confirmed good on a phone.**
+
+## `GET /dashboard/overview` can answer 200 with numbers that are not real (2026-09-01)
+
+Backend Phase 110 replaced `.catch(() => [])` with a `softRead`: a failed source read now returns
+**200** with that source's KPIs **zeroed** and `partial:true` + `degraded:['claims', …]` **inside
+`data`**. The app read neither field, so the master dashboard printed "0 claims, ₹0 settled" as
+though true — convention #4's exact failure mode on the most trusted surface in the app.
+`getDashboardOverview` now re-reports to `data/health` when `partial === true` (kind `'server'`).
+🔑 **A client cannot detect this class at all** — the status is fine, the body is valid, there is
+nothing to retry. **The producer is the only party who knows.** Same argument as the Phase-89
+notification id-kind bug, from the opposite direction. *(`routes/claims.js` also uses the word
+`partial` for a partly-settled claim — unrelated; do not conflate them.)*
+
 ## Read the sibling's UNDEPLOYED commits, not just the items addressed to you (2026-08-31)
 
 ⚠️ **A backend change to a route THE APP ALREADY USES can land with no INBOX item at all.** Phase 87's
