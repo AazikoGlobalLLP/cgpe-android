@@ -14,7 +14,57 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**🔴🔴 2026-09-01 — READ THIS FIRST: THE BACKEND DEPLOYED, AND TWO THINGS CAME WITH IT THAT ARE NOT
+**🔴 2026-09-01 — PHASE 93: THE VOICE APK CRASHED ON EVERY HANDSET, AND THE GATES WERE ALL GREEN ON
+IT. The build `372cd790` shipped and tapping the mic button killed the app to "CGPE Connect keeps
+stopping".** Fixed across four commits (`265ba83`, `6a8c408`, `6acfa54`, `5885792`).
+- 🔑 **THE LESSON, WHICH IS BIGGER THAN THE BUG: `tsc` + `npm test` + `eslint` + `expo export -p web`
+  CANNOT SEE A NATIVE CRASH, AND THIS BUILD WAS THE FIRST TO CARRY VOICE — i.e. its riskiest surface
+  had never once run on hardware.** That was written in this file as "device-unverified" and was not
+  treated as a blocker at build time. **If a build carries a native module that has never run on a
+  phone, say so before spending the build**, and prefer shipping it switched off.
+- **WHAT IT IS NOT, deduced from this tree rather than guessed.** Not `expo-audio`: `VoiceMode` calls
+  `useVoiceTurn` (→ `useAudioRecorder`) at **line 48**, before its `if (!isOpen) return null` at
+  **line 71**, so the recorder is constructed on **every boot** — and boot is fine. Not Lottie:
+  `mascotFor()` returns `null` unconditionally. Not a missing ABI: the APK was **downloaded and
+  opened**, and `librnskia.so` is present for **both** `arm64-v8a` and `armeabi-v7a`, 28 libs each.
+  That leaves the only two things that first RENDER on tap: **Skia's `<Canvas>`** and **`expo-blur`'s
+  `BlurView`**.
+- **THE FIX IS CONTAINMENT, NOT A GUESS BETWEEN THE TWO.** Neither adds function, so both are off
+  behind `VOICE_HEAVY_GRAPHICS_ENABLED` (`lib/voiceGraphics.ts`). `OrbStatic` and the simulated-frost
+  card are the documented always-works fallbacks. Voice mode now renders only surfaces already proven
+  on a device: RN, Reanimated, `expo-linear-gradient`, `expo-audio`.
+- ⚠️ **A `try/catch` AROUND A `require`, `React.lazy`, AND AN ERROR BOUNDARY ARE ALL USELESS HERE** —
+  they catch JS; a native module aborts the PROCESS. `VoiceCharacter`'s `OrbBoundary` looked like
+  protection and was not. **The probe proves a module is INSTALLED, never that it RENDERS.**
+- **THE SECOND FAULT, AND THE ONE THAT KEPT US BLIND: the app threw the reason away.** All three
+  failure paths ran `catch { fail(…) }` without binding the exception, and the banner hard-coded
+  `voice.failed` as its title while showing the same sentence again as its message — which is exactly
+  what the owner's screenshot shows. New pure seam **`src/voice/cause.ts`** puts the real reason on
+  screen (one line, capped at 160 chars, `null` rather than `[object Object]`), the banner title is
+  now the sentence the failure actually produced, and **the "Try again" action is withheld when the
+  failure is permanent** — an unconfigured server was previously offered a retry that cannot work,
+  undoing in a button the rule the message text was obeying.
+- **"Hold to speak" is a SEPARATE fault from the crash, and it is before the network.** A 503 would
+  have been classified `unconfigured` and read "Voice is not switched on for this server yet"
+  (`isPermanentVoiceOutage` reads `code:'not_configured'`, which is what the backend sends). It said
+  `voice.failed`, so the recorder is what fails. `prepareToRecordAsync` is now retried with the
+  **unmodified** `HIGH_QUALITY` preset when our modified one (mono + metering) throws — Android's AAC
+  encoder may refuse a combination the vendor never shipped, and STT does not care about channels.
+  The **first** error is the one reported, because it names the option that was refused.
+- **`ui/FeatureBoundary.tsx`** now wraps `VoiceLauncher` and `VoiceMode`: a JS throw in voice removes
+  *voice*, instead of unmounting the React root and costing the user their screen and back stack.
+  No retry, on purpose — a component that threw in render throws again, and re-mounting it flickers.
+- 📊 **QUOTA, MEASURED: the free plan allows 15 Android builds a month.** August ran **15** and then
+  refused; July ran 13 and did not. September has used **1**. So this was never the constraint it was
+  treated as — **but do not use that as licence to build instead of verifying.**
+- **STILL OPEN:** the crash's exact culprit is **contained, not identified**. The next occurrence will
+  name itself on screen thanks to `cause.ts`. **And the owner's report that stopping a "view as"
+  preview can trigger it is UNEXPLAINED** — `applyView` (`more.tsx:188`) only sets state and toasts;
+  without a log this was deliberately not guessed at.
+
+---
+
+**🔴🔴 2026-09-01 — THE BACKEND DEPLOYED, AND TWO THINGS CAME WITH IT THAT ARE NOT
 OURS TO FIX ALONE.**
 
 **(1) PRODUCTION SECRETS ARE COMMITTED AND PUSHED TO GITHUB.** `cgpe-backend`'s

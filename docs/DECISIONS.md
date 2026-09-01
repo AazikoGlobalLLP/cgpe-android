@@ -5519,3 +5519,57 @@ than merely delivering features — so it is worth stating that before spending 
 `JWT_SECRET` and 20 other real values are committed and pushed in the sibling backend repo. Rotation
 is the only real fix and rotating the JWT secret logs out every user, so the timing is the owner's.
 No value was copied into our tree, our commits, or our docs — names only.
+
+## 2026-09-01 — Phase 93 (the crashing voice APK)
+
+**D-1. Switched BOTH crash suspects off rather than picking one.**
+Skia's `<Canvas>` and `expo-blur`'s `BlurView` are the only two surfaces that first render when voice
+mode opens, and the evidence available here cannot separate them (a native abort leaves nothing in
+JS to inspect, and the device is not on this desk). Guessing would have cost a build per guess.
+Neither adds function — `OrbStatic` and the simulated-frost card are the documented always-works
+fallbacks — so the honest move was to remove both and say plainly that this is containment, not a
+diagnosis.
+
+**D-2. A capability probe is not protection, and the code said otherwise.**
+`hasSkia()`/`hasBlur()` wrap a `require` in `try/catch`, and `VoiceCharacter` adds `React.lazy` plus
+an `OrbBoundary`. All of that catches **JavaScript**. The failure mode of these libraries is a native
+abort, which kills the process before any JS runs. The comments implied a safety that did not exist,
+which is part of why the build was shipped confidently. Written at the code now.
+
+**D-3. Report the real exception to the user, in the banner.**
+Previously every failure path discarded the thrown value and the banner hard-coded the same generic
+sentence as both title and message. A field agent's screenshot therefore carried zero diagnostic
+information, and the only remaining route was `adb logcat` — which a field agent cannot produce.
+Showing a terse technical line under the friendly sentence is a deliberate trade: slightly uglier for
+the user, but a failure that identifies itself from a screenshot. It is not translated on purpose —
+a translated exception helps nobody — and it is capped at 160 characters because a banner is not a
+log viewer.
+
+**D-4. Withhold "Try again" when no retry can help.**
+The rule that an unconfigured server must never carry retry copy was already honoured in the message
+text and then undone by the button beside it. `fail()` now carries `permanent`.
+
+**D-5. Retry the recorder with the vendor's unmodified preset.**
+The hook prepares `HIGH_QUALITY` modified to mono. Mono was a bandwidth optimisation, not a
+requirement, and Android's AAC encoder may refuse a combination the vendor never shipped as a preset.
+Rather than assert that this is the cause, `prepareToRecordAsync` is retried with the plain preset —
+it takes per-call overrides, so the extra call happens only on a device that would otherwise have
+failed outright. The FIRST error is the one reported, since it names the refused option.
+
+**D-6. A feature boundary that shows nothing and never retries.**
+Voice failing should cost the user voice, not their screen and back stack (which is what the
+whole-app `ErrorBoundary` costs, because the navigation state is erased on unmount). No retry: a
+component that throws during render throws again, and re-mounting produces a flicker loop.
+
+**D-7. Did NOT add EAS Update (OTA) to this build, despite the owner asking for exactly that.**
+OTA is the right answer to "make it so a fix does not need a new APK", and it will be added — but it
+introduces a native module and changes the boot path, and this is the build whose entire purpose is
+to stop a native crash. Shipping an unproven native module inside the fix for an unproven native
+module is how the first mistake repeats. Sequence: prove this build on a handset, then add OTA to the
+next one. **14 of the month's 15 builds remain**, so nothing forces the two into one.
+
+**D-8. Measured the quota instead of quoting it.**
+August ran 15 Android builds and then refused; July ran 13 and did not. So the free-plan allowance is
+15/month, and September has used one. The earlier sessions' anxiety about the quota was not
+proportionate to the real limit — but the discipline it produced (verify before spending) was right
+for a different reason, and should survive knowing the number.
