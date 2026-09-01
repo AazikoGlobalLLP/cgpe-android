@@ -209,6 +209,26 @@ The values have to be **rotated**. Suggested order:
 from an EAS build archive (see CLAUDE.md). Whatever ignore rule is added, check every place the file
 could still be copied.
 
+### 13. ⏱️ nginx `proxy_read_timeout` vs the voice proxy's own 80 s budget (added 2026-09-01)
+
+This is arithmetic against the backend's own numbers, not a guess, and it is the one item here that
+**only voice can trigger** — no other request in the app can legitimately run for a minute.
+
+- The voice proxy is three sequential vendor calls whose own timeouts are **STT 30 s + brain 20 s +
+  TTS 30 s** (`cgpe-backend-main/services/voiceService.js:54-56`) — a declared worst case of **80 s**.
+  The app's client ceiling is sized to exactly that, deliberately (mobile Phase 87).
+- **nginx's default `proxy_read_timeout` is 60 s.** If it is still the default on the location fronting
+  `/internal/api/`, every turn slower than 60 s is cut by nginx while the proxy is still working — the
+  vendors are billed, and the app shows a status-less connection error it cannot explain.
+- **Do one of two things, so the two numbers agree:** raise `proxy_read_timeout` (and
+  `proxy_send_timeout`) to **≥ 90 s** on that location, or lower the three `VOICE_*_TIMEOUT_MS` env
+  values so the chain cannot exceed 60 s. Either is fine; disagreeing is not.
+- **Also confirm §7's `client_max_body_size` is actually applied to this path.** The voice route allows
+  **10 MB** (`routes/voice.js:40`); nginx's default is 1 MB. Clips are now capped at 15 s (~250 KB) app
+  side, so this is no longer urgent — but a 1 MB ceiling in front of a 10 MB route is worth knowing.
+- **Why it is asked rather than asserted:** we cannot read the droplet's nginx config from here. Both
+  values are one `grep` on the server.
+
 ---
 
 ## NOT for the server developer — tracked here only so it is not confused with the above
@@ -231,6 +251,12 @@ could still be copied.
 ---
 
 ## Change log for this file
+
+- **2026-09-01 (mobile Phase 96)** — new **§13**: nginx `proxy_read_timeout` (default 60 s) against the
+  voice proxy's own declared 80 s worst case, plus a re-check of §7's body limit on the voice path. Both
+  surfaced when voice reached a real handset for the first time. **Neither is blamed for what the owner
+  saw** — both of that day's failures were app-side (a leaked recorder) and are fixed; these two values
+  are asked for because they are cheap and only voice can reach them.
 
 - **2026-08-31 (later still, mobile Phase 89)** — new **§11**: the deploy repairs team notifications,
   which are silently broken on production today (backend `d4fad85` fixes it; no configuration needed).
