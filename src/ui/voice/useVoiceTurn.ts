@@ -21,6 +21,7 @@ import * as voiceAudio from '@/lib/voiceAudio';
 import { askVoice, isTransportError } from '@/voice/client';
 import { VOICE } from '@/voice/constants';
 import { langForVoice, isRecordingTooShort } from '@/voice/request';
+import { describeCause, describeTransport } from '@/voice/cause';
 import { isAllowedVoiceRoute } from '@/voice/routes';
 import { historyForNlu, recordAssistantTurn, recordUserTurn } from '@/voice/session';
 import { dbToAmp01, type VoiceCharacterState } from '@/ui/voice/voiceVisual';
@@ -30,7 +31,15 @@ export type VoiceTurn = {
   transcript: string;
   setTranscript: (s: string) => void;
   reply: string;
+  /** The human sentence for the failure — the banner TITLE, not a hard-coded one. */
   error: string | null;
+  /**
+   * The technical reason behind `error`, shown under it. `null` when there is nothing useful to add.
+   * Without this a failed turn is undiagnosable from anything but a USB cable — see `voice/cause.ts`.
+   */
+  cause: string | null;
+  /** No retry can help (voice is switched off at the server) → the banner withholds "Try again". */
+  permanent: boolean;
   /** 0..1 mic amplitude on the UI thread — the character/waveform read it with zero re-render. */
   level: SharedValue<number>;
   /** ms at which the current capture began (for the live duration + countdown). */
@@ -56,6 +65,12 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   const [transcript, setTranscript] = useState('');
   const [reply, setReply] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // The technical reason behind `error`, shown UNDER the friendly sentence. See `voice/cause.ts`:
+  // without it a failed turn is undiagnosable from anything but a USB cable.
+  const [cause, setCause] = useState<string | null>(null);
+  // True when no retry can help — the server has voice switched off. Drives whether the banner is
+  // allowed to offer "Try again", which for this case would be a promise the app cannot keep.
+  const [permanent, setPermanent] = useState(false);
   const busy = useRef(false);
   const sessionIdRef = useRef('');
   const startedAtRef = useRef(0);
@@ -94,17 +109,23 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   const reset = useCallback(() => {
     setState('idle');
     setError(null);
+    setCause(null);
+    setPermanent(false);
   }, []);
 
-  const fail = useCallback((msg: string) => {
+  const fail = useCallback((msg: string, why?: string | null, isPermanent = false) => {
     haptics.error();
     setState('error');
     setError(msg);
+    setCause(why ?? null);
+    setPermanent(isPermanent);
   }, []);
 
   const startCapture = useCallback(async () => {
     if (busy.current) return;
     setError(null);
+    setCause(null);
+    setPermanent(false);
     const ok = await voiceAudio.ensureMicPermission();
     if (!ok) {
       toast(t('voice.micDenied'), 'warning');
@@ -118,8 +139,10 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       await voiceAudio.beginCaptureSession();
       await recorder.prepareToRecordAsync();
       recorder.record();
-    } catch {
-      fail(t('voice.failed'));
+    } catch (e) {
+      // The recorder is the likeliest thing to fail on a handset we have never tested on, and it is
+      // the one failure the user CAN see. Keep what it actually said.
+      fail(t('voice.failed'), describeCause(e));
     }
   }, [recorder, toast, t, fail]);
 
@@ -167,6 +190,8 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
             : result.transport === 'timeout' || result.transport === 'server'
               ? t('voice.failed')
               : t('voice.offline'),
+          describeTransport(result.transport, result.status),
+          result.transport === 'unconfigured',
         );
         return;
       }
@@ -197,8 +222,8 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       }
       // 'none' or a confirm_write (display only in v1): leave the answer on screen, then relax to idle.
       setTimeout(() => setState((s) => (s === 'speaking' ? 'idle' : s)), 1400);
-    } catch {
-      fail(t('voice.failed'));
+    } catch (e) {
+      fail(t('voice.failed'), describeCause(e));
     } finally {
       clearTimeout(slow);
       busy.current = false;
@@ -215,5 +240,5 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
     onClose();
   }, [onClose, reset]);
 
-  return { state, transcript, setTranscript, reply, error, level, startedAtRef, startCapture, finishCapture, close, reset };
+  return { state, transcript, setTranscript, reply, error, cause, permanent, level, startedAtRef, startCapture, finishCapture, close, reset };
 }

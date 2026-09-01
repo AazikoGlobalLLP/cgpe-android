@@ -107,8 +107,20 @@ export function VoiceMode() {
 
         {/* result cards */}
         <View style={{ gap: spacing.md }}>
+          {/* The TITLE is the specific sentence the failure produced, not a hard-coded one. It used to
+              be `t('voice.failed')` with `turn.error` repeated underneath it, which read as the same
+              line twice for the commonest case — and, worse, put "Something went wrong, please try
+              again" above "Voice is not switched on for this server yet", contradicting it. The
+              technical reason goes in `message`, and the retry action is withheld when nothing the
+              user does can help (`permanent`) — the documented rule for an unconfigured server. */}
           {turn.state === 'error' && turn.error ? (
-            <Banner tone="danger" title={t('voice.failed')} message={turn.error} action={{ label: t('common.tryAgain'), onPress: turn.reset }} onDismiss={turn.reset} />
+            <Banner
+              tone="danger"
+              title={turn.error}
+              message={turn.cause ?? undefined}
+              action={turn.permanent ? undefined : { label: t('common.tryAgain'), onPress: turn.reset }}
+              onDismiss={turn.reset}
+            />
           ) : null}
           {turn.transcript ? (
             <VoiceGlass style={{ padding: spacing.md }}>
