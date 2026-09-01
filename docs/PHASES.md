@@ -16,7 +16,13 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 **🔴 2026-09-01 — PHASE 93: THE VOICE APK CRASHED ON EVERY HANDSET, AND THE GATES WERE ALL GREEN ON
 IT. The build `372cd790` shipped and tapping the mic button killed the app to "CGPE Connect keeps
-stopping".** Fixed across four commits (`265ba83`, `6a8c408`, `6acfa54`, `5885792`).
+stopping".** Fixed across four commits (`265ba83`, `6a8c408`, `6acfa54`, `5885792`) and shipped as
+build **`577a4ec5`** (FINISHED, **v1.10.0 / versionCode 3**, from `5885792`) —
+`https://expo.dev/artifacts/eas/lpoirjT_MEyyW7_Z7TlqNF-19iHlpnz-1IVO_dzYRFQ.apk`
+(artifact expires 2026-09-15). **The crashing build was versionCode 2; this is 3**, which is the first
+time in this project two builds can be told apart without hashing `base.apk`. **2 of the month's 15
+builds are now used.** ⚠️ **It is device-UNVERIFIED like every build before it — that is the whole
+lesson of this phase. Confirm on a handset before telling anyone it is fixed.**
 - 🔑 **THE LESSON, WHICH IS BIGGER THAN THE BUG: `tsc` + `npm test` + `eslint` + `expo export -p web`
   CANNOT SEE A NATIVE CRASH, AND THIS BUILD WAS THE FIRST TO CARRY VOICE — i.e. its riskiest surface
   had never once run on hardware.** That was written in this file as "device-unverified" and was not
