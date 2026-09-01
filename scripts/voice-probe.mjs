@@ -12,12 +12,20 @@
  *   cd f:\Shivam-Aaziko-Dev-MERN\CGPE-CURRENT-PROJECT\ANDROID
  *   $env:CGPE_EMAIL = "you@example.com"
  *   $env:CGPE_PASSWORD = "your-password"
- *   $env:CGPE_VOICE_SECRET = "vbk_..."      # optional; without it the brain battery is skipped
+ *   $env:CGPE_VOICE_SECRET = "vbk_..."      # OPTIONAL - see below
  *   node scripts/voice-probe.mjs
  *
- * It signs in, prints which voice legs the server has configured, then asks the brain a battery of
- * real Hindi / English / Hinglish commands and shows what came back. Add `--audio <file.m4a>` to
- * also exercise the full `POST /api/voice/ask` chain (STT → brain → TTS).
+ * It signs in, prints which voice legs the server has configured, then runs every clip in
+ * `e2e/voice-probe/audio/` through the REAL `POST /api/voice/ask` chain (STT -> brain -> TTS) and
+ * shows what was heard, which screen would open, and what it said back.
+ *
+ * 🔑 THE AUDIO PATH NEEDS ONLY A LOGIN. The backend holds the brain secret and makes that call
+ * itself, so a tester who cannot see the droplet's `.env` can still exercise the entire feature.
+ * `CGPE_VOICE_SECRET` only unlocks the EXTRA text-only battery that talks to the brain directly
+ * (useful for checking intent mapping without spending STT/TTS), and is skipped when absent.
+ *
+ * Generate the clips first — locally and free, no vendor, no credits:
+ *   powershell -ExecutionPolicy Bypass -File scripts\make-voice-clips.ps1
  *
  * ⚠️ CREDENTIALS COME FROM THE ENVIRONMENT ONLY. Nothing is hardcoded, nothing is written to a
  * commit, and the raw responses land in `e2e/voice-probe/`, which is gitignored AND easignored.
@@ -64,12 +72,16 @@ async function login() {
   const password = process.env.CGPE_PASSWORD;
   if (!email || !password) {
     console.error('Set CGPE_EMAIL and CGPE_PASSWORD in this shell first. See the header of this file.');
-    process.exit(2);
+    throw new Error('missing credentials');
   }
   const res = await fetch(`${API}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    // ⚠️ THE FIELD IS `email_or_phone`, NOT `email` — `routes/auth.js:820` validates it by that
+    // name and answers 400 "Email or mobile number is required" for anything else. The first run of
+    // this script sent `email` and failed exactly there. The APP has always been right
+    // (`src/data/api.ts:980`); only this script was guessing. Read the producer, do not assume.
+    body: JSON.stringify({ email_or_phone: email, password }),
   });
   const json = await res.json().catch(() => null);
   // Shape from `cgpe-backend-main/routes/auth.js:931` — `{success, data:{user, token}}`.
@@ -78,7 +90,11 @@ async function login() {
     console.error(`\nLOGIN FAILED: HTTP ${res.status}`);
     console.error(JSON.stringify(json)?.slice(0, 300));
     console.error('\n(the app shows these as friendly sentences; NO_ACCOUNT / BAD_PASSWORD are the machine codes)');
-    process.exit(3);
+    // `process.exit()` here crashed Node on Windows with
+    // "Assertion failed: !(handle->flags & UV_HANDLE_CLOSING) ... src\\win\\async.c" — libuv objects
+    // to being torn down while a fetch handle is still open. Throw instead and let the runner set
+    // exitCode, so a failed probe ends with a readable line rather than a native assertion.
+    throw new Error('login failed');
   }
   console.log(`Signed in as ${json?.data?.user?.full_name || email} (HTTP ${res.status})\n`);
   return token;
@@ -144,7 +160,63 @@ async function runBrain(authToken) {
   console.log('');
 }
 
-/** The full chain, exactly as the app calls it (multipart, bearer token, no Content-Type header). */
+/**
+ * The full chain (STT → brain → TTS) for EVERY clip in `e2e/voice-probe/audio/`, exactly as the app
+ * calls it: multipart, bearer token, and NO Content-Type header so fetch sets the boundary itself.
+ *
+ * 🔑 THIS PATH NEEDS ONLY A LOGIN — not `CGPE_VOICE_SECRET`. The backend holds the brain secret and
+ * makes that call for us, so a tester who cannot see the droplet's `.env` can still exercise the
+ * whole feature. That is what makes this the useful mode.
+ *
+ * The clips are generated locally and free by `scripts/make-voice-clips.ps1` (Windows' built-in
+ * speech engine), so no vendor, no credits and no upload are needed to produce test speech.
+ */
+async function askAllClips(token) {
+  const dir = path.join(OUT, 'audio');
+  if (!fs.existsSync(dir)) {
+    console.log(`(no clips in ${dir} — run scripts/make-voice-clips.ps1 first, or pass --audio <file>)`);
+    return;
+  }
+  const clips = fs.readdirSync(dir).filter((f) => /\.(wav|m4a|mp3|aac|ogg|webm)$/i.test(f)).sort();
+  if (clips.length === 0) { console.log(`(no audio files in ${dir})`); return; }
+
+  console.log(`FULL CHAIN — POST /voice/ask with ${clips.length} clips\n`);
+  for (const file of clips) {
+    const id = path.basename(file).replace(/\.[^.]+$/, '');
+    const form = new FormData();
+    form.append('audio', new Blob([fs.readFileSync(path.join(dir, file))]), file);
+    form.append('lang', 'en-IN');
+    form.append('session_id', 'probe-session');
+    form.append('request_id', `probe-${id}-${Date.now()}`);
+    form.append('screen', '/(tabs)/home');
+    form.append('history', '[]');
+
+    const t0 = Date.now();
+    try {
+      const res = await fetch(`${API}/voice/ask`, {
+        method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form,
+      });
+      const text = await res.text();
+      let json = null;
+      try { json = JSON.parse(text); } catch { /* keep raw */ }
+      save(`ask-${id}`, json ?? text);
+      const ms = Date.now() - t0;
+      const act = json?.action || {};
+      const heard = String(json?.transcript ?? '').replace(/\s+/g, ' ').slice(0, 40);
+      const reply = String(json?.reply_text ?? '').replace(/\s+/g, ' ').slice(0, 46);
+      console.log(
+        `  ${id.padEnd(13)} HTTP ${res.status} ${String(ms + 'ms').padEnd(8)} ` +
+        `heard="${heard}" -> ${String(act.type ?? '-').padEnd(9)} ${String(act.route ?? '')}`,
+      );
+      if (reply) console.log(`  ${''.padEnd(13)} said: "${reply}"`);
+    } catch (e) {
+      console.log(`  ${id.padEnd(13)} THREW after ${Date.now() - t0}ms: ${e.message}`);
+    }
+  }
+  console.log('');
+}
+
+/** The single-file variant, kept for a one-off clip passed with `--audio`. */
 async function askWithAudio(token) {
   if (!audioPath) {
     console.log('(no --audio given, so STT/TTS were not exercised — pass a clip to run the full chain)');
@@ -189,7 +261,9 @@ DARK in v1 (VOICE_WRITES_ENABLED = false), so a "create a task" half would not e
   const token = await login();
   await voiceStatus(token);
   await runBrain(token);
+  await askAllClips(token);
   await askWithAudio(token);
 })()
   .then(() => { console.log(NOTE); console.log(`\nRaw responses saved under ${OUT}/`); })
-  .catch((e) => { console.error('probe failed:', e); process.exit(1); });
+  .catch((e) => { console.error(`
+probe stopped: ${e.message}`); process.exitCode = 1; });
