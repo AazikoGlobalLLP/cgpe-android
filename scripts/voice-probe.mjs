@@ -1,29 +1,27 @@
 #!/usr/bin/env node
 /**
- * Exercise the REAL voice pipeline from this machine, with no phone and no APK.
+ * Exercise the REAL voice pipeline from a terminal — no phone, no APK, no build.
  *
  * ── WHY ───────────────────────────────────────────────────────────────────────────────────────
- * Voice is the one feature whose correctness lives mostly OUTSIDE this repo: the n8n brain decides
+ * Voice is the one feature whose correctness mostly lives OUTSIDE this repo: the n8n brain decides
  * what a spoken sentence means and which screen to open. `npm test` pins our parser against
  * hand-written JSON, which proves we handle the shapes we IMAGINED — not the shapes the brain
- * actually sends. Those are different claims, and only this script can settle the second one.
+ * actually sends. Those are different claims, and only this script settles the second one.
  *
- * It sends a battery of real transcripts and prints, per command, what came back and whether the app
- * would act on it. Raw responses are saved so they can be pinned as fixtures (see
- * `src/voice/__tests__/brainShapes.test.ts`) — capture reality once, then test against it forever.
+ * ── HOW TO RUN IT (PowerShell) ────────────────────────────────────────────────────────────────
+ *   cd f:\Shivam-Aaziko-Dev-MERN\CGPE-CURRENT-PROJECT\ANDROID
+ *   $env:CGPE_EMAIL = "you@example.com"
+ *   $env:CGPE_PASSWORD = "your-password"
+ *   $env:CGPE_VOICE_SECRET = "vbk_..."      # optional; without it the brain battery is skipped
+ *   node scripts/voice-probe.mjs
  *
- * ── IT NEEDS A CREDENTIAL, AND IT TAKES IT FROM THE ENVIRONMENT ONLY ──────────────────────────
- * Nothing here is hardcoded and nothing is written to disk except responses. Two modes:
+ * It signs in, prints which voice legs the server has configured, then asks the brain a battery of
+ * real Hindi / English / Hinglish commands and shows what came back. Add `--audio <file.m4a>` to
+ * also exercise the full `POST /api/voice/ask` chain (STT → brain → TTS).
  *
- *   BRAIN  — talks to the n8n brain directly (text in, text out; no audio, no STT/TTS cost):
- *     CGPE_VOICE_SECRET=... node scripts/voice-probe.mjs --brain
- *
- *   PROXY  — signs in as a real user and calls the deployed backend the way the app does:
- *     CGPE_EMAIL=... CGPE_PASSWORD=... node scripts/voice-probe.mjs --proxy --audio path/to/clip.m4a
- *     (omit --audio to check `GET /api/voice/status` only — which legs are configured, names only)
- *
- * ⚠️ Never paste a secret into this file, a commit, or a chat. Pass it in the environment, and
- * prefer a throwaway/test account for PROXY mode.
+ * ⚠️ CREDENTIALS COME FROM THE ENVIRONMENT ONLY. Nothing is hardcoded, nothing is written to a
+ * commit, and the raw responses land in `e2e/voice-probe/`, which is gitignored AND easignored.
+ * Close the shell (or `Remove-Item Env:CGPE_PASSWORD`) when you are done.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,9 +32,8 @@ const OUT = path.join('e2e', 'voice-probe');
 
 /**
  * The battery. Mixed English / Hindi / Hinglish, because that is what the staff actually speak, and
- * deliberately including the two cases the owner asked about by name: an ordinary read
- * ("mere aaj ke tasks"), and a MULTI-COMMAND sentence — see the note printed at the end about why
- * the contract can only answer one of the two halves.
+ * deliberately including the two cases the owner named on 2026-09-01: an ordinary read
+ * ("mere aaj ke tasks"), and a MULTI-COMMAND sentence — see the NOTE printed at the end.
  */
 const BATTERY = [
   { id: 'tasks-today-hi', text: 'mere aaj ke tasks kya hai', expect: '/(tabs)/tasks' },
@@ -50,11 +47,10 @@ const BATTERY = [
   { id: 'clients', text: 'client list dikhao', expect: '/(tabs)/clients' },
   { id: 'reminders', text: 'aaj ke reminders batao', expect: '/reminders' },
   { id: 'nonsense', text: 'asdf qwerty zxcv', expect: 'none — must NOT navigate on a guess' },
-  { id: 'multi', text: 'mere aaj ke tasks dikhao aur ek naya task banao kal ke liye', expect: 'ONE action only — see note' },
+  { id: 'multi', text: 'mere aaj ke tasks dikhao aur ek naya task banao kal ke liye', expect: 'ONE action only — see NOTE' },
 ];
 
 const args = process.argv.slice(2);
-const mode = args.includes('--proxy') ? 'proxy' : 'brain';
 const audioArg = args.indexOf('--audio');
 const audioPath = audioArg >= 0 ? args[audioArg + 1] : null;
 
@@ -63,23 +59,11 @@ function save(name, body) {
   fs.writeFileSync(path.join(OUT, `${name}.json`), typeof body === 'string' ? body : JSON.stringify(body, null, 2));
 }
 
-/** One row of the report — kept short so a full battery fits on a screen. */
-function report(id, text, json, expect) {
-  const ok = json?.success ?? json?.ok;
-  const act = json?.action || {};
-  const reply = String(json?.reply_text ?? '').replace(/\s+/g, ' ').slice(0, 60);
-  console.log(
-    `  ${id.padEnd(16)} ok=${String(ok).padEnd(5)} action=${String(act.type ?? '-').padEnd(13)} ` +
-    `route=${String(act.route ?? '-').padEnd(16)} "${reply}"`,
-  );
-  if (expect) console.log(`  ${''.padEnd(16)} expected: ${expect}`);
-}
-
 async function login() {
   const email = process.env.CGPE_EMAIL;
   const password = process.env.CGPE_PASSWORD;
   if (!email || !password) {
-    console.error('PROXY mode needs CGPE_EMAIL and CGPE_PASSWORD in the environment.');
+    console.error('Set CGPE_EMAIL and CGPE_PASSWORD in this shell first. See the header of this file.');
     process.exit(2);
   }
   const res = await fetch(`${API}/auth/login`, {
@@ -88,57 +72,87 @@ async function login() {
     body: JSON.stringify({ email, password }),
   });
   const json = await res.json().catch(() => null);
-  const token = json?.token || json?.data?.token;
+  // Shape from `cgpe-backend-main/routes/auth.js:931` — `{success, data:{user, token}}`.
+  const token = json?.data?.token || json?.token;
   if (!res.ok || !token) {
-    console.error(`login failed: HTTP ${res.status} —`, JSON.stringify(json)?.slice(0, 200));
+    console.error(`\nLOGIN FAILED: HTTP ${res.status}`);
+    console.error(JSON.stringify(json)?.slice(0, 300));
+    console.error('\n(the app shows these as friendly sentences; NO_ACCOUNT / BAD_PASSWORD are the machine codes)');
     process.exit(3);
   }
-  console.log(`signed in (HTTP ${res.status}), token acquired\n`);
+  console.log(`Signed in as ${json?.data?.user?.full_name || email} (HTTP ${res.status})\n`);
   return token;
 }
 
-async function runBrain() {
+/** Which legs the SERVER thinks are configured. Names and millisecond budgets only, never values. */
+async function voiceStatus(token) {
+  const res = await fetch(`${API}/voice/status`, { headers: { Authorization: `Bearer ${token}` } });
+  const json = await res.json().catch(() => null);
+  save('voice-status', json ?? {});
+  const d = json?.data ?? json;
+  console.log(`GET /voice/status -> HTTP ${res.status}`);
+  console.log(JSON.stringify(d, null, 2));
+  if (d && d.ready === false) {
+    console.log(`\n🔴 VOICE IS NOT READY. Missing: ${JSON.stringify(d.missing)}`);
+    console.log('   Until those are set in the droplet .env and :3001 restarted, /voice/ask answers 503.');
+  } else if (d?.ready) {
+    console.log('\n✅ The server reports voice READY.');
+  }
+  console.log('');
+  return d;
+}
+
+function report(id, json, expect) {
+  const ok = json?.success ?? json?.ok;
+  const act = json?.action || {};
+  const reply = String(json?.reply_text ?? '').replace(/\s+/g, ' ').slice(0, 58);
+  console.log(
+    `  ${id.padEnd(16)} ok=${String(ok).padEnd(5)} action=${String(act.type ?? '-').padEnd(13)} ` +
+    `route=${String(act.route ?? '-').padEnd(16)} "${reply}"`,
+  );
+  console.log(`  ${''.padEnd(16)} expected: ${expect}`);
+}
+
+async function runBrain(authToken) {
   const secret = process.env.CGPE_VOICE_SECRET;
   if (!secret) {
-    console.error('BRAIN mode needs CGPE_VOICE_SECRET in the environment.');
-    console.error('Without it the brain answers {"success":false,"reason":"bad_secret"} to everything.');
-    process.exit(2);
+    console.log('(brain battery SKIPPED — CGPE_VOICE_SECRET is not set in this shell.)');
+    console.log('Without it the brain answers {"success":false,"reason":"bad_secret"} to everything.\n');
+    return;
   }
+  // ⚠️ SHAPES TAKEN FROM THE BACKEND'S OWN CALL, NOT GUESSED — `services/voiceService.js:206-213`:
+  // the body is exactly `{transcript, authToken}` and the secret rides in `X-CGPE-Webhook-Secret`.
+  // An earlier draft of this script invented `X-CGPE-Secret` plus a `secret` body field, which would
+  // have reported `bad_secret` for all twelve commands and wasted the whole run.
   console.log(`BRAIN ${BRAIN}\n`);
   for (const c of BATTERY) {
     try {
       const res = await fetch(BRAIN, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-CGPE-Secret': secret },
-        body: JSON.stringify({ transcript: c.text, secret, lang: 'hi-IN', session_id: `probe-${c.id}` }),
+        headers: { 'Content-Type': 'application/json', 'X-CGPE-Webhook-Secret': secret },
+        body: JSON.stringify({ transcript: c.text, authToken }),
       });
       const text = await res.text();
       let json = null;
-      try { json = JSON.parse(text); } catch { /* keep the raw text for the fixture */ }
+      try { json = JSON.parse(text); } catch { /* keep the raw text as the fixture */ }
       save(`brain-${c.id}`, json ?? text);
-      report(c.id, c.text, json, c.expect);
+      report(c.id, json, c.expect);
     } catch (e) {
       console.log(`  ${c.id.padEnd(16)} THREW: ${e.message}`);
     }
   }
+  console.log('');
 }
 
-async function runProxy() {
-  const token = await login();
-
-  const st = await fetch(`${API}/voice/status`, { headers: { Authorization: `Bearer ${token}` } });
-  const stJson = await st.json().catch(() => null);
-  save('voice-status', stJson ?? {});
-  console.log(`GET /voice/status -> HTTP ${st.status}`);
-  console.log(JSON.stringify(stJson?.data ?? stJson, null, 2), '\n');
-
+/** The full chain, exactly as the app calls it (multipart, bearer token, no Content-Type header). */
+async function askWithAudio(token) {
   if (!audioPath) {
-    console.log('No --audio given, so the ask leg was not exercised. Pass a clip to run it.');
+    console.log('(no --audio given, so STT/TTS were not exercised — pass a clip to run the full chain)');
     return;
   }
   if (!fs.existsSync(audioPath)) {
     console.error(`audio file not found: ${audioPath}`);
-    process.exit(4);
+    return;
   }
   const form = new FormData();
   form.append('audio', new Blob([fs.readFileSync(audioPath)]), path.basename(audioPath));
@@ -159,20 +173,23 @@ async function runProxy() {
   try { json = JSON.parse(text); } catch { /* keep raw */ }
   save('proxy-ask', json ?? text);
   console.log(`POST /voice/ask -> HTTP ${res.status} in ${Date.now() - t0} ms`);
-  console.log(JSON.stringify(json, null, 2).slice(0, 1200));
+  console.log(JSON.stringify(json, null, 2).slice(0, 1400));
 }
 
 const NOTE = `
 ────────────────────────────────────────────────────────────────────────────────────────────
-NOTE ON "MULTIPLE COMMANDS IN ONE QUERY" — this is a CONTRACT limit, not a bug to fix in a loop.
-The reply carries exactly ONE \`action\` (\`src/voice/response.ts\`), so a sentence containing two
-instructions can only ever produce one outcome. Supporting two would need the brain to return an
-action LIST and the app to execute them in order — an n8n + contract change, not an app fix.
-Separately, WRITES ARE DARK in v1 (\`VOICE_WRITES_ENABLED = false\`), so any "create/update" half of
-such a sentence would not execute even if it were returned.
+NOTE ON "MULTIPLE COMMANDS IN ONE QUERY" — a CONTRACT limit, not a bug to loop on.
+A reply carries exactly ONE \`action\` (src/voice/response.ts), so a sentence with two instructions
+can only ever produce one outcome. Supporting two needs the brain to return an action LIST and the
+app to execute them in order — an n8n + contract change, not an app fix. Separately, WRITES ARE
+DARK in v1 (VOICE_WRITES_ENABLED = false), so a "create a task" half would not execute anyway.
 ────────────────────────────────────────────────────────────────────────────────────────────`;
 
-const main = mode === 'proxy' ? runProxy : runBrain;
-main()
-  .then(() => { console.log(NOTE); console.log(`raw responses saved under ${OUT}/`); })
+(async () => {
+  const token = await login();
+  await voiceStatus(token);
+  await runBrain(token);
+  await askWithAudio(token);
+})()
+  .then(() => { console.log(NOTE); console.log(`\nRaw responses saved under ${OUT}/`); })
   .catch((e) => { console.error('probe failed:', e); process.exit(1); });
