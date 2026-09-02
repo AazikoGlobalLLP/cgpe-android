@@ -3,6 +3,15 @@
     "name": "CGPE Connect",
     "slug": "ANDROID",
     "version": "1.10.0",
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/6d177f14-d6e3-494a-8ae3-d764332ff256",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/images/android-icon-cgpe.png",
     "scheme": "cgpe",

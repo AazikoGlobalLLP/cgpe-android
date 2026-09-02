@@ -556,6 +556,10 @@ const en = {
   'voice.whichOne': 'Which one?',
   'voice.female': 'Female',
   'voice.male': 'Male',
+  // NOT machine-translated: English in all five, on purpose. New surface (the over-the-air
+  // update banner), no owner copy yet — the `tab.search`/`voice.*` precedent. Requested as Batch 6i.
+  'update.ready': 'Update ready',
+  'update.restart': 'Restart now',
 };
 
 /** Every dictionary carries exactly the English key set. */
@@ -965,6 +969,10 @@ const gu: Dict = {
   'voice.whichOne': 'કઈ?',
   'voice.female': 'સ્ત્રી',
   'voice.male': 'પુરુષ',
+  // NOT machine-translated: English in all five, on purpose. New surface (the over-the-air
+  // update banner), no owner copy yet — the `tab.search`/`voice.*` precedent. Requested as Batch 6i.
+  'update.ready': 'Update ready',
+  'update.restart': 'Restart now',
 };
 
 const hi: Dict = {
@@ -1365,6 +1373,10 @@ const hi: Dict = {
   'voice.whichOne': 'कौन सा?',
   'voice.female': 'महिला',
   'voice.male': 'पुरुष',
+  // NOT machine-translated: English in all five, on purpose. New surface (the over-the-air
+  // update banner), no owner copy yet — the `tab.search`/`voice.*` precedent. Requested as Batch 6i.
+  'update.ready': 'Update ready',
+  'update.restart': 'Restart now',
 };
 
 /**
@@ -1772,6 +1784,10 @@ const hiEn: Dict = {
   'voice.whichOne': 'Kaunsa?',
   'voice.female': 'Female',
   'voice.male': 'Male',
+  // NOT machine-translated: English in all five, on purpose. New surface (the over-the-air
+  // update banner), no owner copy yet — the `tab.search`/`voice.*` precedent. Requested as Batch 6i.
+  'update.ready': 'Update ready',
+  'update.restart': 'Restart now',
 };
 
 /**
@@ -2179,6 +2195,10 @@ const guEn: Dict = {
   'voice.whichOne': 'Kai?',
   'voice.female': 'Female',
   'voice.male': 'Male',
+  // NOT machine-translated: English in all five, on purpose. New surface (the over-the-air
+  // update banner), no owner copy yet — the `tab.search`/`voice.*` precedent. Requested as Batch 6i.
+  'update.ready': 'Update ready',
+  'update.restart': 'Restart now',
 };
 
 /**

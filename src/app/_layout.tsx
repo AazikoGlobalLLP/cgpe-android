@@ -45,6 +45,7 @@ import { FeatureBoundary } from '@/ui/FeatureBoundary';
 import { VoiceModeProvider } from '@/ui/voice/VoiceModeContext';
 import { VoiceMode } from '@/ui/voice/VoiceMode';
 import { HealthBanner } from '@/ui/health-banner';
+import { UpdateBanner } from '@/ui/UpdateBanner';
 import { getLocationConsent, needsConsentGate, flushWriteQueue } from '@/data/api';
 import { subscribeHealth } from '@/data/health';
 
@@ -279,6 +280,13 @@ function RootNav() {
       {/* Mounted once here so every route inherits outage reporting. Sample data is gone,
           so this is the only thing distinguishing "nothing to show" from "could not load". */}
       <HealthBanner />
+      {/* PHASE 98: offers a one-tap restart once an over-the-air update has downloaded. Suppressed
+          while HealthBanner owns this slot, so the two can never overlap. Boundaried because it is
+          new and touches a native module — if it throws, the app should lose the banner, not the
+          user's screen and back stack. */}
+      <FeatureBoundary>
+        <UpdateBanner />
+      </FeatureBoundary>
       {/* Redirects a signed-in, not-yet-consented user to the mandatory /consent notice.
           Fail-open, fires once per session, native-only — see ConsentGate above. */}
       <ConsentGate />
