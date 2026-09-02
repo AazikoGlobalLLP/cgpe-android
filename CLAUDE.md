@@ -719,15 +719,35 @@ path `/api/clients*`, which did not move. `cgpe-api` did the whole job in their 
 (`644ff2b`): 14 call sites now route through `utils/clientCollection.js` →
 `CLIENT_COLLECTION = process.env.CLIENT_COLLECTION || 'client'`, every URL / body / response shape
 **byte-identical**, rollback without redeploy by setting the env var back to `clients`.
-- ⚠️ **Their INBOX item says "cgpe-mobile — nothing owed", and that is right about the SHAPE and
-  wrong about the DATA.** The wire did not change; the **documents** did. `adaptClient`
-  (`src/data/adapt.ts:139-199`) was written against the old import and has **no reader** for the
-  merged LIXXX columns: `Area` (the app reads `raw.address.city || raw.city` → **city blank**),
-  `E_mail` (reads `raw.email` → **email blank**), `groupName` / `Group Head` (reads
-  `raw.familyName || raw.family` → **family blank**), and `annual_premium_sum` (so `totalPremium`
-  shows the **half-yearly instalment**, ₹1,821, not the annual ₹3,642). Also unread: `Sex`,
-  `Marriage Date`, `No of Policies`, `Customer_Code`, `Telephone(Residence)`, `ppt`, `ecs`,
-  `fprDate`, `lastPremiumPayingDate`, `dataAnalysis`.
+- ✅ **THE APP-SIDE ADOPTION IS DONE — Phase 97, 2026-09-02 (`acfcc46`). This entry used to describe
+  it as outstanding; do NOT re-file it.** Their INBOX item said "cgpe-mobile — nothing owed", which
+  was right about the SHAPE and wrong about the DATA: the wire did not change, the **documents** did.
+  `adaptClient` now reads `Area`→city, `E_mail`→email, `groupName`/`Group Head`→family,
+  `annual_premium_sum`→`totalPremium`, plus `Sex`→gender, `Marriage Date`→wedding anniversary and
+  `No of Policies`→the policy-count KPI. Every chain **APPENDS** the LIXXX name — an existing value
+  still wins, the same rule the merge used ("fill current blanks only").
+  🔑 **The owner's sample document is pinned verbatim at `docs/spec/PHASE-97-sample-client.json`** and
+  drives the tests. It is a **Compass extended-JSON** dump (`{$oid}` / `{$date}`); the wire carries a
+  plain hex `_id`, so the test fixture gives `_id` as the app really receives it — pinning `{$oid}`
+  would pin `String(...)` = `"[object Object]"` as the client id.
+  ⚠️ **`annualFactor` (exported from `adapt.ts`) mirrors the backend's CHAIN, not one function.**
+  `normalizeMode()` repairs `halg-yearly`/`hamf-yearly` **before** `clientFlags.annualFactor()` sees
+  them, and the app never normalises `mode` (it writes the raw string into `Policy.frequency`), so
+  those two spellings are folded into our factor. Without them a typo'd row annualises ×1 in the app
+  and ×2 in the panel and one client carries two different annual premiums. `MLY`-style codes fall
+  through to ×1 on BOTH sides — imprecise, and kept matching on purpose. `cgpe-api` has recorded this
+  in their `models.md` and will file an INBOX item before changing either function.
+  ⚠️ **The household label is SUPPRESSED when it equals the client's own name.** `groupName` /
+  `Group Head` carry the HEAD's name, so on the head's own record it merely repeats the title above
+  it; it is kept for every other member, which is the only place it says anything.
+  **Still unread, deliberately:** `Customer_Code`, `Telephone(Residence)` (the backend's own
+  `pickPhone` does not read it either), `ppt`, `ecs`, `fprDate`, `lastPremiumPayingDate`,
+  `dataAnalysis`, and the LIXXX `Premium` (a second annual figure whose semantics one sample cannot
+  settle — `annual_premium_sum` is the one the merge audit reconciles).
+  ✅ **The money path was checked, not assumed:** the renewal reminder builds its figure from
+  `raw.premium` directly (`api.ts` `scanRenewals`), so no WhatsApp message tells a half-yearly client
+  to pay the annual sum. Only the "Annual premium" KPI and the list metric moved — and that KPI's
+  label has always said "Annual premium" in all five languages while showing an instalment.
 - 🔴 **`AadhaarNo` / `PANNo` are on these documents. Do NOT surface them** in a field sweep —
   government ID on a shared handset is an owner decision under DPDP, and the client book already has
   a tighter audience by design (`canViewClients`, Point 9).
@@ -740,25 +760,38 @@ path `/api/clients*`, which did not move. `cgpe-api` did the whole job in their 
   `LIST_HEAVY_EXCLUDE` (an *exclusion* projection) and `GET /clients/:id` returns the full document.
   Non-schema fields survive the read: `policyNo` and `sumAssured` appear nowhere in `models/Client.js`
   yet the app reads both today.
-- 🔎 **Filed `[api]` and still open: `normalizeClient` reads `Area`, but NEITHER projection sends it.**
-  `greetingEngine.js:195` resolves `(c.address && c.address.city) || c.city || c.Area`, while
-  `clientFlags.js:329` (`DERIVED_PROJECTION`) and `:1124` (`DIRECTORY_FACET_PROJECTION`) list only
-  `'address.city'` and `city` — breaking that projection's own written rule, and invisible to their
-  completeness test because its fixture predates `Area`. Their own preflight measured `Area` at
-  **98.8%** of the 9,018-row book, so this blanks city for ~8,900 rows on every derived read
-  (household grouping key `:268`, city sort `:1274`, search score `:755`). The app calls
-  `/clients/segments`, so it reaches us. **A client cannot detect it** — a valid 200 with an empty
-  string, nothing to retry.
+- ✅ **BOTH `[api]` ITEMS WE FILED ARE SHIPPED — do not re-file either (verified in their repo
+  2026-09-02, not read off the board).**
+  **(a) The `Area` projection gap → their Phase 119 (`0179bc0`).** `Area: 1` is now in
+  `DERIVED_PROJECTION` **and** `DIRECTORY_FACET_PROJECTION`, and the directory city sort resolves the
+  same `address.city → city → Area` chain instead of its own copy of the rule, with `Branch N` kept
+  as the last resort. The rule is a test now, not a comment.
+  **(b) `dataAnalysis` riding on every list row → their Phase 120.** We measured it at **3,620 of
+  5,021 bytes — 72.1%** of the owner's sample row, with no reader in either repo. **We asked for one
+  key and it needed four:** `LIST_HEAVY_EXCLUDE` was the only site visible from an app, but grepping
+  the *shape* rather than the name found `campaigns.js AUDIENCE_EXCLUDE` (up to 20,000 rows),
+  `services/reportData.js CLIENT_HEAVY_EXCLUDE` and an inline one in `routes/userPortal.js`, both
+  whole-book. **`GET /clients/:id` is deliberately unchanged and still returns the full audit.**
+  🔑 **The transferable half: a grep for one spelling of a thing is not a survey.** Two of those files
+  even claimed in comments to use "the SAME exclusion projection" and did not.
+  ℹ️ Open, and owner-held: whether `dataAnalysis` is also on the LEGACY book (present on both ⇒ we are
+  paying the cost today; only on `client` ⇒ it is a deploy-day regression). `cgpe-api` refused to
+  guess and shipped **section 6 of `scripts/preflight-client-collection.js`** to answer it; it needs
+  `MONGODB_URI`, which we do not have.
 - 🔴 **`advisor_id` is on ZERO rows of BOTH books** (measured by `cgpe-api`, not inferred). So the
   **P90 SALES-advisor carve-out (D-117)**, which is strict own-only *by design*, returns an **empty
   client book** for that tier — today, on the legacy collection. **Do not weaken the carve-out to
   hide it and do not file it as a backend bug**; it is the owner's data decision (stamp ownership, or
   accept the book is admin-tier-only). Triage a "sales advisor sees no clients" report as this.
-- **Deploy state as of 2026-09-01: Phase 118 is NOT deployed.** `origin/main` = `0324dfc`; `644ff2b`
-  and `22dfbde` are on `origin/Shivam` only. Adopting the new field names early is **inert-safe** —
-  they are simply absent from the old book — but do not tell the owner it fixes anything they can see
-  until the merge + deploy + `:3001` restart. Their preflight has **already been run** (0 blockers);
-  do not re-ask for it.
+- 🔴 **Deploy state RE-VERIFIED 2026-09-02: STILL NOT DEPLOYED, and the window has grown.**
+  `origin/main` is **unchanged at `0324dfc`** (the 1 Sep release, through their Phase 111 — confirmed
+  live by `GET /api/users/test` → 404 and `cloudStorageConfigured: true`). Phases **118–123** —
+  the collection move, the `Area` fix, the `dataAnalysis` fix, monthly-content scheduling, the
+  advisor OTP sign-in — are all on `origin/ved` (`1515f8d`) and on no deployed branch. So **every
+  field this app now reads is still absent from production**, ours and theirs alike. Adopting the
+  names early is **inert-safe** (they are simply not there on the old book), but do not tell the
+  owner it fixes anything they can see until the merge + deploy + `:3001` restart. Their preflight
+  has **already been run** (0 blockers); do not re-ask for it.
 
 ## Verifying the backend WITHOUT guessing (2026-08-26)
 
@@ -771,6 +804,22 @@ path `/api/clients*`, which did not move. `cgpe-api` did the whole job in their 
 - **A no-auth `curl` distinguishes deployed from not:** `401` = deployed and protected, `404`/`501` =
   not on the deployed build. `POST /api/file-attachments` → **401**, i.e. live (mount is on
   `origin/main` at `app.js:466`).
+  🔴 **BUT THAT RULE IS ONLY TRUE AT A TOP-LEVEL MOUNT, AND IT MISLED THIS SESSION (2026-09-02).**
+  Under a router that blanket-protects (`router.use(protect)`), **every path 401s — including paths
+  that do not exist** — so a `401` there proves the ROUTER is mounted and says nothing about the
+  route. Measured: `GET /campaigns/localities` (added in their undeployed Phase 120) answered `401`,
+  which reads as "deployed"; the control
+  `GET /campaigns/definitely-not-a-route-xyz` answered `401` too, and so did
+  `GET /clients/zzz-not-a-route`. **ALWAYS probe a deliberately impossible sibling path first.** If
+  the control 401s, the probe is worthless and **the git refs are the only authority**
+  (`git ls-remote origin refs/heads/main`, then `merge-base --is-ancestor <sha> origin/main`).
+  The rule held for `/upload/presign` and `/voice/ask` because those answer from the app's own 404
+  handler, not from behind a protected router — that is the difference, not luck.
+- ℹ️ **`GET /api/users/test` now answers `404`, so it is SPENT as a discriminator.** CLAUDE.md used to
+  say it answered 200 and therefore proved prod predated backend Phase 105; the 1 Sep release shipped
+  that deletion, so the 404 now only confirms **prod is the 1 Sep release (through Phase 111)**. It
+  cannot distinguish the pending 118–123 window, and no cheap live probe found so far can — see the
+  control-probe trap above.
 - ✅ **`entity_id` EXISTS NOW — but read the deploy caveat before believing it (2026-08-27).**
   `cgpe-api`'s **Phase 94 (`fda199c`)** answered our whole upload item: `entity_id` + `entity_type` are
   real persisted fields on `POST /api/file-attachments` (with a `?entity_id=` filter), the four video

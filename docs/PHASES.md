@@ -14,6 +14,48 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-09-02 — PHASE 97 IS BUILT, COMMITTED (`acfcc46`) AND PUSHED. And BOTH `[api]` items we
+filed came back shipped the same day.**
+
+The app now reads the merged `client` book's own columns. `adaptClient` maps `Area`→city,
+`E_mail`→email, `groupName`/`Group Head`→family, `annual_premium_sum`→`totalPremium`, plus
+`Sex`→gender, `Marriage Date`→wedding anniversary and `No of Policies`→the policy-count KPI. Every
+chain **appends** the LIXXX name, so an existing value still wins — the same rule the merge itself
+used. The owner's sample document is pinned verbatim at `docs/spec/PHASE-97-sample-client.json` and
+drives the tests. Gates: **tsc 0 · npm test 1358 / 83 files · eslint 0 on the touched files.**
+
+- 🔑 **The headline correctness fix: "Annual premium" is finally annual.** That KPI has always been
+  labelled `client.annualPremium` — translated into all five languages — while displaying ONE
+  instalment: ₹1,821 half-yearly against ₹3,642 a year on the owner's own sample. The fallback for an
+  unwarmed row is `premium × annualFactor(mode)`, **never** a bare `premium`.
+- ⚠️ **`annualFactor` mirrors the backend's CHAIN, not one function** — `normalizeMode` repairs the
+  `halg-yearly` / `hamf-yearly` import typos *before* `clientFlags.annualFactor` sees them, and the
+  app never normalises `mode`, so those spellings are folded in here. Otherwise one client carries
+  two different annual premiums in the app and the panel. `cgpe-api` has recorded the dependency in
+  their `models.md` and will file an item before changing either function.
+- ✅ **The money path was checked, not assumed.** The renewal reminder builds its figure from
+  `raw.premium` directly, so no WhatsApp message tells a half-yearly client to pay the annual sum.
+  Only the KPI and the list metric moved.
+- ✅ **`[api]` (a) — the `Area` projection gap → their Phase 119 (`0179bc0`).** `Area: 1` is in both
+  projections now and the directory city sort resolves the same chain instead of its own copy.
+- ✅ **`[api]` (b) — `dataAnalysis` on every list row → their Phase 120.** We measured it at **3,620
+  of 5,021 bytes (72.1%)** of a client row with no reader in either repo. **We asked for one key; it
+  needed four** — `AUDIENCE_EXCLUDE` (up to 20,000 rows), `reportData`, `userPortal` all carried the
+  same shape. `GET /clients/:id` deliberately still returns the full audit.
+- 🔴 **NONE OF IT IS ON A PHONE. `origin/main` is still `0324dfc`** (the 1 Sep release, through their
+  Phase 111 — re-verified today). Phases **118–123** sit on `origin/ved` (`1515f8d`) and on no
+  deployed branch, so every new field is still absent from production. **The one remaining action is
+  the OWNER's: merge → deploy → restart `:3001`.**
+- ⚠️ **A live probe cannot settle this and nearly said the opposite.** `GET /campaigns/localities`
+  (added in the undeployed Phase 120) answers **401**, which reads as "deployed" — but the control
+  `GET /campaigns/definitely-not-a-route-xyz` answers 401 too, because that router blanket-protects
+  before matching. **Probe an impossible sibling path first; if it 401s, only the git refs are
+  authority.**
+
+---
+
+### Superseded — how Phase 97 was scoped, 2026-09-01
+
 **📋 2026-09-01 (later still) — PHASE 97 IS SCOPED, NOT STARTED. NO `src/` FILE WAS TOUCHED.**
 
 The owner asked to move the client book from the `clients` collection to `client` — *"har jagah,
@@ -107,19 +149,18 @@ remains unrotated (owner-owned).
 
 ---
 
-## Next 3 — as of 2026-09-01 (after Phase 97 was scoped)
+## Next 3 — as of 2026-09-02 (after Phase 97 was BUILT)
 
-0. **BUILD PHASE 97 — the client-book field adoption.** `Area`→city, `E_mail`→email,
-   `groupName`/`Group Head`→family, `annual_premium_sum`→`totalPremium`, plus gender / anniversary /
-   policy count on the detail screen. Pin the owner's exact sample document as a fixture in
-   `src/data/__tests__/adapt.test.ts`. **First command:**
-   `npx tsc --noEmit && npm test -- src/data/__tests__/adapt.test.ts`.
-   ⚠️ **`totalPremium` is a money figure on the dashboard** — moving it to the annual sum doubles a
-   half-yearly client and ×12s a monthly one. That is the *correct* value, but it reads as a
-   regression, and `annual_premium_sum` is **absent until the backend has warmed the row**: fall back
-   to `premium × annualFactor(mode)`, never to a bare `premium`, and say the change out loud.
-   ⚠️ It is **inert on a phone until Phase 118 deploys** — do not describe it as fixing anything the
-   owner can see yet.
+0. 🔴 **THE OWNER'S DEPLOY IS NOW THE BIGGEST BLOCKER IN THE PROJECT, and it is not a code task.**
+   `origin/main` = `0324dfc`; backend Phases **118–123** sit on `origin/ved` (`1515f8d`). Undeployed
+   right now: the whole client-collection move, the `Area` city fix, the `dataAnalysis` payload fix,
+   monthly-content scheduling and the advisor OTP sign-in — **plus everything this app shipped today,
+   which reads fields that only exist on the new book.** Three sessions' work is finished and
+   invisible. The action is: merge `origin/ved` → `origin/main`, deploy, restart `:3001`.
+   ⚠️ **Verify it with the git refs, not a curl** — see the 401-control trap in `## Now`.
+   ⚠️ **`advisor_id` is on ZERO rows of both books**, so the P90 SALES carve-out returns an empty
+   client book for that tier the moment anyone tests it. Owner data decision, already filed; triage a
+   "sales advisor sees no clients" report as this, and do **not** weaken the carve-out.
 
 1. **READ THE PROBE OUTPUT, THEN BUILD — in that order.** `GET /voice/status` settles whether the
    server's voice keys are actually set (`ready: true` vs `missing: [...]`), and the eight clips show
@@ -2100,7 +2141,8 @@ session back-filling it — the information already exists in a better-maintaine
 | # | Phase | Status |
 |---|---|---|
 | **Ω** | **FINAL — the production/server developer's message. GATED: runs only when every other phase is Done.** | 🔒 **BLOCKED BY DESIGN** — owner-mandated 2026-08-31. See "Phase Ω" below. The running list it draws from is `docs/OPS-SERVER-HANDOVER.md`, which every phase appends to. **Not startable while any phase is Planned / Built-but-unverified / blocked.** |
-| 97 | Client book reads the **`client`** collection's new fields | 📋 **SCOPED, NOT STARTED** 2026-09-01 — **no `src/` change.** The owner's "`clients` → `client` everywhere" is a BACKEND ask and `cgpe-api` already shipped it (Phase 118 `644ff2b`, `CLIENT_COLLECTION`); the app names no collection, so a find-and-replace would have 404'd every client endpoint. **What IS ours:** the new merged documents carry LIXXX columns `adaptClient` has no reader for — `Area`→city, `E_mail`→email, `groupName`/`Group Head`→family all render **blank**, and `totalPremium` shows the half-yearly *instalment* (₹1,821) instead of `annual_premium_sum` (₹3,642). `Sex`/`Marriage Date`/`No of Policies`/`Customer_Code`/`ppt`/`ecs`/`dataAnalysis` unread; `AadhaarNo`/`PANNo` deliberately out of scope (PII/DPDP). **Blocked from the field regardless:** Phase 118 is on `origin/Shivam`, prod `origin/main` is `0324dfc`. One `[api]` filed — `Area` is read by `normalizeClient:195` but absent from both projections |
+| 97 | Client book reads the **`client`** collection's new fields | ✅ **BUILT + PUSHED** 2026-09-02 (`acfcc46`) — tsc 0 · **1358 tests / 83 files** · eslint 0 on the touched files. `adaptClient` reads `Area`→city, `E_mail`→email, `groupName`/`Group Head`→family, `annual_premium_sum`→`totalPremium`, `Sex`→gender, `Marriage Date`→wedding anniversary, `No of Policies`→policy-count KPI; every chain **appends** so an existing value still wins. **"Annual premium" is finally annual** (the label always said so in five languages while showing a ₹1,821 half-yearly instalment against ₹3,642); unwarmed rows fall back to `premium × annualFactor(mode)`, and `annualFactor` mirrors the backend's `normalizeMode`→`annualFactor` **chain**, typo spellings included, so app and panel cannot disagree. Household label suppressed on the head's own record. Renewal reminders still send the **instalment** — verified, not assumed. Owner's sample pinned at `docs/spec/PHASE-97-sample-client.json`. `AadhaarNo`/`PANNo` unread (PII/DPDP). **Both `[api]` items came back shipped the same day** — `Area` in both projections (their P119 `0179bc0`) and `dataAnalysis: 0` at **four** sites, not the one we could see (their P120). 🔴 **Inert on a phone: `origin/main` is still `0324dfc`; 118–123 are on `origin/ved` only** | <!-- superseded scoping note below -->
+| ~~97~~ | *(scoping, superseded)* | 📋 **SCOPED, NOT STARTED** 2026-09-01 — **no `src/` change.** The owner's "`clients` → `client` everywhere" is a BACKEND ask and `cgpe-api` already shipped it (Phase 118 `644ff2b`, `CLIENT_COLLECTION`); the app names no collection, so a find-and-replace would have 404'd every client endpoint. **What IS ours:** the new merged documents carry LIXXX columns `adaptClient` has no reader for — `Area`→city, `E_mail`→email, `groupName`/`Group Head`→family all render **blank**, and `totalPremium` shows the half-yearly *instalment* (₹1,821) instead of `annual_premium_sum` (₹3,642). `Sex`/`Marriage Date`/`No of Policies`/`Customer_Code`/`ppt`/`ecs`/`dataAnalysis` unread; `AadhaarNo`/`PANNo` deliberately out of scope (PII/DPDP). **Blocked from the field regardless:** Phase 118 is on `origin/Shivam`, prod `origin/main` is `0324dfc`. One `[api]` filed — `Area` is read by `normalizeClient:195` but absent from both projections |
 | 92–96 | see `## Now` | **Done** 2026-09-01 — the four-APK crash day and its aftermath. **92–95** the `'worklet'` fatal: two builds (`372cd790`, `577a4ec5`) exited on the mic, `2cb0e667` shipped voice off, `a9583d51` (versionCode 5) shipped the fix — **all four gates green on both crashing builds**. **96** (`e54e95e`, `9ecaa9e`) the crash confirmed fixed on a handset, and the two real bugs it was hiding: a recorder that outlived the press (React state cannot gate a handler racing an `await`) and `VOICE.MAX_RECORD_MS` with zero consumers. Plus `Settings › Version` now prints the real native build number, and `scripts/voice-probe.mjs` tests voice from a terminal with only a login. **The two voice fixes are device-unverified — JS-only, still no OTA** |
 | 86–88 | see `## Now` | **All three Built** 2026-08-31 — 86 the presigned MinIO upload flow (`4d1c31a`); 87 the voice turn timeout sized to the real proxy + `unconfigured` honesty (`fd28c70`); **88 SHIPPED** (`eb9760f`, +11 tests) — the legacy upload path no longer persists an expiring URL. All three **device-unverified** (no APK since 25 Aug) and **inert in production** until the backend merge |
 | 89–91 | see `## Now` | **Done** 2026-08-31. **89** (`968955e`) the sibling-commit sweep — found `POST /notifications/dispatch` silently broken on prod, no app code owed. **90 BLOCKED** — the APK; EAS free-plan quota refused it, resets 1 Sep. **90a** (`954a0a4`) build pre-flight: four gates green, and the archive was found to be uploading both signing keystores, their plaintext passwords and the Firebase key — fixed. **91** (`b709796`) cross-repo requests filed; two of three `[admin]` items proved not real. **No `src/` change in 90a or 91** |

@@ -1,3 +1,102 @@
+# HANDOFF — CGPE Connect (Android) — Phase 97 (BUILT) — 2026-09-02
+
+> **Phase 97 is built, committed (`acfcc46`) and pushed. Both `[api]` items we filed came back
+> SHIPPED the same day — verified in the sibling's repo, not read off the board.**
+>
+> 🔴 **And the one thing that matters most is not code: `origin/main` has not moved. Backend Phases
+> 118–123 — including the whole client-collection move — sit on `origin/ved` and on no deployed
+> branch. Three sessions' work is finished and invisible on every handset.**
+>
+> ⚠️ **Do not delete the handoffs below this one.**
+
+## Done
+
+- **The app reads the merged `client` book's own columns.** `adaptClient` maps `Area`→city,
+  `E_mail`→email, `groupName`/`Group Head`→family, `annual_premium_sum`→`totalPremium`, plus
+  `Sex`→gender, `Marriage Date`→wedding anniversary and `No of Policies`→the policy-count KPI. Before
+  this, the entire client book rendered **city-blank** (`Area` is the only locality on the new rows —
+  98.8% coverage by `cgpe-api`'s own measurement), family-blank and email-blank.
+- **"Annual premium" is finally annual.** That KPI has always been labelled `client.annualPremium`,
+  translated into all five languages, while showing ONE instalment — ₹1,821 half-yearly against
+  ₹3,642 a year on the owner's own sample. An unwarmed row falls back to
+  `premium × annualFactor(mode)`, never to a bare `premium`.
+- **The owner's sample document is pinned verbatim** at `docs/spec/PHASE-97-sample-client.json` and
+  drives eight new tests. It was recovered from the session transcripts — it was not on disk — and
+  `JSON.parse`d to prove it was unmangled.
+- **Gates: `tsc` 0 · `npm test` 1358 passed / 83 files · `eslint` 0 on the touched files.**
+- ✅ **`cgpe-api` shipped both of our asks the same day.** Their **Phase 119** (`0179bc0`) put
+  `Area: 1` in both projections and made the directory city sort resolve the same chain; their
+  **Phase 120** put `dataAnalysis: 0` at **four** sites — we could only see one from an app, and
+  `campaigns.js AUDIENCE_EXCLUDE` (up to 20,000 rows), `reportData.js` and `userPortal.js` carried
+  the same shape, two of them with comments claiming they used "the SAME" projection.
+
+## Files changed
+
+- `src/data/adapt.ts` — the LIXXX column reads, the household-label rule, and a new exported
+  `annualFactor` mirroring the backend's `normalizeMode`→`annualFactor` **chain**.
+- `src/data/types.ts` — `gender` / `marriageDate` / `policyCount` on `Client`, each with the reason
+  at the field.
+- `src/app/client/[id].tsx` — Gender and Wedding-anniversary rows; the Policies KPI prefers the
+  person's real holding over the one document this screen fetched.
+- `src/data/__tests__/adapt.test.ts` — the owner's document as a fixture + the `annualFactor` table.
+- `docs/spec/PHASE-97-sample-client.json` — the owner's sample, verbatim, as durable evidence.
+- `CLAUDE.md`, `docs/PHASES.md`, `docs/DECISIONS.md`, `../contracts/INBOX.md` — the record.
+
+## Decisions made
+
+- **Recovered the owner's real document rather than trusting yesterday's transcription of it** — and
+  it corrected three details (`E_mail`/`Marriage Date` are null on that row; `groupName` is a
+  *current* field, not a new LIXXX one; and the row's own audit reconciles `currentAnnualPremium:
+  3642`, corroborating the premium reading from the data instead of from our inference).
+- **`annualFactor` mirrors the producer's CHAIN, not one function.** A failing test found it:
+  `normalizeMode` repairs `halg-yearly` / `hamf-yearly` before the factor runs, and the app never
+  normalises `mode`. Without folding those in, a typo'd row annualises ×1 here and ×2 in the panel.
+- **Checked the money path instead of trusting the type.** Renewal reminders build their figure from
+  `raw.premium` directly, so no message tells a half-yearly client to pay the annual sum.
+- **Suppressed the household label where it equals the client's own name**, in the adapter (one seam,
+  feeding both the detail screen and the search index).
+- **A `401` under a blanket-protected router proves nothing** — see "Watch out for".
+
+## Known broken / deliberately skipped
+
+- 🔴 **Nothing shipped today is visible to anyone.** `origin/main` = `0324dfc` (the 1 Sep release,
+  through their Phase 111). Phases 118–123 are on `origin/ved` (`1515f8d`). Until the owner merges +
+  deploys + restarts `:3001`, the new fields are simply absent from production — which is why
+  adopting them early was safe, and also why **this is device-unverified and not "Done" in the
+  `CLAUDE.md` sense.**
+- **`Customer_Code`, `Telephone(Residence)`, `ppt`, `ecs`, `fprDate`, `lastPremiumPayingDate`,
+  `dataAnalysis` and the LIXXX `Premium` are unread on purpose** — the backend's own `pickPhone`
+  skips the residence phone; the date/term fields each need a display RULE rather than a field; and
+  `Premium` is a second annual figure one sample cannot disambiguate.
+- **`AadhaarNo` / `PANNo` stay unread** — government ID on a shared handset is an owner decision
+  under DPDP, not a field sweep. A test asserts neither can appear in the adapter's output.
+- **The new detail rows are English literals** (`Gender`, `Wedding anniversary`), matching their
+  existing English peers in that same section. No key was invented — machine translation is banned,
+  and a half-translated section reads worse than an English one. They belong in the next copy batch.
+- **Open and owner-held: is `dataAnalysis` also on the LEGACY book?** `cgpe-api` refused to guess and
+  shipped section 6 of `scripts/preflight-client-collection.js` to answer it; it needs `MONGODB_URI`,
+  which we do not have.
+- **Voice is unchanged from Phase 96** — the probe output has still not been read, build 6 + OTA is
+  not started, and the committed production `JWT_SECRET` is still unrotated.
+
+## Next session starts here
+
+- **Phase 98: read the voice probe, then build 6 with EAS Update (OTA).** `POST /voice/ask` answers
+  `401` on prod, so the route is deployed; whether the KEYS are set is what the probe settles, and if
+  they are not it is an OPS task no APK can fix. OTA has been asked for three times and its one
+  objection ("don't add a native module to a build that is fixing a crash") is spent.
+- **First command:**
+  `git -C ../cgpe-backend-main ls-remote origin refs/heads/main`
+  (if it is still `0324dfc`, nothing from Phases 97 or 118–123 is live and the owner's deploy is
+  still the blocker — say so before anything else.)
+- **Watch out for:** **a `401` is not proof a route is deployed.** `GET /campaigns/localities`, added
+  in the *undeployed* Phase 120, answers 401 — because `router.use(protect)` fires before route
+  matching, so `GET /campaigns/definitely-not-a-route-xyz` answers 401 too. **Probe an impossible
+  sibling path first; if the control 401s, only the git refs are authority.** `GET /api/users/test`
+  is now spent as a discriminator (it answers 404, which only confirms the 1 Sep release is live).
+
+---
+
 # HANDOFF — CGPE Connect (Android) — Phase 97 (SCOPED, no code) — 2026-09-01
 
 > **Nothing was built this session. It was orientation plus one cross-repo verification, and the

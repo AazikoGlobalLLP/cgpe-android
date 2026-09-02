@@ -5779,3 +5779,86 @@ Phase-79 `channel` field and the Phase-87 timeout: only reading the producer's r
 
 **D-5. Did not tick the Phase 118 box.** It is addressed to `cgpe-admin`, `cgpe-mobile` and OWNER, so
 per the protocol the reply goes underneath and the box is left open for the other recipients.
+
+---
+
+## 2026-09-02 — Phase 97 BUILT: the app reads the merged `client` book, and both `[api]` items came back shipped
+
+**D-1. Recovered the owner's sample document instead of working from a transcription of it.** The
+board said "pin the owner's exact sample document as a fixture" and that document was not on disk —
+it existed only in the previous session's chat. It was recovered from the Claude Code transcripts
+(`C:\Users\A\.claude\projects\*CGPE*\*.jsonl`, the same route `CLAUDE.md` documents for the INBOX
+truncation), `JSON.parse`d to prove it was unmangled, and committed verbatim at
+`docs/spec/PHASE-97-sample-client.json`. **This was worth the five minutes: the document contradicted
+part of the scoping note written from memory.** `E_mail` and `Marriage Date` are `null` on that row
+(its own audit lists them as `missing: LIXXX`), `groupName` is a *current*-data field rather than a
+new LIXXX one, and the row's `dataAnalysis` block independently reconciles `currentAnnualPremium:
+3642` against `premium: 1821` — corroborating the `annual_premium_sum` reading from the data itself
+rather than from our inference.
+
+**D-2. The fixture gives `_id` as the WIRE carries it, not as the owner's copy shows it.** The sample
+is a Compass export, so `_id` is `{"$oid": "..."}` and `updated_at` is `{"$date": "..."}`. The wire
+does not carry that shape — ObjectId serialises to a hex string through `res.json` — and pinning
+`{$oid}` would have pinned `String(...)` = `"[object Object]"` as the client id, i.e. a test of a
+shape that cannot occur. The difference is written at the fixture so nobody "corrects" it back.
+
+**D-3. `annualFactor` mirrors the backend's CHAIN, not one of its functions — and the test found the
+gap, not the reading.** The first version copied `clientFlags.annualFactor()` value for value and a
+test asserting `halg-yearly → 2` failed. The reading was incomplete rather than wrong: on the backend
+`normalizeMode()` repairs that typo **before** the factor sees it, and the app never normalises
+`mode` (it writes the raw string into `Policy.frequency` and displays it). So the two documented typo
+spellings are folded into our factor. Without them a typo'd row annualises ×1 in the app and ×2 in
+the panel and **one client carries two different annual premiums on two screens.** `MLY`-style short
+codes fall through to ×1 on both sides — imprecise, and deliberately kept matching rather than
+"fixed" alone. `cgpe-api` has since recorded the dependency in their `models.md` and will file an
+INBOX item before changing either function. **General form: when you copy a producer's function,
+check what runs BEFORE it.**
+
+**D-4. Verified the money path rather than trusting the type.** `Client.totalPremium` moving from an
+instalment to a person's annual sum is only safe if nothing puts that number in front of a customer.
+`scanRenewals`'s real path builds its figure from `raw.premium` directly (the demo branch is the one
+that reads `totalPremium`), and `renewalMessage` on the detail screen passes `p.premium`. So no
+WhatsApp message tells a half-yearly client to pay ₹3,642 when ₹1,821 is due. **This was the single
+biggest regression risk in the change and it took one grep to settle.**
+
+**D-5. Suppressed the household label when it equals the client's own name.** `groupName` /
+`Group Head` carry the HEAD's name, so on the head's own record the "Family" row merely repeats the
+title above it — which reads as a bug rather than as data. Kept for every other member of that
+household, which is the only place it says anything. Implemented in the adapter (the single seam
+feeding both the detail screen and the search index) rather than in one screen.
+
+**D-6. Left `Customer_Code`, `Telephone(Residence)`, `ppt`, `ecs`, `fprDate`,
+`lastPremiumPayingDate`, `dataAnalysis` and the LIXXX `Premium` unread, on purpose.** Three different
+reasons, recorded so the next reader does not think they were missed: the backend's own `pickPhone`
+does not read `Telephone(Residence)` either (matching the producer beats adding a source); `ppt` /
+`ecs` / `fprDate` / `lastPremiumPayingDate` would each need a display RULE, not just a field, and
+inventing one is how a wrong number reaches a screen; and the LIXXX `Premium` is a **second** annual
+figure whose semantics one sample document cannot settle, while `annual_premium_sum` is the one the
+merge audit reconciles. `AadhaarNo` / `PANNo` stay out under DPDP, as decided yesterday.
+
+**D-7. Filed the `dataAnalysis` payload finding because the app cannot fix it — and it needed four
+fixes, not the one we could see.** Measured on the owner's own row: `dataAnalysis` is **3,620 of
+5,021 bytes, 72.1%** of a client document, with no reader in either repo on deployed `origin/main`.
+At `limit=100` that is ~354 KB of dead audit per page, and `scanRenewals` pages the whole book
+reading four fields per row. `cgpe-api` shipped it the same day (their Phase 120) and found by
+grepping the *shape* rather than the name that three more whole-book scans carried the same
+exclusion — `campaigns.js AUDIENCE_EXCLUDE` (up to 20,000 rows), `services/reportData.js` and an
+inline one in `routes/userPortal.js`, **two of which claimed in comments to use "the SAME" projection
+and did not.** 🔑 **A grep for one spelling of a thing is not a survey.** They deliberately left
+`GET /clients/:id` returning the full audit, as asked.
+
+**D-8. A `401` under a blanket-protected router proves NOTHING, and the control probe is what caught
+it.** `CLAUDE.md` carried the rule "a no-auth `curl` distinguishes deployed from not: 401 = deployed,
+404 = not". Probing `GET /campaigns/localities` — a route added in the **undeployed** Phase 120 —
+returned **401**, which by that rule reads as "deployed" and would have been reported to the owner as
+such. The control `GET /campaigns/definitely-not-a-route-xyz` also returned 401, and so did
+`GET /clients/zzz-not-a-route`: `router.use(protect)` fires before route matching, so every path
+under those routers 401s whether or not it exists. The rule holds only at a top-level mount that
+answers from the app's own 404 handler (`/upload/presign`, `/voice/ask`) — that is the difference,
+not luck. **Always probe an impossible sibling path first; if the control 401s, the git refs are the
+only authority.** Corrected in `CLAUDE.md`, along with the note that `GET /api/users/test` is now
+**spent** as a discriminator: it answers 404 today, which only confirms prod is the 1 Sep release.
+
+**D-9. Did not tick our box on their Phase 119/120 item.** Both are addressed to `cgpe-mobile`,
+`cgpe-admin` and OWNER, so per the protocol the acknowledgement goes underneath and the box is left
+open for the other recipients — the same call as D-5 yesterday.
