@@ -5926,3 +5926,25 @@ dictionary has nothing for "update"/"restart"/"ready"). This is the sanctioned `
 no `expo-updates` native side. Every handset needs one manual install to join, and until then "we can
 fix it over the air" is false for that phone — worth saying plainly rather than letting the owner
 infer that the fleet is now updatable.
+
+**D-9. Checked that the update server is reachable on the networks this fleet actually uses, rather
+than assuming.** Phase 76 diagnosed "can't reach server" on every network as an **IPv6/NAT64 MTU**
+problem: the owner's handsets are on IPv6-only mobile and `cgpe.in` is IPv4-only, so API traffic
+crosses carrier NAT64 and the server's full-size packets are dropped. That made "will OTA even
+arrive?" a fair question. Measured: **`u.expo.dev` publishes AAAA records** (`2606:4700::6812:568`,
+Cloudflare) while **`cgpe.in` still publishes none**. So update traffic runs native IPv6 end to end
+and never touches NAT64 — **on these phones the update path is more reliable than the app's own API
+path**, not less. The `cgpe.in` AAAA record remains an open OPS item, unchanged by any of this.
+
+**D-10. Published the first update immediately, so the publish half is proven rather than argued.**
+Build 6 = `80df5c5a`, versionCode 6, channel `preview`, runtime
+`067cf142ce357706e6b1ec4cf3709930e0c1d7b8`. The first `eas update` (group
+`5e0ea9fc-d07d-4fe7-83b4-41932ec90fe2`) published to **the same Android runtime string, byte for
+byte** — which is the whole question the `fingerprint` policy raises, now answered against a real
+build rather than a local hash. Its JS is identical to build 6's, so it changes nothing and exists
+only as a round-trip test: installing build 6 should raise the update banner within about half a
+minute, and `Settings › Version` should gain a `· u…` suffix after tapping it. **The device half is
+still unproven and no one should claim otherwise.** ⚠️ `eas update` also emitted an **iOS** group at
+a different runtime (`81776dfa…`) — expected, since the fingerprint is per platform, and harmless as
+no iOS build exists. ⚠️ `--environment` is REQUIRED in `--non-interactive` mode; without it the
+command fails outright.
