@@ -5948,3 +5948,19 @@ still unproven and no one should claim otherwise.** ⚠️ `eas update` also emi
 a different runtime (`81776dfa…`) — expected, since the fingerprint is per platform, and harmless as
 no iOS build exists. ⚠️ `--environment` is REQUIRED in `--non-interactive` mode; without it the
 command fails outright.
+
+**D-11. ✅ THE OTA ROUND TRIP IS CONFIRMED ON A REAL HANDSET — 2026-09-02, owner-verified.** All four
+steps of the round-trip test passed on the owner's phone: build 6 installed, the update banner
+appeared on its own, tapping it restarted the app, and `Settings › Version` gained the `· u…` suffix
+it did not have before. **That is the whole feature, end to end, on hardware — not a static
+verification.** It simultaneously proves five things that had only been argued: the `fingerprint`
+runtime matched a real build; `checkAndFetchUpdate` reaches `u.expo.dev` from an Indian mobile
+network; the banner renders and its handler survives a release build (no LogBox, so a throw would
+have been fatal — the trap that cost four APKs); `reloadAsync()` applies the update; and
+`formatVersionLine` reads the applied update back. **A JS fix now reaches a handset in about thirty
+seconds and no longer needs an APK.**
+
+**The one thing that has NOT changed:** builds 1–5 and the 25-Aug field APK still have no
+`expo-updates` native side and can never receive an update. Proving OTA works on one phone does not
+make the other twenty updatable — each needs one manual install of build 6 first. **The remaining
+work is a rollout, and it is the owner's.**
