@@ -171,7 +171,10 @@ function ClientDetailScreen() {
     const p = client.policies[0];
     const out: KpiItem[] = [
       { label: t('client.annualPremium'), value: inrShort(client.totalPremium), icon: 'cash-outline', tone: 'success' },
-      { label: t('client.policies'), value: String(client.policies.length), icon: 'documents-outline', tone: 'primary' },
+      // `policies` only ever holds the ONE document this screen fetched, so its length is
+      // always 1 and says nothing about the person. `No of Policies` on the merged book is
+      // their real holding — prefer it, and fall back to what we fetched when it is absent.
+      { label: t('client.policies'), value: String(client.policyCount ?? client.policies.length), icon: 'documents-outline', tone: 'primary' },
     ];
     // A matured policy has run its full term — no premium is due, so don't raise a "days late" alarm on it.
     const due = p && p.status !== 'matured' ? dueToken(p.nextRenewal, t) : null;
@@ -203,6 +206,7 @@ function ClientDetailScreen() {
     .filter(Boolean).join(' · ');
   const segments = client.segment.map((s) => SEG_META[s]).filter(Boolean);
   const dob = dateOr(client.dob);
+  const marriage = dateOr(client.marriageDate);
 
   return (
     <Screen>
@@ -273,6 +277,12 @@ function ClientDetailScreen() {
             {client.city ? <DataRow label="City" value={client.city} icon="location-outline" /> : null}
             {client.family ? <DataRow label="Family" value={client.family} icon="people-outline" /> : null}
             {dob ? <DataRow label="Date of birth" value={dob} icon="gift-outline" /> : null}
+            {/* `Sex` is backend DATA, rendered exactly as sent — translating a stored value is
+                the no-sweep rule in CLAUDE.md, and it would break any filter keyed on it. */}
+            {client.gender ? <DataRow label="Gender" value={client.gender} icon="person-outline" /> : null}
+            {/* The WEDDING anniversary (`Marriage Date`). Named in full so it cannot be read as
+                the policy anniversary, which is the commencement date on the policy card below. */}
+            {marriage ? <DataRow label="Wedding anniversary" value={marriage} icon="heart-outline" /> : null}
           </ListSection>
         </Appear>
 

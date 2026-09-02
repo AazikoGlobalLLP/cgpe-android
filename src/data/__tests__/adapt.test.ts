@@ -14,7 +14,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   adaptAttendanceHistory,
-  adaptClaim, adaptClient, adaptContest, adaptLead, adaptLicPlan, adaptNotification, adaptReminder,
+  adaptClaim, adaptClient, adaptContest, adaptLead, adaptLicPlan, adaptNotification, adaptReminder, annualFactor,
   adaptUser, adaptWaMessage, adaptWaThread,
   dayMatches, isBirthdayThisMonth, isBirthdayToday, isPremiumDueThisMonth, monthMatches,
 } from '@/data/adapt';
@@ -249,6 +249,205 @@ describe('adaptClient', () => {
 
   it('defaults the name to Customer when every candidate is blank', () => {
     expect(adaptClient({ _id: 'c9', name: '   ' }).name).toBe('Customer');
+  });
+});
+
+/* --------------------------------------------- adaptClient · the merged `client` book
+ *
+ * Phase 97. The book moved from the `clients` collection to `client` (backend Phase 118),
+ * and while the WIRE is byte-identical the DOCUMENTS are not: every LIC row now also
+ * carries its merged LIXXX columns under the original capitalised headers. The fixture
+ * below is the owner's own sample document, kept verbatim at
+ * `docs/spec/PHASE-97-sample-client.json`; only `dataAnalysis` (a ~130-line per-row audit
+ * blob with no reader in the app) is trimmed to the two figures that CORROBORATE the
+ * mapping — the merge itself reconciled `annual_premium_sum` as the annual premium and
+ * `No of Policies` as the policy count.
+ *
+ * ⚠️ `_id` and `updated_at` are written `{$oid}` / `{$date}` in the owner's copy because it
+ * came out of Compass as extended JSON. The wire does NOT carry that shape — ObjectId
+ * serialises to a plain hex string through `res.json` — so `_id` is the one field given
+ * here as the app really receives it. Pinning `{$oid}` would pin `String(...)` =
+ * "[object Object]" as the client id, i.e. a test of a shape that cannot occur.
+ */
+const OWNER_SAMPLE = {
+  _id: '6a43b46141eaae0c6c9e69c1',
+  policyNo: '863251055',
+  name: 'AGRAWAT MUKESHKUMAR TULSIDAS',
+  dob: '1969-03-15',
+  commencementDate: '2002-02-28',
+  fupDate: '2014-08-28',
+  tableNo: '89',
+  term: 16,
+  ppt: 16,
+  mode: 'Half-Yearly',
+  ecs: 'NO',
+  sumAssured: 50000,
+  premium: 1821,
+  maturityDate: '2018-02-28',
+  lastPremiumPayingDate: '2017-02-28',
+  fprDate: '2002-03-28',
+  branchNo: '86H',
+  agentCode: '90960863',
+  groupName: 'AGRAWAT MUKESHKUMAR TULSIDAS',
+  status: 3897,
+  source: 'lic-import',
+  isActive: true,
+  mobileRaw: '96387 80155',
+  mobile: '9638780155',
+  phoneLast10: '9638780155',
+  phone: '919638780155',
+  premiumDateRaw: '00:10:00',
+  nameTokens: ['AGRAWAT', 'MUKESH', 'TULSIDAS'],
+  annual_premium_sum: 3642,
+  coverage_score: 0,
+  Customer_Code: 'I02951',
+  'Insured Name': 'AGRAWAT  MUKESHKUMAR  TULSIDAS',
+  'Group Head': 'AGRAWAT MUKESHKUMAR TULSIDAS',
+  'Date of Birth': '1969-03-15',
+  Area: 'Katargam',
+  Premium: 3642,
+  'Sum Assured': 50000,
+  Mobile: '96387 80155',
+  'Telephone(Office)': null,
+  'Telephone(Residence)': '96387 80155',
+  AadhaarNo: null,
+  PANNo: null,
+  E_mail: null,
+  'Marriage Date': null,
+  'No of Policies': 1,
+  Sex: 'Male',
+  'Add Comm': 'Residential',
+  Expired: null,
+  'Agent Code': null,
+  dataAnalysis: { '#2 Match Validation': { checks: { currentAnnualPremium: 3642, currentPolicyCount: 1 } } },
+};
+
+describe('adaptClient · the merged `client` book (Phase 97)', () => {
+  it("reads the owner's sample document — city, gender and the ANNUAL premium", () => {
+    const out = adaptClient(OWNER_SAMPLE);
+
+    // `Area` is the only locality on this row: `address.city` and `city` are both absent,
+    // so before Phase 97 the whole book rendered with a blank city.
+    expect(out.city).toBe('Katargam');
+    // ₹3,642 a year, NOT the ₹1,821 half-yearly instalment the row also carries.
+    expect(out.totalPremium).toBe(3642);
+    expect(out.policies[0].premium).toBe(1821); // the policy card still shows the instalment
+    expect(out.policies[0].frequency).toBe('Half-Yearly'); // …and what it is an instalment OF
+    expect(out.gender).toBe('Male');
+    expect(out.policyCount).toBe(1);
+    expect(out.id).toBe('6a43b46141eaae0c6c9e69c1');
+    expect(out.name).toBe('Agrawat Mukeshkumar Tulsidas');
+    expect(out.phone).toBe('+919638780155');
+    expect(out.totalCover).toBe(50000);
+  });
+
+  it("leaves a null LIXXX column undefined rather than rendering it empty", () => {
+    const out = adaptClient(OWNER_SAMPLE);
+    // The sample's own audit lists E_mail and Marriage Date as "missing: LIXXX".
+    expect(out.email).toBeUndefined();
+    expect(out.marriageDate).toBeUndefined();
+  });
+
+  it('suppresses the household label on the head of the household, and keeps it for a member', () => {
+    // `Group Head` / `groupName` carry the HEAD's name. On the head's own record that just
+    // repeats the name in the title above it, which reads as a bug rather than as data.
+    expect(adaptClient(OWNER_SAMPLE).family).toBeUndefined();
+
+    // A different member of the same household keeps it — the one place it says something.
+    const wife = adaptClient({ ...OWNER_SAMPLE, _id: 'c-wife', name: 'AGRAWAT SUNITA', 'Insured Name': 'AGRAWAT SUNITA' });
+    expect(wife.family).toBe('Agrawat Mukeshkumar Tulsidas');
+  });
+
+  it('reads Marriage Date and E_mail when the row actually carries them', () => {
+    const out = adaptClient({
+      ...OWNER_SAMPLE,
+      E_mail: 'mukesh@example.com',
+      'Marriage Date': '1994-11-22',
+    });
+    expect(out.email).toBe('mukesh@example.com');
+    expect(out.marriageDate).toBe('1994-11-22T00:00:00.000Z');
+  });
+
+  it('APPENDS the LIXXX names — an existing value always wins', () => {
+    // The merge rule on these documents is "fill current blanks only, never overwrite a
+    // non-empty current value". The adapter has to hold the same order or a row carrying
+    // both spellings would flip to the legacy one.
+    const out = adaptClient({
+      ...OWNER_SAMPLE,
+      address: { city: 'Surat' },
+      email: 'current@example.com',
+      E_mail: 'legacy@example.com',
+      familyName: 'Agrawat parivar',
+    });
+    expect(out.city).toBe('Surat');
+    expect(out.email).toBe('current@example.com');
+    expect(out.family).toBe('Agrawat parivar'); // untouched, NOT title-cased
+  });
+
+  it('falls back to premium × mode when the row has not been warmed — never to a bare premium', () => {
+    // `annual_premium_sum` is the backend's "this row is warmed" marker (clientScoreWarmer),
+    // so it is ABSENT until the warmer has run. A bare `premium` there would report a
+    // half-yearly instalment under a label that says "Annual premium".
+    const { annual_premium_sum, ...unwarmed } = OWNER_SAMPLE;
+    expect(annual_premium_sum).toBe(3642); // the fixture really did carry it
+    expect(adaptClient(unwarmed).totalPremium).toBe(3642); // 1821 × 2, not 1821
+
+    expect(adaptClient({ ...unwarmed, mode: 'Monthly' }).totalPremium).toBe(1821 * 12);
+    expect(adaptClient({ ...unwarmed, mode: 'Quarterly' }).totalPremium).toBe(1821 * 4);
+    expect(adaptClient({ ...unwarmed, mode: 'Yearly' }).totalPremium).toBe(1821);
+  });
+
+  it('ignores a zero or malformed annual_premium_sum instead of reporting ₹0', () => {
+    expect(adaptClient({ ...OWNER_SAMPLE, annual_premium_sum: 0 }).totalPremium).toBe(3642);
+    expect(adaptClient({ ...OWNER_SAMPLE, annual_premium_sum: null }).totalPremium).toBe(3642);
+    expect(adaptClient({ ...OWNER_SAMPLE, annual_premium_sum: 'x' }).totalPremium).toBe(3642);
+  });
+
+  it('never surfaces AadhaarNo or PANNo', () => {
+    // Deliberate, and it is a DPDP decision rather than a UI one: government ID on a shared
+    // handset is the owner's call. Present on the document, absent from the app's shape.
+    const out: any = adaptClient({ ...OWNER_SAMPLE, AadhaarNo: '1234 5678 9012', PANNo: 'ABCDE1234F' });
+    expect(JSON.stringify(out)).not.toContain('1234 5678 9012');
+    expect(JSON.stringify(out)).not.toContain('ABCDE1234F');
+  });
+
+  it('recovers name and dob from the LIXXX spellings when the current fields are blank', () => {
+    const out = adaptClient({
+      _id: 'c-lixxx',
+      'Insured Name': 'AGRAWAT  MUKESHKUMAR  TULSIDAS', // double-spaced in the source
+      'Date of Birth': '1969-03-15',
+      Area: 'Katargam',
+    });
+    expect(out.name).toBe('Agrawat Mukeshkumar Tulsidas');
+    expect(out.dob).toBe('1969-03-15T00:00:00.000Z');
+  });
+});
+
+describe('annualFactor', () => {
+  it('mirrors the backend clientFlags.annualFactor value for value', () => {
+    expect(annualFactor('Monthly')).toBe(12);
+    expect(annualFactor('monthly')).toBe(12);
+    expect(annualFactor('ecs')).toBe(12);
+    expect(annualFactor('sss')).toBe(12);
+    expect(annualFactor('Quarterly')).toBe(4);
+    expect(annualFactor('quaterly')).toBe(4); // the import's known typo
+    expect(annualFactor('Half-Yearly')).toBe(2);
+    expect(annualFactor('half_yearly')).toBe(2);
+    // Both spellings the backend's normalizeMode() repairs before annualFactor sees them.
+    expect(annualFactor('halg-yearly')).toBe(2);
+    expect(annualFactor('hamf-yearly')).toBe(2);
+    expect(annualFactor('Yearly')).toBe(1);
+    expect(annualFactor('Single')).toBe(1);
+  });
+
+  it('returns 1 for anything it does not recognise, including the short codes', () => {
+    // `MLY` means monthly in LIC paperwork and still returns 1 — a deliberate copy of the
+    // backend's behaviour. If the app "improved" on it, the same client would show one
+    // annual premium here and a different one in the admin panel.
+    expect(annualFactor('MLY')).toBe(1);
+    expect(annualFactor('')).toBe(1);
+    expect(annualFactor(null)).toBe(1);
+    expect(annualFactor(undefined)).toBe(1);
   });
 });
 

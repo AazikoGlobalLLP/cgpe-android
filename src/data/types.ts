@@ -90,6 +90,14 @@ export interface Client {
   city: string;
   dob: string;
   family?: string;
+  /** `Sex` on the merged `client` book. Backend DATA — displayed as sent, never translated. */
+  gender?: string;
+  /** `Marriage Date`. NOT the policy anniversary (that is `Policy.startDate`). */
+  marriageDate?: string;
+  /** `No of Policies` — the PERSON's policy count. `policies` only ever holds the one
+   *  document that was fetched, so this is the only honest count of what they hold. */
+  policyCount?: number;
+  /** ANNUAL premium for the person (`annual_premium_sum`), not one instalment. */
   totalPremium: number;
   totalCover: number;
   policies: Policy[];

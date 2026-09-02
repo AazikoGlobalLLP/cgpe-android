@@ -136,12 +136,41 @@ export function adaptLicPlan(raw: any): LicPlan {
   };
 }
 
+/**
+ * Multiply a per-policy premium to an ANNUAL figure from its payment mode.
+ *
+ * Mirrors the backend's CHAIN, not one function: `greetingEngine.normalizeMode()` repairs
+ * the import's known typos and THEN `clientFlags.annualFactor()` reads the repaired value.
+ * The app never normalises `mode` (it writes the raw string into `Policy.frequency` and
+ * shows it), so the two typo spellings are folded in here instead — otherwise a row
+ * reading `halg-yearly` would be annualised ×1 by the app and ×2 by the panel, and the
+ * same client would carry two different annual premiums on two screens.
+ *
+ * `MLY`-style short codes fall through to ×1 on BOTH sides. That is imprecise and it is
+ * still what we want: matching the producer matters more here than being right alone.
+ * Change this only when `clientFlags.js` / `normalizeMode` changes.
+ */
+export function annualFactor(mode: any): number {
+  const m = String(mode || '').toLowerCase().replace(/[^a-z]/g, '');
+  if (!m) return 1;
+  if (m.includes('month') || m === 'ecs' || m === 'sss') return 12;
+  if (m.includes('quart') || m.includes('quater')) return 4;
+  // 'halg'/'hamf' are normalizeMode()'s two documented import typos for 'half'.
+  if (m.includes('half') || m.includes('halg') || m.includes('hamf')) return 2;
+  return 1; // yearly / annual / single / unknown → already annual
+}
+
 export function adaptClient(raw: any): Client {
   raw = raw || {};
   const pi = raw.personal_info || {};
   const pd = raw.policy_details || {};
-  const name = titleCase(raw.name || raw.clientName || raw.fullName || raw.insuredName) || 'Customer';
-  const dob = parseDate(raw.dob || pi.date_of_birth || raw.date_of_birth || raw.dateOfBirth);
+  // Every chain below APPENDS the merged `client` book's LIXXX column (the legacy
+  // capitalised header) to the names that were already read. Appended, never
+  // substituted — the same rule the backend states at greetingEngine.normalizeClient,
+  // because the book arrives in three shapes at once and dropping one nulls a field
+  // across every row that carries only that spelling.
+  const name = titleCase(raw.name || raw.clientName || raw.fullName || raw.insuredName || raw['Insured Name']) || 'Customer';
+  const dob = parseDate(raw.dob || pi.date_of_birth || raw.date_of_birth || raw.dateOfBirth || raw['Date of Birth']);
   const commencement = parseDate(raw.commencementDate || raw.policy_start_date || raw.startDate);
   const maturity = parseDate(raw.maturityDate || raw.maturity_dt || raw.policy_end_date || raw.maturity_date);
   const fupDate = parseDate(raw.fupDate || raw.fup_date || raw.next_premium_date); // premium-due anchor
@@ -150,7 +179,25 @@ export function adaptClient(raw: any): Client {
   const policyNo = String(raw.policyNo || raw.policy_number || raw.policyNumber || '').trim();
   const plan = String(raw.policy_type || raw.planName || raw.plan || 'LIC Policy').trim() || 'LIC Policy';
   const mode = String(raw.mode || pd.premium_frequency || '').trim();
-  const city = String((raw.address && raw.address.city) || raw.city || '').trim();
+  const city = String((raw.address && raw.address.city) || raw.city || raw.Area || '').trim();
+
+  // `annual_premium_sum` is the PERSON's annual total, warmed by the backend
+  // (clientScoreWarmer treats its presence as the "this row is warmed" marker), while
+  // `premium` is ONE instalment on ONE policy row — ₹1,821 half-yearly against ₹3,642 a
+  // year on the owner's own sample. The KPI reading this has ALWAYS been labelled
+  // "Annual premium" (client.annualPremium, translated into all five languages), so the
+  // label was already making a promise the value did not keep.
+  // The fallback is `premium × annualFactor(mode)`, NEVER a bare `premium`: an unwarmed
+  // row would otherwise silently report a half-yearly instalment as a yearly figure.
+  const annualSum = num(raw.annual_premium_sum);
+  const totalPremium = annualSum > 0 ? annualSum : premium * annualFactor(mode);
+
+  // The household label. `groupName` / `Group Head` carry the head's own name, so on the
+  // HEAD's own record it just repeats the name above it — suppressed there, kept on every
+  // other member of that household, which is the only place it says anything.
+  const familyRaw = raw.familyName || raw.family;
+  const groupHead = titleCase(raw.groupName || raw['Group Head']) || undefined;
+  const family = familyRaw || (groupHead && groupHead !== name ? groupHead : undefined) || undefined;
 
   // A policy whose maturity date is already in the PAST has run its full term — it is matured, not
   // in force. The lic-import doc carries no reliable status field (this used to be hardcoded
@@ -186,11 +233,14 @@ export function adaptClient(raw: any): Client {
     id: String(raw._id || raw.id || policyNo || name),
     name,
     phone: pickPhone(raw),
-    email: raw.email || undefined,
+    email: raw.email || raw.E_mail || undefined,
     city,
     dob: iso(dob),
-    family: raw.familyName || raw.family || undefined,
-    totalPremium: premium,
+    family,
+    gender: String(raw.Sex || raw.gender || '').trim() || undefined,
+    marriageDate: iso(parseDate(raw['Marriage Date'] || raw.marriageDate)) || undefined,
+    policyCount: num(raw['No of Policies']) > 0 ? num(raw['No of Policies']) : undefined,
+    totalPremium,
     totalCover: sumAssured,
     policies: [policy],
     segment: Array.from(new Set(segment)) as Client['segment'],
