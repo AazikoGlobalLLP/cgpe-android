@@ -14,6 +14,57 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**✅ 2026-09-02 — PHASE 98: THE APP CAN FIX ITSELF WITHOUT AN APK. EAS Update is installed,
+committed (`11eff09`) and pushed; build 6 carries it.**
+
+The owner asked for this three times ("aisa change karo ki nayi APK ki zaroorat na pade"). Until
+today every JS change meant a full rebuild — 15–20 minutes, a monthly quota, and 21 people
+installing an APK by hand. **Publishing a fix is now
+`npx eas-cli update --channel preview --message "<what changed>"`.** Gates: **tsc 0 · npm test
+1378 / 84 files · eslint 0 errors on the touched files · `expo export -p web` exit 0.**
+
+- 🔴 **ONLY BUILD 6 AND LATER CAN RECEIVE AN UPDATE.** Builds 1–5 and the 25-Aug field APK have no
+  `expo-updates` native side, so **no over-the-air fix can ever reach them.** Every handset needs one
+  manual install to join the update train — and after that, never again. "We can fix it over the air
+  now" is false for any phone still on an older build; say so plainly.
+- 🔑 **`runtimeVersion` is the `fingerprint` policy — chosen after MEASURING, not from the doc.**
+  `CLAUDE.md` records a Windows fingerprint failure that would have ruled this policy out (under
+  `fingerprint` the hash *is* the runtime version, so it cannot be skipped). It did not reproduce:
+  three clean runs, `36864e87` → `067cf142` → `067cf142`. The alternative pins the runtime to the
+  string `1.10.0`, which every build since 1 Sep has shared while their native code differed — it
+  works until someone ships native changes without bumping the version, and then it delivers JS to a
+  build that cannot run it. **That is a rule a human has to remember, and this project has already
+  spent four APKs in one day on one of those.**
+- 🔴 **THE COST OF THAT CHOICE, MEASURED AND WRITTEN DOWN: `eas.json`, `.easignore` and `.gitignore`
+  are fingerprint SOURCES.** Editing any of the three changes the runtime version, so an update
+  published afterwards **silently does not match the build on the phones** — the publish succeeds and
+  nobody receives it. Safe direction (a no-op, not a crash) but invisible. **Before publishing, run
+  `npx expo-updates fingerprint:generate --platform android` and check the hash against the build**,
+  and do not skip `eas update`'s "no compatible builds" warning.
+- ⚠️ **The app OFFERS a restart and never performs one.** `reloadAsync()` erases the navigation stack
+  — the same mechanism that forced the crash screen's button to be reworded — so auto-applying would
+  drop a user out of a half-filled claim form to fix a bug they had not noticed. `ON_LOAD` means the
+  update lands at the next cold start anyway; the banner turns "tomorrow" into "now", by choice.
+- ⚠️ **`fallbackToCacheTimeout` is 0 and must stay 0** (`EXUpdatesLaunchWaitMs: 0`, confirmed by
+  introspect). Anything else blocks the splash on `u.expo.dev`, and this project has a documented
+  IPv6/NAT64 stall where that means a 12-second hang on a network the app otherwise works on.
+- ⚠️ **OTA failures never reach `data/health`, on purpose.** Convention #4 is about the user's data on
+  `cgpe.in`. An unreachable update server is a non-event — we keep running the JS we have — and
+  reporting it would raise the outage banner over data that is perfectly fine.
+- 🔑 **OTA would have silently broken the one build identifier a user can read, so the repair shipped
+  in the same commit.** `1.10.0 (6)` becomes true of build 6 running *any* of its updates, which
+  re-opens the exact hole `9ecaa9e` closed. `Settings › Version` now reads **`1.10.0 (6) · u3f9c1a`**,
+  and **the absence of the `· u…` suffix means that handset has taken no update.** Ask for the whole
+  string. *(General rule: adding a mechanism that changes what a displayed value MEANS makes the
+  display part of the change — same family as the Phase-79 `channel` and Phase-96 `MAX_RECORD_MS`.)*
+- **Two new i18n keys** (`update.ready`, `update.restart`), English in all five dictionaries on the
+  `tab.search`/`voice.*` precedent — no key existed to reuse. Filed as **Batch 6i**. Parity 448 → 450;
+  orphans still **18**, neither new key among them.
+
+---
+
+### Previously, and still true — Phase 97
+
 **✅ 2026-09-02 — PHASE 97 IS BUILT, COMMITTED (`acfcc46`) AND PUSHED. And BOTH `[api]` items we
 filed came back shipped the same day.**
 
@@ -149,7 +200,41 @@ remains unrotated (owner-owned).
 
 ---
 
-## Next 3 — as of 2026-09-02 (after Phase 97 was BUILT)
+## Next 3 — as of 2026-09-02 (after Phase 98, OTA)
+
+1. 🔴 **INSTALL BUILD 6 ON ONE HANDSET, THEN PUBLISH A THROWAWAY UPDATE AND WATCH IT ARRIVE.**
+   **The OTA round trip has never been executed.** Everything about it is verified statically —
+   config introspects, fingerprint is deterministic, gates green — and none of that proves a phone
+   receives an update. Do this before telling the owner the fleet is updatable: install build 6,
+   confirm `Settings › Version` reads `1.10.0 (6)` with **no** `· u…` suffix, publish
+   `npx eas-cli update --channel preview --message "ota round-trip test"`, then background and
+   re-open the app. Expect the banner, tap it, and expect `Settings › Version` to gain a `· u…`.
+   **If nothing arrives, check the fingerprint first** (`fingerprint:generate` vs the build) — an
+   edit to `eas.json`/`.easignore`/`.gitignore` since the build is the most likely cause and it
+   fails silently. **Do not publish an update to the whole fleet before this passes once.**
+2. **READ THE VOICE PROBE OUTPUT.** Unchanged from Phase 97 and still owner-blocked:
+   `node scripts/voice-probe.mjs` needs `CGPE_EMAIL` + `CGPE_PASSWORD`, which no session here holds.
+   `GET /voice/status` settles whether the server's voice keys are set. **If `ready` is false it is
+   an OPS task and no APK — and now no OTA either — can fix it.**
+3. 🔴 **THE OWNER'S BACKEND DEPLOY, still the biggest blocker in the project and not a code task.**
+   `origin/main` = `0324dfc` (re-verified today); backend Phases **118–123** sit on `origin/ved`
+   (`1515f8d`) and on no deployed branch — the client-collection move, the `Area` city fix, the
+   `dataAnalysis` payload fix, monthly-content scheduling, advisor OTP sign-in, **plus everything
+   Phase 97 shipped, which reads fields that only exist on the new book.** Merge → deploy → restart
+   `:3001`. ⚠️ Verify with the git refs, not a curl — see the 401-control trap.
+   ⚠️ **`advisor_id` is on ZERO rows of both books**, so the P90 SALES carve-out returns an empty
+   client book for that tier the moment anyone tests it. Owner data decision, already filed; triage
+   a "sales advisor sees no clients" report as this, and do **not** weaken the carve-out.
+4. 🔴 **THE COMMITTED PRODUCTION SECRETS — unchanged and still the most serious open item.**
+   `Aaziko1Market1/cgpe-backend` `docs/OPS-ENV-HANDOVER.md` (`1624f8a`), 21 real values including
+   `JWT_SECRET`, on three pushed branches. Rotation, not deletion. Owner picks the moment.
+
+*(Then: Hindi voice clips; re-enabling Skia/blur/Lottie, each needing its own device test; the
+unexplained "view as preview" report; and i18n Batches 6i/6h/6f/5/6b, all owner-copy-blocked.)*
+
+---
+
+## Superseded — Next 3 as of 2026-09-02 (after Phase 97 was BUILT)
 
 0. 🔴 **THE OWNER'S DEPLOY IS NOW THE BIGGEST BLOCKER IN THE PROJECT, and it is not a code task.**
    `origin/main` = `0324dfc`; backend Phases **118–123** sit on `origin/ved` (`1515f8d`). Undeployed

@@ -659,10 +659,48 @@ minutes, and the next press dying on `expo-audio`'s own guard (`AudioRecorder.kt
   **15** and then refused; July ran 13 and did not. Four were used on 1 Sep. **The old "quota is
   precious" anxiety was out of proportion — but the discipline it produced is still right for a
   better reason: the real cost of a bad build is 21 handsets on a broken app, not a build credit.**
-- **EAS Update (OTA) is STILL NOT INSTALLED**, so every JS fix needs a full rebuild. **The owner has
-  asked for it twice** ("aisa change karo ki nayi APK ki zaroorat na pade"). It was deliberately kept
-  out of all four 1 Sep builds — it adds a native module and changes the boot path, and those were
-  the builds fixing a crash. **It is the agreed next step once a build is confirmed good on a phone.**
+- ✅ **EAS UPDATE (OTA) IS INSTALLED — Phase 98, 2026-09-02 (`11eff09`). This line used to say it was
+  NOT; do not re-file it.** `expo-updates@~57.0.21`, `updates.url` + `runtimeVersion` in `app.json`,
+  `channel` on every `eas.json` profile. **Publish a JS fix with
+  `npx eas-cli update --channel preview --message "<what changed>"`** — no rebuild, no quota, ~30 s
+  to reach a phone. `checkAutomatically: ON_LOAD` applies it at the next cold start on its own; the
+  `UpdateBanner` offers a one-tap restart so it does not have to wait that long.
+  🔴 **ONLY BUILD 6 AND LATER CAN RECEIVE AN UPDATE.** Builds 1–5 and the 25-Aug field APK have no
+  `expo-updates` native side, so **no OTA can ever reach them** — those handsets need one manual APK
+  install to get onto the update train, and after that never again. Say this plainly to the owner;
+  "we can fix it over the air now" is false for every phone still on an older build.
+  🔴 **`runtimeVersion` IS THE `fingerprint` POLICY, AND THAT MAKES `eas.json` / `.easignore` /
+  `.gitignore` LOAD-BEARING FOR OTA.** Measured, not assumed: those three files are hashed as
+  fingerprint *sources*, so **editing any of them changes the runtime version and an update
+  published afterwards will silently not match build 6** — `eas update` succeeds, and nobody
+  receives it. The failure is a no-op rather than a crash (which is the direction you want), but it
+  reads as "OTA is broken". **Before publishing, run
+  `npx expo-updates fingerprint:generate --platform android` and confirm the hash still matches the
+  build's**; `eas update` also warns when a branch has no compatible builds — do not skip past it.
+  ⚠️ **The Windows fingerprint trap did NOT reproduce** (`36864e87` → `067cf142`, exit 0, twice).
+  `EAS_SKIP_AUTO_FINGERPRINT=1` remains the escape hatch if it returns — **but do not use it now**:
+  under this policy the fingerprint is the runtime version, not an optional local nicety.
+  ⚠️ **`fallbackToCacheTimeout` is 0 and must stay 0** (introspect: `EXUpdatesLaunchWaitMs: 0`). Any
+  other value makes the splash wait on `u.expo.dev` before the app renders, which on this project's
+  documented IPv6/NAT64 stall means a 12-second hang on a network where the app otherwise works.
+  ⚠️ **Nothing in `lib/ota.ts` reports to `data/health`, on purpose.** Convention #4 is about the
+  BACKEND. `u.expo.dev` is a different host holding none of the user's data, so an unreachable update
+  server is a non-event — reporting it would raise the outage banner and tell the user their data
+  could not be loaded while every list on the phone is fine.
+  ⚠️ **The app OFFERS a restart; it never performs one.** `reloadAsync()` erases the navigation stack
+  (the same mechanism documented at `CrashReport.retryLabel`), so an unasked reload would destroy the
+  user's in-progress form to fix a bug they had not noticed. Do not "improve" this into an auto-apply.
+- 🔴 **OTA SILENTLY BREAKS THE BUILD DISCRIMINATOR, AND THE REPAIR IS PART OF THE SAME COMMIT.**
+  `9ecaa9e` put the native build number in `Settings › Version` because "ask which build is
+  installed" was impossible to follow on MIUI. The moment updates ship, **`1.10.0 (6)` is true of
+  build 6 running ANY of its updates**, so the one field-readable identifier in the app stops
+  identifying anything and every bug report becomes unfalsifiable again — the exact hole 9ecaa9e was
+  written to close, re-opened from the other side. `formatVersionLine` (`lib/buildInfo.ts`, pure +
+  tested) now renders **`1.10.0 (6) · u3f9c1a`**, and **the ABSENCE of the `· u…` suffix is itself
+  information: that handset has taken no update.** Ask for the whole string, not the version.
+  🔑 **The general rule this is the second instance of: when you add a mechanism that changes what a
+  displayed value MEANS, the display is part of the change.** Same family as the Phase-79 `channel`
+  field and the Phase-96 `MAX_RECORD_MS` — a value nobody re-read after the thing beneath it moved.
 
 ## `GET /dashboard/overview` can answer 200 with numbers that are not real (2026-09-01)
 

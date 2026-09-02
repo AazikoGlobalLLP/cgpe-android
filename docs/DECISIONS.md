@@ -5862,3 +5862,67 @@ only authority.** Corrected in `CLAUDE.md`, along with the note that `GET /api/u
 **D-9. Did not tick our box on their Phase 119/120 item.** Both are addressed to `cgpe-mobile`,
 `cgpe-admin` and OWNER, so per the protocol the acknowledgement goes underneath and the box is left
 open for the other recipients — the same call as D-5 yesterday.
+
+---
+
+## Phase 98 — EAS Update (OTA) — 2026-09-02
+
+**D-1. Chose the `fingerprint` runtime-version policy, after measuring that fingerprinting works on
+this machine.** `CLAUDE.md` records a Windows fingerprint failure (`UNKNOWN: unknown error, open
+'…react-native-reanimated…index.d.ts.map'`) and the `EAS_SKIP_AUTO_FINGERPRINT=1` workaround, which
+would have ruled this policy out — under `fingerprint` the hash IS the runtime version, so it cannot
+be skipped. It did not reproduce: `expo-updates fingerprint:generate` returned cleanly three times
+(`36864e87` before installing, `067cf142` after, and `067cf142` again to prove determinism).
+The alternative, `appVersion`, pins the runtime to the string `1.10.0` — which every build since
+1 Sep has carried while their native code differed. It would work today and would silently break the
+day someone ships native changes without bumping the marketing version, delivering JS that needs a
+module the installed APK does not have. **That is a rule a human has to remember, and this project
+has already spent four APKs in one day on a rule a human had to remember.** `fingerprint` makes it
+mechanical: the runtime changes exactly when the native inputs change.
+
+**D-2. Accepted the cost that comes with it, and wrote it down rather than discovering it later.**
+`eas.json`, `.easignore` and `.gitignore` are hashed as fingerprint *sources* (measured — they are in
+the emitted source list). So editing any of the three changes the runtime version, and an update
+published afterwards **will not match the build already on the phones**. The publish still succeeds
+and nobody receives it. That failure direction is the safe one — a no-op, not a crash — but it is
+invisible, so the check (`fingerprint:generate`, compare against the build) is now in `CLAUDE.md`
+next to the publish command rather than left to be rediscovered.
+
+**D-3. The app offers a restart; it never performs one.** `reloadAsync()` restarts the JS runtime,
+and `react-navigation` erases the navigation state on unmount — the mechanism already documented at
+`CrashReport.retryLabel`, where the crash-screen button had to be reworded because it could not
+promise to return you to your screen. Auto-applying an update would therefore drop a user out of a
+half-filled claim form to fix a bug they had not noticed. `checkAutomatically: ON_LOAD` means the
+update lands at the next cold start with no UI at all; the banner exists only to turn "tomorrow"
+into "now", at the user's choice.
+
+**D-4. `fallbackToCacheTimeout: 0`, and it is load-bearing rather than a default we inherited.** A
+non-zero value blocks the splash on a request to `u.expo.dev` before the app renders. This project
+has a documented IPv6/NAT64 path where TLS to a working server stalls until the 12 s timeout, and a
+standing invariant that "the splash never waits on the network". `expo config --type introspect`
+confirms `EXUpdatesLaunchWaitMs: 0` reaches the native config.
+
+**D-5. OTA failures are silent and deliberately do NOT reach `data/health`.** Convention #4 exists so
+"no clients" is never confused with "could not load clients" — it is about the user's data, served by
+`cgpe.in`. The update server is a different host holding none of it, and when it is unreachable the
+correct outcome is to keep running the JS we already have. Reporting it would raise the outage banner
+and tell the user their data might be stale while every list on the phone is perfectly fine — turning
+a non-event into a false alarm on the app's most trusted signal.
+
+**D-6. Repaired the build discriminator in the same commit that broke it.** `9ecaa9e` put the native
+build number in `Settings › Version` because MIUI prints none and the app's own row was a hard-coded
+string. OTA re-opens that hole from the other side: `1.10.0 (6)` becomes true of build 6 running any
+of its updates. `formatVersionLine` now renders `1.10.0 (6) · u3f9c1a`, and the absence of the suffix
+means "this handset has taken no update" — which is the question most likely to be asked first.
+**Adding a mechanism that changes what a displayed value MEANS makes the display part of the change.**
+
+**D-7. Two new i18n keys, English in all five dictionaries, filed as Batch 6i.** `update.ready` and
+`update.restart` are a new surface with no owner copy and no existing key to reuse (grepped — the
+dictionary has nothing for "update"/"restart"/"ready"). This is the sanctioned `tab.search` /
+`voice.*` precedent, not machine translation, and it is labelled as such at the keys. Parity bumped
+448 → 450; the orphan scan still reports **18**, and neither new key is among them.
+
+**D-8. Only build 6 and later can ever receive an update.** Builds 1–5 and the 25-Aug field APK have
+no `expo-updates` native side. Every handset needs one manual install to join, and until then "we can
+fix it over the air" is false for that phone — worth saying plainly rather than letting the owner
+infer that the fleet is now updatable.

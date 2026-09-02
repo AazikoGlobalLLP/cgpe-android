@@ -914,3 +914,27 @@ was `common.offlineBody`, and that decision still stands for the empty-state sen
 Batch 6b, asked for individually rather than collapsed into one. *(Seven **write-failure** notices in
 the clock-in flow did match it word for word and were wired on 2026-08-27 — that is a different set
 of strings from the 41 empty-state ones, which is why both statements are true.)*
+
+---
+
+## Batch 6i — the update banner (2 strings, NEW 2026-09-02)
+
+**Why it exists:** the app can now fix itself over the air, without anyone installing a new APK
+(Phase 98). When a fix has downloaded, a small banner appears at the bottom of the screen offering
+to restart into it. That banner is a brand-new surface, so there was no existing key to reuse —
+grepped, and the dictionary has nothing for "update", "restart" or "ready".
+
+**Both strings ship in ENGLISH in all five dictionaries today**, labelled as such in
+`src/i18n/index.tsx`. That is the sanctioned `tab.search` / `voice.*` precedent — an honest English
+fallback rather than a machine-translated guess — and it is why this is a request rather than a
+finished job. Nothing is broken until the copy arrives; the banner simply speaks English.
+
+**Context for the translator:** these two sit side by side in one small bar, with a close (×) button.
+The first is a statement, the second is the button next to it. "Restart" here means the app closes
+and immediately reopens itself — it is quick, nothing is lost, and the user is not signed out.
+
+| Key | English | gu | hi | hi-en | gu-en |
+|---|---|---|---|---|---|
+| `update.ready` | Update ready |  |  |  |  |
+| `update.restart` | Restart now |  |  |  |  |
+
