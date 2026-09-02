@@ -14,8 +14,17 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**✅ 2026-09-02 — PHASE 98: THE APP CAN FIX ITSELF WITHOUT AN APK. EAS Update is installed,
-committed (`11eff09`) and pushed; build 6 carries it.**
+**✅ 2026-09-02 — PHASE 98: THE APP CAN FIX ITSELF WITHOUT AN APK — CONFIRMED END TO END ON A REAL
+HANDSET. EAS Update is installed, committed (`11eff09`) and pushed; build 6 (`80df5c5a`) carries it,
+and the owner watched an update arrive, apply and identify itself.**
+
+**This phase is DONE in the `CLAUDE.md` sense** — not "built but device-unverified", which is the
+status most of this project's work sits in. The owner ran all four steps of the round-trip test:
+install, banner appears unprompted, tap to restart, `Settings › Version` gains the `· u…` suffix.
+That single test proves five things that had otherwise only been argued: the `fingerprint` runtime
+matched a real build, `u.expo.dev` is reachable from an Indian mobile network, the banner's handler
+survives a **release** build (no LogBox — a throw there is fatal, the trap that cost four APKs),
+`reloadAsync()` applies, and the version line reads the applied update back.
 
 The owner asked for this three times ("aisa change karo ki nayi APK ki zaroorat na pade"). Until
 today every JS change meant a full rebuild — 15–20 minutes, a monthly quota, and 21 people
@@ -202,16 +211,19 @@ remains unrotated (owner-owned).
 
 ## Next 3 — as of 2026-09-02 (after Phase 98, OTA)
 
-1. 🔴 **INSTALL BUILD 6 ON ONE HANDSET, THEN PUBLISH A THROWAWAY UPDATE AND WATCH IT ARRIVE.**
-   **The OTA round trip has never been executed.** Everything about it is verified statically —
-   config introspects, fingerprint is deterministic, gates green — and none of that proves a phone
-   receives an update. Do this before telling the owner the fleet is updatable: install build 6,
-   confirm `Settings › Version` reads `1.10.0 (6)` with **no** `· u…` suffix, publish
-   `npx eas-cli update --channel preview --message "ota round-trip test"`, then background and
-   re-open the app. Expect the banner, tap it, and expect `Settings › Version` to gain a `· u…`.
-   **If nothing arrives, check the fingerprint first** (`fingerprint:generate` vs the build) — an
-   edit to `eas.json`/`.easignore`/`.gitignore` since the build is the most likely cause and it
-   fails silently. **Do not publish an update to the whole fleet before this passes once.**
+1. 🔴 **ROLL BUILD 6 OUT TO THE OTHER TWENTY HANDSETS. This is the owner's, and it is now the single
+   highest-value unblocked action in the project.**
+   ✅ **The OTA round trip is CONFIRMED on a real handset (2026-09-02, owner-verified).** All four
+   steps passed: build 6 installed, the banner appeared on its own, tapping it restarted the app, and
+   `Settings › Version` gained the `· u…` suffix. A JS fix now reaches that phone in ~30 seconds.
+   🔴 **It reaches exactly ONE phone.** Builds 1–5 and the 25-Aug field APK have no `expo-updates`
+   native side and can never receive an update — proving OTA on one handset does not make the other
+   twenty updatable. **Each needs one manual install of build 6, and then never again.** Until that
+   is done, "we can fix it over the air" is true of one phone and false of the fleet.
+   ⚠️ **If an update ever fails to arrive on a phone that HAS build 6, check the fingerprint first**
+   (`npx expo-updates fingerprint:generate --platform android` vs the build's runtime version) — an
+   edit to `eas.json` / `.easignore` / `.gitignore` since the build is the likeliest cause, and it
+   fails **silently**: the publish succeeds and nobody receives it.
 2. **READ THE VOICE PROBE OUTPUT.** Unchanged from Phase 97 and still owner-blocked:
    `node scripts/voice-probe.mjs` needs `CGPE_EMAIL` + `CGPE_PASSWORD`, which no session here holds.
    `GET /voice/status` settles whether the server's voice keys are set. **If `ready` is false it is

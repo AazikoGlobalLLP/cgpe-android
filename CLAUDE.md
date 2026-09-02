@@ -659,8 +659,12 @@ minutes, and the next press dying on `expo-audio`'s own guard (`AudioRecorder.kt
   **15** and then refused; July ran 13 and did not. Four were used on 1 Sep. **The old "quota is
   precious" anxiety was out of proportion — but the discipline it produced is still right for a
   better reason: the real cost of a bad build is 21 handsets on a broken app, not a build credit.**
-- ✅ **EAS UPDATE (OTA) IS INSTALLED — Phase 98, 2026-09-02 (`11eff09`). This line used to say it was
-  NOT; do not re-file it.** `expo-updates@~57.0.21`, `updates.url` + `runtimeVersion` in `app.json`,
+- ✅ **EAS UPDATE (OTA) IS INSTALLED AND CONFIRMED WORKING ON A REAL HANDSET — Phase 98, 2026-09-02
+  (`11eff09`; build 6 = `80df5c5a`). This line used to say it was NOT installed; do not re-file it.**
+  The owner ran the full round trip: install → the banner appeared unprompted → tap → restart →
+  `Settings › Version` gained the `· u…` suffix. **Device-verified, not merely built** — which also
+  incidentally proved the banner's press handler survives a release build, where an unhandled throw
+  is fatal (the `'worklet'` trap that cost four APKs). `expo-updates@~57.0.21`, `updates.url` + `runtimeVersion` in `app.json`,
   `channel` on every `eas.json` profile. **Publish a JS fix with
   `npx eas-cli update --channel preview --message "<what changed>"`** — no rebuild, no quota, ~30 s
   to reach a phone. `checkAutomatically: ON_LOAD` applies it at the next cold start on its own; the
