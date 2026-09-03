@@ -64,3 +64,9 @@ credentials/
 
 # Voice probe captures (raw responses; may contain live reply text)
 e2e/voice-probe/
+
+# Staff data dump — SECRET. `cgpe-connect.staff_unified.json` carries staff password_hash (bcrypt)
+# values plus emails/phones; a bcrypt hash is crackable offline, so this must never enter git
+# history. Owner decision 2026-09-03: gitignore it (do not commit, even redacted, without a fresh call).
+cgpe-connect.staff_unified.json
+*.staff_unified.json
