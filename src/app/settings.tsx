@@ -16,6 +16,7 @@ import { describeCacheClear } from '@/lib/appCache';
 import type { CacheClearResult } from '@/lib/appCache';
 import { haptics } from '@/lib/haptics';
 import { useAuth } from '@/store/auth';
+import { useAppUi } from '@/store/appUi';
 import { LANGS, useI18n } from '@/i18n';
 import type { Lang } from '@/i18n';
 import { testConnection } from '@/data/api';
@@ -81,6 +82,11 @@ export default function Settings() {
   const { confirm } = useConfirm();
   const { lang, setLang, t } = useI18n();
   const { biometricEnabled, biometricAvailable, setBiometric } = useAuth();
+  // The role layout the app actually resolved for this user. Surfaced (bare value) so a field agent
+  // can read it aloud to an admin — the app receives the winning key from the server's own
+  // department>role>advisor resolution, and this is the only place it is visible. Pairs with the
+  // admin panel's "This role's layout: <key>" line so both ends describe the same doc the same way.
+  const { config: uiConfig } = useAppUi();
 
   const [bio, setBio] = useState(biometricEnabled);
   const [push, setPush] = useState(true);
@@ -494,6 +500,9 @@ export default function Settings() {
               </Appear>
               <Appear index={3}>
                 <DataRow icon="cube-outline" label="Version" value={versionLine()} numeric />
+              </Appear>
+              <Appear index={4}>
+                <DataRow icon="grid-outline" label="Your layout" value={uiConfig.role_key} numeric />
               </Appear>
             </ListSection>
           </>

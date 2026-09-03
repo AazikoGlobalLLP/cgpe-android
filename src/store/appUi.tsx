@@ -22,6 +22,7 @@
  * Array order is render order. `widgets` is never sorted.
  */
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { AppState } from 'react-native';
 import * as api from '@/data/api';
 import type { AppUiConfig, UiWidget } from '@/data/api';
 import { useAuth } from '@/store/auth';
@@ -706,6 +707,19 @@ export function AppUiProvider({ children }: { children: React.ReactNode }) {
     if (!authReady) return;   // wait for the restored session, or the call goes out unauthenticated
     void load();
   }, [authReady, load]);
+
+  // Refetch the layout when the app returns to the foreground. Without this the config is read ONLY
+  // at cold start (the effect above fires on [authReady, load], and load's deps are [userId]), so an
+  // admin's Save in the panel needs a full kill-and-relaunch to appear on the device. A resume is now
+  // enough. `load()` early-returns when signed out and carries its own staleness guard (`mine()`), so
+  // a background→foreground while logged out, or a superseded fetch, is a safe no-op. (This only
+  // starts to matter once the panel + backend deploys land and the per-role doc exists to be read.)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => {
+      if (s === 'active') void load();
+    });
+    return () => sub.remove();
+  }, [load]);
 
   const served = last && last.user === userId ? last.config : null;
   // Signed out resolves instantly (there is no role to look up); signed in waits for this
