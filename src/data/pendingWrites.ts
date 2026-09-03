@@ -16,12 +16,14 @@ type Listener = () => void;
 
 let list: QueuedWrite[] = [];
 /**
- * A one-time "N draft(s) couldn't be saved and were removed" message, set by the flush when the
- * server REFUSED a draft (a 4xx / attempt-cap drop — spec row 11). A screen shows it once and calls
- * `setDropNotice(null)`. Held here (not per-screen) so a drop that happens while the notes screen is
- * closed is still surfaced the next time it opens.
+ * A one-time COUNT of drafts a flush REFUSED-and-removed (a 4xx / attempt-cap drop — spec row 11).
+ * A screen shows it once, rendering the translated `sync.dropped{One,Many}` message, then calls
+ * `setDropCount(0)`. The count (not a pre-formatted string) lives here because the flush that sets it
+ * is in the non-React api layer with no translator, and this "your work was removed" notice must
+ * reach a Hindi/Gujarati field agent in their own language. Held here (not per-screen) so a drop that
+ * happens while the notes screen is closed is still surfaced the next time it opens.
  */
-let dropNotice: string | null = null;
+let dropCount = 0;
 const listeners = new Set<Listener>();
 
 function emit(): void {
@@ -51,17 +53,17 @@ export function getPendingByKind(kind: QueueKind): QueuedWrite[] {
 /** Drop the in-memory mirror only (the stored queue survives sign-out — spec row 12). */
 export function resetPending(): void {
   list = [];
-  dropNotice = null;
+  dropCount = 0;
   emit();
 }
 
-export function getDropNotice(): string | null {
-  return dropNotice;
+export function getDropCount(): number {
+  return dropCount;
 }
 
-/** Set (or clear, with null) the one-time drop notice a screen shows after a refused flush. */
-export function setDropNotice(msg: string | null): void {
-  dropNotice = msg;
+/** Record how many drafts a refused flush removed (0 clears it). A screen shows the notice once. */
+export function setDropCount(n: number): void {
+  dropCount = n;
   emit();
 }
 

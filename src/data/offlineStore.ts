@@ -59,6 +59,20 @@ export async function purgeUser(userId: string): Promise<void> {
 
 /* ------------------------------------------------------- Write queue (57b) */
 
+/**
+ * Remove one user's persisted write queue entirely. For ACCOUNT DELETION only — sign-out
+ * deliberately KEEPS the queue (spec row 12) so unsent drafts re-sync at the next login, but a
+ * deleted account never logs in again, so its queued lead/task/note drafts (customer names and
+ * phone numbers) would otherwise sit on the shared handset's disk forever with nothing to flush them.
+ */
+export async function purgeQueue(userId: string): Promise<void> {
+  try {
+    await AsyncStorage.multiRemove([queueKey(userId)]);
+  } catch {
+    // Purge must never block account deletion.
+  }
+}
+
 /** Load one user's persisted write queue (empty on a miss / corrupt / storage error). */
 export async function loadQueue(userId: string): Promise<QueuedWrite[]> {
   try {

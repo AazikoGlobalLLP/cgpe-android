@@ -13,7 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { radius, spacing, useTheme } from '@/theme/theme';
-import { getPendingByKind, getDropNotice, subscribePending } from '@/data/pendingWrites';
+import { getPendingByKind, getDropCount, subscribePending } from '@/data/pendingWrites';
 import type { QueuedWrite, QueueKind } from '@/lib/writeQueue';
 import { Txt } from './base';
 import { useT } from '@/i18n';
@@ -28,15 +28,16 @@ export function usePendingWrites(kind: QueueKind): QueuedWrite[] {
   return list;
 }
 
-/** The one-time "couldn't save" message a flush set when the server refused a draft (null if none). */
-export function useDropNotice(): string | null {
-  const [msg, setMsg] = useState<string | null>(() => getDropNotice());
+/** How many drafts a flush refused-and-removed (0 = nothing to show). The screen renders the
+ *  translated sync.dropped{One,Many} message from this count. */
+export function useDropCount(): number {
+  const [n, setN] = useState<number>(() => getDropCount());
   useEffect(() => {
-    const update = () => setMsg(getDropNotice());
+    const update = () => setN(getDropCount());
     update();
     return subscribePending(update);
   }, []);
-  return msg;
+  return n;
 }
 
 export function PendingBadge() {

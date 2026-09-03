@@ -4322,12 +4322,10 @@ export async function flushWriteQueue(): Promise<{ synced: number; dropped: numb
       // The server refused these (a 4xx / attempt-cap). Surface it once — an offline draft that
       // silently vanished would read as data loss. Kind-agnostic ("change") — Notes AND Tasks queue.
       // Guarded on the identity: if the flush broke because the user changed, these were the PREVIOUS
-      // user's drops and must not surface on the new user's screen.
-      pendingBus.setDropNotice(
-        dropped === 1
-          ? 'One offline change could not be saved and was removed.'
-          : `${dropped} offline changes could not be saved and were removed.`,
-      );
+      // user's drops and must not surface on the new user's screen. Sets a COUNT — the screen renders
+      // the translated sync.dropped{One,Many} message, because this api layer has no translator and a
+      // "your work was removed" notice must reach a Hindi/Gujarati agent in their language.
+      pendingBus.setDropCount(dropped);
     }
   } finally {
     flushing = false;

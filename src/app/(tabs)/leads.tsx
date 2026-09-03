@@ -13,8 +13,8 @@ import { SwipeRow } from '@/ui/swipe';
 import type { SwipeAction } from '@/ui/swipe';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
-import { usePendingWrites, useDropNotice, PendingBadge } from '@/ui/pending';
-import { setDropNotice } from '@/data/pendingWrites';
+import { usePendingWrites, useDropCount, PendingBadge } from '@/ui/pending';
+import { setDropCount } from '@/data/pendingWrites';
 import { haptics } from '@/lib/haptics';
 import { useData } from '@/hooks/useData';
 import * as api from '@/data/api';
@@ -129,7 +129,7 @@ export default function Leads() {
   // the pending bus (loaded from storage on sign-in, so they survive an app kill); they render pinned
   // above the pipeline with a "Pending sync" badge and are inert until they flush. Newest draft on top.
   const pendingLeads = usePendingWrites('lead');
-  const dropNotice = useDropNotice();
+  const dropCount = useDropCount();
   const pendingCards = useMemo(() => pendingLeads.map(api.leadDraftToLead).reverse(), [pendingLeads]);
 
   // When a draft flushes (the queue shrinks) the real server lead now exists — refresh so it lands as
@@ -395,13 +395,12 @@ export default function Leads() {
         </View>
 
         {/* PHASE 57: a one-time notice for any offline lead draft the server later refused (dropped). */}
-        {dropNotice ? (
+        {dropCount > 0 ? (
           <View style={{ paddingHorizontal: spacing.lg }}>
             <Banner
               tone="warning"
-              title="An offline lead was not saved"
-              message={dropNotice}
-              onDismiss={() => setDropNotice(null)}
+              title={dropCount === 1 ? t('sync.droppedOne') : t('sync.droppedMany', { n: dropCount })}
+              onDismiss={() => setDropCount(0)}
             />
           </View>
         ) : null}

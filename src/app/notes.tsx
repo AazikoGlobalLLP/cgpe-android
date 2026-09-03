@@ -15,8 +15,8 @@ import { SwipeRow } from '@/ui/swipe';
 import type { SwipeAction } from '@/ui/swipe';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
-import { usePendingWrites, useDropNotice, PendingBadge } from '@/ui/pending';
-import { setDropNotice } from '@/data/pendingWrites';
+import { usePendingWrites, useDropCount, PendingBadge } from '@/ui/pending';
+import { setDropCount } from '@/data/pendingWrites';
 import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
 import { timeAgo } from '@/lib/format';
@@ -130,7 +130,7 @@ export default function Notes() {
   // one-time "couldn't save" notice both come from the write-queue bus, so they survive an app kill
   // and update the moment a background flush lands.
   const pendingRaw = usePendingWrites('note');
-  const dropNotice = useDropNotice();
+  const dropCount = useDropCount();
 
   /** Leak guards: nothing lands on this screen once it is gone, and no superseded
    *  request may overwrite a newer one. */
@@ -426,13 +426,12 @@ export default function Notes() {
 
       {/* PHASE 57b: a one-time notice when the server refused an offline draft on flush (a 4xx).
           The draft is already removed from the queue — this just makes the removal honest. */}
-      {dropNotice ? (
+      {dropCount > 0 ? (
         <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>
           <Banner
             tone="warning"
-            title="Some offline notes were not saved"
-            message={dropNotice}
-            onDismiss={() => setDropNotice(null)}
+            title={dropCount === 1 ? tr('sync.droppedOne') : tr('sync.droppedMany', { n: dropCount })}
+            onDismiss={() => setDropCount(0)}
           />
         </View>
       ) : null}

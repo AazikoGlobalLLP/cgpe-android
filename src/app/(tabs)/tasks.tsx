@@ -16,8 +16,8 @@ import type { SwipeAction } from '@/ui/swipe';
 import { Appear, useCountUp } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { SyncChip } from '@/ui/SyncChip';
-import { usePendingWrites, useDropNotice, PendingBadge } from '@/ui/pending';
-import { setDropNotice } from '@/data/pendingWrites';
+import { usePendingWrites, useDropCount, PendingBadge } from '@/ui/pending';
+import { setDropCount } from '@/data/pendingWrites';
 import { haptics } from '@/lib/haptics';
 
 import { useT } from '@/i18n';
@@ -298,7 +298,7 @@ export default function Tasks() {
   // storage on sign-in, so they survive an app kill); they render here with a "Pending sync" badge,
   // and a one-time drop notice reports any the server later refused. Newest draft on top.
   const pendingTasks = usePendingWrites('task');
-  const dropNotice = useDropNotice();
+  const dropCount = useDropCount();
   const pendingCards = useMemo(() => pendingTasks.map(api.taskDraftToTask).reverse(), [pendingTasks]);
 
   // When a draft flushes (the queue shrinks) the real server task now exists — refetch so it lands as
@@ -456,12 +456,11 @@ export default function Tasks() {
         <SyncChip endpointKey={tasksKey} />
 
         {/* Phase 57b: a one-time notice for any offline task draft the server later refused (dropped). */}
-        {dropNotice ? (
+        {dropCount > 0 ? (
           <Banner
             tone="warning"
-            title="An offline task was not saved"
-            message={dropNotice}
-            onDismiss={() => setDropNotice(null)}
+            title={dropCount === 1 ? t('sync.droppedOne') : t('sync.droppedMany', { n: dropCount })}
+            onDismiss={() => setDropCount(0)}
           />
         ) : null}
         {loading ? <TasksSkeleton /> : (
