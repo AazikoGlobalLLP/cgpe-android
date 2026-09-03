@@ -579,6 +579,7 @@ export default function Tasks() {
             <Appear index={1}>
               <ScrollView
                 horizontal
+                keyboardShouldPersistTaps="handled"
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingRight: spacing.xs }}
               >

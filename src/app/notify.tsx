@@ -91,6 +91,8 @@ export default function NotifyScreen() {
   const [selected, setSelected] = useState<Record<string, true>>({});
 
   const [sending, setSending] = useState(false);
+  // Written synchronously so a second tap sees it immediately (the `sending` state lags a render).
+  const sendingRef = useRef(false);
   const [failure, setFailure] = useState<string | null>(null);
   const [titleErr, setTitleErr] = useState('');
   const [messageErr, setMessageErr] = useState('');
@@ -126,6 +128,12 @@ export default function NotifyScreen() {
   };
 
   const send = useCallback(async () => {
+    // Guard on a REF, not the `sending` state: the confirm sheet's "Send now" fires `void send()`
+    // and closes the sheet, and two fast taps during its exit animation both read a stale
+    // `sending === false` before React re-renders — exactly the recorder-race lesson. A duplicated
+    // dispatch writes the same notice to every teammate's feed with no unsend, so this is the guard.
+    if (sendingRef.current) return;
+    sendingRef.current = true;
     setFailure(null);
     setSending(true);
     try {
@@ -137,7 +145,6 @@ export default function NotifyScreen() {
         user_ids: selectedIds,
       });
       if (!alive.current) return;
-      setSending(false);
       if (!res.ok) {
         haptics.error();
         setFailure(res.message);
@@ -148,9 +155,11 @@ export default function NotifyScreen() {
       router.back();
     } catch {
       if (!alive.current) return;
-      setSending(false);
       haptics.error();
       setFailure('Could not send the notification. Please try again.');
+    } finally {
+      sendingRef.current = false;
+      if (alive.current) setSending(false);
     }
   }, [title, message, priority, audience, selectedIds, toast, router]);
 

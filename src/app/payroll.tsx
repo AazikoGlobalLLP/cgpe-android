@@ -196,9 +196,13 @@ export default function Payroll() {
           />
         ) : merged.length === 0 ? (
           <EmptyState
-            icon="people-outline"
-            title="No team members to show"
-            subtitle="We could not find any staff to place on the payroll roster. Pull down to try again."
+            icon={health.degraded ? 'cloud-offline-outline' : 'people-outline'}
+            title={health.degraded ? 'The staff directory did not load' : 'No team members to show'}
+            subtitle={health.degraded
+              // The roster computed but the staff directory read failed — this is blank, not empty.
+              ? 'The salary figures came through, but the staff directory could not be reached, so this is blank rather than genuinely empty. Pull down to try again.'
+              : 'No staff are set up on the payroll roster for this month yet.'}
+            action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : (
           <>

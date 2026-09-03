@@ -193,25 +193,31 @@ function ClientsScreen() {
       ? `${loadedDisplay} loaded, keep scrolling for more`
       : `${loadedDisplay} loaded`;
 
+  /* The outage check comes BEFORE the search check on purpose (same reasoning as tickets/index).
+   * Client search is SERVER-side (getClientsPage), so a failed search resolves empty and flips
+   * health.degraded — telling the user `No client matches "Rajesh"` when the request never reached
+   * the server sends them to the wrong conclusion. Local filters (activeCount) run over the loaded
+   * set, so they stay first and honest even while degraded. */
   const empty = (
     <EmptyState
-      icon={activeCount > 0 ? 'funnel-outline' : q ? 'search-outline' : health.degraded ? 'cloud-offline-outline' : 'people-outline'}
+      icon={activeCount > 0 ? 'funnel-outline' : health.degraded ? 'cloud-offline-outline' : q ? 'search-outline' : 'people-outline'}
       title={
         activeCount > 0 ? 'Nothing loaded matches these filters'
-          : q ? `No client matches "${q.trim()}"`
-            : health.degraded ? 'The client book could not load'
+          : health.degraded ? 'The client book could not load'
+            : q ? `No client matches "${q.trim()}"`
               : 'No clients in your book yet'
       }
       subtitle={
         activeCount > 0 ? 'Filters run over the clients loaded so far. Clear them, or load more of the book first.'
-          : q ? 'Search runs across the whole book, by name, policy number or mobile number.'
-            : health.degraded ? 'The server did not answer, so nothing here is confirmed. Check your connection and pull to refresh.'
+          : health.degraded ? 'The server did not answer, so nothing here is confirmed. Check your connection and pull to refresh.'
+            : q ? 'Search runs across the whole book, by name, policy number or mobile number.'
               : 'Clients appear here as soon as records are assigned to you.'
       }
       action={
         activeCount > 0 ? { label: 'Clear filters', onPress: clearFilters }
-          : q ? { label: t('common.clearSearch'), onPress: () => setQ('') }
-            : { label: t('common.tryAgain'), onPress: () => fetchPage(1, q.trim(), 'replace') }
+          : health.degraded ? { label: t('common.tryAgain'), onPress: () => fetchPage(1, q.trim(), 'replace') }
+            : q ? { label: t('common.clearSearch'), onPress: () => setQ('') }
+              : { label: t('common.tryAgain'), onPress: () => fetchPage(1, q.trim(), 'replace') }
       }
     />
   );

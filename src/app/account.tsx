@@ -105,7 +105,10 @@ export default function Account() {
 
   const exportData = () => {
     haptics.tap();
-    toast('A data export will be emailed to you.', 'success');
+    // There is no in-app data-export endpoint — nothing was ever sent, so a 'success' toast claiming
+    // "will be emailed to you" was a false assertion on a privacy screen. Say plainly it is not yet
+    // available in the app and point to the privacy policy, which describes how to request a copy.
+    toast('Getting a copy of your data is not available in the app yet — the privacy policy explains how to request it.', 'info');
   };
 
   if (!ready) {

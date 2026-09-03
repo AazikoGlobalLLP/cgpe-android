@@ -7,7 +7,6 @@
  */
 import React from 'react';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { shadow, useTheme } from '@/theme/theme';
 import { hasBlur } from '@/lib/voiceGraphics';
 
@@ -31,6 +30,13 @@ export function VoiceGlass({ children, style }: { children: React.ReactNode; sty
   //   • this library renders a real backdrop blur in native code; if it aborts, it aborts the
   //     PROCESS. No try/catch and no error boundary around it means anything.
   if (hasBlur()) {
+    // Lazy require, NOT a top-level import: expo-blur is a native module and GlassCards is reached at
+    // boot (VoiceMode <- _layout), so a static import would run its module scope at startup — the
+    // documented native-module-scope-throw danger zone that the Skia/Lottie probes already dodge.
+    // hasBlur() has already require()'d expo-blur successfully and cached it, so this resolve is
+    // guaranteed and free.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- see above; must not eval at boot
+    const { BlurView } = require('expo-blur') as typeof import('expo-blur');
     return (
       <View style={[box, style]}>
         <BlurView intensity={38} tint={dark ? 'dark' : 'light'} blurMethod="dimezisBlurView" style={FILL} />

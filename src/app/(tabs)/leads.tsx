@@ -275,11 +275,13 @@ export default function Leads() {
   /* ---------- empty ----------
    * Four genuinely different outcomes, and they must not look alike. "No match for this
    * search" and "nothing here yet" ask the user for opposite things, and an outage asks for
-   * something different again. The ORDER matters: an empty book is reported as an empty
-   * book even while a stage chip is active, because "nothing at Docs shared right now"
-   * implies there is something at the other stages. */
-  const emptyKind = query ? 'search'
-    : leads.length === 0 && health.degraded ? 'outage'
+   * something different again. The ORDER matters twice over. An outage on an empty pipeline is
+   * reported as an outage even while a search is typed — a failed load leaves `leads` empty, and
+   * "No lead matches" over a request that never reached the server is the wrong conclusion. And an
+   * empty book is reported as an empty book even while a stage chip is active, because "nothing at
+   * Docs shared right now" implies there is something at the other stages. */
+  const emptyKind = leads.length === 0 && health.degraded ? 'outage'
+    : query ? 'search'
       : leads.length === 0 ? 'none'
         : filter !== 'all' ? 'filter'
           : 'none';
@@ -334,9 +336,12 @@ export default function Leads() {
           <SearchBar value={q} onChange={setQ} placeholder="Name, interest, city or mobile" />
         </View>
 
-        {/* Bleeds to both edges so the strip reads as scrollable. */}
+        {/* Bleeds to both edges so the strip reads as scrollable. keyboardShouldPersistTaps:
+            this strip sits directly below the SearchBar, so without it RN's default "never" eats
+            the first tap on a stage chip to dismiss the keyboard (the two-tap "feels broken" bug). */}
         <ScrollView
           horizontal
+          keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: spacing.lg }}
         >

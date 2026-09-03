@@ -650,7 +650,9 @@ function CampaignsScreen() {
                   </View>
 
                   <View style={{ flex: 1 }}>
-                    <Metric value={num(count)} size={font.display} />
+                    {/* '—' when the audience did not load (audience null): a confident "0" beside a
+                        block that says "the audience did not load" is a mixed signal. Real 0 stays 0. */}
+                    <Metric value={audience == null ? '—' : num(count)} size={font.display} />
                     <Txt size={font.sub} color={c.muted} numberOfLines={2} style={{ marginTop: 2 }}>
                       {meta.audience}
                     </Txt>
