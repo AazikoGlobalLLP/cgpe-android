@@ -44,10 +44,18 @@ import { Platform } from 'react-native';
 
 /**
  * Master switch for the OPTIONAL decorative renderers (Skia orb, blur glass, Lottie mascot).
- * `false` until each has been proven on real hardware — see the header. `expo-audio` is NOT gated by
- * this: it is load-bearing (there is no voice without a microphone) and is already proven at boot.
+ * `expo-audio` is NOT gated by this: it is load-bearing (there is no voice without a microphone) and
+ * is already proven at boot.
+ *
+ * ⚠️ ENABLED 2026-09-03 by explicit OWNER instruction ("UI hume chaiye, device test baad mein") — the
+ * worklet crash that these were suspected of (and switched off for) was found and fixed elsewhere
+ * (the `OrbStatic` clamp01 directive), so they are no longer the prime suspect. But they have STILL
+ * NOT been proven on a handset, and a native abort in Skia/blur is NOT caught by the error boundary
+ * (it kills the process). So the next build MUST be device-QA'd before any wide rollout, one library
+ * at a time (open voice mode, confirm it survives). The web build is unaffected: `voiceGraphics.web.ts`
+ * stubs these to false so `expo export -p web` never loads them. A green `npm test` is NOT evidence.
  */
-export const VOICE_HEAVY_GRAPHICS_ENABLED = false;
+export const VOICE_HEAVY_GRAPHICS_ENABLED = true;
 
 let skia: boolean | null = null;
 let blur: boolean | null = null;
