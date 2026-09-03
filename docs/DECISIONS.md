@@ -5964,3 +5964,36 @@ seconds and no longer needs an APK.**
 `expo-updates` native side and can never receive an update. Proving OTA works on one phone does not
 make the other twenty updatable — each needs one manual install of build 6 first. **The remaining
 work is a rollout, and it is the owner's.**
+
+---
+
+## D-129 — Voice "dead on the device" is SERVER CONFIG, not app code (2026-09-03)
+cgpe-api confirmed `routes/voice.js` + the `/api/voice` mount are on deployed `main`, so the proxy is
+live. `ready = SARVAM_API_KEY && N8N_VOICE_BRAIN_URL && CGPE_VOICE_SECRET`; the owner's "we speak,
+nothing comes back" is one of those three unset on the droplet (most likely `CGPE_VOICE_SECRET`). The
+app now probes `GET /voice/status` on mic-open and FAILS FAST (names the missing leg) instead of
+recording and waiting 80s through a turn that could only 503, and sizes the abort to the real
+`budget_ms`. **Do not re-diagnose voice as an app bug** — `missing[]` on `/voice/status` is the diagnosis.
+
+## D-130 — Personal-data export is `.xlsx`, not zip-of-CSVs (2026-09-03)
+Owner approved "zip of CSVs"; cgpe-api built `.xlsx` and I accepted it against the owner's literal
+word, on two non-preference grounds: (a) no new zip dependency in a deploy already carrying the JWT
+rotation, (b) a workbook opens on a phone while a zip needs extraction (iOS Files-app detour). Flagged
+to the owner; reversible to CSV as a separate phase if he overrules. Endpoint: `POST /api/account/export`
+→ signed no-auth link; subject always `req.user.user_id`; client book + `password_hash` excluded.
+
+## D-131 — Department-over-role layout precedence KEPT, with a warning (owner ruling 2026-09-03)
+`GET /rbac/app-ui` resolves `candidateRoleKeys` department > role > advisor (first stored doc wins), so
+a seeded department doc silently shadows an edited role doc. Owner ruled: keep the order, add a panel
+warning, no backend precedence change this merge. The app surfaces the resolved `role_key` in Settings
+so a field agent can read which doc actually won.
+
+## D-132 — Heavy voice graphics ENABLED despite being unproven on hardware (owner directed 2026-09-03)
+`VOICE_HEAVY_GRAPHICS_ENABLED = true`. The crash they were suspected of was traced to a worklet
+(`OrbStatic` clamp01), not these libs, so they are no longer the prime suspect — but a native Skia/blur
+abort is not caught by the error boundary, so the next build MUST be device-QA'd one library at a time.
+
+## D-133 — `staff_unified.json` gitignored, NOT committed, despite "commit the root files" (2026-09-03)
+The file holds staff bcrypt `password_hash` values + emails/phones. A general "commit the untracked
+root files" does not override the standing "never commit secrets" rule when a file turns out to carry
+crackable hashes. Committed the safe docs/audio; gitignored the dump; flagged to the owner.

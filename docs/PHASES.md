@@ -14,6 +14,9 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**➡️ 2026-09-03 (END OF DAY) — the app side is caught up; the critical path is now four OWNER/SERVER actions, not code.** After the full-codebase audit and a live cross-session round with cgpe-api + cgpe-admin, everything the owner asked for is built and pushed (`1bf323d..bec6af8`, 17 commits, tsc 0 / test 1390 / web-export 0). The ONLY blockers are owner-held: (1) set `SARVAM_API_KEY` + `N8N_VOICE_BRAIN_URL` + `CGPE_VOICE_SECRET` on the droplet → voice works (assigned to cgpe-api to produce the full env checklist); (2) merge `origin/ved`→`main` + deploy + restart `:3001`; (3) rotate `JWT_SECRET` at that restart; (4) hand cgpe-api the seller→advisor mapping. Then verify + a new build. See `docs/HANDOFF.md` (top entry). The Phase-98 OTA note below is unchanged and still true.
+
+
 **✅ 2026-09-02 — PHASE 98: THE APP CAN FIX ITSELF WITHOUT AN APK — CONFIRMED END TO END ON A REAL
 HANDSET. EAS Update is installed, committed (`11eff09`) and pushed; build 6 (`80df5c5a`) carries it,
 and the owner watched an update arrive, apply and identify itself.**

@@ -1004,6 +1004,15 @@ path `/api/clients*`, which did not move. `cgpe-api` did the whole job in their 
   the foot of `INBOX.md`. Until it ships, `POST /team/tasks` 403s and `addTask` reports it honestly.
 
 ## Voice assistant (built 2026-08-29 — read before touching `src/voice/**` or `src/ui/voice/**`)
+- 🔴 **VOICE "DEAD ON THE DEVICE" IS SERVER CONFIG, NOT APP CODE (2026-09-03) — and `POST /api/voice/ask`
+  IS BUILT AND DEPLOYED on `main`, so do NOT re-diagnose it as an app bug or re-scope a build.** cgpe-api
+  confirmed the proxy is live; `ready = SARVAM_API_KEY && N8N_VOICE_BRAIN_URL && CGPE_VOICE_SECRET`, so a
+  server with no answer has one of those three unset on the droplet (most likely `CGPE_VOICE_SECRET`).
+  `GET /voice/status` `missing[]` names the gap. The app now PROBES it on mic-open (`src/voice/status.ts`
+  + `getVoiceStatus`): if `ready:false` it fails fast and names the missing leg BEFORE recording (the
+  owner's "we speak, nothing comes back" was the app making them wait ~80 s through a turn that could only
+  503), and it sizes the abort to the server's real `timeouts.budget_ms` (so `CEILING_MS` is now only the
+  generous fallback). The "STILL TO BE BUILT by cgpe-api" phrase in the next bullet is STALE — it shipped.
 - **Architecture: n8n is a PURE TEXT brain; the BACKEND does STT + TTS** (owner overrode the Express-
   fat-registry recommendation). The live brain `https://ai.cgpe.in/webhook/cgpe-voice-brain` takes
   `{transcript, authToken}` → `{success, reply_text, action}` (NO audio, NO confidence). The app records
