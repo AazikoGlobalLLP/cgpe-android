@@ -1,0 +1,8 @@
+ANDROID APP
+
+- clock-in ho raha withing 200 m of set location per team member like har ek team member ke data ko update kar denge and based on that aesa karna hai that agar unhe clock in karna hai toh woh particular location se 200 m me aake hi kar sakte hai 
+- salary strict karni hai that jitne unke working hours hai / working days hai uske according unki salary ki ek amount mil jani chaiye 
+- unke completed tasks ki list or report's chaiye that unhone exactly kya kya kab kab and kitna kiya hai and ek performance score ke saath and another thing yeh hai that iske andar sirf tasks count hone chaiye not remainder and other unhe jo task assign hue hai and agar unhone woh pure kiye hai toh hi count hone chaiye....
+- clock - in se leke clock - out ke bech ki jo location hai woh properly track honi chaiye anyhow kuch bhi ho jaye and another thing yeh hai that bhale phone koi bhi ho android, Samsung, ios no worries kuch bhi ho jaye location track kijiye.
+- ek both imp baat yeh hai that master / ek main side honi chaiye or ek number me provide karuga jaha koi task wagera nhi dikhana hai waha main jo team_members hai unki performance activity , location (most important) and unki salary report honi chaiye jyada features ki zarurat nhi hai main zarurat hai sirf or sirf yeh chizo ki
+- login me thoda problem hai that mene mere account se hi login kiya jis se me admin panel me login karta hun `super_admin` wale se and mene khud ke liye ek task create kiya but woh dikha nhi mene application ko restart kuya but woh nhi aya yeh audit karna hai and solve karna hai and mene admin panel se layout change kiya toh phone me ho gaya hai

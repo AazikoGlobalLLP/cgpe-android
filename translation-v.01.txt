@@ -1,0 +1,85 @@
+---
+
+### 1. Screen Strings (`PHASE-41-CONSENT-COPY.md`)
+
+
+
+| Key | English source | ગુજરાતી | हिन्दी | Hinglish | Roman Gujarati |
+| --- | --- | --- | --- | --- | --- |
+| `consent.title`<br> | Location sharing for work
+
+ | કામ માટે લોકેશન શેરિંગ | काम के लिए लोकेशन शेयरिंग | Work ke liye location sharing | Kaam maate location sharing |
+| `consent.intro`<br> | Please read this before you start. CGPE Connect shares your location so the company can manage the field team.
+
+ | કૃપા કરીને શરૂ કરતા પહેલા આ વાંચો. CGPE Connect તમારું લોકેશન શેર કરે છે જેથી કંપની ફિલ્ડ ટીમને મેનેજ કરી શકે. | कृपया शुरू करने से पहले इसे ध्यान से पढ़ें। CGPE Connect आपकी लोकेशन शेयर करता है ताकि कंपनी फील्ड टीम को मैनेज कर सके। | Kripya shuru karne se pehle ise dhyan se padhein. CGPE Connect aapki location share karta hai taaki company field team ko manage kar sake. | Krupya sharu karta pehla aa vaacho. CGPE Connect tamaru location share kare chhe jethi company field team ne manage kari shake. |
+| `consent.collect`<br> | **What is shared:** your precise location and your movement/activity, 24 hours a day — including outside your working hours.
+
+ | **શું શેર કરવામાં આવે છે:** તમારું ચોક્કસ લોકેશન અને તમારી હિલચાલ/પ્રવૃત્તિ, 24 કલાક — જેમાં તમારા કામના કલાકો સિવાયનો સમય પણ સામેલ છે. | **क्या शेयर किया जाता है:** आपकी सटीक लोकेशन और आपकी मूवमेंट/एक्टिविटी, 24 घंटे — जिसमें आपके काम के घंटों के बाहर का समय भी शामिल है। | **Kya share hota hai:** aapki precise location aur movement/activity, 24 ghante — jisme aapke working hours ke bahar ka time bhi shamil hai. | **Shu share thai chhe:** tamaru accurate location ane tamari movement/activity, 24 kalak — jema tamara kaam na kalako sivay no samay pan shamel chhe. |
+| `consent.why`<br> | **Why:** so the company can manage and support the field team.
+
+ | **શા માટે:** જેથી કંપની ફિલ્ડ ટીમને યોગ્ય રીતે મેનેજ અને સપોર્ટ કરી શકે. | **क्यों:** ताकि कंपनी फील्ड टीम को सही ढंग से मैनेज और सपोर्ट कर सके। | **Kyun:** taaki company field team ko theek se manage aur support kar sake. | **Sha maate:** jethi company field team ne barabar manage ane support kari shake. |
+| `consent.who`<br> | **Who can see it:** only the company Master. Your colleagues cannot see your location.
+
+ | **કોણ જોઈ શકે છે:** માત્ર કંપનીના માસ્ટર (Master). તમારા સહકર્મીઓ તમારું લોકેશન જોઈ શકતા નથી. | **कौन देख सकता है:** केवल कंपनी के मास्टर (Master)। आपके सहकर्मी आपकी लोकेशन नहीं देख सकते। | **Kaun dekh sakta hai:** sirf company Master. Aapke colleagues aapki location nahi dekh sakte. | **Kon joi shake chhe:** maatra company na Master. Tamara sathe kaam karta loko tamaru location joi shaksho nahi. |
+| `consent.retention`<br> | **How long it is kept:** your location history is hidden after 90 days and permanently deleted after 180 days.
+
+ | **કેટલા સમય સુધી રાખવામાં આવે છે:** તમારો લોકેશન હિસ્ટ્રી ડેટા 90 દિવસ પછી છુપાવી દેવામાં આવશે અને 180 દિવસ પછી કાયમ માટે ડિલીટ કરી દેવામાં આવશે. | **कितने समय तक रखा जाता है:** आपकी लोकेशन हिस्ट्री 90 दिनों के बाद हाइड कर दी जाएगी और 180 दिनों के बाद हमेशा के लिए डिलीट कर दी जाएगी। | **Kitne time tak rakha jata hai:** aapki location history 90 days ke baad hide ho jayegi aur 180 days ke baad permanently delete ho jayegi. | **Ketla samay sudhi rakhvama aavshe:** tamaro location history data 90 divas pachhi hide kari devama aavshe ane 180 divas pachhi permanently delete kari devama aavshe. |
+| `consent.transparent`<br> | **Nothing is hidden from you:** whenever location is being shared, a notice stays in your phone's status bar. You always know it is on.
+
+ | **તમારાથી કંઈ છુપાયેલું નથી:** જ્યારે પણ લોકેશન શેર થઈ રહ્યું હશે, તમારા ફોનના સ્ટેટસ બારમાં નોટિફિકેશન હંમેશા રહેશે. તમને હંમેશા ખબર રહેશે કે તે ચાલુ છે. | **आपसे कुछ भी छिपा नहीं है:** जब भी लोकेशन शेयर हो रही होगी, आपके फोन के स्टेटस बार में नोटिफिकेशन हमेशा रहेगा। आपको हमेशा पता रहेगा कि यह चालू है। | **Aapse kuch bhi chhupa nahi hai:** jab bhi location share ho rahi hogi, aapke phone ke status bar me notification hamesha rahega. Aapko hamesha pata rahega ki yeh on hai. | **Tamara thi kai chhupayelu nathi:** jyare pan location share thai rahyu hase, tamara phone na status bar ma notification hamesha rehshe. Tamne hamesha khabar rehshe ke te chalu chhe. |
+| `consent.mandatory`<br> | This is required to use the CGPE Connect work app. If you do not agree, you cannot continue.
+
+ | CGPE Connect વર્ક એપનો ઉપયોગ કરવા માટે આ ફરજિયાત છે. જો તમે સંમત ન હોવ, તો તમે આગળ વધી શકતા નથી. | CGPE Connect वर्क ऐप का उपयोग करने के लिए यह अनिवार्य है। यदि आप सहमत नहीं हैं, तो आप आगे नहीं बढ़ सकते। | CGPE Connect work app use karne ke liye yeh mandatory hai. Agar aap agree nahi karte, toh aap aage nahi badh sakte. | CGPE Connect work app use karva maate aa farajiyat chhe. Jo tame agree nathi karta, toh tame aagal vadhi shaksho nahi. |
+| `consent.withdraw`<br> | You can turn location off later, but the app will stop working until you turn it back on, and the Master is told when you turn it off.
+
+ | તમે તેને પછીથી બંધ કરી શકો છો, પરંતુ જ્યાં સુધી તમે ફરી ચાલુ ન કરો ત્યાં સુધી એપ કામ કરવાનું બંધ કરી દેશે, અને બંધ કરશો ત્યારે માસ્ટરને જાણ કરવામાં આવશે. | आप इसे बाद में बंद कर सकते हैं, लेकिन जब तक आप इसे दोबारा चालू नहीं करते तब तक ऐप काम करना बंद कर देगा, और बंद करने पर मास्टर को सूचित किया जाएगा। | Aap ise baad me band kar sakte hain, lekin jab tak aap ise wapas on nahi karte tab tak app kaam karna band kar degi, aur band karne par Master ko notify kiya jayega. | Tame tene pachhithi bandh kari shako chho, pan jya sudhi tame fari chalu na karo tya sudhi app kaam karvanu bandh kari deshe, ane bandh karva par Master ne jaan karvama aavshe. |
+| `consent.agreeButton`<br> | I Agree
+
+ | હું સંમત છું | मैं सहमत हूँ | I Agree | Hu Sehmat Chhu |
+| `consent.declineButton`<br> | I do not agree
+
+ | હું સંમત નથી | मैं सहमत नहीं हूँ | I do not agree | Hu Sehmat Nathi |
+| `consent.declineTitle`<br> | You cannot continue without agreeing
+
+ | સંમત થયા વિના તમે આગળ વધી શકતા નથી | सहमत हुए बिना आप आगे नहीं बढ़ सकते | Agree kiye bina aap aage nahi badh sakte | Sehmat thaya vina tame aagal vadhi shaksho nahi |
+| `consent.declineBody`<br> | Sharing your location is required for this work app. If you have questions, please talk to your manager.
+
+ | આ વર્ક એપ માટે તમારું લોકેશન શેર કરવું ફરજિયાત છે. જો તમને કોઈ પ્રશ્નો હોય, તો કૃપા કરીને તમારા મેનેજર સાથે વાત કરો. | इस वर्क ऐप के लिए आपकी लोकेशन शेयर करना अनिवार्य है। यदि आपके कोई प्रश्न हैं, तो कृपया अपने मैनेजर से बात करें। | Is work app ke liye location share karna mandatory hai. Agar aapka koi sawaal hai, toh kripya apne manager se baat karein. | Aa work app maate tamaru location share karvu farajiyat chhe. Jo tamne koi prashna hoy, toh krupya tamara manager sathe vaat karo. |
+| `consent.declineBack`<br> | Go back
+
+ | પાછા જાઓ | वापस जाएं | Wapas jayein | Pachha jao |
+
+---
+
+### 2. Ongoing Foreground-Service Notification
+
+
+
+| Key | English source | ગુજરાતી | हिन्दी | Hinglish | Roman Gujarati |
+| --- | --- | --- | --- | --- | --- |
+| `consent.serviceTitle`<br> | CGPE Connect
+
+ | CGPE Connect | CGPE Connect | CGPE Connect | CGPE Connect |
+| `consent.serviceBody`<br> | Location on for work
+
+ | કામ માટે લોકેશન ચાલુ છે | काम के लिए लोकेशन चालू है | Work ke liye location on hai | Kaam maate location on chhe |
+
+---
+
+### 3. Blocked-App Screen
+
+
+
+| Key | English source | ગુજરાતી | हिन्दी | Hinglish | Roman Gujarati |
+| --- | --- | --- | --- | --- | --- |
+| `consent.blockedTitle`<br> | Turn location back on to use CGPE Connect
+
+ | CGPE Connect નો ઉપયોગ કરવા માટે લોકેશન ફરીથી ચાલુ કરો | CGPE Connect का उपयोग करने के लिए लोकेशन दोबारा चालू करें | CGPE Connect use karne ke liye location wapas on karein | CGPE Connect use karva maate location fari chalu karo |
+| `consent.blockedBody`<br> | Location sharing is required for this app. Please turn location and the "Allow all the time" permission back on to continue.
+
+ | આ એપ માટે લોકેશન શેરિંગ ફરજિયાત છે. આગળ વધવા માટે કૃપા કરીને લોકેશન અને "Allow all the time" પરમિશન ફરીથી ચાલુ કરો. | इस ऐप के लिए लोकेशन शेयरिंग अनिवार्य है। आगे बढ़ने के लिए कृपया लोकेशन और "Allow all the time" परमिशन दोबारा चालू करें। | Is app ke liye location sharing mandatory hai. Aage badhne ke liye kripya location aur "Allow all the time" permission wapas on karein. | Aa app maate location sharing farajiyat chhe. Aagal vadharva maate krupya location ane "Allow all the time" permission fari chalu karo. |
+| `consent.blockedAction`<br> | Open settings
+
+ | સેટિંગ્સ ખોલો | सेटिंग्स खोलें | Settings kholein | Settings kholo |
+
+---
