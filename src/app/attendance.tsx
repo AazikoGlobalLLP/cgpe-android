@@ -50,7 +50,7 @@ import { useT } from '@/i18n';
 
 /** One day of the history. Named `Entry`, not `Row`, so it cannot be confused with the
  *  layout primitive of that name imported from '@/ui/base' and used below. */
-type Entry = { date: string; inTime?: string; outTime?: string; location?: string };
+type Entry = { date: string; inTime?: string; outTime?: string; location?: string; autoClosed?: boolean };
 
 type Group = { key: string; label: string; rows: Entry[]; offset: number };
 
@@ -174,6 +174,7 @@ export default function Attendance() {
         inTime: h.clock_in?.time || h.clockIn,
         outTime: h.clock_out?.time || h.clockOut,
         location: h.clock_in?.location || h.location,
+        autoClosed: h.autoClosed === true,
       })));
     } catch {
       // api.* already resolves empty and reports the outage to data/health, so there is
@@ -347,22 +348,28 @@ export default function Attendance() {
 
                       const state: 'closed' | 'open' | 'none' =
                         inAt && outAt ? 'closed' : inAt ? 'open' : 'none';
+                      /** The server auto-closed this at the max-shift cap (cgpe-api Phase 130):
+                       *  `outAt` is the cap, not a real clock-out. Show it as a warning, never a clean
+                       *  success, so a capped 15h is not read as a shift the person actually ended. */
+                      const autoClosed = state === 'closed' && r.autoClosed === true;
 
                       const tone: SpineTone =
-                        state === 'closed' ? 'success' : state === 'open' ? 'warning' : 'neutral';
+                        autoClosed ? 'warning' : state === 'closed' ? 'success' : state === 'open' ? 'warning' : 'neutral';
                       const pillTone: Tone =
-                        state === 'closed' ? 'success' : state === 'open' ? 'warning' : 'neutral';
+                        autoClosed ? 'warning' : state === 'closed' ? 'success' : state === 'open' ? 'warning' : 'neutral';
                       const icon: IconName =
-                        state === 'closed' ? 'checkmark-circle'
-                          : state === 'open' ? 'time-outline'
-                            : 'ellipse-outline';
+                        autoClosed ? 'alert-circle'
+                          : state === 'closed' ? 'checkmark-circle'
+                            : state === 'open' ? 'time-outline'
+                              : 'ellipse-outline';
 
                       const title =
-                        state === 'closed' ? `${inAt} to ${outAt}`
-                          : state === 'open' ? `In at ${inAt}`
-                            : 'No clock-in recorded';
+                        autoClosed ? `In at ${inAt} · auto-closed`
+                          : state === 'closed' ? `${inAt} to ${outAt}`
+                            : state === 'open' ? `In at ${inAt}`
+                              : 'No clock-in recorded';
 
-                      const subtitle = [worked, r.location].filter(Boolean).join(' · ');
+                      const subtitle = [autoClosed ? 'Auto-closed at the shift cap — clock-out not recorded' : worked, r.location].filter(Boolean).join(' · ');
 
                       return (
                         <SpineRow
@@ -376,7 +383,7 @@ export default function Attendance() {
                           icon={icon}
                           right={
                             <Pill
-                              label={state === 'closed' ? 'Full day' : state === 'open' ? 'Open' : 'No entry'}
+                              label={autoClosed ? 'Auto' : state === 'closed' ? 'Full day' : state === 'open' ? 'Open' : 'No entry'}
                               tone={pillTone}
                               small
                             />

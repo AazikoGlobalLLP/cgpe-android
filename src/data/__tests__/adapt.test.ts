@@ -859,6 +859,18 @@ describe('adaptAttendanceHistory', () => {
     expect('clock_out' in out[0]).toBe(false);
   });
 
+  it('surfaces autoClosed on a server-capped session, and only when true', () => {
+    // cgpe-api Phase 130 flags a session the max-shift watchdog closed. The clock-out is the cap,
+    // not a real departure, so the app must be able to tell the two apart.
+    const capped = adaptAttendanceHistory([
+      { date: '2026-09-03', sessions: [{ clockIn: 'A', clockOut: 'B', autoClosed: true, autoClosedReason: 'max_shift_15h' }] },
+    ]);
+    expect(capped[0]).toEqual({ date: '2026-09-03', clock_in: { time: 'A' }, clock_out: { time: 'B' }, autoClosed: true });
+    // A normal clock-out carries no flag (not `autoClosed: false`) — the field simply stays absent.
+    const normal = adaptAttendanceHistory([{ date: '2026-09-03', sessions: [{ clockIn: 'A', clockOut: 'B' }] }]);
+    expect('autoClosed' in normal[0]).toBe(false);
+  });
+
   it('drops sessions with no clockIn, and a daylog with zero clocked-in sessions yields nothing', () => {
     expect(adaptAttendanceHistory([{ date: '2026-08-24', sessions: [] }])).toEqual([]);
     expect(adaptAttendanceHistory([{ date: '2026-08-24', sessions: [{ clockOut: 'Y' }] }])).toEqual([]);

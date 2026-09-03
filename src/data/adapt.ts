@@ -579,6 +579,10 @@ export type AttendanceRecord = {
   date: string;
   clock_in?: { time: string };
   clock_out?: { time: string };
+  /** The server auto-closed this session at the max-shift cap (cgpe-api Phase 130,
+   *  `autoClosed`/`autoClosedReason` on the DayLog session) — the clock-out time is the cap, not a
+   *  real departure. Surfaced so a capped 15h is not shown as a clean shift. */
+  autoClosed?: boolean;
 };
 
 export function adaptAttendanceHistory(raw: any): AttendanceRecord[] {
@@ -594,6 +598,7 @@ export function adaptAttendanceHistory(raw: any): AttendanceRecord[] {
         if (!s || !s.clockIn) continue;
         const rec: AttendanceRecord = { date, clock_in: { time: String(s.clockIn) } };
         if (s.clockOut) rec.clock_out = { time: String(s.clockOut) };
+        if (s.autoClosed === true) rec.autoClosed = true;
         out.push(rec);
       }
       continue;
