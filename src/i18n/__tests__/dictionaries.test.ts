@@ -90,7 +90,7 @@ describe('i18n dictionaries — parity and value quality', () => {
     // five dictionaries — NOT machine-translated. The 2026-08-27 waiver covered one batch and is not
     // standing permission, and DONE-4 above says an honest English fallback beats a wrong romanised
     // guess. Same sanctioned precedent as `tab.search`; owner copy requested as Batch 6h.
-    expect(EN_KEYS.length).toBe(450);
+    expect(EN_KEYS.length).toBe(452);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });

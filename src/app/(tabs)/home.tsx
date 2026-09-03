@@ -202,6 +202,17 @@ type ClockState = { in: boolean; time?: string; place?: string; onBreak?: boolea
  *  office-hours figure (`services/payrollEngine.js`), not an invented number. */
 const MIN_SHIFT_MS = 8.5 * 60 * 60 * 1000;
 
+/**
+ * The point past which an open shift is almost certainly a forgotten clock-out, not a real workday.
+ * Owner-reported: shifts were running past 24h; a real shift is 14-15h. The BACKEND owns the
+ * authoritative correction (an auto-close at this cap, flagged so payroll can tell it from a real
+ * clock-out — cgpe-api Phase 130), because the app can be killed and the server cannot. This
+ * constant is the APP's half: a warning shown BEFORE the cap fires, nudging the person to clock out
+ * themselves rather than be silently corrected later. Keep it in step with the backend cap; the
+ * exact 14-vs-15h figure is the owner's one-line call on both sides.
+ */
+const MAX_SHIFT_MS = 15 * 60 * 60 * 1000;
+
 /** D6b — the one-time "your day in 3 steps" guide flag for non-tech team members. */
 const GUIDE_KEY = 'cgpe.home.guide.v1';
 
@@ -1399,6 +1410,12 @@ export default function Home() {
     ? [dutyFor ? `${dutyFor} on duty` : t('common.onDuty'), clock.place].filter((s): s is string => !!s).join(' · ')
     : t('home.gpsCheckin');
 
+  /** A shift past MAX_SHIFT_MS is almost certainly a forgotten clock-out (owner: >24h seen, a real
+   *  shift is 14-15h). Warn BEFORE the backend's auto-close (cgpe-api Phase 130) so the person clocks
+   *  out themselves rather than being silently corrected. `nowTick` ticks every 30s while on duty. */
+  const clockInMs = clock.time ? Date.parse(clock.time) : NaN;
+  const overLongShift = clock.in && Number.isFinite(clockInMs) && nowTick - clockInMs > MAX_SHIFT_MS;
+
   /* ---------- hero shape ---------- */
   const heroRing = hero === 'clock_and_tasks' || hero === 'clock_only';
   const heroTasks = hero === 'clock_and_tasks' || hero === 'tasks_only';
@@ -2217,6 +2234,20 @@ export default function Home() {
 
         {loading || !uiReady ? <HomeSkeleton hero={hero} widgets={widgets} /> : (
           <>
+            {/* An open shift past MAX_SHIFT_MS is a forgotten clock-out. Warn at the very top —
+                above the hero — so it is the first thing seen, and clock-out is one tap away below. */}
+            {overLongShift ? (
+              <Appear>
+                <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.lg }}>
+                  <Banner
+                    tone="warning"
+                    icon="time-outline"
+                    title={t('home.shiftTooLongTitle')}
+                    message={t('home.shiftTooLongBody')}
+                  />
+                </View>
+              </Appear>
+            ) : null}
             {/* HERO — on the clock, and how much of today is left.
                 Its shape is `config.dashboard.hero`; the clock behaviour underneath is
                 untouched, so a role that keeps the ring keeps the geofence and the haptics
