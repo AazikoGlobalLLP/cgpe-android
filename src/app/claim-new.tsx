@@ -329,6 +329,10 @@ function ClaimNewScreen() {
   const amountValid = Number.isFinite(amountValue) && amountValue > 0;
 
   const save = async () => {
+    // A duplicate CLAIM is a real cost, not a cosmetic one. The button disables on loading={saving},
+    // but match the task-new/task-edit convention and hard-stop a re-entrant call so a second tap
+    // before the disable renders cannot file the same claim twice.
+    if (saving) return;
     if (!picked) {
       haptics.warn();
       setClientError('Choose the client this claim belongs to. A claim cannot be filed without a record from the book.');
