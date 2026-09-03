@@ -716,6 +716,18 @@ describe('adaptClaim', () => {
     expect(adaptClaim({ id: 'x', stage: 'document_collection' }).status).toBe('docs_pending');
   });
 
+  it('reads partial_paid as still open, and a rejection as rejected, not settled', () => {
+    // A register status can carry a token the greedy "settled" arm would grab — `partial_paid`
+    // contains "paid", `closed_rejected` contains "closed" — so rejected/partial are tested first.
+    // Matches the backend normaliser (services/claimWorkflow.js): partial_paid -> under_review.
+    expect(adaptClaim({ id: 'b5', status: 'partial_paid' }).status).toBe('under_review');
+    expect(adaptClaim({ id: 'b6', status: 'closed_rejected' }).status).toBe('rejected');
+    // Guard the happy paths so the reorder can't regress them: fully paid is still settled, and a
+    // bare rejection still rejected.
+    expect(adaptClaim({ id: 'b5b', status: 'paid' }).status).toBe('settled');
+    expect(adaptClaim({ id: 'b6b', status: 'rejected' }).status).toBe('rejected');
+  });
+
   it('maps claim types through an exact-key lookup', () => {
     expect(adaptClaim({ id: 'x', claim_type: 'motor' }).type).toBe('Accident');
     expect(adaptClaim({ id: 'x', claim_type: 'death' }).type).toBe('Death');
@@ -881,18 +893,12 @@ describe('adaptAttendanceHistory', () => {
 
 describe('pinned known bugs — these must be updated deliberately when fixed', () => {
   /* Both lead-stage pins that lived here are GONE, not deleted: Phase 4 fixed the mapper, so
-   * they moved up into the `adaptLead` describe as assertions of correct behaviour. The one
-   * about `policy_issued` reading as New was this file's [Phase 4] marker. `mapClaimStatus`
-   * below is the same class of defect in the claims mapper and is still open. */
-
-  it('mapClaimStatus resolves partial_paid to settled, because of arm order', () => {
-    // adaptClaim's own docstring (adapt.ts:205-206) names 'partial_paid' as a real backend
-    // status, but /paid|settl|closed|pass/ at :197 fires before the /partial|.../ arm at :200.
-    // A part-paid claim reads as fully settled.
-    expect(adaptClaim({ id: 'b5', status: 'partial_paid' }).status).toBe('settled');
-    // Same class: /closed/ wins over /reject/.
-    expect(adaptClaim({ id: 'b6', status: 'closed_rejected' }).status).toBe('settled');
-  });
+   * they moved up into the `adaptLead` describe as assertions of correct behaviour. The
+   * partial_paid/closed_rejected claim-status pin has now moved up the same way (see "reads
+   * partial_paid as still open, and a rejection as rejected" in the adaptClaim describe): a
+   * part-paid claim no longer reads as settled, nor a refused one. What remains below is the
+   * LOWER-severity arm-order quirk (docs_pending is reachable only when no status regex matches)
+   * and two input-edge cases. */
 
   it('docs_pending is unreachable whenever any status regex also matches', () => {
     // 'in_process' matches /process/ at adapt.ts:200, so the docs_pending arm is skipped even

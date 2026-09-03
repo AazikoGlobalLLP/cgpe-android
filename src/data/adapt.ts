@@ -386,10 +386,17 @@ const CLAIM_TYPE_LABEL: Record<string, Claim['type']> = {
 function mapClaimStatus(raw: any): Claim['status'] {
   const s = String(raw.status || '').toLowerCase();
   const stage = String(raw.stage || '').toLowerCase();
-  if (/paid|settl|closed|pass/.test(s)) return 'settled';
+  // Order is load-bearing: a register status can contain several of these tokens — `partial_paid`
+  // contains "paid", `closed_rejected` contains "closed" — so the terminal-negative (rejected) and
+  // still-open (partial) readings MUST be tested before the greedy "settled" arm, or a claim with
+  // money still owed, or one that was refused, reads to the agent as fully settled. This mirrors the
+  // backend's own normaliser (services/claimWorkflow.js ALIASES): partial_paid -> under_review,
+  // declined/repudiated -> rejected, paid/disbursed -> settled.
   if (/reject|declin/.test(s)) return 'rejected';
+  if (/partial/.test(s)) return 'under_review';
+  if (/paid|settl|closed|pass/.test(s)) return 'settled';
   if (/submit/.test(s)) return 'submitted';
-  if (/partial|process|review|progress/.test(s)) return 'under_review';
+  if (/process|review|progress/.test(s)) return 'under_review';
   if (stage.includes('document') && !raw.documents_received) return 'docs_pending';
   if (s === 'intake' || s === 'new') return 'intake';
   return 'under_review';
