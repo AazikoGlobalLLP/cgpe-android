@@ -25,6 +25,7 @@ import { API_BASE_URL, APP, FORCE_DEMO } from '@/constants/config';
 import { getAuthToken, isRealSession } from '@/data/api';
 import { VOICE } from '@/voice/constants';
 import { parseVoiceReply, type VoiceReply, type VoiceReplyError } from '@/voice/response';
+import { parseVoiceStatus, type VoiceStatus } from '@/voice/status';
 import { describeCause } from '@/voice/cause';
 import type { VoiceLangCode } from '@/voice/request';
 import type { Turn } from '@/voice/session';
@@ -93,7 +94,42 @@ export type AskVoiceInput = {
   requestId: string;
   screen: string;
   history: Turn[];
+  /** The abort ceiling, from the server's real `budget_ms` (`/voice/status`). Falls back to
+   *  `VOICE.CEILING_MS` when the caller could not read it. See `voice/status.ts` `voiceAbortMs`. */
+  budgetMs?: number | null;
 };
+
+/**
+ * Probe `GET /voice/status` when the mic surface opens, so the app can (1) fail fast with "voice is
+ * not switched on for this server yet" — naming the missing leg — instead of making the user record
+ * and wait through a dead turn, and (2) size the turn abort to the server's real `budget_ms`. Returns
+ * `null` when it cannot answer (no session, non-200, offline, timeout): the caller then lets the turn
+ * run and surface a normal transport error rather than blocking on an unreadable probe.
+ */
+export async function getVoiceStatus(): Promise<VoiceStatus | null> {
+  const token = getAuthToken();
+  if (FORCE_DEMO || !isRealSession() || !token) return null;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), VOICE.STATUS_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${API_BASE_URL}/voice/status`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'X-CGPE-Token': token,
+        'X-CGPE-App-Version': APP.version,
+      },
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;   // 401 / 500 / etc — don't block; let the turn try and fail normally
+    const json = await res.json().catch(() => null);
+    return parseVoiceStatus(json);
+  } catch {
+    return null;   // offline / aborted — a probe must never wedge the mic
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export async function askVoice(a: AskVoiceInput): Promise<AskVoiceResult> {
   const token = getAuthToken();
@@ -105,7 +141,7 @@ export async function askVoice(a: AskVoiceInput): Promise<AskVoiceResult> {
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
-  }, VOICE.CEILING_MS);
+  }, a.budgetMs ?? VOICE.CEILING_MS);
 
   try {
     const form = new FormData();

@@ -40,13 +40,19 @@ export const VOICE = {
    * it is sized to the two-engine worst case. (Our brief predicted the brain ALONE at 2-6 s, which is
    * why the old 8 s A1.3 ceiling — now `SLOW_MS` — would have aborted healthy turns.)
    *
-   * The backend publishes the EXACT number on `GET /voice/status` as `data.timeouts.budget_ms`
-   * (`voiceService.js:142`), which also honours an OPS `VOICE_TOTAL_BUDGET_MS` override this static
-   * value cannot see; reading it to track the live budget is the robust follow-up (filed to `cgpe-api`
-   * as a `[api]`-adjacent note). Until then 110 s covers every default-stage-timeout config. Waiting is
-   * strictly better than discarding: `SLOW_MS` keeps the user informed, and closing the overlay abandons it.
+   * NOW A FALLBACK, not the primary. The app reads the server's real budget from `GET /voice/status`
+   * `data.timeouts.budget_ms` on open (`voice/status.ts` + `getVoiceStatus`) and sizes the abort to
+   * THAT — which tracks the one-vs-two-engine config AND an OPS `VOICE_TOTAL_BUDGET_MS` override this
+   * static value cannot see. This 110 s is used ONLY when /status is unreachable, and it is
+   * deliberately GENEROUS (the two-engine worst case): the server self-limits at its own budget and
+   * returns a real response, so an over-long client ceiling never truncates a healthy turn — it only
+   * ever costs extra wait on a turn that was already going to fail (cgpe-api's asymmetry argument,
+   * 2026-09-03). `SLOW_MS` keeps the user informed meanwhile, and closing the overlay abandons it.
    */
   CEILING_MS: 110_000,
+
+  /** A short probe timeout for the `GET /voice/status` fetch on open — it must not delay the mic. */
+  STATUS_TIMEOUT_MS: 8_000,
 
   /** Multi-turn memory (§7): turns kept on the phone, and the last N text-only turns sent to the NLU. */
   HISTORY_KEEP: 6,

@@ -18,7 +18,8 @@ import { useToast } from '@/ui/feedback';
 import { haptics } from '@/lib/haptics';
 import { useI18n } from '@/i18n';
 import * as voiceAudio from '@/lib/voiceAudio';
-import { askVoice, isTransportError } from '@/voice/client';
+import { askVoice, getVoiceStatus, isTransportError } from '@/voice/client';
+import type { VoiceStatus } from '@/voice/status';
 import { VOICE } from '@/voice/constants';
 import { langForVoice, isRecordingTooShort } from '@/voice/request';
 import { describeCause, describeTransport } from '@/voice/cause';
@@ -75,6 +76,9 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   const busy = useRef(false);
   const sessionIdRef = useRef('');
   const startedAtRef = useRef(0);
+  /** The server's voice config, probed once when the surface opens. `null` until it answers (or if it
+   *  could not be reached). Drives the fail-fast on `ready:false` and the per-turn abort budget. */
+  const statusRef = useRef<VoiceStatus | null>(null);
   /**
    * ⚠️ THE NEXT THREE REFS EXIST BECAUSE REACT STATE CANNOT BE READ BY A HANDLER THAT RACES IT.
    *
@@ -163,6 +167,37 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   }, []);
 
   /**
+   * Probe the server's voice config when the surface opens (`GET /voice/status`). Three payoffs, all
+   * aimed at the owner's "we speak and nothing comes back":
+   *  • FAIL FAST — if `ready:false`, say "voice is not switched on for this server yet" and name the
+   *    missing leg, BEFORE the user records and waits through a turn that could only 503. That wait is
+   *    almost certainly the whole symptom.
+   *  • SIZE THE ABORT — stash `budgetMs` so the turn aborts at the server's real budget, not a guess.
+   *  • TEXT-ONLY — `ready` is `stt && brain`; TTS is separate, so a ready server with no TTS returns
+   *    text and no audio. Say so once, so a missing voice-back is not mistaken for total failure.
+   * A `null` probe (offline / no session / non-200) is left to the turn itself, which surfaces a
+   * normal transport error — the probe must never block the mic on its own inability to answer. Placed
+   * AFTER `fail`/`toast` so it does not read a block-scoped callback before its declaration.
+   */
+  useEffect(() => {
+    let alive = true;
+    void getVoiceStatus().then((s) => {
+      if (!alive || !s) return;
+      statusRef.current = s;
+      if (!s.ready) {
+        fail(
+          t('voice.notSetUp'),
+          s.missing.length ? `Server voice config missing: ${s.missing.join(', ')}` : null,
+          true,
+        );
+      } else if (!s.hasTts) {
+        toast(t('voice.textOnly'), 'info');
+      }
+    });
+    return () => { alive = false; };
+  }, [fail, t, toast]);
+
+  /**
    * Stop and release the recorder if we ever started one. Idempotent and never throws, so it is safe
    * on every exit path — a released button, a thrown prepare, closing the overlay, unmounting.
    * Returns the recorded file's uri when there is one.
@@ -191,6 +226,17 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   const startCapture = useCallback(async () => {
     heldRef.current = true;
     if (busy.current) return;
+    // Voice is switched off at the server (known from the /status probe on open). The effect above
+    // already showed the "not set up" state; a hold must not start a recording that can only 503.
+    if (statusRef.current && statusRef.current.ready === false) {
+      heldRef.current = false;
+      fail(
+        t('voice.notSetUp'),
+        statusRef.current.missing.length ? `Server voice config missing: ${statusRef.current.missing.join(', ')}` : null,
+        true,
+      );
+      return;
+    }
     setError(null);
     setCause(null);
     setPermanent(false);
@@ -307,6 +353,9 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
         requestId: newRequestId(),
         screen: screen ?? '/',
         history: historyForNlu(),
+        // Size the abort to the server's real budget when the /status probe read it; else the
+        // generous CEILING_MS fallback (an over-long ceiling never truncates a healthy turn).
+        budgetMs: statusRef.current?.budgetMs ?? null,
       });
 
       if (isTransportError(result)) {
