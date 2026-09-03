@@ -3298,18 +3298,30 @@ export async function getAgentLocations(): Promise<AgentPin[]> {
 
   // Fallback: nobody clocked in *today* — show each agent's most recent known clock
   // point so the map is never blank (survives a date rollover / quiet morning).
+  let recentFailures = 0;
   const recent = await Promise.all(people.map(async (p) => {
     try {
       const { ok, json } = await req(`/attendance/user/${encodeURIComponent(p.user_id)}`);
-      if (!ok) return null;
+      if (!ok) { recentFailures++; return null; }
       const rows: any[] = json?.data ?? [];
       const withGps = rows.filter((r) => num2(r?.clock_in?.lat) !== undefined);
       withGps.sort((a, b) => String(a.date).localeCompare(String(b.date)));
       // live=false: a prior-day point is last-known, not a live shift — never mark it on duty.
       return toPin(withGps[withGps.length - 1], p, false);
-    } catch { return null; }
+    } catch { recentFailures++; return null; }
   }));
-  return recent.filter(Boolean) as AgentPin[];
+  const recentPins = recent.filter(Boolean) as AgentPin[];
+  // Convention #4: /team/task-overview succeeded (so `people` is populated and its own outage was
+  // NOT reported), but if EVERY per-member attendance read then failed, this is an outage — not an
+  // empty field. Report it under the same `/attendance` key so the map shows "could not load"
+  // instead of a confident "nobody on duty", the very misread Phase 10 rewrote this function to
+  // avoid, arriving through the fan-out instead of the (now-removed) invented sample agents. Kept
+  // narrow: only when we had people to check AND all of them errored, so a genuinely quiet field
+  // (server up, nobody clocked in) still reads as honestly empty.
+  if (!recentPins.length && people.length > 0 && recentFailures === people.length) {
+    return unavailable('/attendance', [] as AgentPin[]);
+  }
+  return recentPins;
 }
 
 /* ------------------------------------------------------- Break locations */

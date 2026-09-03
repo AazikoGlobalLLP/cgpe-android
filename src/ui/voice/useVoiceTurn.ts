@@ -24,7 +24,7 @@ import { langForVoice, isRecordingTooShort } from '@/voice/request';
 import { describeCause, describeTransport } from '@/voice/cause';
 import { isAllowedVoiceRoute } from '@/voice/routes';
 import { isAlreadyPreparedError } from '@/voice/recorderError';
-import { historyForNlu, recordAssistantTurn, recordUserTurn } from '@/voice/session';
+import { expireIfIdle, historyForNlu, recordAssistantTurn, recordUserTurn } from '@/voice/session';
 import { dbToAmp01, type VoiceCharacterState } from '@/ui/voice/voiceVisual';
 
 export type VoiceTurn = {
@@ -291,6 +291,13 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
     // The proxy chains three vendor calls (STT -> brain -> TTS), so a healthy turn can genuinely run
     // past SLOW_MS. Say so, rather than leaving the character sitting in 'thinking' looking hung. The
     // alternative - aborting - discards an answer the server is still producing and bills it twice.
+    // §7: drop stale multi-turn context BEFORE it reaches the NLU. If the app has been idle or
+    // backgrounded past SESSION_IDLE_MS since the last turn, those turns are no longer "this
+    // conversation" — sending them would let the model resolve a pronoun ("uska number") against a
+    // different task, and on a shared handset carry the previous user's spoken context forward. This
+    // is the sole enforcement of the §7 idle window; `historyForNlu()` below then returns only turns
+    // recent enough to belong to this conversation.
+    expireIfIdle(Date.now());
     const slow = setTimeout(() => toast(t('voice.stillWorking'), 'info'), VOICE.SLOW_MS);
     try {
       const result = await askVoice({

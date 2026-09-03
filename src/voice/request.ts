@@ -45,7 +45,15 @@ export function isRecordingTooShort(durationMs: number): boolean {
   return durationMs < VOICE.MIN_RECORD_MS;
 }
 
-/** Over the advisory upload budget → the recorder must stop/compress before sending (A1.2 ~1 MB). */
+/**
+ * Over the advisory ~1 MB upload budget (A1.2). This is a pure guard for a caller that HAS the byte
+ * count in hand (the web path, where `askVoice` already holds the recorded `Blob` and its `.size`).
+ * On a real handset the recording is streamed to the proxy as a `{uri}` FormData part — the bytes
+ * never enter JS memory, so there is nothing to measure here without a native file-stat. The live
+ * size bound on native is therefore `VOICE.MAX_RECORD_MS` (15 s): a 15 s mono AAC clip is well under
+ * 1 MB, so the duration cap enforces the byte budget in practice, and this stays the byte-exact check
+ * for the paths that can afford one.
+ */
 export function exceedsAudioCap(sizeBytes: number): boolean {
   return sizeBytes > VOICE.MAX_AUDIO_BYTES;
 }
