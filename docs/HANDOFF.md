@@ -1,3 +1,95 @@
+# HANDOFF — CGPE Connect (Android) — Phase 98 — 2026-09-02
+
+> **The app can now fix itself over the air, and it is CONFIRMED working on a real handset — not
+> merely built. The owner ran the full round trip on their phone. This phase is Done in the
+> `CLAUDE.md` sense, which is rare for this project.**
+>
+> **Latest APK — build 6 (`80df5c5a`), `1.10.0 (6)`:**
+> `https://expo.dev/artifacts/eas/pt-OtGN3dtJBvENQcjzPUjz4aKWphGnvh3xE9AyhZ_8.apk`
+> (expires 2026-09-16; open ON the phone). It is the FIRST build that can receive an over-the-air fix.
+>
+> ⚠️ **Do not delete the handoffs below this one.**
+
+## Done
+
+- **A JS fix reaches an installed build-6 handset in ~30 seconds, with no rebuild and no re-install.**
+  Publish with `npx eas-cli update --channel preview --message "<what changed>" --environment preview`.
+- **The over-the-air round trip is device-verified.** The owner installed build 6, the update banner
+  appeared on its own, tapping it restarted the app, and `Settings › Version` gained a `· u…` suffix
+  it did not have before. That single test proved five things that had only been argued: the
+  `fingerprint` runtime matched a real build, `u.expo.dev` is reachable from an Indian mobile network,
+  the banner's press handler survives a **release** build (no LogBox — a throw there is fatal, the
+  trap that cost four APKs), `reloadAsync()` applies, and the version line reads the applied update.
+- **`Settings › Version` survives OTA as a build identifier.** It now reads `1.10.0 (6) · u3f9c1a`,
+  and the ABSENCE of the `· u…` suffix means that handset has taken no update. Without this, OTA would
+  have re-opened the exact hole `9ecaa9e` closed (one build number, many possible JS versions).
+- **Gates: `tsc` 0 · `npm test` 1378 passed / 84 files · `eslint` 0 errors on the touched files ·
+  `expo export -p web` exit 0.** Orphan i18n scan still 18; parity 448 → 450.
+
+## Files changed
+
+- `app.json` — `updates` block (`url`, `enabled`, `checkAutomatically: ON_LOAD`,
+  `fallbackToCacheTimeout: 0`) + `runtimeVersion: { policy: "fingerprint" }`.
+- `eas.json` — `channel` on every build profile (`development`/`preview`/`production`).
+- `package.json` / `package-lock.json` — `expo-updates@~57.0.21`, lock synced in the same commit
+  (EAS runs `npm ci`, which hard-fails on an out-of-sync lock).
+- `src/lib/ota.ts` — the `expo-updates` calls behind a lazy `require`, fail-quiet, no `data/health`.
+- `src/lib/otaPolicy.ts` — pure decision seam (foreground-check throttle, banner gate), 20 tests.
+- `src/lib/buildInfo.ts` — `formatVersionLine` / `shortUpdateId` / `versionLine` (OTA-aware line).
+- `src/ui/UpdateBanner.tsx` — offers a one-tap restart; suppressed while `HealthBanner` owns the slot.
+- `src/app/_layout.tsx` — mounts `<UpdateBanner/>` inside a `FeatureBoundary`, beside `HealthBanner`.
+- `src/app/settings.tsx` — Version row now shows `versionLine()` instead of `buildLabel()`.
+- `src/i18n/index.tsx` (+ `__tests__/dictionaries.test.ts`) — `update.ready` / `update.restart`,
+  English in all five dictionaries (the `tab.search`/`voice.*` precedent), parity 448 → 450.
+- `src/lib/__tests__/{otaPolicy,buildInfo}.test.ts` — the pure seams pinned.
+- `CLAUDE.md`, `docs/PHASES.md`, `docs/DECISIONS.md`, `docs/i18n/COPY-REQUEST-2026-08-26.md` (Batch 6i),
+  `../contracts/INBOX.md` — the record.
+
+## Decisions made
+
+- **`fingerprint` runtime policy, chosen after MEASURING that fingerprinting works here.** `CLAUDE.md`
+  records a Windows fingerprint failure that would have ruled it out; it did not reproduce (three
+  clean runs, `36864e87` → `067cf142` → `067cf142`). It is the only policy where an update needing new
+  native code cannot reach a build that lacks it — the alternative makes that a rule a human must
+  remember, and this project has already spent four APKs on one of those.
+- **The cost of that choice, written down: `eas.json` / `.easignore` / `.gitignore` are fingerprint
+  SOURCES.** Editing any of them changes the runtime version, so an update published afterwards
+  silently does not match the build on the phones. Safe direction (no-op, not crash) but invisible.
+- **The app OFFERS a restart; it never performs one.** `reloadAsync()` erases the navigation stack, so
+  auto-applying would drop a user out of a half-filled form. `ON_LOAD` applies at next cold start.
+- **`fallbackToCacheTimeout: 0` and OTA failures never reach `data/health`** — both because the update
+  server is a different host from the user's data, and this project has a documented IPv6/NAT64 stall.
+- **Repaired the build discriminator in the same commit that broke it** (`formatVersionLine`).
+
+## Known broken / deliberately skipped
+
+- 🔴 **OTA reaches exactly ONE phone so far.** Builds 1–5 and the 25-Aug field APK have no
+  `expo-updates` native side and can never receive an update. Each of the other ~20 handsets needs one
+  manual install of build 6, then never again. **This is a rollout, and it is the owner's** — it is
+  now the highest-value unblocked action in the project.
+- **Voice is unchanged from Phase 96** — the probe output still needs `CGPE_EMAIL`/`CGPE_PASSWORD`
+  (owner-held), and `/voice/ask` stays `503` until OPS sets `SARVAM_API_KEY` + `N8N_VOICE_BRAIN_URL`.
+- 🔴 **Backend deploy still not done.** `origin/main` = `0324dfc`; Phases 118–123 (incl. everything
+  Phase 97 reads) sit on `origin/ved` (`1515f8d`). Owner-held: merge → deploy → restart `:3001`.
+- 🔴 **The committed production `JWT_SECRET`** (and 20 other values) is still unrotated. Owner-held.
+- **`update.ready` / `update.restart` ship in English** in all five dictionaries — new surface, no
+  owner copy yet, filed as Batch 6i. Nothing breaks; the banner just speaks English until translated.
+
+## Next session starts here
+
+- **Phase 99 is the owner's, not code: roll build 6 out to the remaining handsets.** Nothing in `src/`
+  blocks it. When done, every future JS fix is free; until done, "we can fix it over the air" is true
+  of one phone and false of the fleet.
+- **First command (orient, confirm nothing regressed and the deploy is still pending):**
+  `git -C ../cgpe-backend-main ls-remote origin refs/heads/main && npm test`
+  (if `origin/main` is still `0324dfc`, the backend deploy is still the blocker — say so first.)
+- **Watch out for:** **before publishing any OTA update, confirm the fingerprint still matches the
+  build** (`npx expo-updates fingerprint:generate --platform android` vs the build's runtime version).
+  An edit to `eas.json` / `.easignore` / `.gitignore` since the build silently makes the update reach
+  nobody — `eas update` succeeds and the phones never see it.
+
+---
+
 # HANDOFF — CGPE Connect (Android) — Phase 97 (BUILT) — 2026-09-02
 
 > **Phase 97 is built, committed (`acfcc46`) and pushed. Both `[api]` items we filed came back
