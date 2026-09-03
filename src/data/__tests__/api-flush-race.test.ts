@@ -98,6 +98,49 @@ describe('flushWriteQueue — a draft enqueued during a replay is never clobbere
   });
 });
 
+describe('flushWriteQueue — the signed-in identity changing mid-flush cannot corrupt the queue, replay under the wrong token, or bleed PII (shared handset)', () => {
+  it('a user switch during draft X\'s replay stops the flush with A\'s queue intact and B never touched', async () => {
+    const X = leadDraft('pending-X', 'Xavier', '1112223330');
+    const Y = leadDraft('pending-Y', 'Yasmin', '7778889990');
+    await store.saveQueue('u1', [X, Y]);
+
+    // While X's create POST is "in flight", user B (u2) signs in on the shared handset.
+    let calls = 0;
+    fetchSpy.mockImplementation(async () => {
+      calls++;
+      api.setCurrentUser('u2', 'Other');   // the identity flips mid-await
+      return reply(201, { success: true, data: { lead: { _id: 'srv-X', name: 'Xavier', phone: '1112223330', status: 'new_lead' } } });
+    });
+
+    const res = await api.flushWriteQueue();
+
+    // The flush bailed the instant it saw the switch: X's outcome was NOT applied, Y never replayed.
+    expect(calls).toBe(1);                   // only X went out; Y never replayed under u2's token
+    expect(res.synced).toBe(0);
+    expect(res.dropped).toBe(0);
+
+    // A's on-disk queue is intact — nothing removed, nothing dropped. Both drafts replay when A returns.
+    const q1 = await store.loadQueue('u1');
+    expect(q1.map((d) => d.id).sort()).toEqual(['pending-X', 'pending-Y']);
+  });
+
+  it('a logout (session ends) during a replay stops the flush WITHOUT dropping the draft on the 401', async () => {
+    const X = leadDraft('pending-X', 'Xavier', '1112223330');
+    await store.saveQueue('u1', [X]);
+
+    // The session ends mid-flight; the server then answers 401 (which classifies as 'drop' normally).
+    fetchSpy.mockImplementation(async () => {
+      api.setAuthToken(null);              // silent 401 / logout: sessionReal -> false
+      return reply(401, { success: false });
+    });
+
+    const res = await api.flushWriteQueue();
+    expect(res.dropped).toBe(0);           // the guard bails BEFORE the 401 drop-classification
+    const q1 = await store.loadQueue('u1');
+    expect(q1.map((d) => d.id)).toEqual(['pending-X']);   // NOT dropped — survives to replay after re-login
+  });
+});
+
 describe('flushWriteQueue — a network THROW keep does NOT bump the poison-cap counter (loophole audit 2026-08-25)', () => {
   it('an offline flush (replay throws) keeps the draft at attempts:0, so a later 5xx still gets the full cap', async () => {
     const X = leadDraft('pending-X', 'Xavier', '1112223330');

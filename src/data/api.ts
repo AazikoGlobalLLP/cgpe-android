@@ -98,11 +98,19 @@ export function setAuthToken(t: string | null) {
   suppressed.clear();
 }
 export function setCurrentUser(id: string | null, name?: string | null) {
+  const changed = id !== currentUserId;
   currentUserId = id; currentUserName = name || null;
   // PHASE 57b: mirror this user's persisted write queue into the reactive bus (drops the previous
   // user's on sign-out). Fire-and-forget — a screen re-renders when it lands.
-  if (id) void offlineStore.loadQueue(id).then(pendingBus.setPending).catch(() => {});
-  else pendingBus.resetPending();
+  if (id) {
+    // On a user CHANGE, clear the bus synchronously before the async load resolves, so the incoming
+    // user never sees a flash of the previous user's queued drafts (their names/phones) during the
+    // AsyncStorage-latency window. A same-id re-hydration skips this to avoid a needless flicker.
+    if (changed) pendingBus.resetPending();
+    void offlineStore.loadQueue(id).then(pendingBus.setPending).catch(() => {});
+  } else {
+    pendingBus.resetPending();
+  }
 }
 export function isRealSession() { return sessionReal; }
 /**
@@ -858,10 +866,15 @@ async function cachedList<T extends { id: string }>(
   fetchOnce: () => Promise<T[] | null>,
   failurePath: () => Promise<T[]>,
 ): Promise<T[]> {
-  const rows = await fetchOnce();
+  // Capture the user BEFORE the read, not after. If the signed-in identity changes while fetchOnce
+  // awaits (logout / user switch on a shared handset), the rows just read belong to the user who
+  // STARTED the read; writing them under whoever is signed in NOW would serve one user's PII to the
+  // next as a "Synced <time>" stale copy on the next outage. So only write when the identity is
+  // unchanged across the await — otherwise skip the cache write entirely (poison neither namespace).
   const uid = currentUserId;
+  const rows = await fetchOnce();
   if (rows !== null) {
-    if (uid) {
+    if (uid && uid === currentUserId) {
       markFresh(endpointKey);
       void offlineStore.writeList(uid, endpointKey, rows);   // fire-and-forget; never blocks the read
     }
@@ -4271,12 +4284,21 @@ export async function flushWriteQueue(): Promise<{ synced: number; dropped: numb
     // mid-flush isn't in this snapshot, so it simply replays on the next flush — never lost.
     const drafts = await offlineStore.loadQueue(uid);
     for (const draft of drafts) {
+      // The signed-in identity can change while replayWrite awaits the network — a logout, a silent
+      // 401, or user B signing in on a shared handset. If it has, STOP. Replaying A's drafts under
+      // B's live token creates A's records owned by B; persisting the outcome to A's queue (by the
+      // captured `uid`) corrupts it based on a reply that never used A's token; and setPending would
+      // paint A's queued customer names/phones onto B's screen. Leave A's queue untouched — the
+      // drafts replay unchanged when A signs back in. Checked before the replay (covers a switch
+      // during the previous iteration) and again after the await (covers a switch during this one).
+      if (currentUserId !== uid || !sessionReal) break;
       let result: { ok: boolean; status: number } | 'threw';
       try {
         result = await replayWrite(draft);
       } catch {
         result = 'threw';
       }
+      if (currentUserId !== uid || !sessionReal) break;
       const outcome: FlushOutcome = flushDecision(result, draft.attempts);
       if (outcome === 'synced') synced++;
       else if (outcome === 'drop') dropped++;
@@ -4296,9 +4318,11 @@ export async function flushWriteQueue(): Promise<{ synced: number; dropped: numb
       await offlineStore.saveQueue(uid, next);
       pendingBus.setPending(next);
     }
-    if (dropped > 0) {
+    if (dropped > 0 && currentUserId === uid && sessionReal) {
       // The server refused these (a 4xx / attempt-cap). Surface it once — an offline draft that
       // silently vanished would read as data loss. Kind-agnostic ("change") — Notes AND Tasks queue.
+      // Guarded on the identity: if the flush broke because the user changed, these were the PREVIOUS
+      // user's drops and must not surface on the new user's screen.
       pendingBus.setDropNotice(
         dropped === 1
           ? 'One offline change could not be saved and was removed.'
