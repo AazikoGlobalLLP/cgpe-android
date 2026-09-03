@@ -666,8 +666,12 @@ minutes, and the next press dying on `expo-audio`'s own guard (`AudioRecorder.kt
   incidentally proved the banner's press handler survives a release build, where an unhandled throw
   is fatal (the `'worklet'` trap that cost four APKs). `expo-updates@~57.0.21`, `updates.url` + `runtimeVersion` in `app.json`,
   `channel` on every `eas.json` profile. **Publish a JS fix with
-  `npx eas-cli update --channel preview --message "<what changed>"`** — no rebuild, no quota, ~30 s
-  to reach a phone. `checkAutomatically: ON_LOAD` applies it at the next cold start on its own; the
+  `npx eas-cli update --channel preview --message "<what changed>" --environment preview`** — no
+  rebuild, no quota, ~30 s to reach a phone. ⚠️ **`--environment` is REQUIRED in `--non-interactive`
+  mode** (this session's shell is EOF): without it the command fails with *"The `--environment` flag
+  must be set when running in `--non-interactive` mode"* and publishes nothing. It also emits a
+  separate **iOS** update group at a different runtime — expected (fingerprint is per platform) and
+  harmless (no iOS build exists). `checkAutomatically: ON_LOAD` applies it at the next cold start on its own; the
   `UpdateBanner` offers a one-tap restart so it does not have to wait that long.
   🔴 **ONLY BUILD 6 AND LATER CAN RECEIVE AN UPDATE.** Builds 1–5 and the 25-Aug field APK have no
   `expo-updates` native side, so **no OTA can ever reach them** — those handsets need one manual APK
