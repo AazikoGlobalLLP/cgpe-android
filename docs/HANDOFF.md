@@ -1,3 +1,90 @@
+# HANDOFF — CGPE Connect (Android) — FULL-CODEBASE AUDIT SWEEP — 2026-09-03
+
+> **A full-codebase audit (8 parallel evidence-demanding agents, every finding verified against the
+> real source before any change), then fixes. 12 confirmed defects fixed across 6 commits, all
+> pushed to `aaziko/Shivam` (`1bf323d..42d7816`). No new code phase existed — the audit IS the work.**
+>
+> ⚠️ **Do not delete the handoffs below this one.** This is NOT the owner's "Phase 99 rollout"
+> (that is still the build-6 handset rollout, owner-held and unchanged).
+
+## Done — fixes, each verified against the real source (backend at deployed `origin/main` `0324dfc`)
+
+- **A partial-paid claim no longer reads as fully settled** (`adapt.ts` `mapClaimStatus`, `c557ec9`).
+  The greedy `/paid|settl|closed|pass/` arm matched the substring in `partial_paid` (money still
+  owed) and `closed_rejected` before the `/partial/` and `/reject/` arms ran, so both rendered as
+  **settled** — contradicting the backend's own normaliser (`claimWorkflow.js`: partial_paid →
+  under_review, declined → rejected). This was the last deliberately-pinned known-bug in the suite;
+  its assertion moved up into correct-behaviour.
+- **The offline flush can no longer corrupt the queue or bleed PII when the signed-in user changes
+  mid-flush** (`api.ts` `flushWriteQueue`, `9100fc1`). It captured the user once and never re-checked
+  across its per-draft network awaits; a shared-handset logout / silent-401 / user-switch caused
+  silent draft loss, cross-user write attribution (A's drafts created owned by B), and A's queued
+  customer names/phones painting onto B's screen. Now re-checks identity before and after each await,
+  bails intact, and guards the drop-notice. Two tests pin it. Same-family fixes: `cachedList`
+  captured the user after the read (cross-user cache poisoning); `setCurrentUser` now clears the bus
+  synchronously on a user change.
+- **The "your work was removed" offline notice is now translated** (`42d7816`). It was hardcoded
+  English in the non-React api layer while the owner-supplied `sync.dropped{One,Many}` keys (5
+  languages, `{n}` placeholder) sat with zero consumers — a Hindi/Gujarati agent was told in English
+  only that their draft was deleted. Now carries a count; the screen renders the translated sentence.
+- **A deleted account's offline draft PII is purged** (`42d7816`). Sign-out keeps the queue for
+  re-sync, but a deleted account never returns, so its queued customer names/phones sat on the shared
+  disk forever. New `offlineStore.purgeQueue`, called from `deleteAccount`.
+- **Voice ceiling sized to the backend's real worst case** (80s → 110s, `078de90`). The proxy tries
+  ElevenLabs then Sarvam sequentially, so with both configured its own budget is 110s; the app was
+  aborting healthy turns at 80s and re-running the billed vendor chain. Also enforced the session
+  idle-expiry (was declared with zero callers → stale turns to the NLU); removed the redundant
+  `SESSION_BG_MS`.
+- **`getAgentLocations` reports an outage** when task-overview succeeds but the whole attendance
+  fan-out fails (`078de90`), instead of a silent "nobody on duty" over a real outage (convention #4).
+- **Screen-layer honesty + guards** (`6331188`, `e9ca377`): clients/leads empty states check
+  `health.degraded` before "no match" (server-side search failure was reading as "no result");
+  notify dispatch ref-guarded against a double-tap that duplicated a team-wide notice; claim-new
+  re-entrancy guard (duplicate insurance claim); leads/tasks `keyboardShouldPersistTaps`; payroll
+  degraded empty-state; account "export data" honest copy (asserted an email with no endpoint);
+  campaigns hero `—` on a failed audience; GlassCards `expo-blur` moved behind a lazy require (native
+  import at module scope in a boot-reachable file).
+
+## Verified CLEAN (traced, not assumed) — the disciplines are holding
+
+Reanimated worklet-crash class · stale-memo deps · unhandled-async handlers · all four RBAC
+invariants (client-book gate, fail-open flags, widget leaks, admin-via-tier) · retry/timeout
+classification · `resetApiState` completeness · adaptClient field mapping · dashboard-partial
+handling · presigned + legacy upload paths · geofence/attribution/fuzzy/biometric/OTA pure seams ·
+AppLock/LocationBlock lock gates · idempotency keys · clock-key per-user scoping.
+
+## Gates
+
+`tsc --noEmit` 0 · `npm test` **1380** / 84 files (+2 new race tests) · `eslint` 0 errors (the 2
+warnings are the pre-existing `status`/`clientTotal` in `api.ts`, untouched).
+
+## Left as documented, NOT fixed (with reasons)
+
+- **Voice read-intent registry gates are latent** — voice is server-dark (`/voice/ask` unconfigured),
+  the proxy is unbuilt, navigation re-gates at the destination, and PII scope is delegated to the
+  backend by design. No live exploit and no app-side fix helps today; recorded for when the proxy lands.
+- **`mapClaimStatus` docs_pending arm-order** — genuinely ambiguous (a live test frames the
+  status-wins-over-stage order as intentional), lower severity, left pinned and documented.
+- **`exceedsAudioCap`** stays a pure guard — on native the clip streams to the proxy so the bytes
+  never enter JS; the 15s record cap is the live size bound. Documented rather than adding a native stat.
+
+## 🔴 OWNER-ONLY — cannot be done in code, live evidence attached
+
+1. **Roll build 6 out to the ~20 other handsets** — unchanged; the single highest-value unblocked action.
+2. **Backend deploy** — `origin/main` still `0324dfc`; **30 commits** (backend Phases 118–128) sit on
+   `origin/ved` (`1515f8d`). Prod health 200; storage now live (`cloudStorageConfigured:true`).
+3. **Rotate `JWT_SECRET` + ~20 committed production secrets** — still present in deployed `origin/main`.
+4. **Voice keys** — `/voice/status` deployed (401), needs `SARVAM_API_KEY` + `N8N_VOICE_BRAIN_URL`.
+
+## Next session starts here
+
+- Nothing in `src/` is blocking. The audit found no further confirmed code defects after these fixes.
+- If picking up code work, the highest-value remaining items are all owner-held (above). Re-verify the
+  deploy gap first: `git -C ../cgpe-backend-main ls-remote origin refs/heads/main` (if still
+  `0324dfc`, the deploy is still the blocker — say so before anything else).
+
+---
+
 # HANDOFF — CGPE Connect (Android) — Phase 98 — 2026-09-02
 
 > **The app can now fix itself over the air, and it is CONFIRMED working on a real handset — not
