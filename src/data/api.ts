@@ -1221,6 +1221,45 @@ export async function deleteAccount(): Promise<{ ok: boolean; reason?: WriteFail
   }
 }
 
+/**
+ * Request a DPDP personal-data export of THIS user's own records (cgpe-api Phase 132).
+ *
+ * The subject is always `req.user.user_id` server-side — the request names no person, so it cannot be
+ * aimed at anyone else. The server assembles the user's own Profile, attendance, tasks/leads/tickets/
+ * commissions and their uploaded-file METADATA into one `.xlsx` workbook (NOT the client book, NOT
+ * `password_hash`) and returns a short-lived SIGNED download link that opens in a mobile browser with
+ * no auth header. The app only opens that link; it never handles the bytes.
+ *
+ * Inert until the deploy lands: the endpoint is on the backend's undeployed branch, so today the POST
+ * 404s and the caller reports `not_available` — the same adopt-early pattern as the Phase-97 fields.
+ */
+export type ExportResult =
+  | { ok: true; downloadUrl: string; filename: string; expiresIn: number }
+  | { ok: false; reason: 'not_available' | 'unavailable' };
+
+export async function exportAccountData(): Promise<ExportResult> {
+  if (FORCE_DEMO || !sessionReal) return { ok: false, reason: 'unavailable' };
+  try {
+    const { ok, status, json } = await req('/account/export', { method: 'POST' });
+    if (!ok) {
+      // 404/501 = the route is not deployed yet — honest "not available", not a transient error.
+      return { ok: false, reason: status === 404 || status === 501 ? 'not_available' : 'unavailable' };
+    }
+    const d = json?.data ?? {};
+    if (typeof d.download_url === 'string' && d.download_url) {
+      return {
+        ok: true,
+        downloadUrl: d.download_url,
+        filename: typeof d.filename === 'string' && d.filename ? d.filename : 'my-data.xlsx',
+        expiresIn: Number(d.expires_in) || 0,
+      };
+    }
+    return { ok: false, reason: 'unavailable' };
+  } catch {
+    return { ok: false, reason: 'unavailable' };
+  }
+}
+
 /* ------------------------------------------------------------------ Leads
  *
  * PHASE 4 — THE WHOLE SECTION SPOKE A VOCABULARY AND AN ENVELOPE THE SERVER DOES NOT HAVE.

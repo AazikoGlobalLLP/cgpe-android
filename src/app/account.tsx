@@ -11,6 +11,7 @@ import { PersonRow } from '@/ui/identity';
 import { Appear } from '@/ui/motion';
 import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
+import * as api from '@/data/api';
 import { useAuth } from '@/store/auth';
 import { useT } from '@/i18n';
 
@@ -41,6 +42,8 @@ export default function Account() {
   const { confirm } = useConfirm();
   const toast = useToast();
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const exportingRef = useRef(false);
   const [failure, setFailure] = useState<string | null>(null);
 
   /**
@@ -103,12 +106,31 @@ export default function Account() {
     });
   };
 
-  const exportData = () => {
+  const exportData = async () => {
+    // Ref-guard, not the `exporting` state: a double-tap must not fire two export requests before the
+    // first render disables the row (the recorder-race lesson).
+    if (exportingRef.current) return;
+    exportingRef.current = true;
+    setExporting(true);
     haptics.tap();
-    // There is no in-app data-export endpoint — nothing was ever sent, so a 'success' toast claiming
-    // "will be emailed to you" was a false assertion on a privacy screen. Say plainly it is not yet
-    // available in the app and point to the privacy policy, which describes how to request a copy.
-    toast('Getting a copy of your data is not available in the app yet — the privacy policy explains how to request it.', 'info');
+    try {
+      const res = await api.exportAccountData();
+      if (!live.current) return;
+      if (res.ok) {
+        // The server returns a short-lived SIGNED link (no auth header) — open it in the system
+        // browser, which downloads the workbook. The app never handles the bytes.
+        toast('Your data export is ready — opening the download.', 'success');
+        Linking.openURL(res.downloadUrl).catch(() => toast('Could not open the download link. Please try again.', 'warning'));
+      } else if (res.reason === 'not_available') {
+        // The endpoint is not deployed on this server yet — honest, not a transient error.
+        toast('Data export is not switched on for this server yet. Please try again later.', 'info');
+      } else {
+        toast('Could not create your data export right now. Please try again.', 'warning');
+      }
+    } finally {
+      if (live.current) setExporting(false);
+      exportingRef.current = false;
+    }
   };
 
   if (!ready) {
@@ -204,12 +226,12 @@ export default function Account() {
           message="Encrypted in transit. We follow India's DPDP Act for personal and policy data."
         />
 
-        <ListSection title="Your data" footer="An export is sent to the address on your account.">
+        <ListSection title="Your data" footer="A copy of your own records, downloaded to this phone as a spreadsheet.">
           <Appear index={0}>
             <DataRow
               icon="download-outline"
               label="Export my data"
-              value=""
+              value={exporting ? 'Preparing…' : ''}
               onPress={exportData}
             />
           </Appear>
