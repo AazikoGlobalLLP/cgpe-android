@@ -302,8 +302,8 @@ export function canViewOwnClients(user: User | null, viewAs?: Tier | null): bool
  * stays legible against both. The previous violet/emerald pair predated the brand port and
  * clashed with the new palette.
  */
-export const TIER_THEME: Record<Tier, { accent: string; accent2: string; grad: [string, string, ...string[]]; badge: string }> = {
-  master: { accent: '#f5b74a', accent2: '#ffd98a', grad: ['#3a2d10', '#241c0c', '#12100a'], badge: 'MASTER' },
-  admin: { accent: '#3182ed', accent2: '#8cc2ff', grad: ['#12314f', '#0b1c30', '#060d17'], badge: 'ADMIN' },
-  team: { accent: '#1dd7bf', accent2: '#6ff5e4', grad: ['#0b3b36', '#0a2a28', '#08191c'], badge: 'TEAM' },
+export const TIER_THEME: Record<Tier, { accent: string; accent2: string; grad: [string, string, ...string[]]; badge: string; labelKey: string }> = {
+  master: { accent: '#f5b74a', accent2: '#ffd98a', grad: ['#3a2d10', '#241c0c', '#12100a'], badge: 'MASTER', labelKey: 'more.masterLabel' },
+  admin: { accent: '#3182ed', accent2: '#8cc2ff', grad: ['#12314f', '#0b1c30', '#060d17'], badge: 'ADMIN', labelKey: 'more.adminLabel' },
+  team: { accent: '#1dd7bf', accent2: '#6ff5e4', grad: ['#0b3b36', '#0a2a28', '#08191c'], badge: 'TEAM', labelKey: 'dash.team' },
 };

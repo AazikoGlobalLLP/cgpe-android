@@ -354,7 +354,7 @@ const COPY_HIT = { top: 10, bottom: 10, left: 10, right: 10 };
 const COPY_HOLD = 1400;
 
 export function DataRow({
-  label, value, icon, tone = 'neutral', onPress, copyable, numeric, copyText, onCopy, right, style,
+  label, value, icon, tone = 'neutral', onPress, copyable, numeric, copyText, onCopy, right, style, stacked,
 }: {
   label: string;
   value: string;
@@ -369,6 +369,8 @@ export function DataRow({
    * none — so "12 Jan 2026" aligns down a column and "Jeevan Anand" is unaffected.
    */
   numeric?: boolean;
+  /** Navigation copy can grow in another language; show its title and description in full. */
+  stacked?: boolean;
   /** Copy something other than the displayed value (a masked number, an unformatted amount). */
   copyText?: string;
   onCopy?: (text: string) => void;
@@ -416,6 +418,12 @@ export function DataRow({
       paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
     }}>
       {icon ? <Ionicons name={icon} size={16} color={c.faint} /> : null}
+      {stacked && !isNum ? (
+        <View style={{ flex: 1, gap: spacing.xs }}>
+          <Txt size={font.sub} color={c.muted}>{label}</Txt>
+          <Txt size={font.body} weight="600" color={valueColor}>{value}</Txt>
+        </View>
+      ) : <>
       <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{label}</Txt>
 
       {/* Spacer, so the value is right-aligned however long the label is. */}
@@ -444,6 +452,7 @@ export function DataRow({
       >
         {value}
       </Text>
+      </>}
       {right}
 
       {copyable ? (

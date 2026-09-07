@@ -168,11 +168,11 @@ export const DEFAULT_UI: AppUiConfig = {
     // module would land in the trailing catch-all rather than a chosen group. Keep it in step with
     // more.tsx's catalogue: a module in one but not the other is a menu bug.
     more_sections: [
-      { title: 'The book', items: ['clients', 'leads', 'segments', 'families', 'premium', 'prospects', 'lic-plans'] },
-      { title: 'Day to day', items: ['tickets', 'claims', 'reminders', 'calendar', 'attendance', 'whatsapp', 'commissions'] },
-      { title: 'Board', items: ['notice-board', 'notes'] },
-      { title: 'Reference', items: ['kb', 'search', 'contests'] },
-      { title: 'You', items: ['profile', 'settings', 'account'] },
+      { title: 'The book', titleKey: 'more.groupBook', items: ['clients', 'leads', 'segments', 'families', 'premium', 'prospects', 'lic-plans'] },
+      { title: 'Day to day', titleKey: 'more.groupDayToDay', items: ['tickets', 'claims', 'reminders', 'calendar', 'attendance', 'whatsapp', 'commissions'] },
+      { title: 'Board', titleKey: 'more.groupBoard', items: ['notice-board', 'notes'] },
+      { title: 'Reference', titleKey: 'more.groupReference', items: ['kb', 'search', 'contests'] },
+      { title: 'You', titleKey: 'more.groupYou', items: ['profile', 'settings', 'account'] },
     ],
     hidden: [],
   },
@@ -311,8 +311,8 @@ export const OPS_TEAM_UI: AppUiConfig = departmentUi(
   ],
   [...OPS_MODULES, ...SELF_MODULES],
   [
-    { title: 'Day to day', items: [...OPS_MODULES] },
-    { title: 'You', items: [...SELF_MODULES] },
+    { title: 'Day to day', titleKey: 'more.groupDayToDay', items: [...OPS_MODULES] },
+    { title: 'You', titleKey: 'more.groupYou', items: [...SELF_MODULES] },
   ],
   ['home', 'tasks', 'claims', 'more'],
 );
@@ -328,8 +328,8 @@ export const SALES_TEAM_UI: AppUiConfig = departmentUi(
   ],
   [...SALES_MODULES, ...SELF_MODULES],
   [
-    { title: 'Your pipeline', items: [...SALES_MODULES] },
-    { title: 'You', items: [...SELF_MODULES] },
+    { title: 'Your pipeline', titleKey: 'ui.yourPipeline', items: [...SALES_MODULES] },
+    { title: 'You', titleKey: 'more.groupYou', items: [...SELF_MODULES] },
   ],
   ['home', 'tasks', 'leads', 'more'],
 );
@@ -549,14 +549,14 @@ export function resolveTabs(config: AppUiConfig): string[] {
  * follows `known`'s order, which is the catalogue's declaration order.
  */
 export function arrangeMoreSections(
-  sections: readonly { title: string; items: readonly string[] }[] | undefined,
+  sections: readonly { title: string; titleKey?: string; items: readonly string[] }[] | undefined,
   known: readonly string[],
   isHidden: (moduleKey: string) => boolean,
   leftoverTitle = 'More',
-): { title: string; keys: string[] }[] {
+): { title: string; titleKey?: string; keys: string[] }[] {
   const knownSet = new Set(known);
   const placed = new Set<string>();
-  const out: { title: string; keys: string[] }[] = [];
+  const out: { title: string; titleKey?: string; keys: string[] }[] = [];
   // `undefined`/empty sections is fail-open, not a blank menu: with nothing placed, every known,
   // non-hidden module falls to the trailing catch-all below (the hard product rule, defensively).
   for (const section of sections ?? []) {
@@ -566,7 +566,7 @@ export function arrangeMoreSections(
       placed.add(key);
       keys.push(key);
     }
-    if (keys.length) out.push({ title: section.title, keys });
+    if (keys.length) out.push({ title: section.title, ...(section.titleKey ? { titleKey: section.titleKey } : {}), keys });
   }
   const leftover = known.filter((k) => !isHidden(k) && !placed.has(k));
   if (leftover.length) out.push({ title: leftoverTitle, keys: leftover });
