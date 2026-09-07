@@ -1,3 +1,4 @@
+import { resolveCopy, textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -55,9 +56,9 @@ const NEXT_STAGE: Partial<Record<LeadStage, LeadStage>> = {
 };
 
 const PRIORITY_LABEL: Record<Lead['priority'], string> = {
-  hot: 'Hot lead',
-  warm: 'Warm lead',
-  cold: 'Cold lead',
+  hot: 'lead.hotLabel',
+  warm: 'lead.warmLabel',
+  cold: 'lead.coldLabel',
 };
 
 /** `fmtDate` returns an em dash for an unparseable date, and the UI does not show those. */
@@ -94,7 +95,7 @@ export default function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<CopyText | null>(null);
 
   /**
    * Mount flag for the commit path, which is not owned by an effect and so has no cleanup
@@ -144,13 +145,13 @@ export default function LeadDetail() {
     if (confirmed) {
       setLead(confirmed);
       haptics.success();
-      toast(`Moved to ${t(STAGE_META[stage].labelKey)}`, 'success');
+      toast(t('lead.movedToast', { stage: t(STAGE_META[stage].labelKey) }), 'success');
       return;
     }
 
     setLead((cur) => (cur ? { ...cur, stage: from } : cur));
     haptics.error();
-    setNotice(`The server did not confirm the move to ${t(STAGE_META[stage].labelKey)}, so this lead is still at ${t(STAGE_META[from].labelKey)}. Nothing was saved.`);
+    setNotice(textCopy('lead.moveUnconfirmed', undefined, { nextStage: textCopy(STAGE_META[stage].labelKey), previousStage: textCopy(STAGE_META[from].labelKey) }));
   }, [lead, saving, toast, t]);
 
   const openPicker = useCallback(() => { setPickerOpen(true); }, []);
@@ -160,18 +161,18 @@ export default function LeadDetail() {
   if (!lead) {
     return (
       <Screen>
-        <Header title="Lead" back />
+        <Header title={t('prospect.stageLead')} back />
         <EmptyState
           icon={health.degraded ? 'cloud-offline-outline' : 'person-circle-outline'}
-          title={health.degraded ? 'This lead could not load' : 'This lead could not be opened'}
+          title={health.degraded ? t('lead.loadFailed') : t('lead.openFailed')}
           subtitle={health.degraded
-            ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
+            ? t('client.unconfirmedBody')
             // Two different refusals reach this branch and the app cannot tell them apart from
             // here: the record is gone (404), or it belongs to another advisor and the server
             // will not open it for you (403 — the list shows unowned leads that the detail route
             // refuses). Naming both beats guessing one, which is what "it may have been
             // reassigned or removed" was doing.
-            : 'The server would not open it. A lead can only be opened by the advisor it belongs to, and this one may belong to someone else or have been removed.'}
+            : t('lead.openRefusedBody')}
           action={{ label: t('common.tryAgain'), onPress: retry }}
         />
       </Screen>
@@ -188,7 +189,7 @@ export default function LeadDetail() {
   // record written when a POST could not reach the server, so it stays defensive.
   const notes: LeadNote[] = lead.notes ?? [];
 
-  const meta = [lead.city, lead.source].filter(Boolean).join(' · ');
+  const meta = [lead.city, resolveCopy(t, lead.source, lead.sourceCopy)].filter(Boolean).join(' · ');
   const added = dateOr(lead.createdAt);
   const dueDate = dateOr(lead.nextActionDate);
 
@@ -196,16 +197,16 @@ export default function LeadDetail() {
   // goes through the picker.
   const oneTap = next && next !== 'policy_issued' ? next : null;
   const primaryLabel = saving ? t('common.saving')
-    : oneTap ? `Move to ${t(STAGE_META[oneTap].labelKey)}`
-      : next === 'policy_issued' ? 'Close this lead'
-        : 'Change stage';
+    : oneTap ? t('claim.moveToStatus', { status: t(STAGE_META[oneTap].labelKey) })
+      : next === 'policy_issued' ? t('lead.closeTitle')
+        : t('lead.changeStage');
 
   return (
     <Screen>
       <Header
-        title="Lead"
+        title={t('prospect.stageLead')}
         back
-        subtitle={lead.name}
+        subtitle={resolveCopy(t, lead.name, lead.nameCopy)}
         right={
           <IconBtn
             icon="options-outline"
@@ -214,7 +215,7 @@ export default function LeadDetail() {
             color={c.muted}
             disabled={saving}
             onPress={openPicker}
-            accessibilityLabel="Choose a different stage"
+            accessibilityLabel={t('lead.chooseStage')}
           />
         }
       />
@@ -227,8 +228,8 @@ export default function LeadDetail() {
         {notice ? (
           <Banner
             tone="danger"
-            title="Stage was not changed"
-            message={notice}
+            title={t('lead.stageUnchanged')}
+            message={renderText(t, notice)}
             action={{ label: t('common.tryAgain'), onPress: openPicker }}
             onDismiss={() => setNotice(null)}
           />
@@ -237,8 +238,8 @@ export default function LeadDetail() {
         {!lead.phone ? (
           <Banner
             tone="warning"
-            title="No mobile number on this lead"
-            message="Calls, WhatsApp and SMS all need a number on the record before they can be used."
+            title={t('lead.noMobile')}
+            message={t('lead.mobileRequiredBody')}
           />
         ) : null}
 
@@ -247,8 +248,8 @@ export default function LeadDetail() {
         <Appear index={0}>
           <Card>
             <PersonRow
-              name={lead.name}
-              subtitle={meta || 'No city or source recorded'}
+              name={resolveCopy(t, lead.name, lead.nameCopy)}
+              subtitle={meta || t('lead.noCitySource')}
               size={58}
               badge={lead.priority === 'hot' ? { tone: 'danger', icon: 'flame' } : undefined}
             />
@@ -256,7 +257,7 @@ export default function LeadDetail() {
             <Row style={{ gap: 6, marginTop: spacing.md, flexWrap: 'wrap' }}>
               <Pill label={t(st.labelKey)} tone={st.tone} dot />
               <Pill
-                label={PRIORITY_LABEL[lead.priority]}
+                label={t(PRIORITY_LABEL[lead.priority])}
                 tone={PRIORITY_TONE[lead.priority]}
                 icon={lead.priority === 'hot' ? 'flame' : undefined}
               />
@@ -268,25 +269,24 @@ export default function LeadDetail() {
             }}>
               {lead.potential > 0 ? (
                 <>
-                  <Eyebrow>Premium potential</Eyebrow>
+                  <Eyebrow>{t('leads.premiumPotential')}</Eyebrow>
                   <Metric value={inrShort(lead.potential)} size={font.display} style={{ marginTop: 2 }} />
                 </>
               ) : (
                 <Txt size={font.sub} color={c.muted}>
-                  No premium potential recorded on this lead yet.
-                </Txt>
+                  {t('lead.noPotential')}</Txt>
               )}
 
               <Meter
                 label={lost ? t('lead.closedAsLost') : won ? t('stage.policyIssued') : t('lead.pipelineProgress')}
                 value={lost ? 0 : step >= 0 ? (step + 1) / FLOW.length : 0}
-                valueLabel={lost ? t('lead.notProceeding') : step >= 0 ? `${step + 1} of ${FLOW.length}` : t(st.labelKey)}
+                valueLabel={lost ? t('lead.notProceeding') : step >= 0 ? t('common.countOfTotal', { count: step + 1, total: FLOW.length }) : t(st.labelKey)}
                 tone={lost ? 'danger' : won ? 'success' : 'primary'}
                 style={{ marginTop: spacing.lg }}
               />
               {!lost && !won && next ? (
                 <Txt size={font.cap} color={c.faint} style={{ marginTop: spacing.sm }}>
-                  {`Next step: ${t(STAGE_META[next].labelKey)}.`}
+                  {t('lead.nextStep', { stage: t(STAGE_META[next].labelKey) })}
                 </Txt>
               ) : null}
             </View>
@@ -294,10 +294,10 @@ export default function LeadDetail() {
         </Appear>
 
         <Appear index={1}>
-          <ListSection title="Lead detail">
-            <DataRow label="Interested in" value={lead.interest || 'Not recorded'} icon="pricetag-outline" />
+          <ListSection title={t('lead.detailTitle')}>
+            <DataRow label={t('leads.interestLabel')} value={lead.interest || t('task.notRecorded')} icon="pricetag-outline" />
             {lead.potential > 0 ? (
-              <DataRow label="Premium potential" value={inr(lead.potential)} icon="cash-outline" numeric />
+              <DataRow label={t('leads.premiumPotential')} value={inr(lead.potential)} icon="cash-outline" numeric />
             ) : null}
             {lead.phone ? (
               <DataRow
@@ -315,41 +315,40 @@ export default function LeadDetail() {
                     bg={c.cardAlt}
                     color={c.muted}
                     onPress={() => { haptics.tap(); sms(lead.phone); }}
-                    accessibilityLabel={`Send an SMS to ${lead.name}`}
+                    accessibilityLabel={t('lead.sendSms', { name: resolveCopy(t, lead.name, lead.nameCopy) })}
                   />
                 }
               />
             ) : null}
-            {lead.city ? <DataRow label="City" value={lead.city} icon="location-outline" /> : null}
-            {lead.source ? <DataRow label="Source" value={lead.source} icon="git-network-outline" /> : null}
+            {lead.city ? <DataRow label={t('leads.cityLabel')} value={lead.city} icon="location-outline" /> : null}
+            {lead.source ? <DataRow label={t('lead.sourceLabel')} value={resolveCopy(t, lead.source, lead.sourceCopy)} icon="git-network-outline" /> : null}
           </ListSection>
         </Appear>
 
         <Appear index={2}>
           <ListSection
-            title="Timeline"
-            footer="Times come from the lead record itself, so they move whenever the record does."
+            title={t('claim.timelineTitle')}
+            footer={t('lead.timesHint')}
           >
-            {added ? <DataRow label="Added" value={added} icon="calendar-outline" numeric /> : null}
+            {added ? <DataRow label={t('common.added')} value={added} icon="calendar-outline" numeric /> : null}
             {lead.lastActivity ? (
-              <DataRow label="Last activity" value={timeAgo(lead.lastActivity)} icon="time-outline" numeric />
+              <DataRow label={t('lead.lastActivity')} value={timeAgo(lead.lastActivity, t)} icon="time-outline" numeric />
             ) : null}
             {lead.nextAction ? (
-              <DataRow label="Next action" value={lead.nextAction} icon="flag-outline" />
+              <DataRow label={t('lead.nextAction')} value={lead.nextAction} icon="flag-outline" />
             ) : null}
-            {dueDate ? <DataRow label="Action due" value={dueDate} icon="alarm-outline" numeric /> : null}
+            {dueDate ? <DataRow label={t('lead.actionDue')} value={dueDate} icon="alarm-outline" numeric /> : null}
           </ListSection>
         </Appear>
 
         <Appear index={3}>
-          <ListSection title={notes.length > 0 ? `Notes (${notes.length})` : 'Notes'}>
+          <ListSection title={notes.length > 0 ? t('lead.notesCount', { count: notes.length }) : t('more.notesTitle')}>
             {notes.length > 0
               ? notes.map((n) => <NoteRow key={n.id} text={n.text} at={n.at} />)
               : (
                 <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }}>
                   <Txt size={font.sub} color={c.muted} style={{ lineHeight: 20 }}>
-                    No notes on this lead yet. Anything written against it on the panel shows up here.
-                  </Txt>
+                    {t('lead.noNotesBody')}</Txt>
                 </View>
               )}
           </ListSection>
@@ -370,7 +369,7 @@ export default function LeadDetail() {
           color={c.primary}
           disabled={!lead.phone}
           onPress={() => { haptics.tap(); call(lead.phone); }}
-          accessibilityLabel={t('common.a11yCall', { name: lead.name })}
+          accessibilityLabel={t('common.a11yCall', { name: resolveCopy(t, lead.name, lead.nameCopy) })}
         />
         <IconBtn
           icon="logo-whatsapp"
@@ -379,7 +378,7 @@ export default function LeadDetail() {
           color={c.whatsapp}
           disabled={!lead.phone}
           onPress={() => { haptics.tap(); whatsapp(lead.phone, `Namaste ${lead.name}`); }}
-          accessibilityLabel={t('common.a11yWhatsapp', { name: lead.name })}
+          accessibilityLabel={t('common.a11yWhatsapp', { name: resolveCopy(t, lead.name, lead.nameCopy) })}
         />
         <Button
           label={primaryLabel}
@@ -407,8 +406,9 @@ export default function LeadDetail() {
  * ================================================================== */
 
 function NoteRow({ text, at }: { text: string; at: string }) {
+  const t = useT();
   const c = useTheme();
-  const when = at ? timeAgo(at) : null;
+  const when = at ? timeAgo(at, t) : null;
   return (
     <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md, gap: 5 }}>
       <Txt size={font.sub} style={{ lineHeight: 20 }}>{text}</Txt>
@@ -442,8 +442,8 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Move this lead"
-      subtitle={`Currently at ${t(STAGE_META[current].labelKey)}`}
+      title={t('lead.moveTitle')}
+      subtitle={t('lead.currentStage', { stage: t(STAGE_META[current].labelKey) })}
     >
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
         <ListSection title={t('common.pipeline')}>
@@ -453,13 +453,13 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
             return (
               <DataRow
                 key={s}
-                label={`Step ${i + 1}`}
+                label={t('lead.stepNumber', { number: i + 1 })}
                 value={t(STAGE_META[s].labelKey)}
                 onPress={isCurrent ? undefined : () => pick(s)}
                 right={
-                  isCurrent ? <Pill label="Current" tone="primary" small dot />
-                    : s === recommended ? <Pill label="Next" tone="accent" small />
-                      : done ? <Pill label="Passed" tone="neutral" small />
+                  isCurrent ? <Pill label={t('common.current')} tone="primary" small dot />
+                    : s === recommended ? <Pill label={t('lead.nextLabel')} tone="accent" small />
+                      : done ? <Pill label={t('lead.passedLabel')} tone="neutral" small />
                         : undefined
                 }
               />
@@ -481,8 +481,7 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
         </ListSection>
 
         <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center' }}>
-          The change is only confirmed once the server sends the updated lead back.
-        </Txt>
+          {t('leads.confirmedServerHint')}</Txt>
       </View>
     </Sheet>
   );
@@ -493,10 +492,11 @@ function StageSheet({ visible, onClose, current, recommended, onPick }: {
  * ================================================================== */
 
 function LeadSkeleton() {
+  const t = useT();
   const c = useTheme();
   return (
     <Screen>
-      <Header title="Lead" back />
+      <Header title={t('prospect.stageLead')} back />
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
         <Card>
           <Row>

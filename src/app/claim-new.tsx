@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText, resolveCopy } from '@/i18n/copy';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,12 +62,12 @@ import { inr } from '@/lib/format';
  * as a fabricated record.
  * ------------------------------------------------------------------ */
 
-const TYPES: { key: Claim['type']; label: string }[] = [
-  { key: 'Health', label: 'Health' },
-  { key: 'Death', label: 'Death' },
-  { key: 'Maturity', label: 'Maturity' },
-  { key: 'Surrender', label: 'Surrender' },
-  { key: 'Accident', label: 'Accident' },
+const TYPES: { key: Claim['type']; labelKey: string }[] = [
+  { key: 'Health', labelKey: 'claim.typeHealth' },
+  { key: 'Death', labelKey: 'claim.typeDeath' },
+  { key: 'Maturity', labelKey: 'client.maturity' },
+  { key: 'Surrender', labelKey: 'claim.typeSurrender' },
+  { key: 'Accident', labelKey: 'claim.typeAccident' },
 ];
 
 const MIN_QUERY = 2;
@@ -112,8 +113,8 @@ export default function ClaimNew() {
     return (
       <RestrictedNotice
         title={t('act.newClaim')}
-        heading="Filing a claim needs client-book access"
-        subtitle="A claim is filed against a client from the book, which is available to administrators, the master account, and sales advisors for their own clients. Ask an administrator to register this claim for you."
+        heading={t('claim.bookAccessTitle')}
+        subtitle={t('claim.bookAccessBody')}
       />
     );
   }
@@ -144,13 +145,13 @@ function ClaimNewScreen() {
   const pickerSearchRef = useRef<TextInput>(null);
   const [results, setResults] = useState<Client[]>([]);
   const [searching, setSearching] = useState(false);
-  const [clientError, setClientError] = useState('');
+  const [clientError, setClientError] = useState<CopyText>('');
 
   /* claim */
   const [type, setType] = useState<Claim['type']>('Health');
   const [policy, setPolicy] = useState('');
   const [amount, setAmount] = useState('');
-  const [amountError, setAmountError] = useState('');
+  const [amountError, setAmountError] = useState<CopyText>('');
   const [insurer, setInsurer] = useState('LIC of India');
   const [notes, setNotes] = useState('');
   const [docs, setDocs] = useState<ClaimDoc[]>([]);
@@ -164,7 +165,10 @@ function ClaimNewScreen() {
   const [prepPct, setPrepPct] = useState(0);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  const [noticeState, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message: CopyText } | { uploadFailure: UploadFailure } | null>(null);
+  const notice = noticeState && 'uploadFailure' in noticeState
+    ? describeUploadFailure(noticeState.uploadFailure, t)
+    : noticeState;
 
   /* The camera, the upload and the POST all outlive a back-press, so every handler below
    * re-checks this before it touches state. The debounced search does not need it: its
@@ -220,7 +224,7 @@ function ClaimNewScreen() {
   const showUploadFailure = (reason: UploadFailure) => {
     const d = describeUploadFailure(reason);
     if (d.tone === 'danger') haptics.error(); else haptics.warn();
-    setNotice(d);
+    setNotice({ uploadFailure: reason });
   };
 
   // POINT 11: the "Capture a document" button now opens a source sheet (photo / gallery / file).
@@ -232,10 +236,10 @@ function ClaimNewScreen() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: (source === 'camera' || source === 'video') ? 'Camera access is off' : 'Photo access is off',
+        title: (source === 'camera' || source === 'video') ? textCopy('claim.cameraOff') : textCopy('claim.photosOff'),
         message: (source === 'camera' || source === 'video')
-          ? 'Allow camera access in your device settings, or choose a file or a photo from your gallery instead.'
-          : 'Allow photo access in your device settings, or take a photo or choose a file instead.',
+          ? textCopy('claim.cameraPermissionBody')
+          : textCopy('claim.photoPermissionBody'),
       });
       return;
     }
@@ -335,13 +339,13 @@ function ClaimNewScreen() {
     if (saving) return;
     if (!picked) {
       haptics.warn();
-      setClientError('Choose the client this claim belongs to. A claim cannot be filed without a record from the book.');
+      setClientError(textCopy('claim.clientRequiredBody'));
       setPickerOpen(true);
       return;
     }
     if (!amountValid) {
       haptics.warn();
-      setAmountError('Enter the amount being claimed, in rupees.');
+      setAmountError(textCopy('claim.amountRequiredBody'));
       return;
     }
 
@@ -365,6 +369,7 @@ function ClaimNewScreen() {
     const created = await api.addClaim({
       clientId: picked.id,
       clientName: picked.name,
+      clientNameCopy: picked.nameCopy,
       clientPhone: picked.phone,
       type,
       policyNumber: policy.trim(),
@@ -381,8 +386,8 @@ function ClaimNewScreen() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'This account cannot register claims',
-        message: 'Filing a claim needs an admin or super admin role. Ask your branch admin to raise it, or ask them to register this claim for you.',
+        title: textCopy('claim.createForbiddenTitle'),
+        message: textCopy('claim.createForbiddenBody'),
       });
       return;
     }
@@ -391,8 +396,8 @@ function ClaimNewScreen() {
       haptics.error();
       setNotice({
         tone: 'danger',
-        title: 'The claim was not created',
-        message: created.error,
+        title: textCopy('claim.notCreated'),
+        message: created.errorCopy ?? created.error,
       });
       return;
     }
@@ -404,14 +409,14 @@ function ClaimNewScreen() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'The claim was not filed',
-        message: 'This session is not signed in to the register, so what you typed is only held on this handset. Sign in again and register it.',
+        title: textCopy('claim.notFiled'),
+        message: textCopy('claim.sessionNotSignedIn'),
       });
       return;
     }
 
     haptics.success();
-    toast(`Claim registered for ${picked.name}.`, 'success');
+    toast(t('claim.registeredToast', { name: resolveCopy(t, picked.name, picked.nameCopy) }), 'success');
 
     // A 201 that carries no usable id (the endpoint can answer `{ success: true }` alone)
     // would push to /claim/undefined and land on "Claim not found" right after a success
@@ -425,7 +430,7 @@ function ClaimNewScreen() {
 
   return (
     <Screen keyboard>
-      <Header title={t('act.newClaim')} back subtitle="File against a client already in the book" />
+      <Header title={t('act.newClaim')} back subtitle={t('claim.newSubtitle')} />
 
       <KeyboardScroll
         contentStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xl }}
@@ -434,8 +439,8 @@ function ClaimNewScreen() {
         {notice ? (
           <Banner
             tone={notice.tone}
-            title={notice.title}
-            message={notice.message}
+            title={renderText(t, notice.title)}
+            message={renderText(t, notice.message)}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
@@ -443,14 +448,14 @@ function ClaimNewScreen() {
         {/* WHO. An open set of real people, so it opens a sheet with faces in it. */}
         <Appear>
           <Group
-            label="Client"
-            error={clientError}
-            hint={picked ? 'Tap to pick a different client.' : 'Required. Search your book by name, policy number or mobile.'}
+            label={t('task.clientLabel')}
+            error={renderText(t, clientError)}
+            hint={picked ? t('claim.changeClientHint') : t('claim.chooseClientHint')}
           >
             <Pressable
               onPress={openPicker}
               accessibilityRole="button"
-              accessibilityLabel={picked ? `Client, currently ${picked.name}. Tap to change` : 'Choose a client'}
+              accessibilityLabel={picked ? t('claim.currentClientA11y', { name: resolveCopy(t, picked.name, picked.nameCopy) }) : t('claim.chooseClient')}
               style={({ pressed }) => [{
                 flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                 minHeight: 58, paddingHorizontal: 13, paddingVertical: spacing.sm,
@@ -460,7 +465,7 @@ function ClaimNewScreen() {
                 borderRadius: radius.md,
               }]}
             >
-              {picked ? <Avatar name={picked.name} size={40} /> : (
+              {picked ? <Avatar name={resolveCopy(t, picked.name, picked.nameCopy)} size={40} /> : (
                 <View style={{
                   width: 40, height: 40, borderRadius: 40 / 2.6, backgroundColor: c.cardAlt,
                   alignItems: 'center', justifyContent: 'center',
@@ -470,11 +475,11 @@ function ClaimNewScreen() {
               )}
               <View style={{ flex: 1, gap: 2 }}>
                 <Txt size={font.body} weight="700" color={picked ? c.text : c.faint} numberOfLines={1}>
-                  {picked ? picked.name : 'Search your client book'}
+                  {picked ? resolveCopy(t, picked.name, picked.nameCopy) : t('claim.searchBook')}
                 </Txt>
                 {picked ? (
                   <Txt size={font.sub} color={c.muted} numeric numberOfLines={1}>
-                    {[picked.phone || 'No number on file', firstPolicy(picked)].filter(Boolean).join(' · ')}
+                    {[picked.phone || t('task.noPhoneTitle'), firstPolicy(picked)].filter(Boolean).join(' · ')}
                   </Txt>
                 ) : null}
               </View>
@@ -485,46 +490,46 @@ function ClaimNewScreen() {
 
         {/* WHAT KIND. A closed set, so it is a chip rail rather than a text field. */}
         <Appear index={1}>
-          <Group label="Claim type">
-            <Chips options={TYPES} value={type} onChange={chooseType} />
+          <Group label={t('claim.typeLabel')}>
+            <Chips options={TYPES.map(({ key, labelKey }) => ({ key, label: t(labelKey) }))} value={type} onChange={chooseType} />
           </Group>
         </Appear>
 
         <Appear index={2}>
           <View style={{ gap: spacing.xl }}>
             <Field
-              label="Policy number"
+              label={t('claim.policyNumberLabel')}
               value={policy}
               onChange={setPolicy}
-              placeholder="Policy the claim is filed against"
+              placeholder={t('claim.policyPlaceholder')}
               icon="document-text-outline"
               hint={picked && !firstPolicy(picked)
-                ? 'No policy number is on record for this client. Type the one on the bond.'
-                : 'Prefilled from the book when a number is on record.'}
+                ? t('claim.noPolicyNumberHint')
+                : t('claim.prefilledPolicyHint')}
             />
             <Field
-              label="Claim amount"
+              label={t('claim.amountLabel')}
               value={amount}
               onChange={onAmount}
               placeholder="500000"
               keyboardType="numeric"
               icon="cash-outline"
-              error={amountError}
-              hint={amountValid ? `${inr(amountValue)} claimed` : 'Required. Rupees, digits only.'}
+              error={renderText(t, amountError)}
+              hint={amountValid ? t('claim.amountClaimed', { amount: inr(amountValue) }) : t('claim.rupeesHint')}
             />
             <Field
-              label="Insurer or TPA"
+              label={t('claim.insurerLabel')}
               value={insurer}
               onChange={setInsurer}
               placeholder="LIC of India"
               icon="business-outline"
-              hint="The register has no insurer field on a new claim, so this is written into the notes."
+              hint={t('claim.insurerNotesHint')}
             />
             <Field
-              label="Notes"
+              label={t('more.notesTitle')}
               value={notes}
               onChange={setNotes}
-              placeholder="Anything the claims desk should know before they open this"
+              placeholder={t('claim.notesPlaceholder')}
               multiline
             />
           </View>
@@ -533,10 +538,10 @@ function ClaimNewScreen() {
         {/* PAPERWORK, collected now rather than chased later. */}
         <Appear index={3}>
           <Group
-            label="Documents"
+            label={t('prospect.stageDocuments')}
             hint={docs.length === 0
-              ? 'Optional. Take a photo, pick one from your gallery, or choose a file — it uploads as soon as you pick it.'
-              : `${docs.length} file${docs.length === 1 ? '' : 's'} on the server. The register cannot link a file to a claim yet, so the names go into the notes.`}
+              ? t('claim.uploadOptionalHint')
+              : t('claim.unlinkedFiles', { count: docs.length })}
           >
             <View style={{ gap: spacing.md }}>
               {docs.length > 0 ? (
@@ -545,8 +550,8 @@ function ClaimNewScreen() {
                     <Appear key={d.id} index={i} distance={6}>
                       <DataRow
                         icon="document-attach-outline"
-                        label={d.name}
-                        value="Uploaded"
+                        label={resolveCopy(t, d.name, d.nameCopy)}
+                        value={t('claim.uploadedLabel')}
                         tone="success"
                         right={
                           <IconBtn
@@ -554,7 +559,7 @@ function ClaimNewScreen() {
                             size={32}
                             bg={c.cardAlt}
                             color={c.muted}
-                            accessibilityLabel={`Do not mention ${d.name} in the claim notes`}
+                            accessibilityLabel={t('claim.removeNoteMention', { document: resolveCopy(t, d.name, d.nameCopy) })}
                             onPress={() => removeDoc(d.id)}
                           />
                         }
@@ -565,7 +570,7 @@ function ClaimNewScreen() {
               ) : null}
 
               <Button
-                label={preparing ? `${t('doc.preparingVideo')} ${Math.round(prepPct * 100)}%` : uploading ? t('common.uploading') : 'Capture or upload a document'}
+                label={preparing ? `${t('doc.preparingVideo')} ${Math.round(prepPct * 100)}%` : uploading ? t('common.uploading') : t('claim.captureDocument')}
                 disabled={preparing || uploading}
                 icon="camera"
                 variant="outline"
@@ -589,7 +594,7 @@ function ClaimNewScreen() {
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: c.hairline,
       }}>
-        <Button label="Register claim" icon="checkmark" onPress={save} loading={saving} size="lg" full />
+        <Button label={t('claim.registerAction')} icon="checkmark" onPress={save} loading={saving} size="lg" full />
       </View>
 
       {/* ---------- document source (photo / gallery / file) ---------- */}
@@ -604,8 +609,8 @@ function ClaimNewScreen() {
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}
         onShown={() => pickerSearchRef.current?.focus()}
-        title="Choose a client"
-        subtitle="Search runs across your whole book"
+        title={t('claim.chooseClient')}
+        subtitle={t('claim.searchWholeBook')}
         height={pickerHeight}
       >
         <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
@@ -613,7 +618,7 @@ function ClaimNewScreen() {
             ref={pickerSearchRef}
             value={q}
             onChange={setQ}
-            placeholder="Name, policy number or mobile"
+            placeholder={t('clients.searchPlaceholder')}
           />
 
           {searching ? (
@@ -633,8 +638,8 @@ function ClaimNewScreen() {
               {results.map((cl, i) => (
                 <PersonRow
                   key={cl.id}
-                  name={cl.name}
-                  subtitle={[cl.phone || 'No number on file', firstPolicy(cl)].filter(Boolean).join(' · ')}
+                  name={resolveCopy(t, cl.name, cl.nameCopy)}
+                  subtitle={[cl.phone || t('task.noPhoneTitle'), firstPolicy(cl)].filter(Boolean).join(' · ')}
                   subtitleIcon={cl.phone ? 'call-outline' : 'alert-circle-outline'}
                   subtitleNumeric
                   chevron
@@ -646,17 +651,17 @@ function ClaimNewScreen() {
           ) : term.length >= MIN_QUERY ? (
             <EmptyState
               icon={health.degraded ? 'cloud-offline-outline' : 'search-outline'}
-              title={health.degraded ? 'The book did not load' : `No client matches "${term}"`}
+              title={health.degraded ? t('claim.bookFailed') : t('clients.noSearchMatch', { query: term })}
               subtitle={health.degraded
-                ? 'The server could not be reached, so this is not a confirmed empty result. Try the search again in a moment.'
-                : 'Search covers the whole book by name, policy number and mobile number. Check the spelling, or try the policy number.'}
+                ? t('claim.searchUnconfirmedBody')
+                : t('claim.searchScopeHint')}
               action={{ label: t('common.clearSearch'), onPress: () => setQ('') }}
             />
           ) : (
             <EmptyState
               icon="search-outline"
-              title="Search your client book"
-              subtitle="Type at least two letters of a name, or the start of a policy or mobile number."
+              title={t('claim.searchBook')}
+              subtitle={t('claim.searchMinHint')}
             />
           )}
         </View>

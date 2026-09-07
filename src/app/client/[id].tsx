@@ -1,3 +1,5 @@
+import { resolveCopy, textCopy, renderText, type CopyText } from '@/i18n/copy';
+import { policyFrequencyLabel } from '@/i18n/display';
 import React, { useCallback, useMemo, useState } from 'react';
 import { Linking, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -55,11 +57,11 @@ function monthYear(iso?: string): string | null {
   return `${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-const POLICY_STATUS: Record<Policy['status'], { label: string; tone: Tone }> = {
-  in_force: { label: 'In force', tone: 'success' },
-  lapsed: { label: 'Lapsed', tone: 'danger' },
-  matured: { label: 'Matured', tone: 'info' },
-  paid_up: { label: 'Paid up', tone: 'warning' },
+const POLICY_STATUS: Record<Policy['status'], { labelKey: string; tone: Tone }> = {
+  in_force: { labelKey: 'client.policyInForce', tone: 'success' },
+  lapsed: { labelKey: 'client.policyLapsed', tone: 'danger' },
+  matured: { labelKey: 'client.policyMatured', tone: 'info' },
+  paid_up: { labelKey: 'client.policyPaidUp', tone: 'warning' },
 };
 
 /** Days-to-FUP, rendered as a status token. Returns null when there is no usable date. */
@@ -93,13 +95,14 @@ type ReportPayload = {
  * wrapper so the real screen's hooks are untouched (no conditional-hooks hazard).
  */
 export default function ClientDetail() {
+  const t = useT();
   const { user, viewAs, ready } = useAuth();
   if (ready && !canViewOwnClients(user, viewAs)) {
     return (
       <RestrictedNotice
-        title="Client"
-        heading="Client details are master and admin only"
-        subtitle="Individual client records are available to administrators and the master account. Ask an administrator if you need this client's details."
+        title={t('task.clientLabel')}
+        heading={t('client.adminOnlyTitle')}
+        subtitle={t('client.adminOnlyBody')}
       />
     );
   }
@@ -118,7 +121,7 @@ function ClientDetailScreen() {
   const [reporting, setReporting] = useState(false);
   const [report, setReport] = useState<ReportPayload | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<CopyText | null>(null);
 
   const load = useCallback(async () => {
     const cl = await api.getClient(String(id));
@@ -147,12 +150,12 @@ function ClientDetailScreen() {
     // different fix (an admin sets it up) — from a service that is momentarily unavailable.
     setFailure(
       r.reason === 'not_configured'
-        ? 'Report generation is not set up on the server yet. Ask your admin to enable it, then try again.'
+        ? textCopy('client.reportNotConfigured')
         : r.reason === 'no_data'
-          ? 'No report could be built for this client. Check the name and try again.'
+          ? textCopy('client.reportNoClient')
           : r.reason === 'timeout'
-            ? 'The report is taking longer than usual to build. Please try again in a moment.'
-            : 'The report service did not answer, so nothing was generated. No figures are shown.',
+            ? textCopy('client.reportSlow')
+            : textCopy('client.reportUnanswered'),
     );
   }, [client, reporting]);
 
@@ -189,20 +192,20 @@ function ClientDetailScreen() {
   if (!client) {
     return (
       <Screen>
-        <Header title="Client 360" back />
+        <Header title={t('client.detailTitle')} back />
         <EmptyState
           icon={health.degraded ? 'cloud-offline-outline' : 'person-circle-outline'}
-          title={health.degraded ? 'This client could not load' : 'Client not found'}
+          title={health.degraded ? t('client.detailFailed') : t('client.notFound')}
           subtitle={health.degraded
-            ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
-            : 'This record is no longer in the book you can see. It may have been reassigned or removed.'}
+            ? t('client.unconfirmedBody')
+            : t('client.recordGoneBody')}
           action={{ label: t('common.tryAgain'), onPress: retry }}
         />
       </Screen>
     );
   }
 
-  const meta = [client.city, client.since && client.since !== '—' ? `Client since ${client.since}` : null]
+  const meta = [client.city, client.since && client.since !== '—' ? t('client.sinceLabel', { since: client.since }) : null]
     .filter(Boolean).join(' · ');
   const segments = client.segment.map((s) => SEG_META[s]).filter(Boolean);
   const dob = dateOr(client.dob);
@@ -210,7 +213,7 @@ function ClientDetailScreen() {
 
   return (
     <Screen>
-      <Header title="Client 360" back subtitle={client.name} />
+      <Header title={t('client.detailTitle')} back subtitle={resolveCopy(t, client.name, client.nameCopy)} />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -220,8 +223,8 @@ function ClientDetailScreen() {
         {failure ? (
           <Banner
             tone="danger"
-            title="Report was not generated"
-            message={failure}
+            title={t('client.reportFailedTitle')}
+            message={renderText(t, failure)}
             action={{ label: t('common.tryAgain'), onPress: doReport }}
             onDismiss={() => setFailure(null)}
           />
@@ -230,8 +233,8 @@ function ClientDetailScreen() {
         {!client.phone ? (
           <Banner
             tone="warning"
-            title="No mobile number on this record"
-            message="Calls, WhatsApp and premium reminders all need a number on the client record."
+            title={t('client.noMobile')}
+            message={t('client.mobileRequiredBody')}
           />
         ) : null}
 
@@ -240,9 +243,9 @@ function ClientDetailScreen() {
         <Appear index={0}>
           <Card>
             <Row>
-              <Avatar name={client.name} size={58} />
+              <Avatar name={resolveCopy(t, client.name, client.nameCopy)} size={58} />
               <View style={{ flex: 1, gap: 2 }}>
-                <Txt size={19} weight="800" numberOfLines={2}>{client.name}</Txt>
+                <Txt size={19} weight="800" numberOfLines={2}>{resolveCopy(t, client.name, client.nameCopy)}</Txt>
                 {meta ? <Txt size={font.sub} color={c.muted} numberOfLines={1}>{meta}</Txt> : null}
               </View>
             </Row>
@@ -259,7 +262,7 @@ function ClientDetailScreen() {
               marginTop: spacing.lg, paddingTop: spacing.md,
               borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline,
             }}>
-              <Eyebrow>Total cover</Eyebrow>
+              <Eyebrow>{t('client.totalCoverLabel')}</Eyebrow>
               <Metric value={inrShort(client.totalCover)} size={font.display} style={{ marginTop: 2 }} />
             </View>
           </Card>
@@ -271,18 +274,18 @@ function ClientDetailScreen() {
         </Appear>
 
         <Appear index={2}>
-          <ListSection title="Contact">
+          <ListSection title={t('filter.contact')}>
             {client.phone ? <DataRow label={t('common.mobile')} value={client.phone} icon="call-outline" numeric copyable /> : null}
-            {client.email ? <DataRow label="Email" value={client.email} icon="mail-outline" copyable /> : null}
-            {client.city ? <DataRow label="City" value={client.city} icon="location-outline" /> : null}
-            {client.family ? <DataRow label="Family" value={client.family} icon="people-outline" /> : null}
-            {dob ? <DataRow label="Date of birth" value={dob} icon="gift-outline" /> : null}
+            {client.email ? <DataRow label={t('profile.emailLabel')} value={client.email} icon="mail-outline" copyable /> : null}
+            {client.city ? <DataRow label={t('leads.cityLabel')} value={client.city} icon="location-outline" /> : null}
+            {client.family ? <DataRow label={t('client.familyLabel')} value={client.family} icon="people-outline" /> : null}
+            {dob ? <DataRow label={t('client.dobLabel')} value={dob} icon="gift-outline" /> : null}
             {/* `Sex` is backend DATA, rendered exactly as sent — translating a stored value is
                 the no-sweep rule in CLAUDE.md, and it would break any filter keyed on it. */}
-            {client.gender ? <DataRow label="Gender" value={client.gender} icon="person-outline" /> : null}
+            {client.gender ? <DataRow label={t('client.genderLabel')} value={client.gender} icon="person-outline" /> : null}
             {/* The WEDDING anniversary (`Marriage Date`). Named in full so it cannot be read as
                 the policy anniversary, which is the commencement date on the policy card below. */}
-            {marriage ? <DataRow label="Wedding anniversary" value={marriage} icon="heart-outline" /> : null}
+            {marriage ? <DataRow label={t('client.anniversaryLabel')} value={marriage} icon="heart-outline" /> : null}
           </ListSection>
         </Appear>
 
@@ -318,7 +321,7 @@ function ClientDetailScreen() {
           color={c.primary}
           disabled={!client.phone}
           onPress={() => { haptics.tap(); call(client.phone); }}
-          accessibilityLabel={t('common.a11yCall', { name: client.name })}
+          accessibilityLabel={t('common.a11yCall', { name: resolveCopy(t, client.name, client.nameCopy) })}
         />
         <IconBtn
           icon="logo-whatsapp"
@@ -327,7 +330,7 @@ function ClientDetailScreen() {
           color={c.whatsapp}
           disabled={!client.phone}
           onPress={() => { haptics.tap(); whatsapp(client.phone, `Namaste ${client.name}`); }}
-          accessibilityLabel={t('common.a11yWhatsapp', { name: client.name })}
+          accessibilityLabel={t('common.a11yWhatsapp', { name: resolveCopy(t, client.name, client.nameCopy) })}
         />
         <Button
           label={t('premium.sendReminder')}
@@ -365,20 +368,20 @@ function PolicySection({ p, index, count }: { p: Policy; index: number; count: n
 
   return (
     <ListSection
-      title={count > 1 ? `Policy ${index + 1} of ${count}` : 'Policy'}
-      footer={hasNumber ? undefined : 'This record carries no policy number, so it cannot be matched to LIC yet.'}
+      title={count > 1 ? t('client.policyIndex', { index: index + 1, count: count }) : t('notice.policyLabel')}
+      footer={hasNumber ? undefined : t('client.noPolicyMatchBody')}
     >
-      <DataRow label="Status" value="" right={<Pill label={status.label} tone={status.tone} small dot />} />
-      <DataRow label="Plan" value={p.plan} />
-      {hasNumber ? <DataRow label="Policy number" value={p.number} numeric copyable /> : null}
-      {p.sumAssured > 0 ? <DataRow label="Sum assured" value={inr(p.sumAssured)} numeric /> : null}
-      {p.premium > 0 ? <DataRow label="Premium" value={inr(p.premium)} numeric /> : null}
-      {p.frequency ? <DataRow label="Mode" value={p.frequency} /> : null}
-      {started ? <DataRow label="Commenced" value={started} numeric /> : null}
-      {matures ? <DataRow label="Maturity" value={matures} numeric /> : null}
+      <DataRow label={t('task.statusLabel')} value="" right={<Pill label={t(status.labelKey)} tone={status.tone} small dot />} />
+      <DataRow label={t('client.planLabel')} value={resolveCopy(t, p.plan, p.planCopy)} />
+      {hasNumber ? <DataRow label={t('claim.policyNumberLabel')} value={p.number} numeric copyable /> : null}
+      {p.sumAssured > 0 ? <DataRow label={t('client.sumAssuredLabel')} value={inr(p.sumAssured)} numeric /> : null}
+      {p.premium > 0 ? <DataRow label={t('client.premiumLabel')} value={inr(p.premium)} numeric /> : null}
+      {p.frequency ? <DataRow label={t('client.modeLabel')} value={policyFrequencyLabel(t, p.frequency)} /> : null}
+      {started ? <DataRow label={t('client.commencedLabel')} value={started} numeric /> : null}
+      {matures ? <DataRow label={t('client.maturity')} value={matures} numeric /> : null}
       {nextDue && !matured ? (
         <DataRow
-          label="Next premium"
+          label={t('client.nextPremiumLabel')}
           value={nextDue}
           numeric
           right={due ? <Pill label={due.label} tone={due.tone} small numeric /> : undefined}
@@ -423,22 +426,21 @@ function ReportSheet({ visible, report, onClose }: {
       onClose={onClose}
       title={t('report.title')}
       subtitle={report?.familyHead ?? undefined}
-      footer={<Button label="Share report" icon="share-social" full onPress={share} />}
+      footer={<Button label={t('client.shareReport')} icon="share-social" full onPress={share} />}
     >
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
         {rows.length > 0 ? (
-          <ListSection title="Summary">
+          <ListSection title={t('client.summaryLabel')}>
             {rows.map((r) => <DataRow key={r.label} label={r.label} value={r.value} numeric />)}
           </ListSection>
         ) : (
           <Txt size={font.sub} color={c.muted}>
-            The report was generated but returned no summary figures.
-          </Txt>
+            {t('client.noReportSummary')}</Txt>
         )}
 
         {report?.viewUrl ? (
           <Button
-            label="View full report"
+            label={t('client.viewFullReport')}
             icon="open-outline"
             full
             onPress={() => { haptics.tap(); Linking.openURL(report.viewUrl as string).catch(() => {}); }}
@@ -446,7 +448,7 @@ function ReportSheet({ visible, report, onClose }: {
         ) : null}
         {report?.pdfUrl ? (
           <Button
-            label="Download PDF"
+            label={t('client.downloadPdf')}
             icon="download-outline"
             variant="outline"
             full
@@ -455,8 +457,7 @@ function ReportSheet({ visible, report, onClose }: {
         ) : null}
         {!report?.viewUrl && !report?.pdfUrl ? (
           <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center' }}>
-            No hosted link came back with this report, so only the figures above are available.
-          </Txt>
+            {t('client.noHostedLink')}</Txt>
         ) : null}
       </View>
     </Sheet>
@@ -468,10 +469,11 @@ function ReportSheet({ visible, report, onClose }: {
  * ================================================================== */
 
 function DetailSkeleton() {
+  const t = useT();
   const c = useTheme();
   return (
     <Screen>
-      <Header title="Client 360" back />
+      <Header title={t('client.detailTitle')} back />
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
         <Card>
           <Row>

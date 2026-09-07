@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText, resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +23,7 @@ import * as api from '@/data/api';
 import type { Claim, ClaimStatus } from '@/data/types';
 import { CLAIM_STATUS } from '@/data/labels';
 import { useT } from '@/i18n';
+import { claimTypeLabel } from '@/i18n/display';
 import { fmtDate, fmtDay, fmtTime, inr } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 
@@ -156,7 +158,10 @@ export default function ClaimDetail() {
   /** 0..1 during the transcode, so a 10-20 s encode shows movement instead of a frozen button. */
   const [prepPct, setPrepPct] = useState(0);
   const [sourceOpen, setSourceOpen] = useState(false);
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  const [noticeState, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message: CopyText } | { uploadFailure: UploadFailure } | null>(null);
+  const notice = noticeState && 'uploadFailure' in noticeState
+    ? describeUploadFailure(noticeState.uploadFailure, t)
+    : noticeState;
   /** Bumped to re-run the focus effect after a retry. */
   const [nonce, setNonce] = useState(0);
   /** Documents the REGISTER holds against this claim — not the local checklist above it. */
@@ -213,8 +218,8 @@ export default function ClaimDetail() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: "Couldn't open that document",
-        message: 'The server did not hand back a link for this file. Check your connection and try again.',
+        title: textCopy('claim.documentOpenFailed'),
+        message: textCopy('claim.documentLinkFailed'),
       });
       return;
     }
@@ -252,7 +257,7 @@ export default function ClaimDetail() {
   const showUploadFailure = (reason: UploadFailure) => {
     const d = describeUploadFailure(reason);
     if (d.tone === 'danger') haptics.error(); else haptics.warn();
-    setNotice(d);
+    setNotice({ uploadFailure: reason });
   };
 
   // POINT 11: the button now opens a source sheet (photo / gallery / file). This runs after the
@@ -264,10 +269,10 @@ export default function ClaimDetail() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: (source === 'camera' || source === 'video') ? 'Camera access is off' : 'Photo access is off',
+        title: (source === 'camera' || source === 'video') ? textCopy('claim.cameraOff') : textCopy('claim.photosOff'),
         message: (source === 'camera' || source === 'video')
-          ? 'Allow camera access in your device settings, or choose a file or a photo from your gallery instead.'
-          : 'Allow photo access in your device settings, or take a photo or choose a file instead.',
+          ? textCopy('claim.cameraPermissionBody')
+          : textCopy('claim.photoPermissionBody'),
       });
       return;
     }
@@ -373,8 +378,8 @@ export default function ClaimDetail() {
     setNotice(null);
     haptics.success();
     toast(firstPending
-      ? `Uploaded. ${firstPending.name} ticked on your checklist.`
-      : 'Document uploaded to the server.', 'success');
+      ? t('claim.uploadChecklistToast', { document: resolveCopy(t, firstPending.name, firstPending.nameCopy) })
+      : t('claim.uploadedToast'), 'success');
   };
 
   /* ---------- states ---------- */
@@ -382,7 +387,7 @@ export default function ClaimDetail() {
   if (loading) {
     return (
       <Screen>
-        <Header title="Claim" back />
+        <Header title={t('task.categoryClaim')} back />
         <DetailSkeleton />
       </Screen>
     );
@@ -391,21 +396,21 @@ export default function ClaimDetail() {
   if (!claim) {
     return (
       <Screen>
-        <Header title="Claim" back />
+        <Header title={t('task.categoryClaim')} back />
         <Card style={{ margin: spacing.lg }}>
           {health.degraded ? (
             <EmptyState
               icon="cloud-offline-outline"
-              title="This claim did not load"
-              subtitle="The server could not be reached, so we cannot confirm whether this claim still exists."
+              title={t('claim.loadFailed')}
+              subtitle={t('claim.loadFailedBody')}
               action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           ) : (
             <EmptyState
               icon="alert-circle-outline"
-              title="Claim not found"
-              subtitle="It may have been closed, merged, or moved to another advisor's register."
-              action={{ label: 'Back to claims', onPress: () => router.back() }}
+              title={t('claim.notFound')}
+              subtitle={t('claim.notFoundBody')}
+              action={{ label: t('claim.backToClaims'), onPress: () => router.back() }}
             />
           )}
         </Card>
@@ -418,7 +423,7 @@ export default function ClaimDetail() {
   const complete = total > 0 && received === total;
   const stage = FLOW.indexOf(claim.status);
   const nextStatus = stage >= 0 && stage < FLOW.length - 1 ? FLOW[stage + 1] : null;
-  const opened = safeDate(claim.openedAt, 'Date not recorded');
+  const opened = safeDate(claim.openedAt, t('claim.dateNotRecorded'));
   const timeline = claim.timeline;
   const phone = claim.clientPhone;
   const docsMessage = `Namaste, regarding your ${claim.type} claim${claim.ref ? ` ${claim.ref}` : ''}, we need a few documents to proceed.`;
@@ -426,8 +431,8 @@ export default function ClaimDetail() {
   return (
     <Screen>
       <Header
-        title={claim.clientName}
-        subtitle={`${claim.type} claim${claim.ref ? ` · ${claim.ref}` : ''}`}
+        title={resolveCopy(t, claim.clientName, claim.clientNameCopy)}
+        subtitle={claim.ref ? t('claim.typeReferenceSummary', { type: claimTypeLabel(t, claim.type), reference: claim.ref }) : t('claim.typeSummary', { type: claimTypeLabel(t, claim.type) })}
         back
       />
 
@@ -440,16 +445,15 @@ export default function ClaimDetail() {
           <Card>
             <Row style={{ alignItems: 'flex-start' }}>
               <View style={{ flex: 1 }}>
-                <Eyebrow>Claim amount</Eyebrow>
+                <Eyebrow>{t('claim.amountLabel')}</Eyebrow>
                 {claim.amount > 0 ? (
                   <Metric value={inr(claim.amount)} size={font.display} style={{ marginTop: 3 }} />
                 ) : (
                   <Txt size={font.h3} weight="800" style={{ marginTop: 5 }} numberOfLines={1}>
-                    Amount not recorded
-                  </Txt>
+                    {t('claim.amountMissing')}</Txt>
                 )}
                 <Txt size={font.sub} color={c.muted} numeric numberOfLines={2} style={{ marginTop: 4 }}>
-                  {`Opened ${opened} · ${claim.ageDays} day${claim.ageDays === 1 ? '' : 's'} in progress`}
+                  {t('claim.ageSummary', { opened, count: claim.ageDays })}
                 </Txt>
               </View>
               <Pill label={t(st.labelKey)} tone={st.tone} />
@@ -457,8 +461,7 @@ export default function ClaimDetail() {
 
             {!phone ? (
               <Txt size={font.cap} color={c.faint} numberOfLines={2} style={{ marginTop: spacing.md }}>
-                No mobile number is on file for this claimant, so they cannot be reached from here.
-              </Txt>
+                {t('claim.noClaimantPhone')}</Txt>
             ) : null}
           </Card>
         </Appear>
@@ -466,8 +469,8 @@ export default function ClaimDetail() {
         {notice ? (
           <Banner
             tone={notice.tone}
-            title={notice.title}
-            message={notice.message}
+            title={renderText(t, notice.title)}
+            message={renderText(t, notice.message)}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
@@ -477,33 +480,33 @@ export default function ClaimDetail() {
             <Card style={{ backgroundColor: c.primarySoft, borderColor: c.primary + '40' }}>
               <Row style={{ gap: spacing.sm, marginBottom: 6 }}>
                 <Ionicons name="chatbubble-ellipses-outline" size={16} color={c.primary} />
-                <Txt size={13} weight="800" color={c.primary} numberOfLines={1}>Latest update</Txt>
+                <Txt size={13} weight="800" color={c.primary} numberOfLines={1}>{t('claim.latestUpdate')}</Txt>
               </Row>
-              <Txt size={13.5} color={c.text} style={{ lineHeight: 20 }}>{claim.aiSummary}</Txt>
+              <Txt size={13.5} color={c.text} style={{ lineHeight: 20 }}>{resolveCopy(t, claim.aiSummary, claim.aiSummaryCopy)}</Txt>
             </Card>
           </Appear>
         ) : null}
 
         {/* THE FACTS, grouped and copyable. */}
         <Appear index={2}>
-          <ListSection title="Claim record" footer="Copy a reference straight into the insurer portal instead of retyping it.">
+          <ListSection title={t('claim.recordTitle')} footer={t('claim.copyReferenceHint')}>
             <DataRow
               icon="pricetag-outline"
-              label="Reference"
-              value={claim.ref || 'Not issued'}
+              label={t('more.groupReference')}
+              value={claim.ref || t('claim.notIssued')}
               copyable={!!claim.ref}
             />
             <DataRow
               icon="document-text-outline"
-              label="Policy number"
-              value={claim.policyNumber || 'Not recorded'}
+              label={t('claim.policyNumberLabel')}
+              value={claim.policyNumber || t('task.notRecorded')}
               numeric={!!claim.policyNumber}
               copyable={!!claim.policyNumber}
             />
-            <DataRow icon="business-outline" label="Insurer or TPA" value={claim.insurer || 'Not recorded'} />
-            <DataRow icon="calendar-outline" label="Opened" value={opened} />
+            <DataRow icon="business-outline" label={t('claim.insurerLabel')} value={claim.insurer || t('task.notRecorded')} />
+            <DataRow icon="calendar-outline" label={t('claim.openedLabel')} value={opened} />
             {claim.clientPhone ? (
-              <DataRow icon="call-outline" label="Claimant mobile" value={claim.clientPhone} numeric copyable />
+              <DataRow icon="call-outline" label={t('claim.claimantMobile')} value={claim.clientPhone} numeric copyable />
             ) : null}
           </ListSection>
         </Appear>
@@ -513,13 +516,13 @@ export default function ClaimDetail() {
           <View style={{ gap: spacing.md }}>
             {total > 0 ? (
               <ListSection
-                title="Documents"
-                footer="This checklist is a working note on your handset. Ticking a document does not update the register."
+                title={t('prospect.stageDocuments')}
+                footer={t('claim.localChecklistHint')}
               >
                 <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md }}>
                   <Meter
                     value={pct}
-                    label="Checklist complete"
+                    label={t('claim.checklistComplete')}
                     valueLabel={`${shownReceived}/${total}`}
                     tone={complete ? 'success' : pct === 0 ? 'warning' : 'primary'}
                   />
@@ -530,7 +533,7 @@ export default function ClaimDetail() {
                       onPress={() => toggleDoc(d.id)}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked: d.received }}
-                      accessibilityLabel={`${d.name}, ${d.received ? 'received' : 'still pending'}`}
+                      accessibilityLabel={t(d.received ? 'claim.documentReceivedA11y' : 'claim.documentPendingA11y', { document: resolveCopy(t, d.name, d.nameCopy) })}
                       style={({ pressed }) => [{
                         flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                         minHeight: 52, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
@@ -549,10 +552,10 @@ export default function ClaimDetail() {
                         numberOfLines={2}
                         style={{ flex: 1, textDecorationLine: d.received ? 'line-through' : 'none' }}
                       >
-                        {d.name}
+                        {resolveCopy(t, d.name, d.nameCopy)}
                       </Txt>
                       <Pill
-                        label={d.received ? 'Received' : 'Pending'}
+                        label={d.received ? t('claim.receivedLabel') : t('claims.pending')}
                         tone={d.received ? 'success' : 'warning'}
                         small
                       />
@@ -564,14 +567,14 @@ export default function ClaimDetail() {
               <Card padded={false}>
                 <EmptyState
                   icon="document-attach-outline"
-                  title="No checklist on this claim"
-                  subtitle="The register did not list any required documents for this claim, so there is nothing to tick off yet."
+                  title={t('claim.noChecklist')}
+                  subtitle={t('claim.noChecklistBody')}
                 />
               </Card>
             )}
 
             <Button
-              label={preparing ? `${t('doc.preparingVideo')} ${Math.round(prepPct * 100)}%` : uploading ? t('common.uploading') : 'Capture or upload a document'}
+              label={preparing ? `${t('doc.preparingVideo')} ${Math.round(prepPct * 100)}%` : uploading ? t('common.uploading') : t('claim.captureDocument')}
               disabled={preparing || uploading}
               icon="camera"
               variant="outline"
@@ -586,8 +589,8 @@ export default function ClaimDetail() {
                 contradicted by the list rendered directly beneath it. */}
             <Txt size={font.cap} color={c.faint} numberOfLines={3} style={{ textAlign: 'center', lineHeight: 17 }}>
               {attachments.length > 0
-                ? 'Files go to the CGPE server and are listed below.'
-                : 'Files go to the CGPE server. The register cannot link a file to a claim yet, so quote the reference when you tell the claims desk.'}
+                ? t('claim.uploadLinkedHint')
+                : t('claim.uploadUnlinkedHint')}
             </Txt>
 
             {/* WHAT THE REGISTER ACTUALLY HOLDS — rendered only when it holds something.
@@ -598,8 +601,8 @@ export default function ClaimDetail() {
                 checklist above, which is a local working note. */}
             {attachments.length > 0 ? (
               <ListSection
-                title="Documents on the register"
-                footer="Held by the server against this claim. Tap one to open it — the link is created fresh each time and expires shortly after."
+                title={t('claim.registerDocuments')}
+                footer={t('claim.serverDocumentsHint')}
               >
                 {attachments.map((a) => (
                   <Pressable
@@ -607,7 +610,7 @@ export default function ClaimDetail() {
                     onPress={() => { void openAttachment(a); }}
                     disabled={opening === a.storageKey}
                     accessibilityRole="button"
-                    accessibilityLabel={`Open ${a.filename || 'document'}`}
+                    accessibilityLabel={t('claim.openDocument', { document: a.filename || t('claim.documentLabel') })}
                     style={({ pressed }) => [{
                       flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                       minHeight: 52, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
@@ -616,7 +619,7 @@ export default function ClaimDetail() {
                   >
                     <Ionicons name="document-text-outline" size={22} color={c.muted} />
                     <Txt size={14.5} weight="600" numberOfLines={1} style={{ flex: 1 }}>
-                      {a.filename || 'Document'}
+                      {a.filename || t('claim.documentLabel')}
                     </Txt>
                     <Ionicons
                       name={opening === a.storageKey ? 'hourglass-outline' : 'open-outline'}
@@ -639,15 +642,14 @@ export default function ClaimDetail() {
           <Appear index={4}>
             <View style={{ gap: spacing.sm }}>
               <Button
-                label={`Move to ${t(CLAIM_STATUS[nextStatus].labelKey).toLowerCase()}`}
+                label={t('claim.moveToStatus', { status: t(CLAIM_STATUS[nextStatus].labelKey).toLowerCase() })}
                 icon="lock-closed"
                 size="lg"
                 full
                 disabled
               />
               <Txt size={font.cap} color={c.faint} numberOfLines={3} style={{ textAlign: 'center', lineHeight: 17 }}>
-                Claim stage is set in the register. This app can read it, but it cannot save a change yet, so ask the claims desk to move it.
-              </Txt>
+                {t('claim.stageReadOnly')}</Txt>
             </View>
           </Appear>
         ) : null}
@@ -655,20 +657,20 @@ export default function ClaimDetail() {
         {/* THE HISTORY. */}
         <Appear index={5}>
           <View>
-            <SectionHeader title="Timeline" />
+            <SectionHeader title={t('claim.timelineTitle')} />
             <Card>
               {timeline.length > 0 ? (
                 <Spine>
-                  {timeline.map((t, i) => {
-                    const time = safeTime(t.at);
-                    const detail = [time, t.by].filter(Boolean).join(' · ');
+                  {timeline.map((entry, i) => {
+                    const time = safeTime(entry.at);
+                    const detail = [time, resolveCopy(t, entry.by, entry.byCopy)].filter(Boolean).join(' · ');
                     return (
                       <SpineRow
-                        key={t.id}
+                        key={entry.id}
                         index={i}
                         last={i === timeline.length - 1}
-                        time={safeDay(t.at, 'n/a')}
-                        title={t.label}
+                        time={safeDay(entry.at, t('claim.noDateShort'))}
+                        title={resolveCopy(t, entry.label, entry.labelCopy)}
                         subtitle={detail || undefined}
                         tone={i === timeline.length - 1 ? 'primary' : 'neutral'}
                       />
@@ -678,8 +680,8 @@ export default function ClaimDetail() {
               ) : (
                 <EmptyState
                   icon="time-outline"
-                  title="No history recorded"
-                  subtitle="The register has not logged any movement on this claim yet."
+                  title={t('claim.noHistory')}
+                  subtitle={t('claim.noHistoryBody')}
                 />
               )}
             </Card>
@@ -706,10 +708,10 @@ export default function ClaimDetail() {
           color={c.primary}
           disabled={!phone}
           onPress={() => { haptics.tap(); call(phone); }}
-          accessibilityLabel={t('common.a11yCall', { name: claim.clientName })}
+          accessibilityLabel={t('common.a11yCall', { name: resolveCopy(t, claim.clientName, claim.clientNameCopy) })}
         />
         <Button
-          label="Request documents"
+          label={t('claim.requestDocuments')}
           icon="logo-whatsapp"
           variant="whatsapp"
           full
