@@ -78,13 +78,13 @@ const GROUP_ORDER = ['event', 'meeting', 'announcement', 'policy', 'holiday'];
 function catMeta(key: string, t: TFn): CatMeta {
   const c = CATEGORY[key];
   if (c) return { label: t(c.labelKey), group: t(c.groupKey), tone: c.tone, icon: c.icon };
-  return { label: key || 'Notice', group: 'Other notices', tone: 'neutral', icon: 'information-circle-outline' };
+  return { label: key || t('notice.fallbackLabel'), group: t('notice.other'), tone: 'neutral', icon: 'information-circle-outline' };
 }
 
 const noticeId = (n: NoticeRow): string => String(n._id ?? n.id ?? n.noticeId ?? '');
 const noticeCat = (n: NoticeRow): string => String(n.category || 'announcement');
 const noticeBody = (n: NoticeRow): string => String(n.body ?? n.message ?? n.content ?? '').trim();
-const noticeTitle = (n: NoticeRow): string => String(n.title || '').trim() || 'Untitled notice';
+const noticeTitle = (t: TFn, n: NoticeRow): string => String(n.title || '').trim() || t('notice.untitled');
 const noticeAuthor = (n: NoticeRow): string => String(n.created_by ?? n.author ?? '').trim();
 
 function parseDate(v?: string | null): Date | null {
@@ -106,11 +106,11 @@ const DAY = 86400000;
  * measured against ONE instant, so two meetings an hour apart can never disagree about
  * which of them is "today".
  */
-function eventToken(d: Date, now: number): { label: string; tone: Tone; icon: IconName } {
+function eventToken(t: TFn, d: Date, now: number): { label: string; tone: Tone; icon: IconName } {
   // No reference time yet (the board has not resolved). State the date, judge nothing.
   if (!(now > 0)) return { label: fmtDay(d), tone: 'neutral', icon: 'calendar-outline' };
   const delta = d.getTime() - now;
-  if (delta < 0) return { label: `Was ${fmtDay(d)}`, tone: 'neutral', icon: 'time-outline' };
+  if (delta < 0) return { label: t('notice.wasDate', { date: fmtDay(d) }), tone: 'neutral', icon: 'time-outline' };
   const label = `${fmtDay(d)}, ${fmtTime(d)}`;
   if (delta <= 2 * DAY) return { label, tone: 'danger', icon: 'alarm-outline' };
   if (delta <= 7 * DAY) return { label, tone: 'warning', icon: 'calendar-outline' };
@@ -212,7 +212,7 @@ export default function NoticeBoard() {
     const out: Group[] = [];
 
     const pinned = shown.filter((n) => n.pinned);
-    if (pinned.length > 0) out.push({ key: '_pinned', title: 'Pinned', rows: pinned });
+    if (pinned.length > 0) out.push({ key: '_pinned', title: t('notice.pinned'), rows: pinned });
 
     const rest = shown.filter((n) => !n.pinned);
     const buckets = new Map<string, NoticeRow[]>();
@@ -236,22 +236,22 @@ export default function NoticeBoard() {
   const empty = outage ? (
     <EmptyState
       icon="cloud-offline-outline"
-      title="The notice board could not load"
-      subtitle="The server did not answer, so this is not an empty board, it is an unanswered request. Check your connection and try again."
+      title={t('notice.loadFailed')}
+      subtitle={t('notice.unconfirmed')}
       action={{ label: t('common.tryAgain'), onPress: () => load('replace') }}
     />
   ) : cat !== 'all' ? (
     <EmptyState
       icon="funnel-outline"
-      title={`Nothing under ${catMeta(cat, t).group}`}
-      subtitle="Other parts of the board still have notices on them."
-      action={{ label: 'Show the whole board', onPress: () => { haptics.select(); setCat('all'); } }}
+      title={t('notice.emptyCategory', { category: catMeta(cat, t).group })}
+      subtitle={t('notice.otherCategories')}
+      action={{ label: t('notice.showWhole'), onPress: () => { haptics.select(); setCat('all'); } }}
     />
   ) : (
     <EmptyState
       icon="megaphone-outline"
-      title="Nothing posted yet"
-      subtitle="Announcements, meetings, policy updates and holidays from the firm all land here. Only admins can post, so there is nothing for you to add."
+      title={t('notice.emptyTitle')}
+      subtitle={t('notice.emptyBody')}
       action={{ label: t('common.refresh'), onPress: () => load('refresh') }}
     />
   );
@@ -259,13 +259,13 @@ export default function NoticeBoard() {
   return (
     <Screen>
       <Header
-        title="Notice Board"
-        subtitle="From the firm"
+        title={t('more.noticeTitle')}
+        subtitle={t('more.noticeSub')}
         back
         right={upcoming > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={String(upcoming)} size={font.h3} />
-            <Eyebrow>Coming up</Eyebrow>
+            <Eyebrow>{t('notice.upcoming')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -306,7 +306,7 @@ export default function NoticeBoard() {
             <Appear key={g.key} index={i}>
               <ListSection
                 title={g.title}
-                footer={g.key === '_pinned' ? 'Kept at the top by the office until it is taken down.' : undefined}
+                footer={g.key === '_pinned' ? t('notice.pinnedNote') : undefined}
               >
                 {g.rows.map((n, r) => (
                   // A notice with no id at all is possible from a hand-seeded document, so
@@ -324,7 +324,7 @@ export default function NoticeBoard() {
 
           {shownCount > 0 ? (
             <Txt size={font.cap} color={c.faint} numeric style={{ textAlign: 'center' }}>
-              {shownCount === 1 ? '1 notice on the board' : `${shownCount} notices on the board`}
+              {shownCount === 1 ? t('notice.oneOnBoard') : t('notice.countOnBoard', { count: shownCount })}
             </Txt>
           ) : null}
         </ScrollView>
@@ -351,19 +351,19 @@ function NoticeLine({ notice, now, onOpen }: {
   const t = useT();
   const meta = catMeta(noticeCat(notice), t);
   const ev = eventAt(notice);
-  const token = ev ? eventToken(ev, now) : null;
+  const token = ev ? eventToken(t, ev, now) : null;
   const posted = postedAt(notice);
   const author = noticeAuthor(notice);
   const body = noticeBody(notice);
 
-  const sub = [posted ? `Posted ${timeAgo(posted)}` : null, author ? `by ${author}` : null]
-    .filter(Boolean).join(' ');
+  const sub = posted && author ? t('notice.postedWithAuthor', { time: timeAgo(posted, t), author })
+    : posted ? t('notice.postedAgo', { time: timeAgo(posted, t) }) : author ? t('notice.byAuthor', { author }) : '';
 
   return (
     <Pressable
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel={`${noticeTitle(notice)}. ${meta.label}${token ? `, ${token.label}` : ''}`}
+      accessibilityLabel={`${noticeTitle(t, notice)}. ${meta.label}${token ? `, ${token.label}` : ''}`}
       style={({ pressed }) => [{ backgroundColor: pressed ? c.cardAlt : 'transparent' }]}
     >
       <View style={{
@@ -378,7 +378,7 @@ function NoticeLine({ notice, now, onOpen }: {
         </View>
 
         <View style={{ flex: 1, gap: 4 }}>
-          <Txt size={font.body} weight="700" numberOfLines={2}>{noticeTitle(notice)}</Txt>
+          <Txt size={font.body} weight="700" numberOfLines={2}>{noticeTitle(t, notice)}</Txt>
 
           {body ? (
             <Txt size={font.sub} color={c.muted} numberOfLines={2} style={{ lineHeight: 19 }}>{body}</Txt>
@@ -387,7 +387,7 @@ function NoticeLine({ notice, now, onOpen }: {
           <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
             {token ? <Pill label={token.label} tone={token.tone} icon={token.icon} small numeric /> : null}
             {notice.location ? <Pill label={String(notice.location)} tone="neutral" icon="location-outline" small /> : null}
-            {notice.pinned ? <Pill label="Pinned" tone="primary" icon="pin" small /> : null}
+            {notice.pinned ? <Pill label={t('notice.pinned')} tone="primary" icon="pin" small /> : null}
             {sub ? <Txt size={font.tiny} color={c.faint} numberOfLines={1}>{sub}</Txt> : null}
           </View>
         </View>
@@ -411,7 +411,7 @@ function NoticeSheet({ visible, notice, now, onClose }: {
 
   const meta = catMeta(noticeCat(notice), t);
   const ev = eventAt(notice);
-  const evToken = ev ? eventToken(ev, now) : null;
+  const evToken = ev ? eventToken(t, ev, now) : null;
   const posted = postedAt(notice);
   const author = noticeAuthor(notice);
   const body = noticeBody(notice);
@@ -422,38 +422,36 @@ function NoticeSheet({ visible, notice, now, onClose }: {
     <Sheet
       visible={visible}
       onClose={onClose}
-      title={noticeTitle(notice)}
-      subtitle={posted ? `${meta.label}, posted ${timeAgo(posted)}` : meta.label}
+      title={noticeTitle(t, notice)}
+      subtitle={posted ? t('notice.categoryPosted', { category: meta.label, time: timeAgo(posted, t) }) : meta.label}
     >
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           <Pill label={meta.label} tone={meta.tone} icon={meta.icon} small />
           {evToken ? <Pill label={evToken.label} tone={evToken.tone} icon={evToken.icon} small numeric /> : null}
-          {notice.pinned ? <Pill label="Pinned" tone="primary" icon="pin" small /> : null}
+          {notice.pinned ? <Pill label={t('notice.pinned')} tone="primary" icon="pin" small /> : null}
         </View>
 
         {body ? (
           <Txt size={font.body} style={{ lineHeight: 22 }}>{body}</Txt>
         ) : (
           <Txt size={font.sub} color={c.faint}>
-            This notice was posted with a title only. There is no further detail on it.
-          </Txt>
+            {t('notice.titleOnly')}</Txt>
         )}
 
-        <ListSection title="Details">
-          {ev ? <DataRow label="When" value={`${fmtDate(ev)}, ${fmtTime(ev)}`} icon="calendar-outline" numeric /> : null}
-          {notice.location ? <DataRow label="Where" value={String(notice.location)} icon="location-outline" /> : null}
-          {posted ? <DataRow label="Posted" value={fmtDate(posted)} icon="time-outline" numeric /> : null}
-          {author ? <DataRow label="Posted by" value={author} icon="person-circle-outline" /> : null}
+        <ListSection title={t('notice.details')}>
+          {ev ? <DataRow label={t('notice.when')} value={`${fmtDate(ev)}, ${fmtTime(ev)}`} icon="calendar-outline" numeric /> : null}
+          {notice.location ? <DataRow label={t('notice.where')} value={String(notice.location)} icon="location-outline" /> : null}
+          {posted ? <DataRow label={t('notice.posted')} value={fmtDate(posted)} icon="time-outline" numeric /> : null}
+          {author ? <DataRow label={t('notice.postedBy')} value={author} icon="person-circle-outline" /> : null}
           {audience && audience.toLowerCase() !== 'all' ? (
-            <DataRow label="For" value={audience} icon="people-outline" />
+            <DataRow label={t('notice.for')} value={audience} icon="people-outline" />
           ) : null}
-          {ref ? <DataRow label="Reference" value={ref} icon="pricetag-outline" copyable numeric /> : null}
+          {ref ? <DataRow label={t('more.groupReference')} value={ref} icon="pricetag-outline" copyable numeric /> : null}
         </ListSection>
 
         <Txt size={font.tiny} color={c.faint} style={{ textAlign: 'center' }}>
-          Notices are posted by the office. You cannot edit or remove one from here.
-        </Txt>
+          {t('notice.readOnly')}</Txt>
       </View>
     </Sheet>
   );

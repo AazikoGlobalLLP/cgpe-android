@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +20,7 @@ import * as api from '@/data/api';
 import type { TrackPoint, TrackSession } from '@/data/api';
 import { fmtTime } from '@/lib/format';
 import { useT } from '@/i18n';
+import type { TFn } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * Movement replay, master only.
@@ -38,17 +40,17 @@ import { useT } from '@/i18n';
  * ScrollView wins every vertical drag and the map can only be panned sideways.
  * ------------------------------------------------------------------ */
 
-type Member = { id: string; name: string; role: string };
+type Member = { id: string; name: string; nameCopy?: LocalCopy; role: string };
 
 const ymd = (d: Date) => d.toISOString().slice(0, 10);
 
-function fmtDur(a?: string, b?: string | null): string {
-  if (!a) return 'Unknown';
+function fmtDur(t: TFn, a?: string, b?: string | null): string {
+  if (!a) return t('agentTrack.unknown');
   const started = new Date(a).getTime();
-  if (Number.isNaN(started)) return 'Unknown';
+  if (Number.isNaN(started)) return t('agentTrack.unknown');
   const end = b ? new Date(b).getTime() : Date.now();
   const mins = Math.max(0, Math.round((end - started) / 60000));
-  return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  return mins < 60 ? t('duration.minutesCompact', { minutes: mins }) : t('duration.hoursMinutesCompact', { hours: Math.floor(mins / 60), minutes: mins % 60 });
 }
 
 const km = (m?: number) => `${((m || 0) / 1000).toFixed(2)} km`;
@@ -147,20 +149,20 @@ export default function AgentTrack() {
   const stats: KpiItem[] = useMemo(() => {
     if (!active) return [];
     return [
-      { label: 'Distance', value: km(active.distance_m), icon: 'navigate-outline', tone: 'primary' },
-      { label: 'Points', value: String(active.point_count || path.length), icon: 'ellipse-outline', tone: 'accent' },
-      { label: 'Duration', value: fmtDur(active.started_at, active.ended_at), icon: 'time-outline', tone: 'info' },
+      { label: t('agentTrack.distance'), value: km(active.distance_m), icon: 'navigate-outline', tone: 'primary' },
+      { label: t('agentTrack.points'), value: String(active.point_count || path.length), icon: 'ellipse-outline', tone: 'accent' },
+      { label: t('agentTrack.duration'), value: fmtDur(t, active.started_at, active.ended_at), icon: 'time-outline', tone: 'info' },
     ];
-  }, [active, path.length]);
+  }, [active, path.length, t]);
 
   if (!isMaster) {
     return (
       <Screen>
-        <Header title="Movement paths" back />
+        <Header title={t('agentMap.movement')} back />
         <EmptyState
           icon="lock-closed-outline"
-          title="Master access only"
-          subtitle="Field-route history is visible to the master admin. Ask them if you need a route checked."
+          title={t('agentMap.masterOnly')}
+          subtitle={t('agentTrack.masterOnlyBody')}
         />
       </Screen>
     );
@@ -169,8 +171,8 @@ export default function AgentTrack() {
   return (
     <Screen>
       <Header
-        title="Movement paths"
-        subtitle={sel ? sel.name : 'Pick a team member'}
+        title={t('agentMap.movement')}
+        subtitle={sel ? resolveCopy(t, sel.name, sel.nameCopy) : t('agentTrack.pickMember')}
         back
       />
 
@@ -187,30 +189,30 @@ export default function AgentTrack() {
       >
         {!sel ? (
           <>
-            <SearchBar value={q} onChange={setQ} placeholder="Search team member" />
+            <SearchBar value={q} onChange={setQ} placeholder={t('agentTrack.searchMember')} />
 
             {loadingMembers ? <RosterSkeleton /> : filtered.length === 0 ? (
               <Card>
                 <EmptyState
                   icon={q.trim() ? 'search-outline' : health.degraded ? 'cloud-offline-outline' : 'people-outline'}
-                  title={q.trim() ? `No member matches "${q.trim()}"`
-                    : health.degraded ? 'The roster could not load'
-                      : 'No trackable members'}
-                  subtitle={q.trim() ? 'Search runs over the names and roles on the roster loaded here.'
+                  title={q.trim() ? t('team.noSearchMatch', { query: q.trim() })
+                    : health.degraded ? t('team.rosterFailed')
+                      : t('agentTrack.noTrackable')}
+                  subtitle={q.trim() ? t('agentTrack.searchScope')
                     : health.degraded
-                      ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
-                      : 'Only staff with a user account can be tracked. Add one in the admin panel first.'}
+                      ? t('team.unconfirmed')
+                      : t('agentTrack.accountRequired')}
                   action={q.trim()
                     ? { label: t('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }
                     : { label: t('common.tryAgain'), onPress: retryMembers }}
                 />
               </Card>
             ) : (
-              <ListSection footer={q.trim() ? `${filtered.length} of ${members.length} shown` : undefined}>
+              <ListSection footer={q.trim() ? t('team.shownCount', { shown: filtered.length, total: members.length }) : undefined}>
                 {filtered.slice(0, 40).map((m, i) => (
                   <Appear key={m.id} index={i}>
                     <PersonRow
-                      name={m.name}
+                      name={resolveCopy(t, m.name, m.nameCopy)}
                       subtitle={String(m.role).replace(/_/g, ' ')}
                       chevron
                       onPress={() => loadSessions(m)}
@@ -224,7 +226,7 @@ export default function AgentTrack() {
         ) : (
           <>
             <Button
-              label="All members"
+              label={t('agentTrack.allMembers')}
               icon="arrow-back"
               variant="ghost"
               size="sm"
@@ -240,8 +242,8 @@ export default function AgentTrack() {
                   <Card padded={false}>
                     <EmptyState
                       icon="git-branch-outline"
-                      title="No points recorded for this shift"
-                      subtitle="The shift was opened but no location fixes came back for it. That normally means location was switched off, or the app never ran in the background that day."
+                      title={t('agentTrack.noShiftPoints')}
+                      subtitle={t('agentTrack.noShiftPointsBody')}
                     />
                   </Card>
                 ) : (
@@ -249,16 +251,13 @@ export default function AgentTrack() {
                     <LeafletMap
                       pins={[]}
                       path={path}
-                      pathName={sel.name}
+                      pathName={resolveCopy(t, sel.name, sel.nameCopy)}
                       loading={loadingPath}
                       height={320}
                       onInteracting={setMapBusy}
                     />
                     <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center', marginTop: spacing.sm, lineHeight: 17 }}>
-                      Drag to pan, pinch to zoom. The line runs from A to B, faint at the
-                      start of the shift and solid at the newest point. Tap anywhere on it
-                      for the time.
-                    </Txt>
+                      {t('agentTrack.mapHint')}</Txt>
                   </>
                 )}
                 {loadingPath ? (
@@ -274,18 +273,18 @@ export default function AgentTrack() {
             ) : null}
 
             {loadingSessions ? <SessionsSkeleton /> : sessions.length === 0 ? (
-              <ListSection title="Tracked shifts (last 14 days)">
+              <ListSection title={t('agentTrack.shifts14')}>
                 <EmptyState
                   icon={health.degraded ? 'cloud-offline-outline' : 'git-branch-outline'}
-                  title={health.degraded ? 'Shifts could not load' : 'No routes recorded yet'}
+                  title={health.degraded ? t('agentTrack.shiftsFailed') : t('agentTrack.noRoutes')}
                   subtitle={health.degraded
-                    ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
-                    : `${sel.name} has not recorded a field route in the last 14 days. Paths appear here after they clock in from the app.`}
+                    ? t('team.unconfirmed')
+                    : t('agentTrack.noRoutesBody', { name: resolveCopy(t, sel.name, sel.nameCopy) })}
                   action={{ label: t('common.tryAgain'), onPress: () => loadSessions(sel) }}
                 />
               </ListSection>
             ) : (
-              <ListSection title="Tracked shifts (last 14 days)">
+              <ListSection title={t('agentTrack.shifts14')}>
                 {sessions.map((s, i) => (
                   <Appear key={s.session_id} index={i}>
                     <SessionRow
@@ -317,7 +316,7 @@ function SessionRow({ s, selected, onPress }: {
   const detail = [
     s.started_at ? fmtTime(s.started_at) : null,
     km(s.distance_m),
-    `${s.point_count || 0} points`,
+    t('agentTrack.pointCount', { count: s.point_count || 0 }),
   ].filter(Boolean).join(' · ');
 
   // A plain Pressable, not a Card: this row already lives inside ListSection's card, and
@@ -327,7 +326,7 @@ function SessionRow({ s, selected, onPress }: {
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected }}
-      accessibilityLabel={`Shift ${s.date}, ${detail}`}
+      accessibilityLabel={t('agentTrack.shiftA11y', { date: s.date, detail: detail })}
       style={({ pressed }) => [{
         backgroundColor: pressed ? c.cardAlt : selected ? c.primarySoft : 'transparent',
       }]}

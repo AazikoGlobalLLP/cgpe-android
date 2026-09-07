@@ -1,3 +1,4 @@
+import { textCopy, renderText, resolveCopy, type CopyText, type LocalCopy } from '@/i18n/copy';
 /**
  * Compose and dispatch a team notification. Admin and Master only.
  *
@@ -35,7 +36,7 @@ import { useT, type TKey } from '@/i18n';
 
 type Audience = 'all' | 'selected';
 type Priority = 'low' | 'medium' | 'high';
-type Member = { id: string; name: string; role: string };
+type Member = { id: string; name: string; nameCopy?: LocalCopy; role: string };
 
 // Phase 84 (2026-08-29): these tables hold i18n KEYS, resolved to the active language inside the
 // component (docs/i18n §6c). Normal/Urgent deliberately do NOT reuse the task priority.medium /
@@ -93,9 +94,9 @@ export default function NotifyScreen() {
   const [sending, setSending] = useState(false);
   // Written synchronously so a second tap sees it immediately (the `sending` state lags a render).
   const sendingRef = useRef(false);
-  const [failure, setFailure] = useState<string | null>(null);
-  const [titleErr, setTitleErr] = useState('');
-  const [messageErr, setMessageErr] = useState('');
+  const [failure, setFailure] = useState<CopyText | null>(null);
+  const [titleErr, setTitleErr] = useState<CopyText>('');
+  const [messageErr, setMessageErr] = useState<CopyText>('');
 
   // Roster loads lazily: a team member never opens this screen, and the whole-team path
   // does not need the list at all.
@@ -117,10 +118,10 @@ export default function NotifyScreen() {
 
   const validate = () => {
     let ok = true;
-    if (!title.trim()) { setTitleErr('Give the notification a title.'); ok = false; } else setTitleErr('');
-    if (!message.trim()) { setMessageErr('Write the message body.'); ok = false; } else setMessageErr('');
+    if (!title.trim()) { setTitleErr(textCopy('notify.titleRequired')); ok = false; } else setTitleErr('');
+    if (!message.trim()) { setMessageErr(textCopy('notify.messageRequired')); ok = false; } else setMessageErr('');
     if (audience === 'selected' && selectedIds.length === 0) {
-      setFailure('Choose at least one person, or switch to the whole team.');
+      setFailure(textCopy('notify.recipientRequired'));
       ok = false;
     }
     if (!ok) haptics.warn();
@@ -147,33 +148,31 @@ export default function NotifyScreen() {
       if (!alive.current) return;
       if (!res.ok) {
         haptics.error();
-        setFailure(res.message);
+        setFailure(res.messageCopy ?? res.message);
         return;
       }
       haptics.success();
-      toast(res.message, 'success');
+      toast(resolveCopy(t, res.message, res.messageCopy), 'success');
       router.back();
     } catch {
       if (!alive.current) return;
       haptics.error();
-      setFailure('Could not send the notification. Please try again.');
+      setFailure(textCopy('notify.sendFailed'));
     } finally {
       sendingRef.current = false;
       if (alive.current) setSending(false);
     }
-  }, [title, message, priority, audience, selectedIds, toast, router]);
+  }, [title, message, priority, audience, selectedIds, toast, router, t]);
 
   const confirmAndSend = () => {
     if (!validate()) return;
     haptics.tap();
-    const who = audience === 'all'
-      ? 'everyone on the team'
-      : `${selectedIds.length} ${selectedIds.length === 1 ? 'person' : 'people'}`;
+    const who = audience === 'all' ? 'all' : selectedIds.length;
     setFailure(null);
     setPendingConfirm(who);
   };
 
-  const [pendingConfirm, setPendingConfirm] = useState<string | null>(null);
+  const [pendingConfirm, setPendingConfirm] = useState<'all' | number | null>(null);
 
   /* Team members must not see this screen at all. The backend enforces the same rule with
      `authorize('admin','leader')`, so this is a courtesy, not the security boundary. */
@@ -184,11 +183,11 @@ export default function NotifyScreen() {
   if (!caps.manageTeam || (uiReady && can('can_dispatch_notification') === false)) {
     return (
       <Screen>
-        <Header title="Notify team" back />
+        <Header title={t('notify.title')} back />
         <EmptyState
           icon="lock-closed-outline"
-          title="Admins only"
-          subtitle="Sending notifications to the team is limited to admin and master accounts."
+          title={t('notify.adminsOnly')}
+          subtitle={t('notify.adminsOnlyBody')}
         />
       </Screen>
     );
@@ -196,43 +195,43 @@ export default function NotifyScreen() {
 
   return (
     <Screen keyboard>
-      <Header title="Notify team" subtitle="Send an alert to your people" back />
+      <Header title={t('notify.title')} subtitle={t('notify.subtitle')} back />
 
       <KeyboardScroll contentStyle={{ paddingHorizontal: spacing.lg, gap: spacing.lg }}>
         {failure ? (
-          <Banner tone="danger" title="Not sent" message={failure} onDismiss={() => setFailure(null)} />
+          <Banner tone="danger" title={t('notify.notSent')} message={renderText(t, failure)} onDismiss={() => setFailure(null)} />
         ) : null}
 
         <Appear>
           <Field
-            label="Title"
+            label={t('notify.titleLabel')}
             value={title}
             onChange={(v) => { setTitle(v); if (titleErr) setTitleErr(''); }}
-            placeholder="Branch meeting moved to 4 PM"
+            placeholder={t('notify.titlePlaceholder')}
             icon="megaphone-outline"
             maxLength={TITLE_MAX}
-            error={titleErr || undefined}
-            hint={`${title.length} of ${TITLE_MAX} characters`}
+            error={titleErr ? renderText(t, titleErr) : undefined}
+            hint={t('notify.characterCount', { count: title.length, max: TITLE_MAX })}
           />
         </Appear>
 
         <Appear index={1}>
           <Field
-            label="Message"
+            label={t('waThread.message')}
             value={message}
             onChange={(v) => { setMessage(v); if (messageErr) setMessageErr(''); }}
-            placeholder="Write what the team needs to know."
+            placeholder={t('notify.messagePlaceholder')}
             icon="chatbox-ellipses-outline"
             multiline
             maxLength={MESSAGE_MAX}
-            error={messageErr || undefined}
-            hint={`${message.length} of ${MESSAGE_MAX} characters`}
+            error={messageErr ? renderText(t, messageErr) : undefined}
+            hint={t('notify.characterCount', { count: message.length, max: MESSAGE_MAX })}
           />
         </Appear>
 
         <Appear index={2}>
           <View style={{ gap: 8 }}>
-            <Txt weight="700" size={13.5} color={c.muted}>Priority</Txt>
+            <Txt weight="700" size={13.5} color={c.muted}>{t('task.priority')}</Txt>
             <Segmented
               options={priorityOptions}
               value={priority}
@@ -240,14 +239,14 @@ export default function NotifyScreen() {
               full
             />
             {priority === 'high' ? (
-              <Txt size={12} color={c.muted}>Urgent notifications are highlighted in red in the feed.</Txt>
+              <Txt size={12} color={c.muted}>{t('notify.urgentNote')}</Txt>
             ) : null}
           </View>
         </Appear>
 
         <Appear index={3}>
           <View style={{ gap: 8 }}>
-            <Txt weight="700" size={13.5} color={c.muted}>Send to</Txt>
+            <Txt weight="700" size={13.5} color={c.muted}>{t('notify.sendTo')}</Txt>
             <Segmented
               options={audienceOptions}
               value={audience}
@@ -264,24 +263,24 @@ export default function NotifyScreen() {
 
         {audience === 'selected' ? (
           <Appear index={4}>
-            <ListSection title={`Recipients (${selectedIds.length})`}>
+            <ListSection title={t('notify.recipientCount', { count: selectedIds.length })}>
               {selectedIds.length === 0 ? (
                 <View style={{ paddingVertical: spacing.md }}>
-                  <Txt size={13} color={c.muted}>Nobody chosen yet.</Txt>
+                  <Txt size={13} color={c.muted}>{t('notify.nobodyChosen')}</Txt>
                 </View>
               ) : (
                 <Row style={{ flexWrap: 'wrap', gap: 6, paddingVertical: spacing.sm }}>
                   {selectedIds.slice(0, 12).map((id) => {
                     const m = roster?.find((r) => r.id === id);
-                    return <Pill key={id} label={m?.name || 'Member'} tone="primary" small />;
+                    return <Pill key={id} label={(m ? resolveCopy(t, m.name, m.nameCopy) : '') || t('pay.member')} tone="primary" small />;
                   })}
                   {selectedIds.length > 12 ? (
-                    <Pill label={`+${selectedIds.length - 12} more`} tone="neutral" small />
+                    <Pill label={t('notify.moreRecipients', { count: selectedIds.length - 12 })} tone="neutral" small />
                   ) : null}
                 </Row>
               )}
               <Button
-                label={selectedIds.length ? 'Change recipients' : 'Choose recipients'}
+                label={selectedIds.length ? t('notify.changeRecipients') : t('notify.chooseRecipients')}
                 icon="people-outline"
                 variant="secondary"
                 onPress={() => { haptics.tap(); void loadRoster(); setPicking(true); }}
@@ -293,7 +292,7 @@ export default function NotifyScreen() {
 
         <Appear index={5}>
           <Button
-            label={sending ? 'Sending' : 'Send notification'}
+            label={sending ? t('notify.sending') : t('notify.sendNotification')}
             icon="paper-plane"
             onPress={confirmAndSend}
             loading={sending}
@@ -304,9 +303,9 @@ export default function NotifyScreen() {
       </KeyboardScroll>
 
       {/* ---- recipient picker ---- */}
-      <Sheet visible={picking} onClose={() => setPicking(false)} title="Choose recipients">
+      <Sheet visible={picking} onClose={() => setPicking(false)} title={t('notify.chooseRecipients')}>
         <View style={{ gap: spacing.md }}>
-          <SearchBar value={query} onChange={setQuery} placeholder="Search by name or role" />
+          <SearchBar value={query} onChange={setQuery} placeholder={t('notify.searchHint')} />
 
           {roster === null ? (
             <View style={{ gap: spacing.sm }}>
@@ -316,10 +315,10 @@ export default function NotifyScreen() {
           ) : filtered.length === 0 ? (
             <EmptyState
               icon={query ? 'search-outline' : 'people-outline'}
-              title={query ? `No match for "${query}"` : 'No team members loaded'}
+              title={query ? t('notify.noSearchMatch', { query: query }) : t('notify.noMembersLoaded')}
               subtitle={query
-                ? 'Try a different name or role.'
-                : 'The roster could not be loaded from the server. Pull back and try again.'}
+                ? t('notify.searchSuggestion')
+                : t('notify.rosterFailed')}
             />
           ) : (
             <View>
@@ -328,7 +327,7 @@ export default function NotifyScreen() {
                 return (
                   <Appear key={m.id} index={i}>
                     <PersonRow
-                      name={m.name}
+                      name={resolveCopy(t, m.name, m.nameCopy)}
                       subtitle={m.role.replace('_', ' ')}
                       onPress={() => {
                         haptics.select();
@@ -362,7 +361,7 @@ export default function NotifyScreen() {
               style={{ flex: 1 }}
             />
             <Button
-              label={`Done (${selectedIds.length})`}
+              label={t('notify.doneCount', { count: selectedIds.length })}
               onPress={() => { haptics.tap(); setPicking(false); }}
               style={{ flex: 2 }}
             />
@@ -371,15 +370,15 @@ export default function NotifyScreen() {
       </Sheet>
 
       {/* ---- send confirmation ---- */}
-      <Sheet visible={!!pendingConfirm} onClose={() => setPendingConfirm(null)} title="Send this notification?">
+      <Sheet visible={!!pendingConfirm} onClose={() => setPendingConfirm(null)} title={t('notify.sendConfirm')}>
         <View style={{ gap: spacing.lg }}>
           <Txt size={14} color={c.muted}>
-            This goes to {pendingConfirm} straight away. There is no way to unsend it.
+            {pendingConfirm === 'all' ? t('notify.confirmAll') : t(pendingConfirm === 1 ? 'notify.confirmOne' : 'notify.confirmMany', { count: pendingConfirm ?? 0 })}
           </Txt>
-          <ListSection title="Preview">
+          <ListSection title={t('notify.preview')}>
             <View style={{ gap: 4, paddingVertical: spacing.sm }}>
               <Row style={{ gap: 8 }}>
-                <Txt weight="800" size={15} style={{ flex: 1 }}>{title.trim() || 'Untitled'}</Txt>
+                <Txt weight="800" size={15} style={{ flex: 1 }}>{title.trim() || t('notify.untitled')}</Txt>
                 {priority === 'high' ? <Pill label={t('notify.prioUrgent')} tone="danger" small /> : null}
               </Row>
               <Txt size={13.5} color={c.muted}>{message.trim()}</Txt>
@@ -393,7 +392,7 @@ export default function NotifyScreen() {
               style={{ flex: 1 }}
             />
             <Button
-              label="Send now"
+              label={t('notify.sendNow')}
               icon="paper-plane"
               onPress={() => { setPendingConfirm(null); void send(); }}
               style={{ flex: 2 }}
