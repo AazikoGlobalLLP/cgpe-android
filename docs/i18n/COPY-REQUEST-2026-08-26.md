@@ -1,5 +1,18 @@
 # Translation copy request — 2026-08-26
 
+**Current status — 2026-09-07:** The owner explicitly approved completion of this
+pending scope's Gujarati, Hindi, Hinglish and Gujlish translations today. This is
+the current authorization; the August one-batch waiver is not being extended by
+assumption. Existing human copy remains unchanged. Batch 6c and the later already
+wired copy are complete despite older rows below. The remaining outage/home/route
+copy and provider-independent messages are being completed in Phases 102–119.
+Phase 100 closes account/privacy copy and the five Batch 6h/6i voice/update
+fallbacks. Generated copy is identified for human naturalness review; native
+persistence and actual device layout cannot be certified from dictionary tests.
+
+The older request tables are historical source material. Current callsite inventory
+and the phase board determine what remains; do not request already supplied copy.
+
 > ## ⚠️ STATUS AS OF 2026-08-27 (night) — READ THIS BEFORE SENDING ANYTHING
 >
 > **The owner instructed us to do the remaining translations ourselves** rather than wait
@@ -937,4 +950,3 @@ and immediately reopens itself — it is quick, nothing is lost, and the user is
 |---|---|---|---|---|---|
 | `update.ready` | Update ready |  |  |  |  |
 | `update.restart` | Restart now |  |  |  |  |
-

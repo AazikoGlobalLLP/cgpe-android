@@ -1,5 +1,15 @@
 # PHASE 19 — Language toggle: verify + harden all 5 languages (incl. Hinglish / Gujlish)
 
+**Current update — 2026-09-07:** The toggle, persistence, interpolation and parity
+checks are already implemented. The owner has now explicitly authorized generated
+translations for the remaining pending scope in Gujarati, Hindi, Hinglish and
+Gujlish. Existing supplied copy stays intact. Phase 100 translates account/privacy
+and closes the five voice/update English fallbacks; Phases 102–119 cover remaining
+routes and shared message delivery. Human naturalness review, layout evidence and
+native process-death persistence remain acceptance gates. The historical status
+and original requirements below are preserved as the original plan, not today's
+implementation state. See the September 7 decision and current phase board.
+
 Session `cgpe-mobile`. Requested 2026-08-11 (Hinglish, verbatim intent):
 
 > "Ek row add kijiye jahan language toggle daalna hai — koi Gujlish / Hinglish mein bhi application

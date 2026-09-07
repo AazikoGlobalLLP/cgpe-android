@@ -6,6 +6,44 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-09-07 — Complete pending mobile implementation and translations
+
+**Context.** After workflow initialization, the owner asked: “go for all the pending
+phases and complete everything”. The September 7 audit found a new self-service
+deletion-request contract, an EAS staff-export exclusion gap, and the unfinished
+Phase 19 translation scope. Earlier notes that all app code was finished predate
+these findings. The historical translation waiver covered only one batch.
+
+**Decision.** The owner explicitly authorized the remaining Gujarati, Hindi,
+Hinglish and Gujlish translations: “Haan, is pending scope ki translations complete
+karo”. This applies to the established pending scope, preserves existing supplied
+translations, and permits generated copy to be implemented now. Complete the
+request/status flow as Phase 100, archive selection as Phase 101, and remaining
+screen/shared-copy groups as Phases 102–119. Source edits and final review remain
+with the main agent; delegated work is bounded read/copy analysis under phase-runner.
+
+**Consequence.** Generated language copy remains identifiable for human naturalness
+review. Wire values, user/backend content, brand identities and recipient-facing
+message templates are not silently translated. Calendar month/weekday formatting
+keeps the existing explicit decision. Deletion submission is a request for review,
+never account erasure, session cleanup or a fulfillment promise. Git availability
+is not production deployment evidence. Server configuration, policy ownership,
+store accounts and physical-device acceptance remain separate evidence gates.
+
+## 2026-09-07 — Staff exports must be excluded from EAS as well as Git
+
+**Context.** EAS uses `.easignore` instead of `.gitignore` when it is present. The
+staff export patterns existed only in the latter.
+
+**Decision.** Mirror both staff-export patterns in `.easignore`; verify with the
+installed EAS selector without creating or uploading an archive.
+
+**Consequence.** `.easignore` is a fingerprint input. The next release needs a
+compatible Android build; an OTA published from this tree cannot be assumed to
+reach build 6. No staff-export contents are required for verification.
+
+---
+
 ## 2026-08-31 — The undeployed-commit sweep is RECURRING, and it reports bugs the app cannot see (Phase 89)
 
 **Context.** Phase 87 introduced a sweep of `cgpe-api`'s undeployed commits and found Phase 101, a
