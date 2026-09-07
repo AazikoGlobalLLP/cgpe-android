@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -67,7 +68,7 @@ import { useT } from '@/i18n';
 type Kind = 'renewal' | 'birthday' | 'maturity' | 'anniversary';
 type Rec = { name: string; phone: string; message: string };
 type Audience = Awaited<ReturnType<typeof api.getCampaignAudience>>;
-type Notice = { tone: FeedbackTone; title: string; message: string; jobId?: string };
+type Notice = { tone: FeedbackTone; title: CopyText; message: CopyText; jobId?: string };
 
 const KIND_META: Record<Kind, {
   icon: IconName;
@@ -80,34 +81,34 @@ const KIND_META: Record<Kind, {
   renewal: {
     icon: 'refresh-circle', tone: 'warning',
     fg: (c) => c.warning, bg: (c) => c.warningSoft,
-    audience: 'Clients with a premium falling due',
+    audience: 'campaign.audienceRenewal',
   },
   birthday: {
     icon: 'gift', tone: 'accent',
     fg: (c) => c.accent, bg: (c) => c.accentSoft,
-    audience: 'Clients with a birthday this month',
+    audience: 'campaign.audienceBirthday',
   },
   maturity: {
     icon: 'cash', tone: 'info',
     fg: (c) => c.info, bg: (c) => c.infoSoft,
-    audience: 'Clients with a policy maturing soon',
+    audience: 'campaign.audienceMaturity',
   },
   anniversary: {
     icon: 'heart', tone: 'danger',
     fg: (c) => c.danger, bg: (c) => c.dangerSoft,
-    audience: 'Clients whose policy anniversary falls this month',
+    audience: 'campaign.audienceAnniversary',
   },
 };
 
 const KIND_LABEL: Record<Kind, string> = {
-  renewal: 'Renewals',
-  birthday: 'Birthdays',
-  maturity: 'Maturity',
-  anniversary: 'Anniversary',
+  renewal: 'home.renewals',
+  birthday: 'act.birthdays',
+  maturity: 'client.maturity',
+  anniversary: 'campaign.anniversary',
 };
 
 const num = (n: number) => n.toLocaleString('en-IN');
-const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
 
 /**
  * `store/jobs` is outside this phase's scope and writes its copy with em-dashes. This app's
@@ -200,7 +201,7 @@ function SampleRow({ rec, index, onSend }: { rec: Rec; index: number; onSend: (r
       <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.sm, paddingBottom: spacing.md }}>
         <PersonRow
           name={rec.name}
-          subtitle={rec.phone || 'No number on record'}
+          subtitle={rec.phone || t('campaign.noNumber')}
           subtitleIcon={rec.phone ? 'call-outline' : 'alert-circle-outline'}
           subtitleNumeric
           right={
@@ -236,13 +237,13 @@ function SampleRow({ rec, index, onSend }: { rec: Rec; index: number; onSend: (r
               onPress={() => setOpen((v) => !v)}
               hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
               accessibilityRole="button"
-              accessibilityLabel={open ? `Collapse the message to ${rec.name}` : `Read the full message to ${rec.name}`}
+              accessibilityLabel={open ? t('campaign.collapseMessage', { name: rec.name }) : t('campaign.readMessageA11y', { name: rec.name })}
               style={({ pressed }) => [{
                 marginTop: 2, paddingVertical: 5, alignSelf: 'flex-start', opacity: pressed ? 0.6 : 1,
               }]}
             >
               <Txt size={font.tiny} weight="700" color={c.primary}>
-                {open ? 'Show less' : 'Read the full message'}
+                {open ? t('campaign.showLess') : t('campaign.readFullMessage')}
               </Txt>
             </Pressable>
           </View>
@@ -264,13 +265,14 @@ function SampleRow({ rec, index, onSend }: { rec: Rec; index: number; onSend: (r
  * wrapper so the real screen's hooks are untouched.
  */
 export default function Campaigns() {
+  const t = useT();
   const { user, viewAs, ready } = useAuth();
   if (ready && !canViewClients(user, viewAs)) {
     return (
       <RestrictedNotice
-        title="Campaigns"
-        heading="Campaigns are master and admin only"
-        subtitle="Bulk WhatsApp campaigns run over the client book, which is available to administrators and the master account."
+        title={t('dash.campaigns')}
+        heading={t('campaign.adminOnly')}
+        subtitle={t('campaign.adminOnlyBody')}
       />
     );
   }
@@ -407,8 +409,8 @@ function CampaignsScreen() {
       if (focused.current) haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'Your role cannot send bulk campaigns',
-        message: 'The server refused the bulk send for this account. Nothing was dispatched. Message clients one at a time from the sample below, or ask an admin or team leader to run this campaign.',
+        title: textCopy('campaign.roleCannotSend'),
+        message: textCopy('campaign.roleRefusedBody'),
         jobId: j.id,
       });
       return;
@@ -418,8 +420,8 @@ function CampaignsScreen() {
       if (focused.current) haptics.error();
       setNotice({
         tone: 'danger',
-        title: 'Dispatch failed',
-        message: plain(j.message) || 'The send did not reach the server, so nothing was delivered. Try again, or message clients one at a time from the sample below.',
+        title: textCopy('campaign.dispatchFailed'),
+        message: j.messageCopy || plain(j.message) || textCopy('campaign.dispatchFailedBody'),
         jobId: j.id,
       });
       return;
@@ -429,8 +431,8 @@ function CampaignsScreen() {
       if (focused.current) haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'Nothing to send',
-        message: plain(j.message) || 'No client matched this occasion, so nothing was dispatched.',
+        title: textCopy('campaign.nothingToSend'),
+        message: j.messageCopy || plain(j.message) || textCopy('campaign.noMatchDispatched'),
         jobId: j.id,
       });
       return;
@@ -441,8 +443,8 @@ function CampaignsScreen() {
       if (focused.current) haptics.success();
       setNotice({
         tone: 'success',
-        title: `Dispatched to ${num(j.sent)} ${plural(j.sent, 'client', 'clients')}`,
-        message: plain(j.message) || 'The server confirmed the campaign was handed to the sender.',
+        title: textCopy(j.sent === 1 ? 'campaign.dispatchedOne' : 'campaign.dispatchedCount', { count: num(j.sent) }),
+        message: j.messageCopy || plain(j.message) || textCopy('campaign.handoffConfirmed'),
         jobId: j.id,
       });
       return;
@@ -452,22 +454,22 @@ function CampaignsScreen() {
     if (focused.current) haptics.warn();
     setNotice({
       tone: 'warning',
-      title: 'Nothing was confirmed sent',
-      message: plain(j.message) || `${num(j.total)} ${plural(j.total, 'recipient was', 'recipients were')} found, but the server did not confirm a single delivery. Send them one at a time from the sample below.`,
+      title: textCopy('campaign.noneConfirmed'),
+      message: j.messageCopy || plain(j.message) || textCopy(j.total === 1 ? 'campaign.noneDeliveredOne' : 'campaign.noneDeliveredMany', { count: num(j.total) }),
       jobId: j.id,
     });
-  }, [trackedJob]);
+  }, [trackedJob, t]);
 
   /* ---------- derived ---------- */
   const meta = KIND_META[kind];
   const count = audience?.count ?? 0;
   const sample: Rec[] = useMemo(
     () => (audience?.sample ?? []).map((s) => ({
-      name: s.name || 'Unnamed client',
+      name: s.name || t('campaign.unnamedClient'),
       phone: waPhone(s.phone),
       message: s.message || '',
     })),
-    [audience],
+    [audience, t],
   );
   const hidden = Math.max(0, count - sample.length);
 
@@ -508,18 +510,18 @@ function CampaignsScreen() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'Nothing to send',
-        message: 'No client matches this occasion right now, so there is nobody to message.',
+        title: textCopy('campaign.nothingToSend'),
+        message: textCopy('campaign.noMatchNow'),
       });
       return;
     }
 
     const ok = await confirm({
-      title: `Send to ${num(count)} ${plural(count, 'client', 'clients')}?`,
+      title: t(count === 1 ? 'campaign.sendOneConfirm' : 'campaign.sendManyConfirm', { count: num(count) }),
       message: kind === 'renewal'
-        ? `Your whole client book is re-scanned when this runs, so the final count can differ a little from ${num(count)}. Every client with a premium due gets a personalised WhatsApp. This messages real policyholders.`
-        : `A personalised WhatsApp goes to all ${num(count)} matching ${plural(count, 'client', 'clients')}, not just the ones sampled below. This messages real policyholders and cannot be recalled.`,
-      confirmText: 'Start sending',
+        ? t('campaign.renewalConfirm', { count: num(count) })
+        : t(count === 1 ? 'campaign.otherConfirmOne' : 'campaign.otherConfirmMany', { count: num(count) }),
+      confirmText: t('campaign.startSending'),
       icon: meta.icon,
     });
     if (!alive.current || !ok) return;
@@ -528,7 +530,7 @@ function CampaignsScreen() {
     setNotice(null);
     setSending(true);
 
-    const id = await startCampaign(kind, `${KIND_LABEL[kind]} campaign`);
+    const id = await startCampaign(kind, `${({ renewal: 'Renewals', birthday: 'Birthdays', maturity: 'Maturity', anniversary: 'Anniversary' })[kind]} campaign`, textCopy('campaign.jobTitle', undefined, { occasion: textCopy(KIND_LABEL[kind]) }));
     if (!alive.current) return;
     setSending(false);
     setJobId(id);
@@ -537,18 +539,18 @@ function CampaignsScreen() {
      * scan can already have finished by the time this dialog is answered, and "Sending
      * started" would then be describing something that had stopped. */
     const monitor = await confirm({
-      title: 'Campaign handed off',
+      title: t('campaign.handedOff'),
       message: kind === 'renewal'
-        ? 'Your client book is being scanned and renewal reminders dispatched in the background. Watch the progress, or keep working?'
-        : 'The messages are being dispatched in the background. Watch the progress, or keep working?',
-      confirmText: 'Monitor progress',
-      cancelText: 'Continue working',
+        ? t('campaign.renewalBackground')
+        : t('campaign.otherBackground'),
+      confirmText: t('campaign.monitor'),
+      cancelText: t('campaign.continueWorking'),
       icon: 'paper-plane',
     });
     if (!alive.current) return;
     if (monitor) openJob(id);
-    else toast('Running in the background. Tap the progress bar to monitor.', 'info');
-  }, [sending, canSend, count, confirm, kind, meta.icon, startCampaign, openJob, toast]);
+    else toast(t('campaign.runningBackground'), 'info');
+  }, [sending, canSend, count, confirm, kind, meta.icon, startCampaign, openJob, toast, t]);
 
   /* ---------- the single commitment ---------- */
   const sendOne = useCallback((r: Rec) => {
@@ -563,29 +565,29 @@ function CampaignsScreen() {
        filling this space with rows would be inventing policyholders. */
     <EmptyState
       icon="eye-off-outline"
-      title={`${num(count)} matched, none sampled`}
-      subtitle="The server counted this audience but returned no sample rows, so there are no names or messages to check. The send button above still reaches every one of them."
-      action={{ label: 'Reload the sample', onPress: () => void loadAudience(kind) }}
+      title={t('campaign.noneSampled', { count: num(count) })}
+      subtitle={t('campaign.noneSampledBody')}
+      action={{ label: t('campaign.reloadSample'), onPress: () => void loadAudience(kind) }}
     />
   ) : health.degraded ? (
     <EmptyState
       icon="cloud-offline-outline"
-      title="The audience did not load"
-      subtitle="The server did not answer, so this is not a confirmed empty audience. Check your connection and try the request again."
+      title={t('campaign.audienceFailed')}
+      subtitle={t('campaign.audienceUnconfirmed')}
       action={{ label: t('common.tryAgain'), onPress: () => void loadAudience(kind) }}
     />
   ) : (
     <EmptyState
       icon="checkmark-done-circle-outline"
-      title="Nobody is due for this"
-      subtitle={`${meta.audience} would appear here. Nobody on your book qualifies right now, so there is nothing to send.`}
-      action={{ label: 'Pick another occasion', onPress: () => changeKind(kind === 'renewal' ? 'birthday' : 'renewal') }}
+      title={t('campaign.nobodyDue')}
+      subtitle={t('campaign.emptyAudience', { audience: t(meta.audience) })}
+      action={{ label: t('campaign.pickOccasion'), onPress: () => changeKind(kind === 'renewal' ? 'birthday' : 'renewal') }}
     />
   );
 
   return (
     <Screen>
-      <Header title="Campaigns" subtitle="Bulk WhatsApp outreach" back />
+      <Header title={t('dash.campaigns')} subtitle={t('campaign.subtitle')} back />
 
       {/* Kept outside the loading branch so the occasion can be changed while an audience
           is still in flight. */}
@@ -593,10 +595,10 @@ function CampaignsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: spacing.xs }}>
           <Segmented<Kind>
             options={[
-              { key: 'renewal', label: KIND_LABEL.renewal },
-              { key: 'birthday', label: KIND_LABEL.birthday },
-              { key: 'maturity', label: KIND_LABEL.maturity },
-              { key: 'anniversary', label: KIND_LABEL.anniversary },
+              { key: 'renewal', label: t(KIND_LABEL.renewal) },
+              { key: 'birthday', label: t(KIND_LABEL.birthday) },
+              { key: 'maturity', label: t(KIND_LABEL.maturity) },
+              { key: 'anniversary', label: t(KIND_LABEL.anniversary) },
             ]}
             value={kind}
             onChange={changeKind}
@@ -626,7 +628,7 @@ function CampaignsScreen() {
             {kpis.length > 0 ? (
               <Appear>
                 <View style={{ gap: spacing.sm }}>
-                  <Eyebrow style={{ marginLeft: spacing.xs }}>Your book right now</Eyebrow>
+                  <Eyebrow style={{ marginLeft: spacing.xs }}>{t('campaign.bookNow')}</Eyebrow>
                   {/* Cancels the screen gutter so the strip bleeds to the edge and reads as
                       scrollable, then re-adds it inside. */}
                   <KpiStrip
@@ -654,23 +656,23 @@ function CampaignsScreen() {
                         block that says "the audience did not load" is a mixed signal. Real 0 stays 0. */}
                     <Metric value={audience == null ? '—' : num(count)} size={font.display} />
                     <Txt size={font.sub} color={c.muted} numberOfLines={2} style={{ marginTop: 2 }}>
-                      {meta.audience}
+                      {t(meta.audience)}
                     </Txt>
                   </View>
                 </Row>
 
                 <Txt size={font.cap} color={c.muted} style={{ marginTop: 14, lineHeight: 18 }}>
                   {kind === 'renewal'
-                    ? 'Each client gets their own reminder with their premium, policy number and due date. The book is re-scanned live when you send, so the final count can differ slightly from the figure above.'
-                    : 'Each client gets their own message, personalised from their record. The rows below are a sample of the audience, not the whole of it.'}
+                    ? t('campaign.renewalPersonalised')
+                    : t('campaign.otherPersonalised')}
                 </Txt>
 
                 {reachShare != null && summary ? (
                   <Meter
                     value={reachShare}
                     tone="success"
-                    label="Reachable on WhatsApp"
-                    valueLabel={`${num(summary.opted_in)} of ${num(summary.total_clients)}`}
+                    label={t('analytics.whatsappReach')}
+                    valueLabel={t('pay.amountOfTotal', { amount: num(summary.opted_in), total: num(summary.total_clients) })}
                     style={{ marginTop: spacing.lg }}
                   />
                 ) : null}
@@ -680,7 +682,7 @@ function CampaignsScreen() {
                   size="lg"
                   variant="whatsapp"
                   icon="logo-whatsapp"
-                  label={!canSend ? 'Sending is disabled for your role' : sending ? 'Starting' : count > 0 ? t('premium.sendAllCount', { n: num(count) }) : 'Nobody to send to'}
+                  label={!canSend ? t('campaign.roleDisabled') : sending ? t('campaign.starting') : count > 0 ? t('premium.sendAllCount', { n: num(count) }) : t('campaign.nobodyToSend')}
                   loading={sending}
                   disabled={count === 0 || !canSend}
                   onPress={() => { void sendAll(); }}
@@ -696,14 +698,14 @@ function CampaignsScreen() {
                       <Meter
                         value={jobProcessed / jobTotal}
                         tone="accent"
-                        label="Dispatching now"
-                        valueLabel={`${num(processedShown)} of ${num(jobTotal)}`}
+                        label={t('campaign.dispatching')}
+                        valueLabel={t('pay.amountOfTotal', { amount: num(processedShown), total: num(jobTotal) })}
                       />
                     ) : (
-                      <Txt size={font.cap} color={c.muted}>Building the audience for this send.</Txt>
+                      <Txt size={font.cap} color={c.muted}>{t('campaign.buildingAudience')}</Txt>
                     )}
                     <Button
-                      label="Monitor progress"
+                      label={t('campaign.monitor')}
                       variant="ghost"
                       size="sm"
                       iconRight="arrow-forward"
@@ -719,9 +721,9 @@ function CampaignsScreen() {
             {notice ? (
               <Banner
                 tone={notice.tone}
-                title={notice.title}
-                message={notice.message}
-                action={notice.jobId ? { label: 'Monitor progress', onPress: () => openJob(notice.jobId!) } : undefined}
+                title={renderText(t, notice.title)}
+                message={renderText(t, notice.message)}
+                action={notice.jobId ? { label: t('campaign.monitor'), onPress: () => openJob(notice.jobId!) } : undefined}
                 onDismiss={() => setNotice(null)}
               />
             ) : null}
@@ -730,10 +732,10 @@ function CampaignsScreen() {
               <Card>{emptyBlock}</Card>
             ) : (
               <ListSection
-                title={`Sample of ${num(sample.length)} ${plural(sample.length, 'recipient', 'recipients')}`}
+                title={t(sample.length === 1 ? 'campaign.sampleOne' : 'campaign.sampleMany', { count: num(sample.length) })}
                 footer={hidden > 0
-                  ? `These are a sample. Sending reaches all ${num(count)} ${plural(count, 'client', 'clients')}, including ${num(hidden)} not shown here.`
-                  : `Every matching client is shown. Sending reaches all ${num(count)} of them.`}
+                  ? t(count === 1 ? 'campaign.sampleFooterOne' : 'campaign.sampleFooterMany', { count: num(count), hidden: num(hidden) })
+                  : t('campaign.allShownFooter', { count: num(count) })}
               >
                 {sample.map((r, i) => (
                   <SampleRow key={`${r.phone}-${i}`} rec={r} index={i} onSend={sendOne} />

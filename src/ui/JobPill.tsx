@@ -5,9 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePathname, useRouter } from 'expo-router';
 import { useTheme, radius, shadow } from '@/theme/theme';
 import { useJobs } from '@/store/jobs';
+import { useT } from '@/i18n';
 
 /** Floating indicator for a background job — tap to monitor. Hidden on the monitor screen. */
 export function JobPill() {
+  const t = useT();
   const c = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -35,7 +37,7 @@ export function JobPill() {
           <View style={{ height: '100%', width: `${pct * 100}%`, backgroundColor: c.accent, borderRadius: 2 }} />
         </View>
       </View>
-      <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 11.5, fontFamily: 'Geist_700Bold', fontWeight: '700' }}>Monitor</Text>
+      <Text style={{ color: 'rgba(255,255,255,0.62)', fontSize: 11.5, fontFamily: 'Geist_700Bold', fontWeight: '700' }}>{t('job.monitor')}</Text>
       <Ionicons name="chevron-forward" size={15} color="#9fb0cc" />
     </Pressable>
   );

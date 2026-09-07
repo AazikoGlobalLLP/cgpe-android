@@ -38,9 +38,9 @@ type StatusSpec = {
 };
 
 const STATUS: Record<Job['status'], StatusSpec> = {
-  running: { label: 'Sending', icon: 'sync-outline', pill: 'info', meter: 'primary' },
-  done: { label: 'Completed', icon: 'checkmark-circle', pill: 'success', meter: 'success' },
-  failed: { label: 'Failed', icon: 'alert-circle', pill: 'danger', meter: 'danger' },
+  running: { label: 'notify.sending', icon: 'sync-outline', pill: 'info', meter: 'primary' },
+  done: { label: 'performance.completed', icon: 'checkmark-circle', pill: 'success', meter: 'success' },
+  failed: { label: 'job.failed', icon: 'alert-circle', pill: 'danger', meter: 'danger' },
 };
 
 const LOG_ICON: Record<JobLogLine['state'], IconName> = {
@@ -91,12 +91,12 @@ export default function JobMonitor() {
   if (!job) {
     return (
       <Screen>
-        <Header title="Job" back />
+        <Header title={t('job.title')} back />
         <EmptyState
           icon="hourglass-outline"
           title={t('job.goneTitle')}
           subtitle={t('job.goneBody')}
-          action={{ label: 'Go back', onPress: () => router.back() }}
+          action={{ label: t('consent.declineBack'), onPress: () => router.back() }}
         />
       </Screen>
     );
@@ -106,14 +106,14 @@ export default function JobMonitor() {
   // "Completed / 100%" success dress — it delivered nothing. It gets its own warning spec.
   const refused = !!job.needsRole;
   const spec: StatusSpec = refused
-    ? { label: 'Not sent', icon: 'lock-closed', pill: 'warning', meter: 'warning' }
-    : STATUS[job.status];
+    ? { label: t('notify.notSent'), icon: 'lock-closed', pill: 'warning', meter: 'warning' }
+    : { ...STATUS[job.status], label: t(STATUS[job.status].label) };
   const pct = refused ? 0 : (job.total > 0 ? Math.min(1, processed / job.total) : job.status === 'done' ? 1 : 0);
   const running = job.status === 'running';
 
   return (
     <Screen>
-      <Header title={job.label} subtitle="Background job" back />
+      <Header title={job.label} subtitle={t('job.background')} back />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -125,7 +125,7 @@ export default function JobMonitor() {
             <Row>
               <Ionicons name={spec.icon} size={20} color={running ? c.primary : refused ? c.warning : job.status === 'done' ? c.success : c.danger} />
               <Eyebrow style={{ flex: 1 }}>{spec.label}</Eyebrow>
-              <Pill label={running ? 'Live' : 'Finished'} tone={spec.pill} small dot />
+              <Pill label={running ? t('job.live') : t('job.finished')} tone={spec.pill} small dot />
             </Row>
 
             <Row style={{ alignItems: 'flex-end', gap: 6, marginTop: spacing.md }}>
@@ -133,7 +133,7 @@ export default function JobMonitor() {
               <Txt size={17} weight="700" color={c.muted} numeric style={{ marginBottom: 4 }}>
                 / {job.total.toLocaleString('en-IN')}
               </Txt>
-              <Txt size={font.sub} color={c.faint} style={{ marginBottom: 5 }}>messages</Txt>
+              <Txt size={font.sub} color={c.faint} style={{ marginBottom: 5 }}>{t('job.messagesLower')}</Txt>
             </Row>
 
             <View style={{
@@ -142,13 +142,12 @@ export default function JobMonitor() {
             }}>
               <Meter
                 value={pct}
-                label={running ? 'Dispatching' : 'Dispatched'}
+                label={running ? t('job.dispatching') : t('job.dispatched')}
                 tone={spec.meter}
                 valueLabel={`${Math.round(pct * 100)}%`}
               />
               <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.sm, lineHeight: 15 }}>
-                The audience is handed to the sender in one call, so this tracks dispatch progress, not per-message delivery.
-              </Txt>
+                {t('job.dispatchHelp')}</Txt>
             </View>
           </Card>
         </Appear>
@@ -157,7 +156,7 @@ export default function JobMonitor() {
           <Appear index={1}>
             <Banner
               tone={refused ? 'warning' : job.status === 'failed' ? 'danger' : 'success'}
-              title={refused ? 'Bulk send not allowed for your role' : job.status === 'failed' ? 'The send did not complete' : 'Send finished'}
+              title={refused ? t('job.bulkRefused') : job.status === 'failed' ? t('job.sendIncomplete') : t('job.sendFinished')}
               message={job.message}
             />
           </Appear>
@@ -165,17 +164,17 @@ export default function JobMonitor() {
 
         <Appear index={2}>
           {log.length === 0 ? (
-            <ListSection title="Activity">
+            <ListSection title={t('job.activity')}>
               <EmptyState
                 icon="reader-outline"
-                title="Nothing logged yet"
-                subtitle="Each step of the send is written here as it happens."
+                title={t('job.noLogs')}
+                subtitle={t('job.logsHelp')}
               />
             </ListSection>
           ) : (
             <ListSection
-              title="Activity"
-              footer={running ? 'Newest first. The list keeps the last 40 steps.' : undefined}
+              title={t('job.activity')}
+              footer={running ? t('job.logsFooter') : undefined}
             >
               {log.map((l, i) => <LogRow key={`${l.at}_${i}`} l={l} />)}
             </ListSection>
