@@ -21,6 +21,8 @@
  *      needs a next step; whoever fixes it needs the error text. Both, in that order.
  * ------------------------------------------------------------------ */
 
+import { EN_CRASH_COPY, type CrashCopy } from '@/i18n/crashCopy';
+
 /** What the boundary renders. `detail` is there to be screenshotted and reported, not to reassure. */
 export type CrashReport = {
   /** Plain heading. Says what happened, not why. */
@@ -83,14 +85,11 @@ export function crashDetail(error: unknown): string {
  * advisor reads it as "nothing was lost" and it is immediately followed by an instruction that
  * throws unsaved work away. In this project a comforting non-answer is a defect, so it is gone.
  */
-export function describeCrash(error: unknown): CrashReport {
+export function describeCrash(error: unknown, copy: Readonly<CrashCopy> = EN_CRASH_COPY): CrashReport {
   return {
-    title: 'This screen stopped working',
-    message:
-      'Reloading starts the app again from the beginning, so anything you had typed on this '
-      + 'screen and not yet saved will be lost. Work already saved is not affected. If this keeps '
-      + 'happening, tell your branch admin what you were doing when it went wrong.',
-    retryLabel: 'Reload the app',
+    title: copy.title,
+    message: copy.message,
+    retryLabel: copy.retryLabel,
     detail: crashDetail(error),
   };
 }

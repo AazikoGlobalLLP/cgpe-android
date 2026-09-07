@@ -3,6 +3,7 @@ import type { ErrorBoundaryProps } from 'expo-router';
 
 import { type as textType } from '@/theme/theme';
 import { describeCrash } from '@/lib/crashReport';
+import { getCrashCopy } from '@/i18n/crashCopy';
 
 /* ------------------------------------------------------------------ *
  * RouteErrorBoundary — the last thing standing when a screen throws.
@@ -21,7 +22,7 @@ import { describeCrash } from '@/lib/crashReport';
  * and confirm hosts. None of their hooks can be relied on here: at best they fall back to a
  * default (see the colour note below), at worst they throw — and a boundary that crashes while
  * rendering leaves a blank screen again, the exact failure it exists to replace. So:
- * react-native primitives only, literal colours, and copy in English.
+ * react-native primitives only, literal colours, and a dependency-free copy snapshot.
  *
  * The colours are read off `theme/theme.tsx`'s own `light`/`dark` palettes rather than invented,
  * so this screen still looks like the app; they are copied as literals rather than imported
@@ -36,10 +37,8 @@ import { describeCrash } from '@/lib/crashReport';
  * are separate families. If the crash happened before `useFonts` resolved, the family is simply
  * missing and RN falls back to the system face — degraded, still legible.
  *
- * NOT WIRED FOR TRANSLATION ON PURPOSE. No keys exist for this copy, and `t()` falls back to
- * the key — so a crash screen would read "crash.title" to a Gujarati user, which is worse than
- * English. The four strings are listed in `docs/i18n/COPY-REQUEST-2026-08-26.md`; wire them when
- * human copy arrives. (`t()` is unavailable here anyway — see the constraint above.)
+ * The language snapshot survives provider unmount after a crash. Before preferences have
+ * loaded it uses English; account transitions reset it before loading the next preference.
  *
  * ⚠️ THE BUTTON LABEL COMES FROM `describeCrash`, NOT FROM A LITERAL HERE. It says "Reload the
  * app" because that is what `Try.retry()` actually does — it re-mounts the ROOT and navigation
@@ -57,7 +56,8 @@ const DARK = { bg: '#070c14', card: '#0f1724', text: '#e9eff7', muted: '#8fa0b6'
 export function RouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const scheme = useColorScheme();
   const c = scheme === 'dark' ? DARK : LIGHT;
-  const { title, message, retryLabel, detail } = describeCrash(error);
+  const copy = getCrashCopy();
+  const { title, message, retryLabel, detail } = describeCrash(error, copy);
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -83,7 +83,7 @@ export function RouteErrorBoundary({ error, retry }: ErrorBoundaryProps) {
           {detail ? (
             <View style={{ backgroundColor: c.bg, borderRadius: 12, borderWidth: 1, borderColor: c.border, padding: 12 }}>
               <Text style={{ color: c.muted, letterSpacing: 0.8, marginBottom: 4, ...textType('600', 11) }}>
-                WHAT WENT WRONG
+                {copy.detailHeading}
               </Text>
               {/* Selectable so the advisor can copy it into a message instead of retyping it. */}
               <Text selectable style={{ color: c.text, lineHeight: 18, ...textType('400', 12) }}>{detail}</Text>

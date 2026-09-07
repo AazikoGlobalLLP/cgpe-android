@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -7,6 +8,7 @@ import { fmtDay, fmtTime } from '@/lib/format';
 import { haptics } from '@/lib/haptics';
 import { Txt } from './base';
 import { useT } from '@/i18n';
+import type { TFn } from '@/i18n';
 import { IconBtn } from './controls';
 import { Banner, EmptyState, Skeleton } from './feedback';
 import { useDataHealth } from './health-banner';
@@ -75,7 +77,7 @@ export type TrackPathPoint = { lat: number; lng: number; at?: string | number };
 /** PHASE 66: one break point to draw ORANGE. `name` labels the popup; `active` = an in-progress break. */
 export type MapBreak = {
   lat: number; lng: number; at?: string | number; kind: 'start' | 'end';
-  name?: string; reason?: string | null; active?: boolean;
+  name?: string; nameCopy?: LocalCopy; reason?: string | null; active?: boolean;
 };
 
 export type LeafletMapProps = {
@@ -239,12 +241,13 @@ function buildPayload(
   cluster: boolean,
   reduced: boolean,
   breaks: MapBreak[],
+  tr: TFn,
 ): MapPayload {
   const markers: MapMarker[] = [];
 
   /* ---- Clock-in / clock-out pins ---- */
   for (const p of pins) {
-    const name = esc(p.name || 'Agent');
+    const name = esc(resolveCopy(tr, p.name, p.nameCopy) || tr('map.agentFallback'));
     const city = p.city ? esc(p.city) : '';
     if (usable(p.inLat, p.inLng)) {
       const t = clock(p.inTime);
@@ -260,7 +263,7 @@ function buildPayload(
         size: 18,
         glyph: '',
         name,
-        line1: esc(t ? `Clocked in at ${t}` : 'Clocked in, time not recorded'),
+        line1: esc(t ? tr('home.clockedInAt', { time: t }) : tr('map.clockedInTimeMissing')),
         line2: esc(join([city, dayOf(p.inTime)])),
       });
     }
@@ -275,7 +278,7 @@ function buildPayload(
         size: 18,
         glyph: '',
         name,
-        line1: esc(t ? `Clocked out at ${t}` : 'Clocked out, time not recorded'),
+        line1: esc(t ? tr('map.clockedOutAt', { time: t }) : tr('map.clockedOutTimeMissing')),
         line2: esc(join([city, dayOf(p.outTime)])),
       });
     }
@@ -296,9 +299,9 @@ function buildPayload(
       // A live, in-progress break sits a touch larger so a manager can pick out who is on break now.
       size: b.active ? 20 : 15,
       glyph: '',
-      name: esc(b.name || 'Break'),
-      line1: esc(t ? `${ended ? 'Break ended' : 'Break started'} at ${t}` : (ended ? 'Break ended' : 'Break started')),
-      line2: esc(join([b.reason ? `Reason: ${b.reason}` : '', dayOf(b.at), b.active ? 'On break now' : ''])),
+      name: esc(resolveCopy(tr, b.name || '', b.nameCopy) || tr('break.start')),
+      line1: esc(t ? tr(ended ? 'map.breakEndedAt' : 'map.breakStartedAt', { time: t }) : (ended ? tr('map.breakEnded') : tr('map.breakStarted'))),
+      line2: esc(join([b.reason ? tr('map.breakReason', { reason: b.reason }) : '', dayOf(b.at), b.active ? tr('map.onBreakNow') : ''])),
     });
   }
 
@@ -325,7 +328,7 @@ function buildPayload(
 
   const route: [number, number][] = ordered.map((p) => [p.lat, p.lng]);
   const n = ordered.length;
-  const who = esc(pathName || 'Recorded route');
+  const who = esc(pathName || tr('map.recordedRoute'));
 
   let routeInfo: MapPayload['routeInfo'] = null;
 
@@ -344,10 +347,10 @@ function buildPayload(
       size: 26,
       glyph: 'A',
       name: who,
-      line1: esc(tFrom ? `Route start, ${tFrom}` : 'Route start, time not recorded'),
+      line1: esc(tFrom ? tr('map.routeStartAt', { time: tFrom }) : tr('map.routeStartTimeMissing')),
       line2: esc(dayOf(first.at)),
       solo: 1,
-      tip: esc(tFrom || 'Start'),
+      tip: esc(tFrom || tr('map.routeStart')),
       tipDir: 'top',
     });
 
@@ -361,11 +364,11 @@ function buildPayload(
         size: 26,
         glyph: 'B',
         name: who,
-        line1: esc(tTo ? `Latest recorded position, ${tTo}` : 'Latest recorded position, time not recorded'),
+        line1: esc(tTo ? tr('map.latestAt', { time: tTo }) : tr('map.latestTimeMissing')),
         line2: esc(dayOf(last.at)),
         solo: 1,
         pulse: 1,
-        tip: esc(tTo || 'Latest'),
+        tip: esc(tTo || tr('map.latest')),
         tipDir: 'bottom',
       });
 
@@ -388,21 +391,21 @@ function buildPayload(
           size: 11,
           glyph: '',
           name: who,
-          line1: esc(t || 'Time not recorded'),
-          line2: esc(join([dayOf(p.at), 'Recorded position'])),
+          line1: esc(t || tr('team.timeMissing')),
+          line2: esc(join([dayOf(p.at), tr('map.recordedPosition')])),
         });
       }
 
       routeInfo = {
         title: who,
-        line1: esc(tFrom && tTo ? `${tFrom} to ${tTo}` : 'Times not recorded'),
-        line2: esc(join([dayOf(first.at), `${n} recorded points`])),
+        line1: esc(tFrom && tTo ? tr('map.timeRange', { from: tFrom, to: tTo }) : tr('map.timesMissing')),
+        line2: esc(join([dayOf(first.at), tr('map.recordedPoints', { count: n })])),
       };
     }
   }
 
   const sig = hash(
-    markers.map((m) => `${m.id}${m.lat.toFixed(5)},${m.lng.toFixed(5)}${m.line1}`).join('|')
+    JSON.stringify({ markers, routeInfo })
     + `#${route.length}#${cluster ? 1 : 0}#${reduced ? 1 : 0}`,
   );
 
@@ -455,7 +458,7 @@ function buildHtml(c: Palette, t: (k: any, p?: any) => string): string {
     radius: CLUSTER_PX,
     // Strings the injected page renders. Built HERE and passed in already
     // translated, the same rule the file's header states for dates and times.
-    i18n: { pointsHere: t('map.pointsHere', { n: '{n}' }), andMore: t('map.andMore', { n: '{n}' }) },
+    i18n: { closePopup: t('map.closePopup'), clusterA11y: esc(t('map.clusterA11y', { count: '{count}' })), pointsHere: t('map.pointsHere', { n: '{n}' }), andMore: t('map.andMore', { n: '{n}' }) },
   });
 
   const css = [
@@ -574,7 +577,7 @@ function buildHtml(c: Palette, t: (k: any, p?: any) => string): string {
     "  var n = g.length, lat = 0, lng = 0, i;",
     "  for (i = 0; i < n; i++) { lat += g[i].m.lat; lng += g[i].m.lng; }",
     "  var s = n < 10 ? 36 : n < 50 ? 42 : 48;",
-    "  var label = n + ' points grouped here. Activate to open.';",
+    "  var label = CFG.i18n.clusterA11y.replace('{count}', n);",
     "  var html = '<div class=\"cl\" role=\"button\" tabindex=\"0\" aria-label=\"' + label + '\" style=\"width:' + s + 'px;height:' + s",
     "    + 'px;background:' + CFG.clusterHalo + '\"><b style=\"background:' + CFG.cluster + ';color:' + CFG.clusterInk + '\">' + n + '</b></div>';",
     "  var mk = L.marker([lat/n, lng/n], {",
@@ -744,6 +747,7 @@ function buildHtml(c: Palette, t: (k: any, p?: any) => string): string {
     "  if (show) { if (!map.hasLayer(markerLayer)) map.addLayer(markerLayer); }",
     "  else { if (map.hasLayer(markerLayer)) map.removeLayer(markerLayer); }",
     "};",
+    "map.on('popupopen', function(e){ var root = e.popup.getElement(); var button = root && root.querySelector('.leaflet-popup-close-button'); if (button) { button.setAttribute('aria-label', CFG.i18n.closePopup); button.setAttribute('title', CFG.i18n.closePopup); } });",
     "map.on('zoomend', function(){ rebuild(); drawArrows(); });",
     "window.addEventListener('resize', function(){ map.invalidateSize({ animate: false }); });",
     "window.addEventListener('orientationchange', function(){ setTimeout(function(){ map.invalidateSize({ animate: false }); }, 220); });",
@@ -970,8 +974,8 @@ function MapCanvas({
       <View style={[frame(c, height), { alignItems: 'center', justifyContent: 'center' }]}>
         <EmptyState
           icon="map-outline"
-          title="The map could not open"
-          subtitle="The map view could not start on this device. Try again — the points themselves are listed below. (The map itself no longer needs a connection; only the background imagery does.)"
+          title={t('map.openFailed')}
+          subtitle={t('map.openFailedHelp')}
           action={{ label: t('common.tryAgain'), onPress: onRetry }}
           style={{ paddingVertical: spacing.lg }}
         />
@@ -1052,7 +1056,7 @@ function MapCanvas({
             bg={c.card}
             color={c.primary}
             onPress={recenter}
-            accessibilityLabel="Fit every point on screen"
+            accessibilityLabel={t('map.fitAll')}
           />
           <IconBtn
             icon={satellite ? 'map-outline' : 'globe-outline'}
@@ -1060,7 +1064,7 @@ function MapCanvas({
             bg={satellite ? c.primarySoft : c.card}
             color={c.primary}
             onPress={onToggleSatellite}
-            accessibilityLabel={satellite ? 'Switch to street map' : 'Switch to satellite view'}
+            accessibilityLabel={satellite ? t('map.streetView') : t('map.satelliteView')}
           />
           <IconBtn
             icon={pointsShown ? 'eye-outline' : 'eye-off-outline'}
@@ -1068,7 +1072,7 @@ function MapCanvas({
             bg={pointsShown ? c.card : c.primarySoft}
             color={c.primary}
             onPress={onTogglePoints}
-            accessibilityLabel={pointsShown ? 'Hide location points' : 'Show location points'}
+            accessibilityLabel={pointsShown ? t('map.hidePoints') : t('map.showPoints')}
           />
         </View>
       )}
@@ -1089,8 +1093,8 @@ function MapCanvas({
         <View style={{ position: 'absolute', left: spacing.sm, right: spacing.sm, bottom: spacing.sm }}>
           <Banner
             tone="warning"
-            title="Map tiles could not load"
-            message="The pins and the route are real. Only the background imagery needs a connection."
+            title={t('map.tilesFailed')}
+            message={t('map.tilesFailedHelp')}
           />
         </View>
       ) : null}
@@ -1123,8 +1127,8 @@ export function LeafletMap({
 
   const html = useMemo(() => buildHtml(c, t), [c, t]);
   const payload = useMemo(
-    () => buildPayload(pins, path, pathName, c, cluster, reduced, breaks),
-    [pins, path, pathName, c, cluster, reduced, breaks],
+    () => buildPayload(pins, path, pathName, c, cluster, reduced, breaks, t),
+    [pins, path, pathName, c, cluster, reduced, breaks, t],
   );
   // Memoised down to a STRING: `pins={[]}` at a call site builds a new array on every
   // render, and an equal string is what stops that from firing an injection each time.
@@ -1146,11 +1150,11 @@ export function LeafletMap({
         <Txt size={30} weight="900" numeric>{routed > 1 ? routed : pins.length}</Txt>
         <Txt size={font.sub} color={c.muted} style={{ marginTop: 4, textAlign: 'center' }}>
           {routed > 1
-            ? `recorded points on this route${pathName ? `, ${pathName}` : ''}`
-            : `agent pins (${onDuty} on duty)`}
+            ? pathName ? t('map.webNamedRoutePoints', { name: pathName }) : t('map.webRoutePoints')
+            : t('map.webAgentPins', { onDuty: onDuty })}
         </Txt>
         <Txt size={11.5} color={c.faint} style={{ marginTop: 10, textAlign: 'center', lineHeight: 16 }}>
-          The interactive map renders in the mobile app.{'\n'}The same records are listed below.
+          {t('map.mobileOnly')}{'\n'}{t('map.recordsBelow')}
         </Txt>
       </View>
     );
@@ -1162,10 +1166,10 @@ export function LeafletMap({
       <View style={[frame(c, height), { alignItems: 'center', justifyContent: 'center' }]}>
         <EmptyState
           icon={health.degraded ? 'cloud-offline-outline' : 'map-outline'}
-          title={health.degraded ? 'The map could not load its points' : 'No location points yet'}
+          title={health.degraded ? t('map.pointsFailed') : t('map.noPoints')}
           subtitle={health.degraded
-            ? 'The server did not answer, so an empty map here is unconfirmed rather than quiet.'
-            : 'Points appear as soon as somebody clocks in from the app with location turned on.'}
+            ? t('map.unconfirmed')
+            : t('map.emptyHelp')}
           style={{ paddingVertical: spacing.lg }}
         />
       </View>
@@ -1176,7 +1180,7 @@ export function LeafletMap({
     <MapCanvas
       // A palette change rebuilds the page and a retry reloads it. Either way this is a new
       // page, and every handshake belongs to the new one rather than to the old.
-      key={`${c.scheme}:${attempt}`}
+      key={`${c.scheme}:${hash(html)}:${attempt}`}
       html={html}
       payloadJson={payloadJson}
       height={height}

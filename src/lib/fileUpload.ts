@@ -1,3 +1,4 @@
+import type { TFn } from '@/i18n';
 import { UPLOAD_TIMEOUT } from '@/constants/config';
 
 /* ------------------------------------------------------------------ *
@@ -465,7 +466,7 @@ export function isEphemeralUrl(url: string): boolean {
 /** Honest copy for every failure. `tone` matches the app's `FeedbackTone` values so a
  *  screen can drop it straight onto a Banner. A hard failure is 'danger'; a "you/your
  *  setup, not the file" condition is the softer 'warning'. */
-export function describeUploadFailure(reason: UploadFailure): {
+export function describeUploadFailure(reason: UploadFailure, t?: TFn): {
   tone: 'danger' | 'warning'; title: string; message: string;
 } {
   const secs = Math.round(UPLOAD_TIMEOUT / 1000);
@@ -473,50 +474,50 @@ export function describeUploadFailure(reason: UploadFailure): {
     case 'too_large':
       return {
         tone: 'warning',
-        title: 'That file is too large',
-        message: `The server accepts files up to ${MAX_UPLOAD_MB} MB. Choose a smaller file, or take the photo again at a lower size.`,
+        title: t ? t('upload.tooLargeTitle') : 'That file is too large',
+        message: t ? t('upload.tooLargeBody', { maxMB: MAX_UPLOAD_MB }) : `The server accepts files up to ${MAX_UPLOAD_MB} MB. Choose a smaller file, or take the photo again at a lower size.`,
       };
     case 'type_rejected':
       return {
         tone: 'warning',
-        title: "That file type isn't supported",
-        message: `You can attach ${ALLOWED_UPLOAD_LABEL}.`,
+        title: t ? t('upload.typeTitle') : "That file type isn't supported",
+        message: t ? t('upload.typeBody', { types: t('upload.allowedTypes') }) : `You can attach ${ALLOWED_UPLOAD_LABEL}.`,
       };
     case 'timeout':
       return {
         tone: 'danger',
-        title: 'The upload timed out',
-        message: `The file was still uploading after ${secs} seconds, so it was stopped. Check your connection and try again.`,
+        title: t ? t('upload.timeoutTitle') : 'The upload timed out',
+        message: t ? t('upload.timeoutBody', { seconds: secs }) : `The file was still uploading after ${secs} seconds, so it was stopped. Check your connection and try again.`,
       };
     case 'network':
       return {
         tone: 'danger',
-        title: "Couldn't reach the server",
-        message: 'The file did not leave your phone, so nothing was attached. Check your connection and try again.',
+        title: t ? t('upload.networkTitle') : "Couldn't reach the server",
+        message: t ? t('upload.networkBody') : 'The file did not leave your phone, so nothing was attached. Check your connection and try again.',
       };
     case 'server':
       return {
         tone: 'danger',
-        title: "The server didn't accept the file",
-        message: 'It reached the server but was not stored. Try again in a moment.',
+        title: t ? t('upload.serverTitle') : "The server didn't accept the file",
+        message: t ? t('upload.serverBody') : 'It reached the server but was not stored. Try again in a moment.',
       };
     case 'unauthorized':
       return {
         tone: 'warning',
-        title: "This account can't upload here",
-        message: "Your role or sign-in doesn't allow uploads. Sign in again, or ask your branch admin.",
+        title: t ? t('upload.unauthorizedTitle') : "This account can't upload here",
+        message: t ? t('upload.unauthorizedBody') : "Your role or sign-in doesn't allow uploads. Sign in again, or ask your branch admin.",
       };
     case 'not_signed_in':
       return {
         tone: 'warning',
-        title: "You're not signed in",
-        message: "This session isn't signed in to the register, so the file stayed on the handset. Sign in again and retry.",
+        title: t ? t('upload.signedOutTitle') : "You're not signed in",
+        message: t ? t('upload.signedOutBody') : "This session isn't signed in to the register, so the file stayed on the handset. Sign in again and retry.",
       };
     case 'not_stored':
       return {
         tone: 'warning',
-        title: "Uploaded, but the server won't keep it",
-        message: "Document storage isn't switched on for this server, so this file won't be saved. Ask your admin to enable it before relying on it.",
+        title: t ? t('upload.notStoredTitle') : "Uploaded, but the server won't keep it",
+        message: t ? t('upload.notStoredBody') : "Document storage isn't switched on for this server, so this file won't be saved. Ask your admin to enable it before relying on it.",
       };
     case 'not_linked':
       // PRESIGNED FLOW ONLY, and the reason it is not silent like the legacy path's
@@ -527,8 +528,8 @@ export function describeUploadFailure(reason: UploadFailure): {
       // wearing a green tick. A retry re-uploads under a fresh key, which is correct.
       return {
         tone: 'danger',
-        title: "The file wasn't attached",
-        message: 'It reached storage, but the register did not record it, so it is not linked to this claim. Attach it again.',
+        title: t ? t('upload.notLinkedTitle') : "The file wasn't attached",
+        message: t ? t('upload.notLinkedBody') : 'It reached storage, but the register did not record it, so it is not linked to this claim. Attach it again.',
       };
     case 'video_not_accepted':
       // A PERMANENT condition, so the copy must not say "try again" — the server told us it
@@ -543,8 +544,8 @@ export function describeUploadFailure(reason: UploadFailure): {
       // the branch as the safety net, and revisit the wording only if the two lists diverge.
       return {
         tone: 'warning',
-        title: 'This server does not accept videos yet',
-        message: 'Your photos and documents still work. Ask your admin to switch on video uploads — until then, take photos of the damage instead.',
+        title: t ? t('upload.videoTitle') : 'This server does not accept videos yet',
+        message: t ? t('upload.videoBody') : 'Your photos and documents still work. Ask your admin to switch on video uploads — until then, take photos of the damage instead.',
       };
   }
 }

@@ -1,3 +1,4 @@
+import type { TFn } from '@/i18n';
 /** Formatting helpers — India / LIC conventions (₹, lakh, DD Mon). */
 
 /**
@@ -96,20 +97,20 @@ export function fmtTime(d: string | Date | null | undefined): string {
 }
 
 /** "2h ago", "3d ago", "Just now" from an ISO string or Date. */
-export function timeAgo(d: string | Date | null | undefined): string {
+export function timeAgo(d: string | Date | null | undefined, t?: TFn): string {
   const dt = toDate(d);
   if (!dt) return NO_DATE;   // previously rendered "NaNm ago"
   const diff = Date.now() - dt.getTime();
   const s = Math.floor(diff / 1000);
   // A clock-skewed device, or a record stamped in the future, must not read "-4m ago".
-  if (s < 0) return `Just${NB}now`;
-  if (s < 60) return `Just${NB}now`;
+  if (s < 0) return t ? t('time.justNow').replace(/ /g, NB) : `Just${NB}now`;
+  if (s < 60) return t ? t('time.justNow').replace(/ /g, NB) : `Just${NB}now`;
   const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m${NB}ago`;
+  if (m < 60) return t ? t('time.minutesAgo', { count: m }).replace(/ /g, NB) : `${m}m${NB}ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h${NB}ago`;
+  if (h < 24) return t ? t('time.hoursAgo', { count: h }).replace(/ /g, NB) : `${h}h${NB}ago`;
   const dd = Math.floor(h / 24);
-  if (dd < 7) return `${dd}d${NB}ago`;
+  if (dd < 7) return t ? t('time.daysAgo', { count: dd }).replace(/ /g, NB) : `${dd}d${NB}ago`;
   return fmtDay(dt);
 }
 

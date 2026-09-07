@@ -355,7 +355,7 @@ export async function isBiometricPoolIntact(): Promise<boolean> {
  * Returns false rather than throwing on any refusal, so the caller can simply leave
  * quick-unlock switched off and carry on with a normal session.
  */
-export async function saveBoundIdentity(userId: string, refreshToken: string): Promise<boolean> {
+export async function saveBoundIdentity(userId: string, refreshToken: string, prompt = 'Confirm it is you to enable quick unlock'): Promise<boolean> {
   if (isWeb || !Secure) return false;
   if (typeof userId !== 'string' || userId.length === 0) return false;
   if (typeof refreshToken !== 'string' || refreshToken.length === 0) return false;
@@ -393,7 +393,7 @@ export async function saveBoundIdentity(userId: string, refreshToken: string): P
       Secure!.setItemAsync(
         BINDING_KEY,
         JSON.stringify(record),
-        authOptions('Confirm it is you to enable quick unlock'),
+        authOptions(prompt),
       ),
     PROMPT_TIMEOUT_MS,
   );
@@ -415,11 +415,11 @@ export async function saveBoundIdentity(userId: string, refreshToken: string): P
  * `POST /auth/refresh-biometric`; if the server refuses it (revoked on logout, or past its 30-day
  * window), the caller falls back to manual sign-in.
  */
-export async function resolveBoundIdentity(): Promise<BoundIdentity | null> {
+export async function resolveBoundIdentity(prompt = 'Unlock CGPE Connect'): Promise<BoundIdentity | null> {
   // Collapse concurrent calls. AppLock arms on cold start and again on foreground, and those
   // can overlap; without this the user gets two stacked biometric prompts.
   if (inFlight) return inFlight;
-  const run = resolveOnce();
+  const run = resolveOnce(prompt);
   inFlight = run;
   try {
     return await run;
@@ -428,7 +428,7 @@ export async function resolveBoundIdentity(): Promise<BoundIdentity | null> {
   }
 }
 
-async function resolveOnce(): Promise<BoundIdentity | null> {
+async function resolveOnce(prompt: string): Promise<BoundIdentity | null> {
   if (isWeb || !Secure) {
     lastOutcome = 'unsupported';
     return null;
@@ -458,7 +458,7 @@ async function resolveOnce(): Promise<BoundIdentity | null> {
   }
 
   const read = await settle(
-    () => Secure!.getItemAsync(BINDING_KEY, authOptions('Unlock CGPE Connect')),
+    () => Secure!.getItemAsync(BINDING_KEY, authOptions(prompt)),
     PROMPT_TIMEOUT_MS,
   );
 

@@ -8,7 +8,7 @@ import { useT } from '@/i18n';
 import { Txt } from '@/ui/base';
 import { Button } from '@/ui/controls';
 import { Sheet } from '@/ui/sheet';
-import { ALL_UPLOAD_MIME, ALLOWED_UPLOAD_LABEL, MAX_UPLOAD_MB, type PickedFile } from '@/lib/fileUpload';
+import { ALL_UPLOAD_MIME, MAX_UPLOAD_MB, type PickedFile } from '@/lib/fileUpload';
 import { MAX_VIDEO_SECONDS } from '@/lib/videoCompress';
 
 /* ------------------------------------------------------------------ *
@@ -153,16 +153,11 @@ export function DocumentSourceSheet({ visible, onClose, onResult }: {
     >
       <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
         <Button label={t('doc.takePhoto')} icon="camera-outline" variant="outline" full onPress={() => choose('camera')} />
-        {/* English on purpose. `doc.recordVideo` does NOT exist in the dictionary, and t() falls
-            back to the KEY, so calling it would render the literal text "doc.recordVideo" on
-            screen. Inventing the Gujarati/Hindi spelling of "video" would be machine translation,
-            which is forbidden here (PHASE-19 §4) — so this joins the other not-yet-translated
-            strings and is listed in docs/i18n/COPY-REQUEST-2026-08-26.md for the owner. */}
         <Button label={t('doc.recordVideo')} icon="videocam-outline" variant="outline" full onPress={() => choose('video')} />
         <Button label={t('doc.gallery')} icon="images-outline" variant="outline" full onPress={() => choose('gallery')} />
         <Button label={t('doc.file')} icon="document-outline" variant="outline" full onPress={() => choose('document')} />
         <Txt size={c.font.cap} color={c.faint} numberOfLines={3} style={{ textAlign: 'center', lineHeight: 17, marginTop: spacing.xs }}>
-          You can attach {ALLOWED_UPLOAD_LABEL}, up to {MAX_UPLOAD_MB} MB.{' '}
+          {t('doc.attachmentLimit', { types: t('upload.allowedTypes'), maxMB: MAX_UPLOAD_MB })}{' '}
           {t('doc.videoHint', { seconds: MAX_VIDEO_SECONDS })}
         </Txt>
       </View>

@@ -58,7 +58,7 @@ export function SyncChip({ endpointKey }: { endpointKey: string }) {
     >
       <Ionicons name="cloud-offline-outline" size={13} color={c.warning} />
       <Txt size={12} weight="500" color={c.muted}>
-        {t('sync.syncedAt', { time: timeAgo(new Date(fresh.syncedAt)) })}
+        {t('sync.syncedAt', { time: timeAgo(new Date(fresh.syncedAt), t) })}
       </Txt>
     </View>
   );
