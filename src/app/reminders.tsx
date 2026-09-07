@@ -1,3 +1,4 @@
+import { resolveCopy, textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -99,23 +100,23 @@ function toneFor(r: Reminder): SpineTone {
  * mark and punctuation this app's copy does not use. The missing date is stated in the
  * subtitle instead, where there is room to say it in words.
  */
-function timeFor(r: Reminder): string {
+function timeFor(r: Reminder, t: ReturnType<typeof useT>): string {
   const d = daysUntil(r.date);
   if (!Number.isFinite(d)) return '';
-  if (d === 0) return 'Today';
+  if (d === 0) return t('common.today');
   return fmtDay(r.date);
 }
 
-function subtitleFor(r: Reminder): string {
+function subtitleFor(r: Reminder, t: ReturnType<typeof useT>): string {
   const d = daysUntil(r.date);
   // Guard first. An unparseable date makes daysUntil NaN, and the old comparison chain
   // fell through to the overdue branch and rendered the literal "Overdue by NaN days".
   if (!Number.isFinite(d)) {
-    return r.subtitle ? `No date on record. ${r.subtitle}` : 'No date on record.';
+    return r.subtitle ? t('reminders.noDateWithSubtitle', { subtitle: r.subtitle }) : t('reminders.noDateSentence');
   }
   if (r.done || d >= 0) return r.subtitle;
   const late = Math.abs(d);
-  return `Overdue by ${late} day${late === 1 ? '' : 's'}. ${r.subtitle}`;
+  return t('reminders.overdueDays', { count: late, subtitle: r.subtitle });
 }
 
 /* ---------- loading ----------
@@ -156,7 +157,7 @@ export default function Reminders() {
   const [items, setItems] = useState<Reminder[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message: CopyText } | null>(null);
 
   /** The leak guard. No state is written once the screen is gone. */
   const mounted = useRef(true);
@@ -209,8 +210,8 @@ export default function Reminders() {
     haptics.warn();
     setNotice({
       tone: 'warning',
-      title: 'Not marked done',
-      message: `"${r.title}" could not be saved — it never reached the server, so it is still open. Check your connection and try again.`,
+      title: textCopy('reminders.notMarkedDone'),
+      message: textCopy('reminders.markFailedBody', { title: r.title }, { ...(r.titleCopy ? { title: r.titleCopy } : {}) }),
     });
   }, []);
 
@@ -234,10 +235,10 @@ export default function Reminders() {
   const nothing = items.length === 0;
 
   const subtitle = groups.pending.length === 0
-    ? (items.length > 0 ? 'Every follow-up is closed' : 'Nothing pending')
+    ? (items.length > 0 ? t('reminders.everyClosed') : t('reminders.nothingPending'))
     : groups.overdue.length > 0
-      ? `${groups.pending.length} pending, ${groups.overdue.length} overdue`
-      : `${groups.pending.length} pending follow-up${groups.pending.length === 1 ? '' : 's'}`;
+      ? t('reminders.pendingOverdueSummary', { pending: groups.pending.length, overdue: groups.overdue.length })
+      : t('reminders.pendingCount', { count: groups.pending.length });
 
   return (
     <Screen>
@@ -258,8 +259,8 @@ export default function Reminders() {
         {notice ? (
           <Banner
             tone={notice.tone}
-            title={notice.title}
-            message={notice.message}
+            title={renderText(t, notice.title)}
+            message={renderText(t, notice.message)}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
@@ -269,15 +270,15 @@ export default function Reminders() {
             {health.degraded ? (
               <EmptyState
                 icon="cloud-offline"
-                title="Reminders did not load"
-                subtitle="The server could not be reached, so this is not a confirmed empty list. Pull down to try again."
+                title={t('reminders.loadFailed')}
+                subtitle={t('reminders.unconfirmedList')}
                 action={{ label: t('common.tryAgain'), onPress: () => void load(true) }}
               />
             ) : (
               <EmptyState
                 icon="notifications-off-outline"
-                title="No follow-ups yet"
-                subtitle="Birthdays, renewals and maturities from your client book appear here as they come due."
+                title={t('reminders.noneYet')}
+                subtitle={t('reminders.upcomingBody')}
               />
             )}
           </Card>
@@ -293,7 +294,7 @@ export default function Reminders() {
               <Group index={2} title={t('tasks.upcoming')} items={groups.upcoming} onToggle={toggle} />
             ) : null}
             {groups.done.length > 0 ? (
-              <Group index={3} title="Completed" items={groups.done} onToggle={toggle} />
+              <Group index={3} title={t('task.completedLabel')} items={groups.done} onToggle={toggle} />
             ) : null}
 
             {/* Every reminder is closed, but the list is not empty — a different state from
@@ -301,16 +302,15 @@ export default function Reminders() {
             {groups.pending.length === 0 ? (
               <EmptyState
                 icon="checkmark-done-circle-outline"
-                title="Nothing left to chase"
-                subtitle="Every follow-up on your book is closed. New ones appear here as they come due."
+                title={t('reminders.nothingToChase')}
+                subtitle={t('reminders.allClosedBody')}
               />
             ) : null}
 
             {/* Said once, at the foot of the list, rather than repeated on every row.
                 Long-press is the same door for anyone who cannot swipe precisely. */}
             <Txt size={font.tiny} color={c.faint} style={{ textAlign: 'center' }}>
-              Swipe a reminder for quick actions, or press and hold it.
-            </Txt>
+              {t('reminders.quickActionsHint')}</Txt>
           </>
         )}
       </ScrollView>
@@ -362,9 +362,9 @@ function Group({ title, items, onToggle, index = 0 }: {
                   <SpineRow
                     index={i}
                     last={i === items.length - 1}
-                    time={sameDayAsPrevious ? '' : timeFor(r)}
-                    title={r.title}
-                    subtitle={subtitleFor(r)}
+                    time={sameDayAsPrevious ? '' : timeFor(r, t)}
+                    title={resolveCopy(t, r.title, r.titleCopy)}
+                    subtitle={subtitleFor(r, t)}
                     tone={toneFor(r)}
                     icon={r.done ? 'checkmark-circle' : ((REMINDER_ICON[r.type] ?? 'notifications') as IconName)}
                     right={
@@ -376,7 +376,7 @@ function Group({ title, items, onToggle, index = 0 }: {
                           size={34}
                           bg={c.successSoft}
                           color={c.success}
-                          accessibilityLabel={`Mark ${r.title} done`}
+                          accessibilityLabel={t('home.markTaskDone', { task: resolveCopy(t, r.title, r.titleCopy) })}
                           onPress={() => onToggle(r)}
                         />
                       )

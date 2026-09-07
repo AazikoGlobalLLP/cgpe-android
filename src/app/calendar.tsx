@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { font, radius, spacing, useTheme } from '@/theme/theme';
@@ -53,9 +54,9 @@ function timeLabel(iso: string): string {
   return /\d{2}:\d{2}/.test(iso) ? fmtTime(dt) : '-';
 }
 
-function dayTitle(offset: number): string {
-  if (offset === 0) return 'Today';
-  if (offset === 1) return 'Tomorrow';
+function dayTitle(offset: number, t: ReturnType<typeof useT>): string {
+  if (offset === 0) return t('common.today');
+  if (offset === 1) return t('tasks.tomorrow');
   const d = new Date();
   d.setDate(d.getDate() + offset);
   return `${FULL_WD[d.getDay()]}, ${d.getDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]}`;
@@ -125,10 +126,10 @@ export default function Calendar() {
   }, [sel]);
 
   const subtitle = loading
-    ? 'Loading the next 14 days'
+    ? t('calendar.loadingFortnight')
     : openTotal > 0
-      ? `${openTotal} open in the next 14 days`
-      : 'Next 14 days';
+      ? t('calendar.openFortnight', { count: openTotal })
+      : t('calendar.nextFortnight');
 
   return (
     <Screen>
@@ -147,7 +148,7 @@ export default function Calendar() {
                 date={d.date}
                 count={d.count}
                 active={d.offset === sel}
-                label={`${FULL_WD[(new Date().getDay() + d.offset) % 7]} ${d.date}, ${d.count} open`}
+                  label={t('calendar.dayOpenCountA11y', { weekday: FULL_WD[(new Date().getDay() + d.offset) % 7], date: d.date, count: d.count })}
                 onPress={() => pickDay(d.offset)}
               />
             </Appear>
@@ -161,9 +162,9 @@ export default function Calendar() {
         showsVerticalScrollIndicator={false}
       >
         <Row style={{ marginBottom: spacing.md, marginTop: spacing.xs }}>
-          <Txt size={font.h3} weight="800" style={{ flex: 1 }} numberOfLines={1}>{dayTitle(sel)}</Txt>
+          <Txt size={font.h3} weight="800" style={{ flex: 1 }} numberOfLines={1}>{dayTitle(sel, t)}</Txt>
           {!loading && events.length > 0 ? (
-            <Pill label={`${events.length} item${events.length === 1 ? '' : 's'}`} tone="neutral" small numeric />
+            <Pill label={t('calendar.itemCount', { count: events.length })} tone="neutral" small numeric />
           ) : null}
         </Row>
 
@@ -171,7 +172,7 @@ export default function Calendar() {
           <DayEmpty
             degraded={health.degraded && items.length === 0}
             anyLoaded={items.length > 0}
-            dayLabel={dayTitle(sel)}
+            dayLabel={dayTitle(sel, t)}
             nextBusy={nextBusy}
             onRetry={retry}
             onJump={(o) => pickDay(o)}
@@ -236,7 +237,7 @@ function EventRow({ r, index, last }: { r: Reminder; index: number; last: boolea
       index={index}
       last={last}
       time={timeLabel(r.date)}
-      title={r.title}
+      title={resolveCopy(t, r.title, r.titleCopy)}
       subtitle={r.subtitle || r.clientName}
       tone={r.done ? 'neutral' : TONE[r.type] ?? 'primary'}
       icon={REMINDER_ICON[r.type] ?? 'notifications'}
@@ -281,8 +282,8 @@ function DayEmpty({ degraded, anyLoaded, dayLabel, nextBusy, onRetry, onJump }: 
     return (
       <EmptyState
         icon="cloud-offline-outline"
-        title="Your calendar could not load"
-        subtitle="The server did not answer, so this day is unconfirmed rather than clear. Check your connection and try again."
+        title={t('calendar.loadFailed')}
+        subtitle={t('calendar.unconfirmedDayBody')}
         action={{ label: t('common.tryAgain'), onPress: onRetry }}
       />
     );
@@ -291,8 +292,8 @@ function DayEmpty({ degraded, anyLoaded, dayLabel, nextBusy, onRetry, onJump }: 
     return (
       <EmptyState
         icon="calendar-outline"
-        title="Nothing scheduled in the next 14 days"
-        subtitle="Birthdays, premium chases and follow-ups appear here as soon as they are raised against your book."
+        title={t('calendar.emptyFortnight')}
+        subtitle={t('calendar.eventsAppearBody')}
         action={{ label: t('common.refresh'), onPress: onRetry }}
       />
     );
@@ -300,10 +301,10 @@ function DayEmpty({ degraded, anyLoaded, dayLabel, nextBusy, onRetry, onJump }: 
   return (
     <EmptyState
       icon="calendar-clear-outline"
-      title={`${dayLabel} is clear`}
-      subtitle="No follow-ups, greetings or premium chases fall on this day."
+      title={t('calendar.dayClear', { day: dayLabel })}
+      subtitle={t('calendar.dayClearBody')}
       action={nextBusy != null
-        ? { label: `Go to ${dayTitle(nextBusy)}`, onPress: () => onJump(nextBusy) }
+        ? { label: t('calendar.goToDay', { day: dayTitle(nextBusy, t) }), onPress: () => onJump(nextBusy) }
         : undefined}
     />
   );

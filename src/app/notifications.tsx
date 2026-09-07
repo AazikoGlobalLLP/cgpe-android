@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -78,11 +79,11 @@ function startOfDay(d: Date): number {
 }
 
 /** "Today" / "Yesterday" / "4 days ago" / "12 Jul". Relative only while it stays useful. */
-function dayLabel(d: Date): string {
+function dayLabel(d: Date, t: ReturnType<typeof useT>): string {
   const diff = Math.round((startOfDay(new Date()) - startOfDay(d)) / DAY_MS);
-  if (diff === 0) return 'Today';
-  if (diff === 1) return 'Yesterday';
-  if (diff > 1 && diff < 7) return `${diff} days ago`;
+  if (diff === 0) return t('common.today');
+  if (diff === 1) return t('tasks.yesterday');
+  if (diff > 1 && diff < 7) return t('notifications.daysAgo', { count: diff });
   return fmtDay(d);
 }
 
@@ -153,7 +154,7 @@ export default function Notifications() {
       const key = ok ? String(startOfDay(d)) : 'undated';
       let g = map.get(key);
       if (!g) {
-        g = { key, label: ok ? dayLabel(d) : 'No date recorded', items: [], offset: 0 };
+        g = { key, label: ok ? dayLabel(d, t) : t('notifications.noDate'), items: [], offset: 0 };
         map.set(key, g);
       }
       g.items.push(n);
@@ -182,7 +183,7 @@ export default function Notifications() {
       ...g,
       offset: sizes.slice(0, i).reduce((n, x) => n + x, 0),
     }));
-  }, [items]);
+  }, [items, t]);
 
   const markAll = useCallback(async () => {
     if (busy || unread === 0) return;
@@ -261,21 +262,21 @@ export default function Notifications() {
   const showBar = !loading && unread > 0;
 
   const subtitle = loading
-    ? 'Loading your feed'
+    ? t('notifications.loadingFeed')
     : items.length === 0
-      ? 'Nothing waiting'
+      ? t('notifications.nothingWaiting')
       : unread > 0
-        ? `${unread} of ${items.length} still unread`
-        : `${items.length} notification${items.length === 1 ? '' : 's'}, all read`;
+        ? t('notifications.unreadCount', { unread: unread, total: items.length })
+        : t('notifications.allReadCount', { count: items.length });
 
   return (
     <Screen>
-      <Header title="Notifications" subtitle={subtitle} back />
+      <Header title={t('home.notificationsLabel')} subtitle={subtitle} back />
 
       {!loading && items.length > 0 ? (
         <Row style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>
           <Pill
-            label={unread > 0 ? `${unread} unread` : 'All read'}
+              label={unread > 0 ? t('notifications.unreadShort', { count: unread }) : t('notifications.allRead')}
             tone={unread > 0 ? 'primary' : 'success'}
             dot
             numeric={unread > 0}
@@ -307,8 +308,8 @@ export default function Notifications() {
         {refused ? (
           <Banner
             tone="warning"
-            title="Not everything could be marked as read"
-            message="The server still lists some of these as unread, so the feed below is what it actually holds."
+            title={t('notifications.markAllFailed')}
+            message={t('notifications.markAllFailedBody')}
             onDismiss={() => setRefused(false)}
           />
         ) : null}
@@ -319,15 +320,15 @@ export default function Notifications() {
           health.degraded ? (
             <EmptyState
               icon="cloud-offline-outline"
-              title="The feed did not load"
-              subtitle="Your notifications could not be fetched, so this is not a confirmed empty inbox. Try again once you are back on a signal."
+              title={t('notifications.feedFailed')}
+              subtitle={t('notifications.feedFailedBody')}
               action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           ) : (
             <EmptyState
               icon="notifications-off-outline"
-              title="You are all caught up"
-              subtitle="Claim updates, renewal reminders, new leads and contest results land here as they happen."
+              title={t('notifications.caughtUp')}
+              subtitle={t('notifications.eventsBody')}
             />
           )
         ) : (
@@ -351,7 +352,7 @@ export default function Notifications() {
                       // row fight each other.
                       index={g.offset + i}
                       time={ok ? shortTime(d) : ''}
-                      title={n.title || 'Notification'}
+                      title={resolveCopy(t, n.title, n.titleCopy) || t('notifications.singleLabel')}
                       subtitle={n.body || undefined}
                       icon={KIND_ICON[n.kind] ?? 'notifications-outline'}
                       // Read items fall back to the neutral node, so the rail itself reports
@@ -381,7 +382,7 @@ export default function Notifications() {
           borderTopColor: c.border,
         }}>
           <Button
-            label={`Mark ${unread} as read`}
+            label={t('notifications.markCountRead', { count: unread })}
             icon="checkmark-done-outline"
             full
             loading={busy}

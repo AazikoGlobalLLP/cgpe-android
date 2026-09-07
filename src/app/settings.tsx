@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -59,7 +60,7 @@ import { versionLine } from '@/lib/buildInfo';
 const PUSH_KEY = 'cgpe.push';
 const WA_KEY = 'cgpe.waAlerts';
 
-type Notice = { tone: FeedbackTone; title: string; message: string };
+type Notice = { tone: FeedbackTone; title: CopyText; message: CopyText };
 
 /**
  * A romanized option is a regional language written in the English alphabet, and its code
@@ -94,7 +95,7 @@ export default function Settings() {
   const [prefsReady, setPrefsReady] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   /** PHASE 55 — the last connectivity-test verdict shown inline on the row; '' before the first run. */
-  const [connMsg, setConnMsg] = useState('');
+  const [connMsg, setConnMsg] = useState<CopyText>('');
   const [testing, setTesting] = useState(false);
   /** PHASE 77 — true only while the throwaway WebView that clears the tile cache is mounted. */
   const [clearing, setClearing] = useState(false);
@@ -130,8 +131,8 @@ export default function Settings() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'No fingerprint or face unlock on this device',
-        message: 'Enrol one in your phone settings, then turn this on again.',
+        title: textCopy('settings.noBiometrics'),
+        message: textCopy('settings.enrolBiometrics'),
       });
       return;
     }
@@ -143,14 +144,14 @@ export default function Settings() {
     setBio(ok ? v : false);
     if (ok) {
       haptics.success();
-      toast(v ? 'Biometric unlock enabled' : 'Biometric unlock disabled', 'success');
+      toast(v ? t('settings.biometricEnabled') : t('settings.biometricDisabled'), 'success');
       return;
     }
     haptics.warn();
     setNotice({
       tone: 'warning',
-      title: 'Biometric unlock was not enabled',
-      message: 'The device did not confirm your identity, so the setting was left off.',
+      title: textCopy('settings.biometricFailed'),
+      message: textCopy('settings.identityNotConfirmed'),
     });
   };
 
@@ -159,7 +160,7 @@ export default function Settings() {
     key: string,
     v: boolean,
     apply: (next: boolean) => void,
-    name: string,
+    nameKey: string,
   ) => {
     haptics.tap();
     apply(v);
@@ -171,8 +172,8 @@ export default function Settings() {
       apply(!v);
       setNotice({
         tone: 'danger',
-        title: `${name} could not be saved`,
-        message: 'The switch was put back to where it was. Try again in a moment.',
+        title: textCopy('settings.preferenceFailed', undefined, { name: textCopy(nameKey) }),
+        message: textCopy('settings.switchRestored'),
       });
     }
   };
@@ -202,18 +203,18 @@ export default function Settings() {
     if (testing) return;
     haptics.tap();
     setTesting(true);
-    setConnMsg('Testing…');
+    setConnMsg(textCopy('settings.testing'));
     setNotice(null);
     const r = await testConnection();
     if (!live.current) return;
     setTesting(false);
     if (r.ok) {
       haptics.success();
-      setConnMsg(`Reached in ${r.ms} ms`);
+      setConnMsg(textCopy('settings.reachedMs', { milliseconds: r.ms }));
       setNotice({
         tone: 'success',
-        title: 'Connected to the CGPE server',
-        message: `It answered in ${r.ms} ms on this network. If a screen still shows no data, the problem is the data itself or your sign-in — not the connection.`,
+        title: textCopy('settings.connectedTitle'),
+        message: textCopy('settings.connectedBody', { milliseconds: r.ms }),
       });
       return;
     }
@@ -221,21 +222,21 @@ export default function Settings() {
     const detail =
       r.kind === 'timeout'
         ? {
-            value: 'Too slow',
-            title: 'The server did not answer in time',
-            message: `No reply within ${Math.round(REQUEST_TIMEOUT / 1000)} seconds on this network. The connection is very slow — try mobile data or a different WiFi.`,
+            value: textCopy('settings.tooSlow'),
+            title: textCopy('settings.serverTimeoutTitle'),
+            message: textCopy('settings.serverTimeoutBody', { seconds: Math.round(REQUEST_TIMEOUT / 1000) }),
           }
         : r.kind === 'server'
         ? {
-            value: `Error ${r.status ?? ''}`.trim(),
-            title: 'The server answered with an error',
-            message: `The server is reachable but returned ${r.status ?? 'an error'}. That is a server problem, not your network — please report it.`,
+            value: textCopy('settings.errorCode', { code: r.status ?? '' }),
+            title: textCopy('settings.serverErrorTitle'),
+            message: r.status != null ? textCopy('settings.serverErrorBody', { error: r.status }) : textCopy('settings.serverErrorBody', undefined, { error: textCopy('settings.anError') }),
           }
         : {
-            value: 'No connection',
-            title: 'Cannot reach the CGPE server',
+            value: textCopy('settings.noConnection'),
+            title: textCopy('settings.unreachableTitle'),
             message:
-              'This network cannot reach cgpe.in. Open https://cgpe.in/internal/api/health in this phone’s browser on the same WiFi — if that also fails, it is the WiFi (captive portal or firewall), not the app.',
+              textCopy('settings.unreachableBody'),
           };
     setConnMsg(detail.value);
     setNotice({ tone: 'danger', title: detail.title, message: detail.message });
@@ -279,7 +280,7 @@ export default function Settings() {
     toast(t(said.messageKey), said.tone === 'success' ? 'success' : 'info');
   };
 
-  const themeValue = c.scheme === 'dark' ? 'Dark, follows system' : 'Light, follows system';
+  const themeValue = c.scheme === 'dark' ? t('settings.darkSystem') : t('settings.lightSystem');
 
   return (
     <Screen>
@@ -292,8 +293,8 @@ export default function Settings() {
         {notice ? (
           <Banner
             tone={notice.tone}
-            title={notice.title}
-            message={notice.message}
+            title={renderText(t, notice.title)}
+            message={renderText(t, notice.message)}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
@@ -311,19 +312,19 @@ export default function Settings() {
         ) : (
           <>
             <ListSection
-              title="Security"
-              footer="Biometric unlock asks for your fingerprint or face every time the app comes back to the foreground."
+              title={t('settings.security')}
+              footer={t('settings.biometricHint')}
             >
               <Appear index={0}>
                 <DataRow
                   icon="finger-print"
-                  label="Biometric unlock"
+                  label={t('settings.biometricLabel')}
                   value=""
                   right={
                     <Switch
                       value={bio}
                       onValueChange={toggleBio}
-                      accessibilityLabel="Biometric unlock"
+                      accessibilityLabel={t('settings.biometricLabel')}
                       trackColor={{ true: c.primary, false: c.border }}
                       thumbColor="#ffffff"
                     />
@@ -333,27 +334,27 @@ export default function Settings() {
               <Appear index={1}>
                 <DataRow
                   icon="key"
-                  label="Change password"
+                  label={t('settings.changePassword')}
                   value=""
-                  onPress={() => toast('Password changes are handled in the web panel for now.', 'info')}
+                  onPress={() => toast(t('settings.passwordWebOnly'), 'info')}
                 />
               </Appear>
             </ListSection>
 
             <ListSection
-              title="Notifications"
-              footer="Push covers reminders, claims and lead alerts. WhatsApp alerts cover new Hub messages."
+              title={t('home.notificationsLabel')}
+              footer={t('settings.notificationHint')}
             >
               <Appear index={0}>
                 <DataRow
                   icon="notifications"
-                  label="Push notifications"
+                  label={t('settings.pushLabel')}
                   value=""
                   right={
                     <Switch
                       value={push}
-                      onValueChange={(v) => persistToggle(PUSH_KEY, v, setPush, 'Push notifications')}
-                      accessibilityLabel="Push notifications"
+                      onValueChange={(v) => persistToggle(PUSH_KEY, v, setPush, 'settings.pushLabel')}
+                      accessibilityLabel={t('settings.pushLabel')}
                       trackColor={{ true: c.primary, false: c.border }}
                       thumbColor="#ffffff"
                     />
@@ -363,13 +364,13 @@ export default function Settings() {
               <Appear index={1}>
                 <DataRow
                   icon="logo-whatsapp"
-                  label="WhatsApp alerts"
+                  label={t('settings.whatsappAlerts')}
                   value=""
                   right={
                     <Switch
                       value={waAlerts}
-                      onValueChange={(v) => persistToggle(WA_KEY, v, setWaAlerts, 'WhatsApp alerts')}
-                      accessibilityLabel="WhatsApp alerts"
+                      onValueChange={(v) => persistToggle(WA_KEY, v, setWaAlerts, 'settings.whatsappAlerts')}
+                      accessibilityLabel={t('settings.whatsappAlerts')}
                       trackColor={{ true: c.whatsapp, false: c.border }}
                       thumbColor="#ffffff"
                     />
@@ -378,9 +379,9 @@ export default function Settings() {
               </Appear>
             </ListSection>
 
-            <ListSection title="Appearance">
+            <ListSection title={t('settings.appearance')}>
               <Appear index={0}>
-                <DataRow icon="contrast" label="Theme" value={themeValue} />
+                <DataRow icon="contrast" label={t('settings.theme')} value={themeValue} />
               </Appear>
             </ListSection>
 
@@ -394,11 +395,10 @@ export default function Settings() {
                   {t('settings.language')}
                 </Txt>
                 <Txt size={font.tiny} color={c.faint}>
-                  Changes the app labels straight away. Client records stay in the language they were entered in.
-                </Txt>
+                  {t('settings.languageHint')}</Txt>
               </View>
 
-              <ListSection title="Script languages">
+              <ListSection title={t('settings.scriptLanguages')}>
                 {SCRIPT_LANGS.map((l, i) => (
                   <Appear key={l.code} index={i}>
                     <LangRow
@@ -412,8 +412,8 @@ export default function Settings() {
               </ListSection>
 
               <ListSection
-                title="Romanized"
-                footer="The same regional languages written in the English alphabet, for anyone who reads Roman script faster."
+                title={t('settings.romanized')}
+                footer={t('settings.romanizedHint')}
               >
                 {ROMAN_LANGS.map((l, i) => (
                   <Appear key={l.code} index={i}>
@@ -432,14 +432,14 @@ export default function Settings() {
                 complaint. It pings the server and gives a plain verdict, so the owner can tell a
                 real app fault from a network that just can't reach cgpe.in. */}
             <ListSection
-              title="Connection"
-              footer="Checks whether this phone can reach the CGPE server right now. Use it when a screen won’t load, to tell an app problem from a WiFi problem."
+              title={t('settings.connection')}
+              footer={t('settings.connectionHint')}
             >
               <Appear index={0}>
                 <DataRow
                   icon="pulse"
-                  label={testing ? 'Testing connection…' : 'Test connection'}
-                  value={connMsg}
+                  label={testing ? t('settings.testingConnection') : t('settings.testConnection')}
+                  value={renderText(t, connMsg).trim()}
                   onPress={runConnectionTest}
                 />
               </Appear>
@@ -471,38 +471,38 @@ export default function Settings() {
                 because it is the only route to the deletion flow from here, and the row
                 now says where it goes. The version moved to its own read-only row. */}
             <ListSection
-              title="Support and about"
-              footer={`${APP.name} for ${APP.org}. ${APP.since}.`}
+              title={t('settings.supportAbout')}
+          footer={t('more.brandFooter', { app: APP.name, org: APP.org, since: APP.since })}
             >
               <Appear index={0}>
                 <DataRow
                   icon="help-circle"
-                  label="Help and FAQ"
+                  label={t('settings.helpFaq')}
                   value=""
-                  onPress={() => toast('Help articles are on the web panel for now.', 'info')}
+                  onPress={() => toast(t('settings.helpWebOnly'), 'info')}
                 />
               </Appear>
               <Appear index={1}>
                 <DataRow
                   icon="star"
-                  label="Rate CGPE Connect"
+                  label={t('settings.rateApp')}
                   value=""
-                  onPress={() => toast('CGPE Connect is not on the Play Store yet. Ratings open once it is listed.', 'info')}
+                  onPress={() => toast(t('settings.rateUnavailable'), 'info')}
                 />
               </Appear>
               <Appear index={2}>
                 <DataRow
                   icon="shield-checkmark"
-                  label="Account and privacy"
-                  value="Data and deletion"
+                  label={t('more.accountTitle')}
+                  value={t('more.accountSub')}
                   onPress={() => router.push('/account')}
                 />
               </Appear>
               <Appear index={3}>
-                <DataRow icon="cube-outline" label="Version" value={versionLine()} numeric />
+                <DataRow icon="cube-outline" label={t('more.versionLabel')} value={versionLine()} numeric />
               </Appear>
               <Appear index={4}>
-                <DataRow icon="grid-outline" label="Your layout" value={uiConfig.role_key} numeric />
+                <DataRow icon="grid-outline" label={t('settings.yourLayout')} value={uiConfig.role_key} numeric />
               </Appear>
             </ListSection>
           </>

@@ -1,3 +1,4 @@
+import { resolveCopy, textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -30,7 +31,7 @@ function DeletionRequestPanel() {
   const [request, setRequest] = useState<api.AccountDeletionRequest | null>(null);
   const [reading, setReading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<CopyText | null>(null);
   const live = useRef(true);
   const busy = useRef(false);
   const readingRef = useRef(false);
@@ -48,11 +49,11 @@ function DeletionRequestPanel() {
     setReading(false);
     if (res.ok) setRequest(res.request);
     else setFailure(res.reason === 'unsupported'
-      ? t('account.deletionUnavailable')
+      ? textCopy('account.deletionUnavailable')
       : res.reason === 'forbidden'
-        ? t('account.deletionReadForbidden')
-        : t('account.deletionRefreshFailed'));
-  }, [t]);
+        ? textCopy('account.deletionReadForbidden')
+        : textCopy('account.deletionRefreshFailed'));
+  }, []);
 
   useEffect(() => {
     live.current = true;
@@ -83,10 +84,10 @@ function DeletionRequestPanel() {
       } else {
         haptics.error();
         setFailure(res.reason === 'unsupported'
-          ? t('account.deletionUnavailable')
+          ? textCopy('account.deletionUnavailable')
           : res.reason === 'forbidden'
-            ? t('account.deletionSubmitForbidden')
-            : t('account.deletionSubmitFailed'));
+            ? textCopy('account.deletionSubmitForbidden')
+            : textCopy('account.deletionSubmitFailed'));
       }
     } finally {
       busy.current = false;
@@ -107,7 +108,7 @@ function DeletionRequestPanel() {
         </Txt>
         <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
           {reading ? <Skeleton height={48} radius={radius.md} /> : null}
-          {!reading && failure ? <Banner tone="warning" title={t('account.deletionStatusUnconfirmed')} message={failure} /> : null}
+          {!reading && failure ? <Banner tone="warning" title={t('account.deletionStatusUnconfirmed')} message={renderText(t, failure)} /> : null}
           {!reading && request ? (
             <Banner
               tone={request.status === 'rejected' ? 'warning' : 'info'}
@@ -241,7 +242,7 @@ export default function Account() {
         <Appear>
           <Card>
             <PersonRow
-              name={user.name}
+              name={resolveCopy(t, user.name, user.nameCopy)}
               subtitle={user.email}
               photo={user.photo}
               size={52}
