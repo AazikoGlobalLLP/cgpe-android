@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -16,7 +17,8 @@ import * as api from '@/data/api';
 import type { WaThread } from '@/data/types';
 import { timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
-import { useT } from '@/i18n';
+import { useT, type TFn } from '@/i18n';
+import { whatsappTagLabel } from '@/i18n/display';
 
 /* ------------------------------------------------------------------ *
  * The WhatsApp inbox.
@@ -60,10 +62,10 @@ const SEP_INSET = spacing.lg + AVATAR + spacing.md;
  * A thread whose `last_at` never came through should show nothing at all rather than a
  * placeholder glyph that reads as data.
  */
-function whenLabel(iso: string): string {
+function whenLabel(iso: string, tr: TFn): string {
   if (!iso) return '';
   const t = new Date(iso).getTime();
-  return Number.isFinite(t) ? timeAgo(iso) : '';
+  return Number.isFinite(t) ? timeAgo(iso, tr) : '';
 }
 
 function sortTime(iso: string): number {
@@ -72,6 +74,7 @@ function sortTime(iso: string): number {
 }
 
 export default function WhatsAppHub() {
+  const t = useT();
   const c = useTheme();
   const tr = useT(); // `t` is a thread iteration variable throughout this component; translator is `tr`
   const router = useRouter();
@@ -155,12 +158,12 @@ export default function WhatsAppHub() {
   const clearSearch = useCallback(() => { setQ(''); }, []);
 
   const subtitle = loading
-    ? 'Loading your inbox'
+    ? t('whatsapp.loadingInbox')
     : threads.length === 0
-      ? 'Nothing to read right now'
+      ? t('whatsapp.nothingToRead')
       : waiting > 0
-        ? `${threads.length} chats, ${waiting} waiting on you`
-        : `${threads.length} chats, all caught up`;
+        ? t('whatsapp.chatsWaiting', { count: threads.length, waiting: waiting })
+        : t('whatsapp.chatsCaughtUp', { count: threads.length });
 
   /* ---------- empty ----------
    * Four outcomes that must not look alike. "No match" and "nothing here yet" ask the user
@@ -185,20 +188,20 @@ export default function WhatsAppHub() {
               : 'chatbubbles-outline'
       }
       title={
-        emptyKind === 'search' ? `No chat matches "${q.trim()}"`
-          : emptyKind === 'filter' ? 'Nothing unread'
-            : emptyKind === 'outage' ? 'Your inbox could not load'
-              : 'No conversations yet'
+        emptyKind === 'search' ? t('whatsapp.noMatchTitle', { query: q.trim() })
+          : emptyKind === 'filter' ? t('whatsapp.nothingUnread')
+            : emptyKind === 'outage' ? t('whatsapp.loadFailedTitle')
+              : t('whatsapp.noConversations')
       }
       subtitle={
-        emptyKind === 'search' ? 'Search runs over the name, the last message, the tag and the mobile number.'
-          : emptyKind === 'filter' ? 'Every chat here has been read. Switch back to All to see the rest of the inbox.'
-            : emptyKind === 'outage' ? 'The server did not answer, so nothing here is confirmed. Check your connection and pull to refresh.'
-              : 'Conversations appear here as soon as someone messages the business number.'
+        emptyKind === 'search' ? t('whatsapp.searchScope')
+          : emptyKind === 'filter' ? t('whatsapp.allReadBody')
+            : emptyKind === 'outage' ? t('clients.unconfirmedBody')
+              : t('whatsapp.emptyBody')
       }
       action={
         emptyKind === 'search' ? { label: tr('common.clearSearch'), onPress: clearSearch }
-          : emptyKind === 'filter' ? { label: 'Show all chats', onPress: () => pickFilter('all') }
+          : emptyKind === 'filter' ? { label: t('whatsapp.showAllChats'), onPress: () => pickFilter('all') }
             : { label: tr('common.tryAgain'), onPress: refresh }
       }
     />
@@ -213,7 +216,7 @@ export default function WhatsAppHub() {
         right={!loading && unread > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={String(unreadDisplay)} size={font.h3} color={c.whatsapp} />
-            <Eyebrow>Unread</Eyebrow>
+            <Eyebrow>{t('whatsapp.unread')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -223,14 +226,14 @@ export default function WhatsAppHub() {
           {/* Not debounced, and deliberately so: this filters an array already in memory
               (the endpoint caps at 100 threads), so a timer would only add latency to a
               keystroke that already costs nothing. There is no timer here to leak. */}
-          <SearchBar value={q} onChange={setQ} placeholder="Name, message or mobile number" />
+          <SearchBar value={q} onChange={setQ} placeholder={t('whatsapp.searchPlaceholder')} />
           <Segmented<Filter>
             full
             value={filter}
             onChange={pickFilter}
             options={[
-              { key: 'all', label: `All ${threads.length}` },
-              { key: 'unread', label: waiting > 0 ? `Unread ${waiting}` : 'Unread' },
+              { key: 'all', label: t('whatsapp.allCount', { count: threads.length }) },
+              { key: 'unread', label: waiting > 0 ? t('whatsapp.unreadCount', { count: waiting }) : t('whatsapp.unread') },
             ]}
           />
         </View>
@@ -282,7 +285,7 @@ export default function WhatsAppHub() {
 function ThreadRow({ thread, onOpen }: { thread: WaThread; onOpen: () => void }) {
   const c = useTheme();
   const t = useT();
-  const when = whenLabel(thread.lastAt);
+  const when = whenLabel(thread.lastAt, t);
   const hasUnread = thread.unread > 0;
 
   // Two actions maximum, ranked by what the thumb most likely meant: answer in the real
@@ -306,9 +309,9 @@ function ThreadRow({ thread, onOpen }: { thread: WaThread; onOpen: () => void })
   return (
     <SwipeRow actions={actions} onPress={onOpen} radius={0} surface={c.card}>
       <PersonRow
-        name={thread.name}
+        name={resolveCopy(t, thread.name, thread.nameCopy)}
         size={AVATAR}
-        subtitle={thread.lastMessage || 'No message text on this thread'}
+        subtitle={thread.lastMessage || t('whatsapp.noMessageText')}
         badge={hasUnread ? { tone: 'whatsapp' } : undefined}
         style={{ marginHorizontal: 0, paddingHorizontal: spacing.lg, borderRadius: 0 }}
         right={
@@ -327,7 +330,7 @@ function ThreadRow({ thread, onOpen }: { thread: WaThread; onOpen: () => void })
             {hasUnread ? (
               <Pill label={String(thread.unread)} tone="success" small numeric />
             ) : thread.tag ? (
-              <Pill label={thread.tag} tone="neutral" small />
+              <Pill label={whatsappTagLabel(t, thread.tag)} tone="neutral" small />
             ) : null}
           </View>
         }
@@ -353,6 +356,7 @@ function RowSeparator() {
 }
 
 function ListFooter({ count, swipeable }: { count: number; swipeable: boolean }) {
+  const t = useT();
   const c = useTheme();
   return (
     <View style={{
@@ -363,8 +367,7 @@ function ListFooter({ count, swipeable }: { count: number; swipeable: boolean })
           Threads with no number on file expose no actions, and promising two buttons that
           are not there is how a gesture gets written off as broken. */}
       <Txt size={font.cap} color={c.faint} numeric>
-        {count === 1 ? '1 chat' : `${count} chats`}
-        {swipeable ? '. Swipe a row to call or reply.' : ''}
+        {t(swipeable ? (count === 1 ? 'whatsapp.footerSwipeOne' : 'whatsapp.footerSwipeMany') : (count === 1 ? 'whatsapp.footerOne' : 'whatsapp.footerMany'), { count })}
       </Txt>
     </View>
   );

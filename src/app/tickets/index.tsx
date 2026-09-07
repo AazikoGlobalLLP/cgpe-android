@@ -20,6 +20,7 @@ import * as api from '@/data/api';
 import { timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
+import { ticketLabel } from '@/i18n/display';
 
 /* ------------------------------------------------------------------ *
  * The request inbox — every ticket the WhatsApp bot, AI-Ops or an admin raised.
@@ -93,9 +94,6 @@ function zoneTone(z?: string): Tone | null {
   }
 }
 
-const titleCase = (s: string) =>
-  s.replace(/[_-]+/g, ' ').replace(/\b\w/g, (m) => m.toUpperCase());
-
 /** Segment labels carry the facet count. Four digits would break the track, so cap it. */
 const withCount = (label: string, n: number) => `${label} ${n > 999 ? '999+' : n}`;
 
@@ -111,6 +109,7 @@ const createdAtOf = (t: api.Ticket): string | null => {
 };
 
 export default function TicketsInbox() {
+
   const c = useTheme();
   const tr = useT(); // `t` elsewhere in this file is ticket type-meta; the translator is `tr`
   const router = useRouter();
@@ -228,20 +227,20 @@ export default function TicketsInbox() {
   /* ---------- controls ---------- */
 
   const stateOptions = useMemo(() => ([
-    { key: 'all' as StateKey, label: withCount('All', meta.stateCounts.all) },
-    { key: 'active' as StateKey, label: withCount('Active', meta.stateCounts.active) },
-    { key: 'closed' as StateKey, label: withCount('Closed', meta.stateCounts.closed) },
-  ]), [meta.stateCounts]);
+    { key: 'all' as StateKey, label: withCount(tr('common.all'), meta.stateCounts.all) },
+    { key: 'active' as StateKey, label: withCount(tr('tickets.active'), meta.stateCounts.active) },
+    { key: 'closed' as StateKey, label: withCount(tr('search.closedLabel'), meta.stateCounts.closed) },
+  ]), [meta.stateCounts, tr]);
 
   const typeOptions = useMemo(() => {
     const entries = Object.entries(meta.typeCounts).filter(([, n]) => n > 0);
     entries.sort((a, b) => b[1] - a[1]);
     const all = entries.reduce((n, [, v]) => n + v, 0);
     return [
-      { key: 'all', label: 'All types', count: all },
-      ...entries.map(([k, n]) => ({ key: k, label: titleCase(k), count: n })),
+      { key: 'all', label: tr('tickets.allTypes'), count: all },
+      ...entries.map(([k, n]) => ({ key: k, label: ticketLabel(tr, 'type', k), count: n })),
     ];
-  }, [meta.typeCounts]);
+  }, [meta.typeCounts, tr]);
 
   const onState = useCallback((next: StateKey) => { haptics.select(); setState(next); }, []);
   const onType = useCallback((next: string) => { haptics.select(); setType(next); }, []);
@@ -249,10 +248,10 @@ export default function TicketsInbox() {
   const filtered = type !== 'all' || state !== 'all' || query.length > 0;
 
   const readout = total === 0
-    ? 'Nothing to show'
+    ? tr('tickets.nothingToShow')
     : hasMore
-      ? `${items.length} of ${total} loaded, page ${page} of ${totalPages}`
-      : `${items.length} of ${total} shown`;
+      ? tr('tickets.loadedPages', { shown: items.length, total, page, pages: totalPages })
+      : tr('tickets.shownSummary', { shown: items.length, total });
 
   /* ---------- empty ----------
    * Four different facts, four different messages. "The server did not answer", "your search
@@ -267,8 +266,8 @@ export default function TicketsInbox() {
     ? (
       <EmptyState
         icon="cloud-offline-outline"
-        title="The request inbox could not load"
-        subtitle="The server did not answer, so nothing here is confirmed. Check your connection and pull down to refresh."
+        title={tr('tickets.loadFailedTitle')}
+        subtitle={tr('tickets.loadFailedBody')}
         action={{ label: tr('common.tryAgain'), onPress: reload }}
       />
     )
@@ -276,8 +275,8 @@ export default function TicketsInbox() {
       ? (
         <EmptyState
           icon="search-outline"
-          title={`No request matches "${query}"`}
-          subtitle="Search runs over the whole inbox, by client name, phone, ticket reference, policy number or task."
+          title={tr('tickets.noMatchTitle', { query: query })}
+          subtitle={tr('tickets.searchScope')}
           action={{ label: tr('common.clearSearch'), onPress: () => setQ('') }}
         />
       )
@@ -285,29 +284,29 @@ export default function TicketsInbox() {
         ? (
           <EmptyState
             icon="funnel-outline"
-            title={`No ${titleCase(type).toLowerCase()} requests in this view`}
-            subtitle="This type has nothing in the state you are looking at. Try another state, or drop the type filter."
-            action={{ label: 'Show all types', onPress: () => onType('all') }}
+            title={tr('tickets.noTypeTitle', { type: ticketLabel(tr, 'type', type) })}
+            subtitle={tr('tickets.noTypeBody')}
+            action={{ label: tr('tickets.showAllTypes'), onPress: () => onType('all') }}
           />
         )
         : state === 'closed'
           ? (
             <EmptyState
               icon="archive-outline"
-              title="Nothing closed yet"
-              subtitle="Requests move here once they are resolved, completed or cancelled."
-              action={{ label: 'See active requests', onPress: () => onState('active') }}
+              title={tr('tickets.nothingClosedTitle')}
+              subtitle={tr('tickets.closedBody')}
+              action={{ label: tr('tickets.seeActive'), onPress: () => onState('active') }}
             />
           )
           : (
             <EmptyState
               icon="checkmark-done-circle-outline"
-              title={state === 'active' ? 'No open requests' : 'No requests raised yet'}
+              title={state === 'active' ? tr('tickets.noOpenTitle') : tr('tickets.noneRaisedTitle')}
               subtitle={state === 'active'
-                ? 'Every request raised for your clients has been closed. New ones arrive here from WhatsApp automatically.'
-                : 'Requests raised by the WhatsApp bot, by AI-Ops or from the admin panel land here.'}
+                ? tr('tickets.allClosedBody')
+                : tr('tickets.noneRaisedBody')}
               action={state === 'active'
-                ? { label: 'Include closed', onPress: () => onState('all') }
+                ? { label: tr('tickets.includeClosed'), onPress: () => onState('all') }
                 : { label: tr('common.refresh'), onPress: reload }}
             />
           );
@@ -315,13 +314,13 @@ export default function TicketsInbox() {
   return (
     <Screen>
       <Header
-        title="Requests"
-        subtitle="Every ticket raised across the firm"
+        title={tr('more.ticketsSub')}
+        subtitle={tr('tickets.subtitle')}
         back
         right={meta.stateCounts.all > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={meta.stateCounts.all.toLocaleString('en-IN')} size={font.h3} />
-            <Eyebrow>In the inbox</Eyebrow>
+            <Eyebrow>{tr('tickets.inInbox')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -330,7 +329,7 @@ export default function TicketsInbox() {
         <SearchBar
           value={q}
           onChange={setQ}
-          placeholder="Client, phone, reference or task"
+          placeholder={tr('tickets.searchPlaceholder')}
         />
 
         <Segmented options={stateOptions} value={state} onChange={onState} full />
@@ -354,7 +353,7 @@ export default function TicketsInbox() {
             {readout}
           </Txt>
           {type !== 'all' ? (
-            <Button label="Clear type" variant="ghost" size="sm" onPress={() => onType('all')} />
+            <Button label={tr('tickets.clearType')} variant="ghost" size="sm" onPress={() => onType('all')} />
           ) : null}
         </Row>
       </View>
@@ -415,16 +414,16 @@ function TicketRow({ ticket, onOpen }: { ticket: api.Ticket; onOpen: () => void 
   const rail = priorityColor(c, ticket.priority);
   const zone = zoneTone(ticket.zone);
   const phone = ticket.client?.phone ?? '';
-  const name = ticket.client?.name || 'Customer';
+  const name = ticket.client?.name || tr('tickets.customerFallback');
 
   const reason = ticket.reason || ticket.task || ticket.request_text || '';
   const created = createdAtOf(ticket);
 
   const meta = [
     ticket.priority ? String(ticket.priority).toUpperCase() : null,
-    ticket.policy_no ? `Policy ${ticket.policy_no}` : null,
-    ticket.owner?.name ? `With ${ticket.owner.name}` : 'Unclaimed',
-    created ? timeAgo(created) : null,
+    ticket.policy_no ? tr('clients.policyNumber', { number: ticket.policy_no }) : null,
+    ticket.owner?.name ? tr('tickets.withOwner', { name: ticket.owner.name }) : tr('home.unclaimed'),
+    created ? timeAgo(created, tr) : null,
   ].filter(Boolean).join(' · ');
 
   const actions: SwipeAction[] = phone ? [
@@ -433,7 +432,7 @@ function TicketRow({ ticket, onOpen }: { ticket: api.Ticket; onOpen: () => void 
       icon: 'logo-whatsapp',
       label: tr('common.whatsapp'),
       tone: 'whatsapp',
-      onPress: () => { haptics.tap(); whatsapp(phone, `Namaste ${name}`); },
+      onPress: () => { haptics.tap(); whatsapp(phone, `Namaste ${ticket.client?.name || 'Customer'}`); },
     },
   ] : [];
 
@@ -451,11 +450,11 @@ function TicketRow({ ticket, onOpen }: { ticket: api.Ticket; onOpen: () => void 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
             <Ionicons name={t.icon} size={13} color={c.faint} />
             <Txt size={font.tiny} weight="700" color={c.faint} numeric numberOfLines={1} style={{ flexShrink: 1 }}>
-              {ticket.ticket_ref || ticket.type_label || 'Request'}
+              {ticket.ticket_ref || (ticket.type ? ticketLabel(tr, 'type', ticket.type, ticket.type_label) : tr('tickets.requestFallback'))}
             </Txt>
             <View style={{ flex: 1, minWidth: spacing.xs }} />
-            {zone ? <Pill label={titleCase(String(ticket.zone))} tone={zone} small dot /> : null}
-            <Pill label={ticket.status_label || titleCase(ticket.status)} tone={statusTone(ticket.status)} small />
+            {zone ? <Pill label={ticketLabel(tr, 'zone', String(ticket.zone))} tone={zone} small dot /> : null}
+            <Pill label={ticketLabel(tr, 'status', ticket.status, ticket.status_label)} tone={statusTone(ticket.status)} small />
           </View>
 
           <Txt size={font.body} weight="700" numberOfLines={1}>{name}</Txt>
@@ -465,7 +464,7 @@ function TicketRow({ ticket, onOpen }: { ticket: api.Ticket; onOpen: () => void 
               {reason}
             </Txt>
           ) : (
-            <Txt size={font.sub} color={c.faint} numberOfLines={1}>No description was captured</Txt>
+            <Txt size={font.sub} color={c.faint} numberOfLines={1}>{tr('tickets.noDescriptionShort')}</Txt>
           )}
 
           {meta ? (
@@ -500,6 +499,7 @@ function ListFooter({ loadingMore, hasMore, count, total, filtered, onLoadMore }
   loadingMore: boolean; hasMore: boolean; count: number; total: number; filtered: boolean;
   onLoadMore: () => void;
 }) {
+  const tr = useT();
   const c = useTheme();
   if (count === 0) return null;
 
@@ -519,10 +519,10 @@ function ListFooter({ loadingMore, hasMore, count, total, filtered, onLoadMore }
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
     }}>
       {hasMore ? (
-        <Button label="Load more requests" variant="ghost" size="sm" onPress={onLoadMore} />
+        <Button label={tr('tickets.loadMore')} variant="ghost" size="sm" onPress={onLoadMore} />
       ) : (
         <Txt size={font.cap} color={c.faint} numeric>
-          {filtered ? `All ${total.toLocaleString('en-IN')} matching requests shown` : `All ${total.toLocaleString('en-IN')} requests shown`}
+          {filtered ? tr('tickets.allMatchingShown', { count: total.toLocaleString('en-IN') }) : tr('tickets.allShown', { count: total.toLocaleString('en-IN') })}
         </Txt>
       )}
     </View>

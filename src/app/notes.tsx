@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
 import { timeAgo } from '@/lib/format';
 import { useT } from '@/i18n';
+import type { TFn } from '@/i18n';
 import { getHealth } from '@/data/health';
 import * as api from '@/data/api';
 import type { BoardNote, NotesPage } from '@/data/api';
@@ -54,12 +56,12 @@ const PAGE = 25;
 
 type CatMeta = { label: string; tone: Tone; icon: IconName };
 
-const CATEGORY: Record<string, CatMeta> = {
-  task: { label: 'Task', tone: 'primary', icon: 'checkbox-outline' },
-  reminder: { label: 'Reminder', tone: 'warning', icon: 'alarm-outline' },
-  note: { label: 'Note', tone: 'neutral', icon: 'document-text-outline' },
-  idea: { label: 'Idea', tone: 'accent', icon: 'bulb-outline' },
-  'follow-up': { label: 'Follow up', tone: 'info', icon: 'repeat-outline' },
+const CATEGORY: Record<string, Omit<CatMeta, 'label'> & { labelKey: string }> = {
+  task: { labelKey: 'task.titleLabel', tone: 'primary', icon: 'checkbox-outline' },
+  reminder: { labelKey: 'notes.reminderCategory', tone: 'warning', icon: 'alarm-outline' },
+  note: { labelKey: 'home.noteLabel', tone: 'neutral', icon: 'document-text-outline' },
+  idea: { labelKey: 'notes.ideaCategory', tone: 'accent', icon: 'bulb-outline' },
+  'follow-up': { labelKey: 'notes.followUpCategory', tone: 'info', icon: 'repeat-outline' },
 };
 
 /**
@@ -69,8 +71,9 @@ const CATEGORY: Record<string, CatMeta> = {
  */
 const COMPOSE_CATS: string[] = ['note', 'task', 'reminder', 'follow-up', 'idea'];
 
-function catMeta(key: string): CatMeta {
-  return CATEGORY[key] ?? { label: key || 'Note', tone: 'neutral', icon: 'document-text-outline' };
+function catMeta(tr: TFn, key: string): CatMeta {
+  const meta = CATEGORY[key];
+  return meta ? { ...meta, label: tr(meta.labelKey) } : { label: key || tr('home.noteLabel'), tone: 'neutral', icon: 'document-text-outline' };
 }
 
 const EMPTY_FACETS: NotesPage['facets'] = { categories: [], tags: [], statuses: [] };
@@ -94,6 +97,7 @@ function bumpFacet(rows: { label: string; value: number }[], label: string, by: 
 }
 
 export default function Notes() {
+
   const c = useTheme();
   const tr = useT(); // `t` is used as a setState accumulator below; translator is `tr`
   const router = useRouter();
@@ -124,7 +128,7 @@ export default function Notes() {
   const [draft, setDraft] = useState('');
   const [draftCat, setDraftCat] = useState<string>('note');
   const [saving, setSaving] = useState(false);
-  const [writeError, setWriteError] = useState<string | null>(null);
+  const [writeError, setWriteError] = useState<CopyText | null>(null);
 
   // PHASE 57b — offline write queue. The pending note drafts (created offline, awaiting sync) and a
   // one-time "couldn't save" notice both come from the write-queue bus, so they survive an app kill
@@ -213,7 +217,7 @@ export default function Notes() {
     // PHASE 57b: the server ANSWERED and refused it — nothing saved, nothing queued.
     if (res.status === 'failed') {
       haptics.error();
-      setWriteError('That note was not saved. The server refused the write, so nothing has been added to your board.');
+      setWriteError(textCopy('notes.saveFailedBody'));
       return;
     }
 
@@ -244,9 +248,9 @@ export default function Notes() {
     if (inView && !q.trim()) {
       setItems((prev) => sortNotes([created, ...prev.filter((n) => n.id !== created.id)]));
       setTotal((t) => t + 1);
-      toast('Note saved to your board.', 'success');
+      toast(tr('notes.savedToast'), 'success');
     } else {
-      toast(`Note saved under ${catMeta(created.category).label}.`, 'success');
+      toast(tr('notes.savedUnderToast', { category: catMeta(tr, created.category).label }), 'success');
     }
   }, [draft, draftCat, cat, q, toast, tr]);
 
@@ -258,20 +262,20 @@ export default function Notes() {
     if (!live.current) return;
     if (!updated) {
       haptics.error();
-      setWriteError('That note could not be changed. The server refused the write, so it is unchanged on your board.');
+      setWriteError(textCopy('notes.changeFailedBody'));
       return;
     }
     haptics.success();
     setItems((prev) => sortNotes(prev.map((n) => (n.id === updated.id ? updated : n))));
-    toast(updated.pinned ? 'Note pinned to the top.' : 'Note unpinned.', 'success');
-  }, [toast]);
+    toast(updated.pinned ? tr('notes.pinnedToast') : tr('notes.unpinnedToast'), 'success');
+  }, [toast, tr]);
 
   const removeNote = useCallback(async (note: BoardNote) => {
     const ok = await confirm({
-      title: 'Delete this note?',
-      message: 'It leaves your board for good. Nobody else can see it, and it cannot be brought back.',
+      title: tr('notes.deleteTitle'),
+      message: tr('notes.deleteBody'),
       confirmText: tr('common.delete'),
-      cancelText: 'Keep it',
+      cancelText: tr('notes.keepNote'),
       destructive: true,
       icon: 'trash-outline',
     });
@@ -284,7 +288,7 @@ export default function Notes() {
 
     if (!done) {
       haptics.error();
-      setWriteError('That note was not deleted. The server refused the write, so it is still on your board.');
+      setWriteError(textCopy('notes.deleteFailedBody'));
       return;
     }
     haptics.success();
@@ -295,7 +299,7 @@ export default function Notes() {
       categories: bumpFacet(f.categories, note.category, -1),
       statuses: bumpFacet(f.statuses, note.status || 'active', -1),
     }));
-    toast('Note deleted.', 'success');
+    toast(tr('notes.deletedToast'), 'success');
   }, [confirm, toast, tr]);
 
   const toggleReveal = useCallback((id: string) => {
@@ -341,7 +345,7 @@ export default function Notes() {
 
   const chips = useMemo(() => ([
     { key: 'all', label: tr('common.all') },
-    ...facets.categories.map((f) => ({ key: f.label, label: catMeta(f.label).label, count: f.value })),
+    ...facets.categories.map((f) => ({ key: f.label, label: catMeta(tr, f.label).label, count: f.value })),
   ]), [facets.categories, tr]);
 
   const searching = q.trim().length > 0;
@@ -365,50 +369,50 @@ export default function Notes() {
   const empty = noBoard ? (
     <EmptyState
       icon="call-outline"
-      title="Your board needs your mobile number"
-      subtitle="Notes are matched to the WhatsApp number they were dictated from, so your profile has to carry that number before a board can exist. Nothing is missing, there is simply no board yet."
-      action={{ label: 'Open my profile', onPress: () => router.push('/profile') }}
+      title={tr('notes.mobileNeededTitle')}
+      subtitle={tr('notes.mobileNeededBody')}
+      action={{ label: tr('notes.openProfile'), onPress: () => router.push('/profile') }}
     />
   ) : outage ? (
     <EmptyState
       icon="cloud-offline-outline"
-      title="Your notes could not load"
-      subtitle="The server did not answer, so this is not an empty board, it is an unanswered request. Check your connection and try again."
+      title={tr('notes.loadFailedTitle')}
+      subtitle={tr('notes.loadFailedBody')}
       action={{ label: tr('common.tryAgain'), onPress: () => load(1, q.trim(), cat, 'replace') }}
     />
   ) : searching ? (
     <EmptyState
       icon="search-outline"
-      title={`No note matches "${q.trim()}"`}
-      subtitle="Search looks through the note text, the original dictation and the tags."
+      title={tr('notes.noMatchTitle', { query: q.trim() })}
+      subtitle={tr('notes.searchScope')}
       action={{ label: tr('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }}
     />
   ) : cat !== 'all' ? (
     <EmptyState
       icon="funnel-outline"
-      title={`Nothing filed under ${catMeta(cat).label}`}
-      subtitle="Other categories on your board still have notes in them."
-      action={{ label: 'Show all notes', onPress: clearFilters }}
+      title={tr('notes.categoryEmptyTitle', { category: catMeta(tr, cat).label })}
+      subtitle={tr('notes.categoryEmptyBody')}
+      action={{ label: tr('notes.showAll'), onPress: clearFilters }}
     />
   ) : (
     <EmptyState
       icon="journal-outline"
-      title="Nothing on your board yet"
-      subtitle="Jot something below, or send a voice note to the CGPE WhatsApp number and it lands here transcribed."
-      action={{ label: 'Jot a note', onPress: () => setComposing(true) }}
+      title={tr('home.emptyBoard')}
+      subtitle={tr('notes.emptyBody')}
+      action={{ label: tr('notes.jotNote'), onPress: () => setComposing(true) }}
     />
   );
 
   return (
     <Screen keyboard>
       <Header
-        title="Notes"
-        subtitle="Private to you"
+        title={tr('more.notesTitle')}
+        subtitle={tr('notes.privateToYou')}
         back
         right={boardCount > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={String(boardDisplay)} size={font.h3} />
-            <Eyebrow>On your board</Eyebrow>
+            <Eyebrow>{tr('notes.onBoard')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -417,8 +421,8 @@ export default function Notes() {
         <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>
           <Banner
             tone="danger"
-            title="That change did not save"
-            message={writeError}
+            title={tr('notes.changeNotSaved')}
+            message={renderText(tr, writeError)}
             onDismiss={() => setWriteError(null)}
           />
         </View>
@@ -462,7 +466,7 @@ export default function Notes() {
           <SearchBar
             value={q}
             onChange={setQ}
-            placeholder="Search your notes and dictations"
+            placeholder={tr('notes.searchPlaceholder')}
           />
           {chips.length > 1 ? (
             <Chips
@@ -474,7 +478,7 @@ export default function Notes() {
           {filterActive ? (
             <Row style={{ gap: spacing.sm }}>
               <Txt size={font.cap} color={c.faint} numeric numberOfLines={1} style={{ flex: 1 }}>
-                {total === 1 ? '1 note matches' : `${total} notes match`}
+                {total === 1 ? tr('notes.oneMatches') : tr('notes.manyMatch', { count: total })}
               </Txt>
               <Button label={tr('common.clear')} variant="ghost" size="sm" onPress={clearFilters} />
             </Row>
@@ -557,9 +561,10 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
   onPin: () => void;
   onDelete: () => void;
 }) {
+
   const c = useTheme();
   const tr = useT();
-  const meta = catMeta(note.category);
+  const meta = catMeta(tr, note.category);
   const isVoice = note.sourceType === 'voice';
 
   const text = (note.text || '').trim();
@@ -574,15 +579,15 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
   const long = body.length > 220;
   const expandable = hasOriginal || long;
   const discloseLabel = hasOriginal
-    ? (revealed ? 'Hide original dictation' : 'Show original dictation')
-    : (revealed ? 'Show less' : 'Show more');
+    ? (revealed ? tr('notes.hideOriginal') : tr('notes.showOriginal'))
+    : (revealed ? tr('notes.showLess') : tr('notes.showMore'));
 
   // PHASE 57b: a pending (offline-queued) draft isn't on the server yet, so pin/delete — both server
   // writes — don't apply. No swipe actions until it syncs.
   const actions: SwipeAction[] = note.pending ? [] : [
     {
       icon: note.pinned ? 'pin-outline' : 'pin',
-      label: note.pinned ? 'Unpin' : 'Pin',
+      label: note.pinned ? tr('notes.unpin') : tr('notes.pin'),
       tone: 'primary',
       onPress: onPin,
     },
@@ -624,19 +629,19 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
                 {body}
               </Txt>
             ) : (
-              <Txt size={font.sub} color={c.faint}>No text was saved with this note.</Txt>
+              <Txt size={font.sub} color={c.faint}>{tr('notes.noText')}</Txt>
             )}
 
             <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
               {note.pending ? <PendingBadge /> : null}
               <Pill label={meta.label} tone={meta.tone} icon={meta.icon} small />
-              {isVoice ? <Pill label="Voice note" tone="accent" icon="mic" small /> : null}
-              {note.pinned ? <Pill label="Pinned" tone="primary" icon="pin" small /> : null}
+              {isVoice ? <Pill label={tr('home.voiceNote')} tone="accent" icon="mic" small /> : null}
+              {note.pinned ? <Pill label={tr('notes.pinned')} tone="primary" icon="pin" small /> : null}
               {note.tags.slice(0, 3).map((t, i) => (
                 <Pill key={`${t}-${i}`} label={t} tone="neutral" small />
               ))}
               {when ? (
-                <Txt size={font.tiny} color={c.faint} numeric>{timeAgo(when)}</Txt>
+                <Txt size={font.tiny} color={c.faint} numeric>{timeAgo(when, tr)}</Txt>
               ) : null}
             </View>
 
@@ -664,8 +669,7 @@ function NoteCard({ note, revealed, onToggleReveal, onPin, onDelete }: {
                 borderLeftWidth: 3, borderLeftColor: c.accent,
               }}>
                 <Txt size={font.tiny} weight="700" color={c.faint}>
-                  As dictated on WhatsApp
-                </Txt>
+                  {tr('notes.asDictated')}</Txt>
                 <Txt size={font.sub} style={{ lineHeight: 20 }}>{transcript}</Txt>
               </View>
             ) : null}
@@ -694,6 +698,7 @@ function Composer({
   onCategory: (v: string) => void;
   onSave: () => void;
 }) {
+
   const c = useTheme();
   const tr = useT();
 
@@ -710,23 +715,23 @@ function Composer({
       {open ? (
         <>
           <Field
-            label="New note"
+            label={tr('notes.newNote')}
             value={draft}
             onChange={onChange}
-            placeholder="What do you need to remember?"
+            placeholder={tr('notes.composePlaceholder')}
             multiline
             autoFocus
             maxLength={2000}
           />
           <Chips
-            options={COMPOSE_CATS.map((k) => ({ key: k, label: catMeta(k).label }))}
+            options={COMPOSE_CATS.map((k) => ({ key: k, label: catMeta(tr, k).label }))}
             value={category}
             onChange={onCategory}
           />
           <Row>
             <Button label={tr('common.cancel')} variant="ghost" onPress={onCancel} />
             <Button
-              label="Save note"
+              label={tr('notes.saveNote')}
               icon="checkmark"
               onPress={onSave}
               loading={saving}
@@ -740,7 +745,7 @@ function Composer({
         <Pressable
           onPress={onOpen}
           accessibilityRole="button"
-          accessibilityLabel="Jot a note"
+          accessibilityLabel={tr('notes.jotNote')}
           style={({ pressed }) => [{
             flexDirection: 'row', alignItems: 'center', gap: spacing.md,
             height: 50, paddingHorizontal: 15, borderRadius: radius.md,
@@ -750,8 +755,7 @@ function Composer({
         >
           <Ionicons name="create-outline" size={19} color={c.primary} />
           <Txt size={font.body} weight="500" color={c.faint} numberOfLines={1} style={{ flex: 1 }}>
-            Jot a note
-          </Txt>
+            {tr('notes.jotNote')}</Txt>
           <Ionicons name="chevron-up" size={18} color={c.faint} />
         </Pressable>
       )}
@@ -783,6 +787,7 @@ function NoteSeparator() {
 function BoardFooter({ count, loadingMore, hasMore, onLoadMore }: {
   count: number; loadingMore: boolean; hasMore: boolean; onLoadMore: () => void;
 }) {
+  const tr = useT();
   const c = useTheme();
   if (count === 0) return null;
 
@@ -802,10 +807,10 @@ function BoardFooter({ count, loadingMore, hasMore, onLoadMore }: {
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
     }}>
       {hasMore ? (
-        <Button label="Load older notes" variant="ghost" size="sm" onPress={onLoadMore} />
+        <Button label={tr('notes.loadOlder')} variant="ghost" size="sm" onPress={onLoadMore} />
       ) : (
         <Txt size={font.cap} color={c.faint} numeric>
-          {count === 1 ? '1 note shown' : `All ${count} notes shown`}
+          {count === 1 ? tr('notes.oneShown') : tr('notes.allShown', { count: count })}
         </Txt>
       )}
     </View>

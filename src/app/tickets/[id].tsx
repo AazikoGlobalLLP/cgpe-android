@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import { useAuth } from '@/store/auth';
 import { useAppUi } from '@/store/appUi';
 import * as api from '@/data/api';
 import { useT } from '@/i18n';
+import { ticketLabel } from '@/i18n/display';
 import { fmtDate, fmtTime, timeAgo } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 
@@ -120,11 +122,11 @@ const sentence = (s: string) => {
 const STATE_OPTIONS = ['new', 'in_progress', 'awaiting_customer', 'resolved', 'closed'];
 
 const STATE_HINT: Record<string, string> = {
-  new: 'Nobody has started on it',
-  in_progress: 'Being worked on right now',
-  awaiting_customer: 'Waiting on the customer for something',
-  resolved: 'Done, pending a final close',
-  closed: 'Finished. It leaves the active inbox',
+  new: 'ticket.statusNewHint',
+  in_progress: 'ticket.statusWorkingHint',
+  awaiting_customer: 'ticket.statusWaitingHint',
+  resolved: 'ticket.statusResolvedHint',
+  closed: 'ticket.statusClosedHint',
 };
 
 function trailOf(t: api.Ticket): TrailEntry[] {
@@ -161,7 +163,7 @@ export default function TicketDetail() {
   const [ticket, setTicket] = useState<api.Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | null>(null);
+  const [failure, setFailure] = useState<CopyText | null>(null);
 
   const [stateOpen, setStateOpen] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
@@ -208,7 +210,7 @@ export default function TicketDetail() {
 
   /* ---------- writes ---------- */
 
-  const applyResult = useCallback((updated: api.Ticket | null, refusal: string, done: string) => {
+  const applyResult = useCallback((updated: api.Ticket | null, refusal: CopyText, done: string) => {
     if (!alive.current) return false;
     if (!updated) {
       haptics.error();
@@ -222,11 +224,11 @@ export default function TicketDetail() {
     return true;
   }, [toast]);
 
-  const claim = useCallback(async () => {
+  const claim = async () => {
     if (!ticket || busy) return;
     if (!me) {
       haptics.warn();
-      setFailure('Your profile has no name on it, so the request cannot be assigned to you. Add a name in your profile and try again.');
+      setFailure(textCopy('ticket.profileNameMissing'));
       return;
     }
     haptics.tap();
@@ -237,10 +239,10 @@ export default function TicketDetail() {
     setBusy(false);
     applyResult(
       updated,
-      'The server did not accept the assignment, so this request is still unclaimed. Nothing was changed.',
-      'You are handling this request',
+      textCopy('ticket.assignmentFailed'),
+      tr('ticket.assignedToast'),
     );
-  }, [ticket, busy, me, applyResult]);
+  };
 
   const advance = useCallback(async (next: string) => {
     if (!ticket || busy) return;
@@ -254,10 +256,10 @@ export default function TicketDetail() {
     setBusy(false);
     applyResult(
       updated,
-      'The server did not accept the status change, so the request is still where it was.',
-      `Status set to ${titleCase(next)}`,
+      textCopy('ticket.statusFailed'),
+      tr('ticket.statusSetToast', { status: ticketLabel(tr, 'status', next) }),
     );
-  }, [ticket, busy, applyResult]);
+  }, [ticket, busy, applyResult, tr]);
 
   const addNote = useCallback(async () => {
     const text = note.trim();
@@ -270,13 +272,13 @@ export default function TicketDetail() {
     setBusy(false);
     const ok = applyResult(
       updated,
-      'The note was not saved. Nothing has been added to this request.',
-      'Note added',
+      textCopy('ticket.noteFailed'),
+      tr('ticket.noteAdded'),
     );
     if (!alive.current) return;
     setNoteOpen(false);
     if (ok) setNote('');
-  }, [note, ticket, busy, applyResult]);
+  }, [note, ticket, busy, applyResult, tr]);
 
   /* ---------- derived ---------- */
 
@@ -291,13 +293,13 @@ export default function TicketDetail() {
   if (!ticket) {
     return (
       <Screen>
-        <Header title="Request" back />
+        <Header title={tr('tickets.requestFallback')} back />
         <EmptyState
           icon={health.degraded ? 'cloud-offline-outline' : 'file-tray-outline'}
-          title={health.degraded ? 'This request could not load' : 'Request not found'}
+          title={health.degraded ? tr('ticket.loadFailedTitle') : tr('ticket.notFoundTitle')}
           subtitle={health.degraded
-            ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
-            : 'This ticket is not in the inbox you can see. It may have been closed, reassigned or removed.'}
+            ? tr('client.unconfirmedBody')
+            : tr('ticket.notFoundBody')}
           action={{ label: tr('common.tryAgain'), onPress: retry }}
         />
       </Screen>
@@ -308,15 +310,15 @@ export default function TicketDetail() {
   const t = typeMeta(ticket.type);
   const zone = zoneTone(ticket.zone);
   const phone = ticket.client?.phone ?? '';
-  const name = ticket.client?.name || 'Customer';
+  const name = ticket.client?.name || tr('tickets.customerFallback');
   const reason = ticket.reason || ticket.request_text || '';
   const task = ticket.task || '';
   const created = stamp(createdAtOf(ticket));
   const updated = stamp(updatedAtOf(ticket));
   const createdAge = createdAtOf(ticket);
   const original = w.original_command && w.original_command !== reason ? w.original_command : null;
-  const source = w.source_label || (ticket.source ? titleCase(ticket.source) : null);
-  const raisedBy = [source, ticket.channel ? titleCase(ticket.channel) : null].filter(Boolean).join(' · ');
+  const source = ticket.source ? ticketLabel(tr, 'source', ticket.source, w.source_label) : w.source_label || null;
+  const raisedBy = [source, ticket.channel ? ticketLabel(tr, 'channel', ticket.channel) : null].filter(Boolean).join(' · ');
 
   const stateChoices = STATE_OPTIONS.includes(ticket.status)
     ? STATE_OPTIONS
@@ -325,8 +327,8 @@ export default function TicketDetail() {
   return (
     <Screen>
       <Header
-        title={ticket.ticket_ref || 'Request'}
-        subtitle={`${ticket.type_label || titleCase(ticket.type)}${createdAge ? ` · raised ${timeAgo(createdAge)}` : ''}`}
+        title={ticket.ticket_ref || tr('tickets.requestFallback')}
+        subtitle={createdAge ? tr('ticket.raisedSubtitle', { type: ticketLabel(tr, 'type', ticket.type, ticket.type_label), age: timeAgo(createdAge, tr) }) : ticketLabel(tr, 'type', ticket.type, ticket.type_label)}
         back
       />
 
@@ -338,8 +340,8 @@ export default function TicketDetail() {
         {failure ? (
           <Banner
             tone="danger"
-            title="That change was not saved"
-            message={failure}
+            title={tr('ticket.changeNotSaved')}
+            message={renderText(tr, failure)}
             onDismiss={() => setFailure(null)}
           />
         ) : null}
@@ -350,19 +352,19 @@ export default function TicketDetail() {
           <Card>
             <PersonRow
               name={name}
-              subtitle={phone || 'No number on this request'}
+              subtitle={phone || tr('ticket.noNumber')}
               subtitleIcon={phone ? 'call-outline' : 'alert-circle-outline'}
               subtitleNumeric
-              right={<Pill label={ticket.status_label || titleCase(ticket.status)} tone={statusTone(ticket.status)} small />}
+              right={<Pill label={ticketLabel(tr, 'status', ticket.status, ticket.status_label)} tone={statusTone(ticket.status)} small />}
             />
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.md }}>
-              <Pill label={ticket.type_label || titleCase(ticket.type)} tone={t.tone} icon={t.icon} small />
+              <Pill label={ticketLabel(tr, 'type', ticket.type, ticket.type_label)} tone={t.tone} icon={t.icon} small />
               {ticket.priority ? (
                 <Pill label={String(ticket.priority).toUpperCase()} tone={priorityTone(ticket.priority)} icon="flag" small />
               ) : null}
-              {zone ? <Pill label={`${titleCase(String(ticket.zone))} zone`} tone={zone} small dot /> : null}
-              {ticket.is_closed ? <Pill label="Closed" tone="neutral" icon="lock-closed" small /> : null}
+              {zone ? <Pill label={tr('ticket.zoneLabel', { zone: ticketLabel(tr, 'zone', String(ticket.zone)) })} tone={zone} small dot /> : null}
+              {ticket.is_closed ? <Pill label={tr('search.closedLabel')} tone="neutral" icon="lock-closed" small /> : null}
             </View>
 
             {/* Ownership, stated in words. This is the fact the whole screen turns on. */}
@@ -377,9 +379,9 @@ export default function TicketDetail() {
                 color={ownedByMe ? c.success : owner ? c.primary : c.warning}
               />
               <Txt size={font.sub} weight="700" color={ownedByMe ? c.success : owner ? c.text : c.warning} numberOfLines={2} style={{ flex: 1 }}>
-                {ownedByMe ? 'You are handling this'
-                  : owner ? `${owner} is handling this`
-                    : 'Nobody is handling this yet'}
+                {ownedByMe ? tr('ticket.youHandling')
+                  : owner ? tr('ticket.ownerHandling', { name: owner })
+                    : tr('ticket.nobodyHandling')}
               </Txt>
               {ticket.owner?.team ? (
                 <Txt size={font.tiny} color={c.faint} numberOfLines={1}>{titleCase(ticket.owner.team)}</Txt>
@@ -392,9 +394,9 @@ export default function TicketDetail() {
             paragraph the advisor actually reads. */}
         <Appear index={1}>
           <Card>
-            <Eyebrow color={c.primary}>Why this was raised</Eyebrow>
+            <Eyebrow color={c.primary}>{tr('ticket.whyRaised')}</Eyebrow>
             <Txt size={16} weight="700" style={{ marginTop: 5, lineHeight: 23 }}>
-              {reason || 'No description was captured for this request.'}
+              {reason || tr('ticket.noDescription')}
             </Txt>
 
             {task && task !== reason ? (
@@ -402,7 +404,7 @@ export default function TicketDetail() {
                 marginTop: spacing.md, paddingTop: spacing.md,
                 borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline, gap: 3,
               }}>
-                <Txt size={font.cap} weight="700" color={c.muted}>What needs doing</Txt>
+                <Txt size={font.cap} weight="700" color={c.muted}>{tr('ticket.whatNeedsDoing')}</Txt>
                 <Txt size={font.sub} style={{ lineHeight: 21 }}>{task}</Txt>
               </View>
             ) : null}
@@ -412,7 +414,7 @@ export default function TicketDetail() {
                 marginTop: spacing.md, paddingTop: spacing.md,
                 borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline, gap: 3,
               }}>
-                <Txt size={font.cap} weight="700" color={c.muted}>{"In the customer's words"}</Txt>
+                <Txt size={font.cap} weight="700" color={c.muted}>{tr('ticket.customerWords')}</Txt>
                 <Txt size={font.sub} color={c.muted} style={{ lineHeight: 21 }}>{`"${original}"`}</Txt>
               </View>
             ) : null}
@@ -420,41 +422,41 @@ export default function TicketDetail() {
         </Appear>
 
         <Appear index={2}>
-          <ListSection title="Request">
+          <ListSection title={tr('tickets.requestFallback')}>
             <DataRow
-              label="Status"
+              label={tr('task.statusLabel')}
               value=""
               icon="ellipse-outline"
-              right={<Pill label={ticket.status_label || titleCase(ticket.status)} tone={statusTone(ticket.status)} small />}
+              right={<Pill label={ticketLabel(tr, 'status', ticket.status, ticket.status_label)} tone={statusTone(ticket.status)} small />}
             />
             {ticket.policy_no ? (
-              <DataRow label="Policy number" value={ticket.policy_no} icon="document-text-outline" numeric copyable />
+              <DataRow label={tr('claim.policyNumberLabel')} value={ticket.policy_no} icon="document-text-outline" numeric copyable />
             ) : null}
             {phone ? <DataRow label={tr('common.mobile')} value={phone} icon="call-outline" numeric copyable /> : null}
-            {raisedBy ? <DataRow label="Raised by" value={raisedBy} icon="megaphone-outline" /> : null}
-            {ticket.category ? <DataRow label="Category" value={titleCase(ticket.category)} icon="pricetag-outline" /> : null}
+            {raisedBy ? <DataRow label={tr('ticket.raisedBy')} value={raisedBy} icon="megaphone-outline" /> : null}
+            {ticket.category ? <DataRow label={tr('task.category')} value={titleCase(ticket.category)} icon="pricetag-outline" /> : null}
             {w.linked?.id ? (
-              <DataRow label={`Linked ${titleCase(w.linked.type || 'record')}`} value={String(w.linked.id)} icon="link-outline" copyable />
+              <DataRow label={tr('ticket.linkedRecord', { type: w.linked.type ? ticketLabel(tr, 'type', w.linked.type) : tr('ticket.recordFallback') })} value={String(w.linked.id)} icon="link-outline" copyable />
             ) : null}
-            {w.language ? <DataRow label="Language" value={titleCase(w.language)} icon="language-outline" /> : null}
-            {created ? <DataRow label="Raised" value={created} icon="time-outline" numeric /> : null}
+            {w.language ? <DataRow label={tr('ticket.language')} value={titleCase(w.language)} icon="language-outline" /> : null}
+            {created ? <DataRow label={tr('ticket.raised')} value={created} icon="time-outline" numeric /> : null}
             {updated && updated !== created ? (
-              <DataRow label="Last update" value={updated} icon="refresh-outline" numeric />
+              <DataRow label={tr('ticket.lastUpdate')} value={updated} icon="refresh-outline" numeric />
             ) : null}
           </ListSection>
         </Appear>
 
         <Appear index={3}>
-          <ListSection title="Ownership">
+          <ListSection title={tr('ticket.ownership')}>
             <DataRow
-              label="Owner"
-              value={owner || 'Unclaimed'}
+              label={tr('ticket.owner')}
+              value={owner || tr('home.unclaimed')}
               icon="person-outline"
               tone={owner ? 'neutral' : 'warning'}
             />
-            {ticket.owner?.team ? <DataRow label="Team" value={titleCase(ticket.owner.team)} icon="people-outline" /> : null}
+            {ticket.owner?.team ? <DataRow label={tr('dash.team')} value={titleCase(ticket.owner.team)} icon="people-outline" /> : null}
             {ticket.owner?.status ? (
-              <DataRow label="Assignment" value={titleCase(ticket.owner.status)} icon="checkmark-circle-outline" />
+              <DataRow label={tr('ticket.assignment')} value={ticketLabel(tr, 'assignment', ticket.owner.status)} icon="checkmark-circle-outline" />
             ) : null}
           </ListSection>
         </Appear>
@@ -462,7 +464,7 @@ export default function TicketDetail() {
         <Appear index={4}>
           <Row style={{ gap: spacing.md }}>
             <Button
-              label="Update status"
+              label={tr('ticket.updateStatus')}
               icon="swap-vertical-outline"
               variant="outline"
               disabled={busy}
@@ -471,7 +473,7 @@ export default function TicketDetail() {
             />
             {ownedByOther ? (
               <Button
-                label="Take it over"
+                label={tr('ticket.takeOver')}
                 icon="hand-left-outline"
                 variant="ghost"
                 disabled={busy}
@@ -484,7 +486,7 @@ export default function TicketDetail() {
 
         {notes.length > 0 ? (
           <Appear index={5}>
-            <ListSection title="Notes" footer="Notes are visible to everyone who can see this request.">
+            <ListSection title={tr('more.notesTitle')} footer={tr('ticket.notesVisibility')}>
               {notes.map((n, i) => (
                 <View key={`${i}_${String(n).slice(0, 12)}`} style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.md }}>
                   <Txt size={font.sub} style={{ lineHeight: 21 }}>{String(n)}</Txt>
@@ -496,17 +498,16 @@ export default function TicketDetail() {
 
         <Appear index={6}>
           {trail.length > 0 ? (
-            <ListSection title="Activity" footer="Newest first. Every status change, assignment and note is recorded here.">
+            <ListSection title={tr('ticket.activity')} footer={tr('ticket.activityHint')}>
               {trail.map((e, i) => (
                 <TrailRow key={`${i}_${e.at ?? 'na'}`} entry={e} first={i === 0} />
               ))}
             </ListSection>
           ) : (
-            <ListSection title="Activity">
+            <ListSection title={tr('ticket.activity')}>
               <View style={{ paddingHorizontal: spacing.lg, paddingVertical: spacing.lg }}>
                 <Txt size={font.sub} color={c.muted}>
-                  Nothing has happened on this request since it was raised.
-                </Txt>
+                  {tr('ticket.noActivity')}</Txt>
               </View>
             </ListSection>
           )}
@@ -535,12 +536,12 @@ export default function TicketDetail() {
           bg={c.whatsappSoft}
           color={c.whatsapp}
           disabled={!phone}
-          onPress={() => { haptics.tap(); whatsapp(phone, `Namaste ${name}`); }}
+          onPress={() => { haptics.tap(); whatsapp(phone, `Namaste ${ticket.client?.name || 'Customer'}`); }}
           accessibilityLabel={tr('common.a11yWhatsapp', { name })}
         />
         {canClaim ? (
           <Button
-            label="I'll handle this"
+            label={tr('ticket.handleThis')}
             icon="hand-left"
             full
             loading={busy}
@@ -550,7 +551,7 @@ export default function TicketDetail() {
           />
         ) : (
           <Button
-            label="Add a note"
+            label={tr('ticket.addNote')}
             icon="create-outline"
             full
             disabled={busy}
@@ -563,8 +564,8 @@ export default function TicketDetail() {
       <Sheet
         visible={stateOpen}
         onClose={() => setStateOpen(false)}
-        title="Update status"
-        subtitle={`Currently ${ticket.status_label || titleCase(ticket.status)}`}
+        title={tr('ticket.updateStatus')}
+        subtitle={tr('task.currentStatus', { status: ticketLabel(tr, 'status', ticket.status, ticket.status_label) })}
       >
         <View style={{ paddingTop: spacing.xs }}>
           {stateChoices.map((s, i) => (
@@ -582,11 +583,11 @@ export default function TicketDetail() {
       <Sheet
         visible={noteOpen}
         onClose={() => setNoteOpen(false)}
-        title="Add a note"
+        title={tr('ticket.addNote')}
         subtitle={ticket.ticket_ref ?? undefined}
         footer={
           <Button
-            label="Save note"
+            label={tr('notes.saveNote')}
             icon="checkmark"
             full
             loading={busy}
@@ -597,13 +598,13 @@ export default function TicketDetail() {
       >
         <View style={{ paddingTop: spacing.xs }}>
           <Field
-            label="Note"
+            label={tr('home.noteLabel')}
             value={note}
             onChange={setNote}
-            placeholder="What happened, or what you agreed with the customer"
+            placeholder={tr('ticket.notePlaceholder')}
             multiline
             maxLength={500}
-            hint="This is added to the activity trail with your name against it."
+            hint={tr('ticket.noteHint')}
           />
         </View>
       </Sheet>
@@ -620,12 +621,13 @@ function StateOption({ value, current, first, onPress }: {
 }) {
   const c = useTheme();
   const tone = statusTone(value);
-  const hint = STATE_HINT[value];
+  const tr = useT();
+  const hint = STATE_HINT[value] ? tr(STATE_HINT[value]) : null;
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={titleCase(value)}
+      accessibilityLabel={ticketLabel(tr, 'status', value)}
       accessibilityState={{ selected: current }}
       style={({ pressed }) => [{
         flexDirection: 'row', alignItems: 'center', gap: spacing.md,
@@ -635,7 +637,7 @@ function StateOption({ value, current, first, onPress }: {
         backgroundColor: pressed ? c.cardAlt : 'transparent',
       }]}
     >
-      <Pill label={titleCase(value)} tone={tone} small dot />
+      <Pill label={ticketLabel(tr, 'status', value)} tone={tone} small dot />
       <View style={{ flex: 1 }}>
         {hint ? <Txt size={font.cap} color={c.muted} numberOfLines={1}>{hint}</Txt> : null}
       </View>
@@ -653,8 +655,9 @@ function StateOption({ value, current, first, onPress }: {
  * ================================================================== */
 
 function TrailRow({ entry, first }: { entry: TrailEntry; first: boolean }) {
+  const tr = useT();
   const c = useTheme();
-  const when = entry.at ? timeAgo(entry.at) : null;
+  const when = entry.at ? timeAgo(entry.at, tr) : null;
   const meta = [entry.actor, when].filter(Boolean).join(' · ');
   return (
     <View style={{
@@ -684,10 +687,11 @@ function TrailRow({ entry, first }: { entry: TrailEntry; first: boolean }) {
  * ================================================================== */
 
 function TicketSkeleton() {
+  const tr = useT();
   const c = useTheme();
   return (
     <Screen>
-      <Header title="Request" back />
+      <Header title={tr('tickets.requestFallback')} back />
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
         <Card>
           <Row>
