@@ -14,6 +14,31 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
+**2026-09-07 — owner-authorized completion is in progress.** The current audit
+supersedes the September 3 “app side caught up” statement: the new deletion-request
+contract and staff-export archive gap require mobile changes, and Phase 19 still
+has untranslated UI. The owner explicitly approved all remaining translation
+batches today. Preserve the historical entries below as dated evidence.
+
+| Phase | Deliverable | Current gate |
+|---|---|---|
+| 100 | Account deletion request, review status, honest failure and session preservation | Locally verified: 32 API tests, 4 mocked browser scenarios, TypeScript and zero lint errors; native/production checks open |
+| 101 | Exclude staff exports from EAS uploads | Selector checks pass: 8 exclusions, 5 config controls, 290 source/asset files retained; no upload |
+| 102–107 | Home/profile, tasks, main tabs, settings, record details, tickets/notes/WhatsApp list | Approved translation proposal and source-wiring batches in progress |
+| 108–113 | WhatsApp detail, earnings/attendance, payroll/analytics, team/maps, campaigns/notices, prospect/reference screens | Approved translation proposal and source-wiring batches in progress |
+| 114–119 | Auth/API/native/error and shared-component message delivery, final callsite reconciliation | Approved translation proposal and source-wiring batches in progress |
+| 99 / Phase 19 device gates / Ω | Fleet rollout, physical-device checks, final production acceptance | Require actual server, policy, store and device evidence; not closed by source tests |
+
+Next implementation work: finish Phase 100 browser verification, checkpoint the
+archive fix, then complete the language groups. Backend `main` was verified at
+`99df14b5cd8cf0e321dbcf662e1fa3e2941f999a` and `Shivam` at
+`338724b317f4944569b498e9fa183f01792c71ed` on September 7. The old `0324dfc`
+comparison is historical, not a current deploy test. Deletion-request implementation
+`65e3894f28ab79ef56d5a5ead90882c6a7ef1989` is on the latter branch and absent
+from main at this audit. Production runtime/configuration remains unverified.
+
+### Historical checkpoint — September 3
+
 **➡️ 2026-09-03 (END OF DAY) — the app side is caught up; the critical path is now four OWNER/SERVER actions, not code.** After the full-codebase audit and a live cross-session round with cgpe-api + cgpe-admin, everything the owner asked for is built and pushed (`1bf323d..bec6af8`, 17 commits, tsc 0 / test 1390 / web-export 0). The ONLY blockers are owner-held: (1) set `SARVAM_API_KEY` + `N8N_VOICE_BRAIN_URL` + `CGPE_VOICE_SECRET` on the droplet → voice works (assigned to cgpe-api to produce the full env checklist); (2) merge `origin/ved`→`main` + deploy + restart `:3001`; (3) rotate `JWT_SECRET` at that restart; (4) hand cgpe-api the seller→advisor mapping. Then verify + a new build. See `docs/HANDOFF.md` (top entry). The Phase-98 OTA note below is unchanged and still true.
 
 
@@ -212,7 +237,17 @@ remains unrotated (owner-owned).
 
 ---
 
-## Next 3 — as of 2026-09-02 (after Phase 98, OTA)
+## Next 3 — current September 7 completion run
+
+1. Complete and verify Phase 100 account request/status adoption; preserve sessions
+   and classify unavailable/malformed replies honestly.
+2. Checkpoint Phase 101 staff-export archive exclusion and its new-build runtime
+   requirement.
+3. Finish approved Phases 102–119 translation wiring, then reconcile browser,
+   handset, server and policy evidence before release. Do not treat historical
+   copy waits or old backend branch hashes as current blockers.
+
+### Historical next actions — September 2 (after Phase 98, OTA)
 
 1. 🔴 **ROLL BUILD 6 OUT TO THE OTHER TWENTY HANDSETS. This is the owner's, and it is now the single
    highest-value unblocked action in the project.**
@@ -2834,6 +2869,15 @@ Phase 7 (tracking/geofence correctness) should land before it too. Everything el
 that can run in parallel.
 
 ## Open INBOX items addressed to this session
+
+**Current audit — September 7:** The new pending-backend-completion thread requires
+the account deletion request/status consumer implemented in Phase 100. Older open
+shared boxes include already completed/no-consumer FYIs and runtime/device checks;
+their full threads and corrections were reviewed without changing sibling boxes.
+Backend source availability is recorded under Now. Production readiness, policy
+fulfillment, voice configuration and handset observations remain unverified here.
+
+### Historical audit — August 10
 
 From `../contracts/INBOX.md`, re-read 2026-08-10 at the close of Phase 7. **Nothing is open against
 this session.** Both remaining boxes were closed by Phase 7:

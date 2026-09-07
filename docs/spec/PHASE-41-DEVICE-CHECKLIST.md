@@ -49,14 +49,15 @@ nothing. Each row names the **exact code path** and the **exact observable** —
 | 9 | Reboot the handset (do **not** reopen the app) | After boot, WorkManager restores the periodic task and it **re-arms** the recorder within ~15 min — no hand-written BootReceiver | `expo-background-task` restored-after-reboot; re-arm iff live shift OR 24/7 armed |
 | 10 | Clock out **and** withdraw consent so nothing is left to record | The watchdog **retires** — the device stops being woken (protects §3 battery) | `retireWatchdog` at `stopUpdates`; `watchdog.ts` re-arm invariant |
 
-## 3. 41c — motion-adaptive sampling (verify, then MEASURE)
+## 3. 41c — motion classifier and owner-selected hourly sampling (verify, then MEASURE)
 
 | # | Step | Expected observable | Code anchor |
 |---|---|---|---|
-| 11 | Sit still (phone on a desk, screen on) for >5 min, then walk | While still + foreground, sampling lengthens the **time** cadence to 5 min; on movement it returns to the Balanced/60 s/30 m cadence. **Scope honesty:** the profile is applied at each service (re)start, **not mid-session**, and the accelerometer **pauses in background**, so `still` rarely fires for a pocketed phone | `motion.ts` `classifyMotion`/`samplingProfile`/`resolveMotion`; `startService` reads `track.motion` |
+| 11 | Sit still (phone on a desk, screen on), then walk; observe across the configured sampling interval | The classifier changes still/moving, but **all profiles request hourly sampling** (`HOURLY_MS = 3600000`, Phase 78 owner decision). Shift still/moving retain high accuracy and distance interval 0. Do not expect the superseded 5-minute/60-second cadence. OS delivery and watchdog fixes are best-effort; record actual observations. Profiles apply at service (re)start and the accelerometer pauses in background. | `motion.ts` `classifyMotion`/`samplingProfile`/`resolveMotion`; `startService` reads `track.motion` |
 
-> §12.8 / §3: 41c is the **lever**, not a guaranteed win. Row 11 confirms the classifier *works*;
-> whether it *helps* is decided by the row 16 battery measurement.
+> Corrected September 7 against the implemented Phase 78 decision. Row 11 verifies
+> classifier behavior without promising adaptive cadence. Row 16 still requires a
+> real battery measurement; changing the hourly setting requires an owner decision.
 
 ## 4. 41d — anti-circumvention (§5)
 
@@ -89,7 +90,7 @@ nothing. Each row names the **exact code path** and the **exact observable** —
 | 8 | OEM-kill → re-arm ~1 interval | | | | |
 | 9 | Reboot → restored + re-arm | | | | |
 | 10 | Off-shift + un-armed → retire stops wakeups | | | | |
-| 11 | Motion classifier still→5 min, moving→Balanced | | | | |
+| 11 | Classifier still/moving; hourly profiles; actual device delivery recorded | | | | |
 | 12 | Fake-GPS fixes dropped (gap, not fake route) | | | | |
 | 13 | Revoke bg permission → every master alerted, once | | | | |
 | 14 | Device-Location-OFF → app-block overlay + Open settings + back-swallow + auto-clear | | | | |

@@ -1,3 +1,47 @@
+# HANDOFF — CGPE Connect (Android) — 2026-09-07 — completion run in progress
+
+The owner authorized all pending phases and explicitly approved remaining Gujarati,
+Hindi, Hinglish and Gujlish translations. Codex workflow initialization is recorded
+in `docs/CODEX_WORKFLOW.md`; previous handoffs are preserved below.
+
+## Current verified work
+
+- Phase 100 implements POST/GET account deletion requests and review statuses,
+  preserving auth/biometric/draft state. It removes the old destructive context/API
+  route and guards delayed old-token 401 responses from expiring a new user.
+- Account/privacy has 32 new five-language keys and reuses two supplied keys; the
+  five voice/update English fallbacks are now translated under today's approval.
+- TypeScript passes; 32 new contract tests pass; full suite passes 1,422 tests
+  before the separately passing additional placeholder-parity test. Four mocked
+  browser scenarios pass, including refresh/reload with preserved authentication.
+  The splash-settled under-review screenshot was visually checked at 402 px.
+- Phase 101 mirrors staff-export exclusions into `.easignore`. Actual EAS selector
+  checks pass for eight exclusions, five config controls and 290 source/assets.
+  No sensitive contents read, archive created or upload performed.
+- The device sampling checklist now reflects the existing owner-selected hourly
+  profiles; the release guide no longer treats September 1 quota expiry as current.
+
+## Continue without restarting completed work
+
+Phases 102–119 are authorized translation batches in progress. Read the current
+board and proposed copy artifacts; source edits and final review remain with the
+main agent. Existing supplied translations stay intact. Preserve wire identifiers,
+backend/user content and explicit calendar-formatting decisions. Source and web
+checks do not close human naturalness or native cold-start/device acceptance.
+
+## External limits
+
+September 7 backend live main was `99df14b5cd8cf0e321dbcf662e1fa3e2941f999a`;
+Shivam was `338724b317f4944569b498e9fa183f01792c71ed`. Deletion-request commit
+`65e3894f28ab79ef56d5a5ead90882c6a7ef1989` was absent main. These are Git facts,
+not production deployment proof. Voice configuration, deployment, secret rotation,
+seller/advisor assignments, review/fulfillment policy, store accounts and fleet
+device checks remain unverified. The archive exclusion changes the runtime
+fingerprint: a compatible new Android build is required before subsequent OTA
+rollout. Phase 99 and Ω remain gated accordingly.
+
+---
+
 # HANDOFF — CGPE Connect (Android) — 2026-09-03 (END OF DAY) — live coordination + owner-directed fixes
 
 > **A full-codebase audit, then a LIVE cross-session round (SendMessage, not just INBOX) with

@@ -34,7 +34,7 @@ device, a screenshot, a video). Documents marked **👤 owner** are account/web/
 | Android background-location + FGS declarations | ✅ drafted here; ⏳ needs screenshots + video |
 | Data Safety / Apple App Privacy | ✅ data map ready; 👤 owner fills the console forms |
 | Version consistency | ✅ reconciled to 1.10.0 |
-| Android production build | ⛔ EAS free quota exhausted until **1 Sep 2026** (or paid plan) |
+| Android production build | September 7: the old September 1 quota date is stale. Build 6 and its OTA round trip were device-confirmed September 2; current production-build capacity is unverified. The staff-export `.easignore` fix changes the fingerprint, requiring a compatible new build before subsequent OTA rollout. |
 | iOS build / TestFlight | ⛔ needs Apple Developer account (owner purchasing) — EAS builds it in the cloud, no Mac required |
 | `eas.json submit.production` credentials | 👤 owner (Play service-account JSON + Apple ASC API key) |
 | FCM V1 key (push delivery) | 👤 owner (interactive `eas credentials`) |
