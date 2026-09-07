@@ -1,3 +1,4 @@
+import { renderText, type CopyText, resolveCopy, textCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -58,7 +59,7 @@ import { useT } from '@/i18n';
 type StageFilter = 'all' | LeadStage;
 
 /** A screen-specific failure worth keeping on screen. The app-wide HealthBanner covers outages. */
-type Notice = { title: string; message: string };
+type Notice = { title: CopyText; message: CopyText };
 
 /** The server's own enum order (`contracts/enums.md:212`), which is also the funnel order. */
 const STAGE_ORDER: LeadStage[] = ['new_lead', 'meeting_scheduled', 'docs_shared', 'policy_issued', 'lost'];
@@ -208,15 +209,15 @@ export default function Leads() {
     if (confirmed) {
       setLeads((prev) => prev.map((l) => (l.id === lead.id ? confirmed : l)));
       haptics.success();
-      toast(`${lead.name} moved to ${t(STAGE_META[next].labelKey)}`, 'success');
+      toast(t('leads.movedToast', { name: resolveCopy(t, lead.name, lead.nameCopy), stage: t(STAGE_META[next].labelKey) }), 'success');
       return;
     }
 
     setLeads((prev) => prev.map((l) => (l.id === lead.id ? { ...l, stage: from } : l)));
     haptics.error();
     setNotice({
-      title: 'That move was not saved',
-      message: `${lead.name} could not be moved to ${t(STAGE_META[next].labelKey)}. The server did not confirm the change, so the lead is still at ${t(STAGE_META[from].labelKey)}.`,
+      title: textCopy('leads.moveFailed'),
+      message: textCopy('leads.moveFailedBody', { name: lead.name }, { ...(lead.nameCopy ? { name: lead.nameCopy } : {}), nextStage: textCopy(STAGE_META[next].labelKey), previousStage: textCopy(STAGE_META[from].labelKey) }),
     });
   }, [busyId, toast, t]);
 
@@ -239,7 +240,7 @@ export default function Leads() {
     refresh();
     if (confirmed) {
       haptics.success();
-      toast(`${lead.name} added to your pipeline`, 'success');
+      toast(t('leads.addedToast', { name: resolveCopy(t, lead.name, lead.nameCopy) }), 'success');
       return;
     }
     // PHASE 57: a dropped connection now QUEUES the lead to the persistent write queue — it will POST
@@ -248,7 +249,7 @@ export default function Leads() {
     // add it again" — the draft is safe and will retry itself, so a neutral acknowledgement is honest.
     if (reason === 'network') {
       haptics.tap();
-      toast(t('sync.savedLocalNamed', { name: lead.name }), 'info');
+      toast(t('sync.savedLocalNamed', { name: resolveCopy(t, lead.name, lead.nameCopy) }), 'info');
       return;
     }
     haptics.warn();
@@ -257,13 +258,13 @@ export default function Leads() {
     // holding it — telling that user to pull to refresh would send them looking for a record that was
     // never created and can never be.
     setNotice(reason === 'server' ? {
-      title: 'That lead is not on the server yet',
-      message: `${lead.name} was captured on this device, but the server did not confirm it. Pull to refresh and check before adding this lead again.`,
+      title: textCopy('leads.notOnServerTitle'),
+      message: textCopy('leads.notOnServerBody', { name: lead.name }, { ...(lead.nameCopy ? { name: lead.nameCopy } : {}) }),
     } : {
-      title: 'That lead was not added',
+      title: textCopy('leads.notAddedTitle'),
       message: reason === 'forbidden'
-        ? `The server refused to create ${lead.name}: this account does not have access to Leads. Nothing was saved, on this device or on the server.`
-        : `The server has nowhere to create ${lead.name} — it answered that the leads endpoint is not there. Nothing was saved, on this device or on the server.`,
+        ? textCopy('leads.createForbiddenBody', { name: lead.name }, { ...(lead.nameCopy ? { name: lead.nameCopy } : {}) })
+        : textCopy('leads.createUnavailableBody', { name: lead.name }, { ...(lead.nameCopy ? { name: lead.nameCopy } : {}) }),
     });
   }, [refresh, toast, t]);
 
@@ -295,22 +296,22 @@ export default function Leads() {
               : 'people-outline'
       }
       title={
-        emptyKind === 'search' ? `No lead matches "${q.trim()}"`
-          : emptyKind === 'filter' ? `Nothing at ${filter === 'all' ? 'this stage' : t(STAGE_META[filter].labelKey)} right now`
-            : emptyKind === 'outage' ? 'Your pipeline could not load'
-              : 'No leads in your pipeline yet'
+        emptyKind === 'search' ? t('leads.noSearchMatch', { query: q.trim() })
+          : emptyKind === 'filter' ? t('leads.stageEmpty', { stage: filter === 'all' ? t('leads.thisStage') : t(STAGE_META[filter].labelKey) })
+            : emptyKind === 'outage' ? t('leads.pipelineLoadFailed')
+              : t('leads.emptyPipelineTitle')
       }
       subtitle={
-        emptyKind === 'search' ? 'Search runs over name, interest, city and mobile number.'
-          : emptyKind === 'filter' ? 'Every other stage is still there. Switch the filter to see the rest of the pipeline.'
-            : emptyKind === 'outage' ? 'The server did not answer, so nothing here is confirmed. Check your connection and pull to refresh.'
-              : 'Add the first one and it will sit at the New stage until you move it forward.'
+        emptyKind === 'search' ? t('leads.searchFieldsBody')
+          : emptyKind === 'filter' ? t('leads.otherStagesBody')
+            : emptyKind === 'outage' ? t('clients.unconfirmedBody')
+              : t('leads.firstLeadBody')
       }
       action={
         emptyKind === 'search' ? { label: t('common.clearSearch'), onPress: () => setQ('') }
-          : emptyKind === 'filter' ? { label: 'Show all stages', onPress: () => pickStage('all') }
+          : emptyKind === 'filter' ? { label: t('leads.showAllStages'), onPress: () => pickStage('all') }
             : emptyKind === 'outage' ? { label: t('common.tryAgain'), onPress: refresh }
-              : { label: 'Add a lead', onPress: () => setAddOpen(true) }
+              : { label: t('leads.addOne'), onPress: () => setAddOpen(true) }
       }
     />
   );
@@ -319,11 +320,11 @@ export default function Leads() {
     <Screen>
       <Header
         title={t('tab.leads')}
-        subtitle={loading ? 'Loading your pipeline' : `${leads.length} leads, ${openCount} still open`}
+        subtitle={loading ? t('leads.loadingPipeline') : t('leads.totalOpenSummary', { count: leads.length, open: openCount })}
         right={!loading && openValue > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={inrShort(openValueDisplay)} size={font.h3} />
-            <Eyebrow>Open pipeline</Eyebrow>
+            <Eyebrow>{t('home.openPipeline')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -333,7 +334,7 @@ export default function Leads() {
           {/* Not debounced, deliberately: this filters an array already in memory (the
               endpoint returns the whole pipeline in one call), so a timer would only add
               latency to a keystroke that costs nothing. */}
-          <SearchBar value={q} onChange={setQ} placeholder="Name, interest, city or mobile" />
+          <SearchBar value={q} onChange={setQ} placeholder={t('leads.searchPlaceholder')} />
         </View>
 
         {/* Bleeds to both edges so the strip reads as scrollable. keyboardShouldPersistTaps:
@@ -360,14 +361,14 @@ export default function Leads() {
               // the first move out of New is a booked meeting — so the old label described a
               // milestone the pipeline can no longer record, and read as an accusation on any
               // day of calls that produced no meetings.
-              label="Meeting booked or further"
+              label={t('leads.meetingOrFurther')}
               value={engagedCount / openCount}
-              valueLabel={`${engagedCount} of ${openCount}`}
+                  valueLabel={t('common.countOfTotal', { count: engagedCount, total: openCount })}
               tone={engagedCount === 0 ? 'warning' : 'primary'}
               style={{ flex: 1 }}
             />
             <Button
-              label="By stage"
+              label={t('leads.byStage')}
               variant="ghost"
               size="sm"
               iconRight="chevron-forward"
@@ -380,8 +381,8 @@ export default function Leads() {
           <View style={{ paddingHorizontal: spacing.lg }}>
             <Banner
               tone="warning"
-              title={notice.title}
-              message={notice.message}
+              title={renderText(t, notice.title)}
+              message={renderText(t, notice.message)}
               onDismiss={() => setNotice(null)}
               action={{ label: t('common.refresh'), onPress: () => { setNotice(null); refresh(); } }}
             />
@@ -457,7 +458,7 @@ export default function Leads() {
         />
       )}
 
-      <Fab icon="add" label="Add lead" onPress={() => setAddOpen(true)} />
+      <Fab icon="add" label={t('leads.addAction')} onPress={() => setAddOpen(true)} />
 
       <PipelineSheet
         visible={pipeOpen}
@@ -499,8 +500,8 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
   const st = STAGE_META[lead.stage];
   const next = NEXT_STAGE[lead.stage];
 
-  const fact = lead.interest || lead.city || lead.phone || 'No interest recorded';
-  const subtitle = lead.lastActivity ? `${fact} · ${timeAgo(lead.lastActivity)}` : fact;
+  const fact = lead.interest || lead.city || lead.phone || t('leads.noInterest');
+  const subtitle = lead.lastActivity ? `${fact} · ${timeAgo(lead.lastActivity, t)}` : fact;
   const subtitleIcon = lead.interest ? 'pricetag-outline' : lead.city ? 'location-outline' : 'call-outline';
 
   // Two actions maximum, and SwipeRow ignores anything past that. Ranked by what the thumb
@@ -511,7 +512,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
       icon: next === 'policy_issued' ? 'trophy' : 'arrow-forward',
       // "Close as won" rather than "Mark won": this one opens a confirmation, and a label
       // promising an immediate write would misdescribe what the swipe does.
-      label: next === 'policy_issued' ? 'Close as won' : `To ${t(STAGE_META[next].labelKey)}`,
+      label: next === 'policy_issued' ? t('leads.closeWon') : t('leads.toStage', { stage: t(STAGE_META[next].labelKey) }),
       tone: next === 'policy_issued' ? 'success' : 'primary',
       onPress: onAdvance,
     });
@@ -536,7 +537,7 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
   return (
     <SwipeRow actions={actions} onPress={onOpen} disabled={busy} radius={0} surface={c.card}>
       <PersonRow
-        name={lead.name}
+        name={resolveCopy(t, lead.name, lead.nameCopy)}
         subtitle={subtitle}
         subtitleIcon={subtitleIcon}
         subtitleNumeric
@@ -563,9 +564,10 @@ function LeadRow({ lead, busy, onOpen, onAdvance }: {
  * confirmed row (the reconcile-on-flush refresh above). A bordered card sets it apart from live rows.
  */
 function PendingLeadRow({ lead }: { lead: Lead }) {
+  const t = useT();
   const c = useTheme();
   const { spacing, font, radius } = c;
-  const fact = lead.interest || lead.city || lead.phone || 'No interest recorded';
+  const fact = lead.interest || lead.city || lead.phone || t('leads.noInterest');
   const subtitleIcon = lead.interest ? 'pricetag-outline' : lead.city ? 'location-outline' : 'call-outline';
   return (
     <View style={{
@@ -575,7 +577,7 @@ function PendingLeadRow({ lead }: { lead: Lead }) {
       borderColor: c.warning,
     }}>
       <PersonRow
-        name={lead.name}
+        name={resolveCopy(t, lead.name, lead.nameCopy)}
         subtitle={fact}
         subtitleIcon={subtitleIcon}
         subtitleNumeric
@@ -609,6 +611,7 @@ function RowSeparator() {
 }
 
 function ListFooter({ count }: { count: number }) {
+  const t = useT();
   const c = useTheme();
   const { spacing, font } = c;
   return (
@@ -617,7 +620,7 @@ function ListFooter({ count }: { count: number }) {
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
     }}>
       <Txt size={font.cap} color={c.faint} numeric>
-        {count === 1 ? '1 lead' : `${count} leads`}. Swipe a row to move it on.
+        {t('leads.registerFooter', { count })}
       </Txt>
     </View>
   );
@@ -647,26 +650,25 @@ function PipelineSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Pipeline by stage"
+      title={t('leads.pipelineByStage')}
       subtitle={openCount > 0
-        ? `${openCount} open, ${inrShort(openValue)} in play`
-        : 'Nothing open right now'}
+        ? t('leads.openValueSummary', { count: openCount, amount: inrShort(openValue) })
+        : t('leads.nothingOpen')}
     >
       <View style={{ gap: spacing.xl, paddingTop: spacing.xs }}>
         {closedCount > 0 ? (
           <Meter
-            label="Policy issued, out of every lead you have closed"
+            label={t('leads.wonRateLabel')}
             value={wonCount / closedCount}
-            valueLabel={`${wonCount} of ${closedCount}`}
+        valueLabel={t('common.countOfTotal', { count: wonCount, total: closedCount })}
             tone="success"
           />
         ) : (
           <Txt size={font.sub} color={c.muted}>
-            No lead has been closed yet, so there is no win rate to show.
-          </Txt>
+            {t('leads.noWinRate')}</Txt>
         )}
 
-        <ListSection title="Stages" footer="Tap a stage to filter the list behind this sheet.">
+        <ListSection title={t('more.leadsSub')} footer={t('leads.stageFilterHint')}>
           {STAGE_ORDER.map((s) => {
             const b = byStage[s];
             const meta = STAGE_META[s];
@@ -674,7 +676,7 @@ function PipelineSheet({
               <DataRow
                 key={s}
                 label={t(meta.labelKey)}
-                value={b.count === 0 ? 'None' : b.value > 0 ? inrShort(b.value) : `${b.count}`}
+                value={b.count === 0 ? t('leads.noneLabel') : b.value > 0 ? inrShort(b.value) : `${b.count}`}
                 onPress={() => onPickStage(s)}
                 right={b.count > 0 ? <Pill label={String(b.count)} tone={meta.tone} small numeric /> : undefined}
               />
@@ -706,32 +708,31 @@ function CloseOutSheet({ visible, lead, onClose, onConfirm }: {
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Close this lead as won?"
+      title={t('leads.closeWonTitle')}
       // "swiped straight back" was never true — a swipe only ever moves a lead FORWARD one step
       // (NEXT_STAGE has no reverse), and the stage picker on the detail screen is the only way
       // back. Telling someone a move is reversible by swipe sends them to swipe again, which
       // advances it further.
-      subtitle={`${lead.name} leaves the open pipeline. Any stage can still be set again from the lead's own screen.`}
+      subtitle={t('leads.closeWonBody', { name: resolveCopy(t, lead.name, lead.nameCopy) })}
       footer={
         <Row>
-          <Button label="Not yet" variant="outline" style={{ flex: 1 }} onPress={onClose} />
-          <Button label="Close as won" icon="trophy" style={{ flex: 1.4 }} onPress={onConfirm} />
+          <Button label={t('leads.notYet')} variant="outline" style={{ flex: 1 }} onPress={onClose} />
+          <Button label={t('leads.closeWon')} icon="trophy" style={{ flex: 1.4 }} onPress={onConfirm} />
         </Row>
       }
     >
       <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
-        <ListSection title="What moves">
-          <DataRow label="Lead" value={lead.name} icon="person-outline" />
-          <DataRow label="From" value={t(STAGE_META[lead.stage].labelKey)} icon="flag-outline" />
-          <DataRow label="To" value={t(STAGE_META.policy_issued.labelKey)} tone="success" icon="trophy-outline" />
+        <ListSection title={t('leads.whatMoves')}>
+          <DataRow label={t('prospect.stageLead')} value={resolveCopy(t, lead.name, lead.nameCopy)} icon="person-outline" />
+          <DataRow label={t('leads.fromLabel')} value={t(STAGE_META[lead.stage].labelKey)} icon="flag-outline" />
+          <DataRow label={t('leads.toLabel')} value={t(STAGE_META.policy_issued.labelKey)} tone="success" icon="trophy-outline" />
           {lead.potential > 0 ? (
-            <DataRow label="Premium potential" value={inr(lead.potential)} icon="cash-outline" numeric />
+            <DataRow label={t('leads.premiumPotential')} value={inr(lead.potential)} icon="cash-outline" numeric />
           ) : null}
         </ListSection>
 
         <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center' }}>
-          The change is only confirmed once the server sends the updated lead back.
-        </Txt>
+          {t('leads.confirmedServerHint')}</Txt>
       </View>
     </Sheet>
   );
@@ -754,10 +755,10 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
   const [potential, setPotential] = useState('');
   const [city, setCity] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<CopyText | null>(null);
   /** The server's own refusal sentence (HTTP 400). Kept apart from `error`, which belongs to
    *  the one check this sheet makes for itself, so neither is shown under the wrong field. */
-  const [refused, setRefused] = useState<string | null>(null);
+  const [refused, setRefused] = useState<CopyText | null>(null);
 
   // Same contract as the screen: the POST outlives a thumb on the tab bar, and this component
   // is unmounted along with the tab.
@@ -778,7 +779,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
     if (saving) return;
     if (!name.trim()) {
       haptics.warn();
-      setError('A name is the one thing a lead cannot be without.');
+      setError(textCopy('leads.nameRequired'));
       return;
     }
     haptics.tap();
@@ -806,7 +807,7 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
       // cause: it is required and validated server-side.
       if (result.reason === 'invalid') {
         haptics.warn();
-        setRefused(result.message);
+        setRefused(result.messageCopy ?? result.message);
         return;
       }
       reset();
@@ -825,10 +826,10 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
       visible={visible}
       onClose={close}
       title={t('act.newLead')}
-      subtitle="It starts at the New stage. You can move it on straight away."
+      subtitle={t('leads.newStageBody')}
       footer={
         <Button
-          label={saving ? t('common.saving') : 'Add lead'}
+          label={saving ? t('common.saving') : t('leads.addAction')}
           icon="checkmark"
           size="lg"
           full
@@ -841,47 +842,47 @@ function AddLeadSheet({ visible, onClose, onAdded }: {
         {refused ? (
           <Banner
             tone="danger"
-            title="The server did not accept this lead"
-            message={refused}
+            title={t('leads.serverRefusedTitle')}
+            message={renderText(t, refused)}
             onDismiss={() => setRefused(null)}
           />
         ) : null}
         <Field
-          label="Name"
+          label={t('leads.nameLabel')}
           value={name}
           onChange={(v) => { setName(v); if (error) setError(null); if (refused) setRefused(null); }}
-          placeholder="Who is this lead?"
-          error={error ?? undefined}
+          placeholder={t('leads.namePlaceholder')}
+          error={error ? renderText(t, error) : undefined}
         />
         <Field
-          label="Mobile number"
+          label={t('leads.mobileLabel')}
           value={phone}
           onChange={(v) => { setPhone(v); if (refused) setRefused(null); }}
-          placeholder="10 digit mobile"
+          placeholder={t('leads.mobilePlaceholder')}
           keyboardType="phone-pad"
           icon="call-outline"
-          hint="Needed for the call and WhatsApp actions on the row — and the server requires it."
+          hint={t('leads.mobileHint')}
         />
         <Field
-          label="Interested in"
+          label={t('leads.interestLabel')}
           value={interest}
           onChange={setInterest}
-          placeholder="Plan or need"
+          placeholder={t('leads.interestPlaceholder')}
           icon="pricetag-outline"
         />
         <Field
-          label="Premium potential"
+          label={t('leads.premiumPotential')}
           value={potential}
           onChange={setPotential}
-          placeholder="Annual premium in rupees"
+          placeholder={t('leads.premiumPlaceholder')}
           keyboardType="numeric"
           icon="cash-outline"
         />
         <Field
-          label="City"
+          label={t('leads.cityLabel')}
           value={city}
           onChange={setCity}
-          placeholder="Where are they based?"
+          placeholder={t('leads.cityPlaceholder')}
           icon="location-outline"
         />
       </View>

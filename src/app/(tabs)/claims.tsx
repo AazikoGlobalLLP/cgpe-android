@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -61,43 +62,43 @@ const TYPE_ICON: Record<Claim['type'], IconName> = {
 };
 
 /** One honest message per view. A shared "nothing here" would misreport six of the seven. */
-const EMPTY_COPY: Record<Filter, { icon: IconName; title: string; subtitle: string; add?: boolean }> = {
+const EMPTY_COPY: Record<Filter, { icon: IconName; titleKey: string; subtitleKey: string; add?: boolean }> = {
   all: {
     icon: 'shield-outline',
-    title: 'No claims in your register',
-    subtitle: 'Claims you register appear here with their documents and status. Start one with the button below.',
+    titleKey: 'claims.emptyRegisterTitle',
+    subtitleKey: 'claims.emptyRegisterBody',
     add: true,
   },
   intake: {
     icon: 'download-outline',
-    title: 'Nothing at intake',
-    subtitle: 'No claim is waiting to be opened. New claims land here first.',
+    titleKey: 'claims.emptyIntakeTitle',
+    subtitleKey: 'claims.emptyIntakeBody',
     add: true,
   },
   docs_pending: {
     icon: 'document-attach-outline',
-    title: 'Nothing waiting on documents',
-    subtitle: 'Every open claim has the paperwork it needs right now.',
+    titleKey: 'claims.emptyDocsTitle',
+    subtitleKey: 'claims.emptyDocsBody',
   },
   under_review: {
     icon: 'search-outline',
-    title: 'Nothing under review',
-    subtitle: 'No claim is being assessed by the insurer at the moment.',
+    titleKey: 'claims.emptyReviewTitle',
+    subtitleKey: 'claims.emptyReviewBody',
   },
   submitted: {
     icon: 'paper-plane-outline',
-    title: 'Nothing submitted',
-    subtitle: 'No claim has been sent to the insurer yet.',
+    titleKey: 'claims.emptySubmittedTitle',
+    subtitleKey: 'claims.emptySubmittedBody',
   },
   settled: {
     icon: 'checkmark-done-circle-outline',
-    title: 'Nothing settled yet',
-    subtitle: 'Claims move here once the insurer has paid out.',
+    titleKey: 'claims.emptySettledTitle',
+    subtitleKey: 'claims.emptySettledBody',
   },
   rejected: {
     icon: 'close-circle-outline',
-    title: 'Nothing rejected',
-    subtitle: 'No claim in your register has been turned down.',
+    titleKey: 'claims.emptyRejectedTitle',
+    subtitleKey: 'claims.emptyRejectedBody',
   },
 };
 
@@ -247,8 +248,8 @@ export default function Claims() {
 
   const n = filtered.length;
   const readout = filter === 'all'
-    ? `${n} claim${n === 1 ? '' : 's'} · ${inrShort(activeValue)} still in progress`
-    : `${n} of ${claims.length} claim${claims.length === 1 ? '' : 's'} match this status`;
+    ? t('claims.activeSummary', { count: n, amount: inrShort(activeValue) })
+    : t('claims.statusSummary', { shown: n, count: claims.length });
 
   const empty = EMPTY_COPY[filter];
   // An empty register under an outage means "could not load", not "nothing to work on".
@@ -256,10 +257,10 @@ export default function Claims() {
   const outage = health.degraded && claims.length === 0;
 
   const subtitle = loading
-    ? 'Loading the register'
+    ? t('claims.loadingRegister')
     : sum
-      ? `${sum.total_claims} in the register · ${inrShort(sum.pending_amount)} pending`
-      : `${claims.length} on your rows · ${inrShort(activeValue)} in progress`;
+      ? t('claims.registerPendingSummary', { count: sum.total_claims, amount: inrShort(sum.pending_amount) })
+      : t('claims.loadedProgressSummary', { count: claims.length, amount: inrShort(activeValue) });
 
   const listHeader = (
     <View style={{ gap: spacing.md, paddingBottom: spacing.md }}>
@@ -319,18 +320,18 @@ export default function Claims() {
               {outage ? (
                 <EmptyState
                   icon="cloud-offline-outline"
-                  title="The register did not load"
-                  subtitle="The server could not be reached, so this is not a confirmed empty register. Pull down to try again."
+                  title={t('claims.registerFailed')}
+                  subtitle={t('claims.unconfirmedRegister')}
                   action={{ label: t('common.tryAgain'), onPress: retry }}
                 />
               ) : (
                 <EmptyState
                   icon={empty.icon}
-                  title={empty.title}
-                  subtitle={empty.subtitle}
+                  title={t(empty.titleKey)}
+                  subtitle={t(empty.subtitleKey)}
                   action={empty.add && canCreateClaim
                     ? { label: t('act.newClaim'), onPress: () => router.push('/claim-new') }
-                    : { label: 'Show all claims', onPress: () => pickFilter('all') }}
+                    : { label: t('claims.showAll'), onPress: () => pickFilter('all') }}
                 />
               )}
             </Card>
@@ -385,15 +386,15 @@ function ClaimRow({ claim, index, onOpen }: { claim: Claim; index: number; onOpe
       <View style={{ backgroundColor: c.card }}>
         <DataRow
           icon={TYPE_ICON[claim.type]}
-          label={claim.clientName}
-          value={hasAmount ? inrShort(claim.amount) : 'No amount'}
+          label={resolveCopy(t, claim.clientName, claim.clientNameCopy)}
+          value={hasAmount ? inrShort(claim.amount) : t('claims.noAmount')}
           numeric={hasAmount}
           right={
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
               {showDocs ? (
                 <View
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}
-                  accessibilityLabel={`${received} of ${total} documents received`}
+                  accessibilityLabel={t('claims.documentsCount', { received: received, total: total })}
                 >
                   <Ionicons name="document-attach-outline" size={12} color={docTone} />
                   <Txt size={font.tiny} weight="700" color={docTone} numeric>{received}/{total}</Txt>

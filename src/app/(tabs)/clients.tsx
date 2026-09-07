@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -188,10 +189,10 @@ function ClientsScreen() {
 
   /* ---------- readout ---------- */
   const readout = activeCount > 0
-    ? `${shown.length} of ${loadedDisplay} loaded match these filters`
+    ? t('clients.filteredLoadedCount', { shown: shown.length, loaded: loadedDisplay })
     : hasMore
-      ? `${loadedDisplay} loaded, keep scrolling for more`
-      : `${loadedDisplay} loaded`;
+      ? t('clients.loadedMoreHint', { count: loadedDisplay })
+        : t('clients.loadedCount', { count: loadedDisplay });
 
   /* The outage check comes BEFORE the search check on purpose (same reasoning as tickets/index).
    * Client search is SERVER-side (getClientsPage), so a failed search resolves empty and flips
@@ -202,19 +203,19 @@ function ClientsScreen() {
     <EmptyState
       icon={activeCount > 0 ? 'funnel-outline' : health.degraded ? 'cloud-offline-outline' : q ? 'search-outline' : 'people-outline'}
       title={
-        activeCount > 0 ? 'Nothing loaded matches these filters'
-          : health.degraded ? 'The client book could not load'
-            : q ? `No client matches "${q.trim()}"`
-              : 'No clients in your book yet'
+        activeCount > 0 ? t('clients.noFilterMatch')
+          : health.degraded ? t('clients.bookFailed')
+            : q ? t('clients.noSearchMatch', { query: q.trim() })
+              : t('clients.emptyBook')
       }
       subtitle={
-        activeCount > 0 ? 'Filters run over the clients loaded so far. Clear them, or load more of the book first.'
-          : health.degraded ? 'The server did not answer, so nothing here is confirmed. Check your connection and pull to refresh.'
-            : q ? 'Search runs across the whole book, by name, policy number or mobile number.'
-              : 'Clients appear here as soon as records are assigned to you.'
+        activeCount > 0 ? t('clients.loadedFilterBody')
+          : health.degraded ? t('clients.unconfirmedBody')
+            : q ? t('clients.searchScopeBody')
+              : t('clients.assignedBody')
       }
       action={
-        activeCount > 0 ? { label: 'Clear filters', onPress: clearFilters }
+        activeCount > 0 ? { label: t('clients.clearFilters'), onPress: clearFilters }
           : health.degraded ? { label: t('common.tryAgain'), onPress: () => fetchPage(1, q.trim(), 'replace') }
             : q ? { label: t('common.clearSearch'), onPress: () => setQ('') }
               : { label: t('common.tryAgain'), onPress: () => fetchPage(1, q.trim(), 'replace') }
@@ -240,7 +241,7 @@ function ClientsScreen() {
           <SearchBar
             value={q}
             onChange={setQ}
-            placeholder="Name, policy number or mobile"
+            placeholder={t('clients.searchPlaceholder')}
             style={{ flex: 1 }}
           />
           <View>
@@ -250,7 +251,7 @@ function ClientsScreen() {
               bg={activeCount > 0 ? c.primarySoft : c.cardAlt}
               color={activeCount > 0 ? c.primary : c.muted}
               onPress={() => setFilterOpen(true)}
-              accessibilityLabel={activeCount > 0 ? `Filters, ${activeCount} active` : 'Filter clients'}
+              accessibilityLabel={activeCount > 0 ? t('clients.filtersActive', { count: activeCount }) : t('clients.filterAction')}
             />
             {activeCount > 0 ? (
               <View
@@ -323,7 +324,7 @@ function ClientsScreen() {
         value={filters}
         onChange={(next) => { haptics.select(); setFilters(next); }}
         onReset={() => { haptics.select(); setFilters({}); }}
-        title="Filter loaded clients"
+        title={t('clients.filterLoadedTitle')}
         applyLabel={t('common.showResults')}
       />
     </Screen>
@@ -343,7 +344,7 @@ function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
   const due = p?.nextRenewal ? daysUntil(p.nextRenewal) : NaN;
   const hasDue = Number.isFinite(due);
 
-  const subtitle = hasPolicyNo ? `Policy ${p!.number}` : client.phone || client.city || 'No policy number on record';
+  const subtitle = hasPolicyNo ? t('clients.policyNumber', { number: p!.number }) : client.phone || client.city || t('clients.noPolicyNumber');
   const subtitleIcon = hasPolicyNo ? 'document-text-outline' : client.phone ? 'call-outline' : 'alert-circle-outline';
 
   // One status token per row, ranked by urgency: money first, then the courtesy touch.
@@ -367,7 +368,7 @@ function ClientRow({ client, onOpen }: { client: Client; onOpen: () => void }) {
   return (
     <SwipeRow actions={actions} onPress={onOpen} radius={0} surface={c.card}>
       <PersonRow
-        name={client.name}
+        name={resolveCopy(t, client.name, client.nameCopy)}
         subtitle={subtitle}
         subtitleIcon={subtitleIcon}
         subtitleNumeric
@@ -408,6 +409,7 @@ function RowSeparator() {
 function ListFooter({ loadingMore, hasMore, count, onLoadMore }: {
   loadingMore: boolean; hasMore: boolean; count: number; onLoadMore: () => void;
 }) {
+  const t = useT();
   const c = useTheme();
   const { spacing, font } = c;
   const inset = sepInset(spacing);
@@ -428,9 +430,9 @@ function ListFooter({ loadingMore, hasMore, count, onLoadMore }: {
   return (
     <View style={{ backgroundColor: c.card, paddingVertical: spacing.md, alignItems: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border }}>
       {hasMore ? (
-        <Button label="Load more clients" variant="ghost" size="sm" onPress={onLoadMore} />
+        <Button label={t('clients.loadMore')} variant="ghost" size="sm" onPress={onLoadMore} />
       ) : (
-        <Txt size={font.cap} color={c.faint} numeric>All {count.toLocaleString('en-IN')} loaded</Txt>
+        <Txt size={font.cap} color={c.faint} numeric>{t('clients.allLoaded', { count: count.toLocaleString('en-IN') })}</Txt>
       )}
     </View>
   );

@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -23,7 +24,8 @@ import type { Claim, Client, Lead } from '@/data/types';
 import type { Task } from '@/data/tasks';
 import { TASK_STATUS, taskSearchFields } from '@/data/tasks';
 import { CLAIM_STATUS, STAGE_META } from '@/data/labels';
-import { useT } from '@/i18n';
+import { useT, type TFn } from '@/i18n';
+import { taskCategoryLabel } from '@/i18n/display';
 import { inrShort } from '@/lib/format';
 import {
   buildQuery, rank, GROUP_CAP, W_ID, W_SECOND, W_TEXT,
@@ -194,8 +196,8 @@ function clip(s: string, n = 54): string {
  * digits and getting back a list of names with no numbers on it is the single most annoying
  * thing a search screen can do.
  */
-function detailFor(hit: Hit | null, fallback: string): string {
-  if (hit && hit.field.key !== 'name') return clip(hit.field.value);
+function detailFor(hit: Hit | null, fallback: string, t?: TFn, copies?: Record<string, LocalCopy | undefined>): string {
+  if (hit && hit.field.key !== 'name') return clip(t ? resolveCopy(t, hit.field.value, copies?.[hit.field.key]) : hit.field.value);
   return fallback;
 }
 
@@ -468,16 +470,17 @@ export default function Search() {
     if (res.clients.length > 0) {
       out.push({
         key: 'clients',
-        title: `Clients (${res.clients.length})`,
+        title: t('search.clientsCount', { count: res.clients.length }),
         order: 0,
         top: res.clients[0].score,
         rows: res.clients.map(({ item, hit }, i) => ({
           id: `client-${item.id}-${i}`,
           icon: 'person-outline',
-          label: item.name || 'Unnamed client',
+          label: resolveCopy(t, item.name, item.nameCopy) || t('search.unnamedClient'),
           value: detailFor(
             hit,
-            item.totalCover > 0 ? `${inrShort(item.totalCover)} cover` : (item.phone || item.city || 'On your book'),
+          item.totalCover > 0 ? t('search.coverAmount', { amount: inrShort(item.totalCover) }) : (item.phone || item.city || t('search.onBook')),
+            t, { plan: item.policies[0]?.planCopy },
           ),
           onPress: () => router.push({ pathname: '/client/[id]', params: { id: item.id } }),
         })),
@@ -487,7 +490,7 @@ export default function Search() {
     if (res.leads.length > 0) {
       out.push({
         key: 'leads',
-        title: `Leads (${res.leads.length})`,
+        title: t('search.leadsCount', { count: res.leads.length }),
         order: 1,
         top: res.leads[0].score,
         rows: res.leads.map(({ item, hit }, i) => {
@@ -495,8 +498,8 @@ export default function Search() {
           return {
             id: `lead-${item.id}-${i}`,
             icon: 'person-add-outline',
-            label: item.name || 'Unnamed lead',
-            value: detailFor(hit, item.interest || item.source || item.city || ''),
+            label: resolveCopy(t, item.name, item.nameCopy) || t('search.unnamedLead'),
+            value: detailFor(hit, item.interest || resolveCopy(t, item.source, item.sourceCopy) || item.city || '', t, { source: item.sourceCopy }),
             pill: { label: t(st.labelKey), tone: st.tone as Tone },
             onPress: () => router.push({ pathname: '/lead/[id]', params: { id: item.id } }),
           };
@@ -507,7 +510,7 @@ export default function Search() {
     if (res.claims.length > 0) {
       out.push({
         key: 'claims',
-        title: `Claims (${res.claims.length})`,
+        title: t('search.claimsCount', { count: res.claims.length }),
         order: 2,
         top: res.claims[0].score,
         rows: res.claims.map(({ item, hit }, i) => {
@@ -515,8 +518,8 @@ export default function Search() {
           return {
             id: `claim-${item.id}-${i}`,
             icon: 'shield-half-outline',
-            label: item.clientName || item.ref || 'Claim',
-            value: detailFor(hit, item.ref || (item.amount > 0 ? inrShort(item.amount) : '')),
+            label: resolveCopy(t, item.clientName, item.clientNameCopy) || item.ref || t('task.categoryClaim'),
+            value: detailFor(hit, item.ref || (item.amount > 0 ? inrShort(item.amount) : ''), t, { note: item.aiSummaryCopy }),
             pill: { label: t(st.labelKey), tone: st.tone as Tone },
             onPress: () => router.push({ pathname: '/claim/[id]', params: { id: item.id } }),
           };
@@ -527,15 +530,15 @@ export default function Search() {
     if (res.tickets.length > 0) {
       out.push({
         key: 'tickets',
-        title: `Tickets (${res.tickets.length})`,
+        title: t('search.ticketsCount', { count: res.tickets.length }),
         order: 3,
         top: res.tickets[0].score,
         rows: res.tickets.map(({ item, hit }, i) => ({
           id: `ticket-${item.id}-${i}`,
           icon: 'ticket-outline',
-          label: item.client?.name || item.ticket_ref || 'Ticket',
+          label: item.client?.name || item.ticket_ref || t('home.ticketLabel'),
           value: detailFor(hit, item.ticket_ref || item.type_label || ''),
-          pill: { label: item.status_label || (item.is_closed ? 'Closed' : 'Open'), tone: ticketTone(item) },
+          pill: { label: item.status_label || (item.is_closed ? t('search.closedLabel') : t('search.openLabel')), tone: ticketTone(item) },
           onPress: () => router.push({ pathname: '/tickets/[id]', params: { id: item.id } }),
         })),
       });
@@ -544,7 +547,7 @@ export default function Search() {
     if (res.tasks.length > 0) {
       out.push({
         key: 'tasks',
-        title: `Tasks (${res.tasks.length})`,
+        title: t('search.tasksCount', { count: res.tasks.length }),
         order: 4,
         top: res.tasks[0].score,
         rows: res.tasks.map(({ item, hit }, i) => {
@@ -552,8 +555,8 @@ export default function Search() {
           return {
             id: `task-${item.id}-${i}`,
             icon: TASK_ICON[item.category] ?? 'checkbox-outline',
-            label: item.title || 'Task',
-            value: detailFor(hit, item.client || item.category || ''),
+            label: resolveCopy(t, item.title, item.titleCopy) || t('task.titleLabel'),
+            value: detailFor(hit, item.client || (item.categoryCopy ? resolveCopy(t, item.category, item.categoryCopy) : taskCategoryLabel(t, item.category || '')), t, { category: item.categoryCopy, 'assigned by': item.assignedByCopy }),
             pill: { label: t(st.labelKey), tone: st.tone as Tone },
             onPress: () => router.push({ pathname: '/task/[id]', params: { id: item.id } }),
           };
@@ -577,10 +580,10 @@ export default function Search() {
   const outage = ran ? runFailed : health.degraded;
 
   const subtitle = !term
-    ? (canClients ? 'Clients, leads, claims, tickets and tasks' : 'Leads, claims, tickets and tasks')
+    ? (canClients ? t('search.allCollections') : t('search.withoutClients'))
     : searching
-      ? 'Looking through your book'
-      : `${total} result${total === 1 ? '' : 's'} for "${ran || term}"`;
+      ? t('search.lookingThroughBook')
+      : t('tasks.searchCount', { count: total, query: ran || term });
 
   return (
     <Screen>
@@ -592,7 +595,7 @@ export default function Search() {
           value={q}
           onChange={onQuery}
           onSubmit={() => submitNow(q)}
-          placeholder="Name, mobile, email or reference"
+          placeholder={t('search.inputPlaceholder')}
           autoFocus
         />
       </View>
@@ -620,22 +623,22 @@ export default function Search() {
           <View style={{ gap: spacing.lg }}>
             <Banner
               tone="offline"
-              title="Search could not reach every collection"
-              message="At least one request did not get an answer, so this is not a confirmed miss."
-              action={{ label: 'Search again', onPress: retry }}
+              title={t('search.collectionsFailedTitle')}
+              message={t('search.unconfirmedMiss')}
+              action={{ label: t('search.again'), onPress: retry }}
             />
             <EmptyState
               icon="cloud-offline-outline"
-              title="Nothing confirmed"
-              subtitle={`The server went quiet while looking for "${term}". A matching record may well exist. Check your connection, then run it again.`}
+              title={t('search.nothingConfirmed')}
+              subtitle={t('search.serverQuietBody', { query: term })}
             />
           </View>
         ) : blank ? (
           /* (b) The search ran and genuinely found nothing. */
           <EmptyState
             icon="file-tray-outline"
-            title={`No match for "${ran || term}"`}
-            subtitle={`Nothing in your ${canClients ? 'clients, ' : ''}leads, claims, tickets or tasks carries that. Try a shorter piece of the name, or the last four digits of a mobile number.`}
+            title={t('search.noMatch', { query: ran || term })}
+            subtitle={t(canClients ? 'search.noMatchBodyWithClients' : 'search.noMatchBodyWithoutClients')}
             action={{ label: t('common.clearSearch'), onPress: () => submitNow('') }}
           />
         ) : (
@@ -643,9 +646,9 @@ export default function Search() {
             {outage ? (
               <Banner
                 tone="offline"
-                title="These results may be incomplete"
-                message="At least one collection did not answer, so a record matching your search could be missing from this list."
-                action={{ label: 'Run it again', onPress: retry }}
+                title={t('search.incompleteTitle')}
+                message={t('search.incompleteBody')}
+                action={{ label: t('search.runAgain'), onPress: retry }}
               />
             ) : null}
 
@@ -672,7 +675,7 @@ export default function Search() {
 
             {capped ? (
               <Txt size={font.tiny} color={c.faint} numberOfLines={2} style={{ marginTop: -spacing.sm }}>
-                {`Showing the ${GROUP_CAP} closest matches in each group. Add a few more characters to narrow it.`}
+                {t('search.closestMatchesHint', { count: GROUP_CAP })}
               </Txt>
             ) : null}
           </>
@@ -698,23 +701,21 @@ function Resting({ recent, onPick, onClearRecent, canClients }: {
     <View style={{ gap: spacing.lg }}>
       <Appear index={0}>
         <View style={{ gap: 6, paddingTop: spacing.sm }}>
-          <Txt size={19} weight="800">Start typing to search</Txt>
+          <Txt size={19} weight="800">{t('search.startTyping')}</Txt>
           <Txt size={font.sub} color={c.muted} style={{ lineHeight: 20 }}>
-            Part of a name works. So does part of a mobile number, a fragment of an email, or a
-            claim or ticket reference.
-          </Txt>
+            {t('search.inputHelp')}</Txt>
         </View>
       </Appear>
 
       {recent.length > 0 ? (
         <Appear index={1}>
-          <ListSection title={`Recent searches (${recent.length})`}>
+          <ListSection title={t('search.recentCount', { count: recent.length })}>
             {recent.map((r) => (
               <DataRow key={r} icon="time-outline" label={r} value="" onPress={() => { haptics.select(); onPick(r); }} />
             ))}
           </ListSection>
           <Row style={{ marginTop: spacing.sm, justifyContent: 'flex-end' }}>
-            <Button label="Clear recent searches" variant="ghost" size="sm" onPress={onClearRecent} />
+            <Button label={t('search.clearRecent')} variant="ghost" size="sm" onPress={onClearRecent} />
           </Row>
         </Appear>
       ) : null}
