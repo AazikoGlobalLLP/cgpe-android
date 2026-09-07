@@ -1,3 +1,6 @@
+import { textCopy, type LocalCopy } from '@/i18n/copy';
+import { readTrackingCopy, type TrackingCopySnapshot } from './trackingCopy';
+import type { TFn } from '@/i18n';
 /**
  * Field-route tracking. While a team member is clocked in we record their GPS path and
  * stream it to the backend so the master can replay where they went.
@@ -290,21 +293,42 @@ async function ambientArmed(): Promise<boolean> {
  * read back here. A headless service restart (41b boot-receiver) has no i18n context, so the strings
  * are captured when 24/7 is armed, not resolved now. Falls back to a neutral English default.
  */
-async function readNotif(): Promise<Notif> {
+async function notificationOwner(): Promise<string | null> {
   try {
-    const raw = await storage.get(NOTIF_KEY);
-    if (raw) {
-      const n = JSON.parse(raw);
-      if (n && typeof n.title === 'string' && typeof n.body === 'string') return { title: n.title, body: n.body };
-    }
-  } catch {
-    // Corrupt JSON: use the neutral default rather than start the service with no notification.
-  }
-  return AMBIENT_NOTIF_FALLBACK;
+    const raw = await storage.get('cgpe.user');
+    const user = raw ? JSON.parse(raw) : null;
+    return typeof user?.id === 'string' ? user.id : null;
+  } catch { return null; }
 }
 
-async function writeNotif(n: Notif): Promise<void> {
-  await storage.set(NOTIF_KEY, JSON.stringify({ title: n.title, body: n.body }));
+async function readNotif(mode: 'ambient' | 'shift' = 'ambient'): Promise<Notif> {
+  return readTrackingCopy(await storage.get(NOTIF_KEY), await notificationOwner(), mode,
+    mode === 'ambient' ? AMBIENT_NOTIF_FALLBACK : SHIFT_NOTIF);
+}
+
+async function writeNotif(n: Notif, mode: 'ambient' | 'shift', ownerId: string): Promise<void> {
+  if (await notificationOwner() !== ownerId) return;
+  let saved: TrackingCopySnapshot = { ownerId };
+  try {
+    const raw = await storage.get(NOTIF_KEY);
+    const old = raw ? JSON.parse(raw) : null;
+    if (old?.ownerId === ownerId) {
+      saved = old;
+      // The UI's latest language snapshot wins over a late permission/clock-in response.
+      if (typeof saved[mode]?.title === 'string' && typeof saved[mode]?.body === 'string') return;
+    }
+  } catch { /* replace unusable copy */ }
+  saved[mode] = { title: n.title, body: n.body };
+  if (await notificationOwner() === ownerId) await storage.set(NOTIF_KEY, JSON.stringify(saved));
+}
+
+/** Refresh the next restart's copy without restarting recording or requesting permission. */
+export async function updateTrackingNotificationCopies(ownerId: string, ambient: Notif, shift: Notif): Promise<void> {
+  if (!isNative) return;
+  await serial(async () => {
+    if (await notificationOwner() !== ownerId) return;
+    await storage.set(NOTIF_KEY, JSON.stringify({ ownerId, ambient, shift }));
+  });
 }
 
 /**
@@ -676,7 +700,7 @@ async function watchdogTick(): Promise<void> {
     // notification — a headless restart has no i18n context (§12.4). Attribution resumes on its own:
     // `ingest` reads `state.sid` at flush time, so the re-armed service posts to the open shift if
     // there is one, otherwise as ambient.
-    await startService(await readNotif());
+    await startService(await readNotif(armed ? 'ambient' : 'shift'));
     running = true;
   }
   // PHASE 71 — recording SHOULD be live now (action was 'idle' or we just re-armed). The OS location
@@ -821,18 +845,20 @@ if (isNative) {
  * called from `startTracking`: a permission dialog belongs to a button press, not to a
  * background service starting up.
  */
-export async function ensureBackgroundPermission(): Promise<{ granted: boolean; reason?: string }> {
+export async function ensureBackgroundPermission(t?: TFn): Promise<{ granted: boolean; reason?: string; reasonCopy?: LocalCopy }> {
   if (!isNative) {
     return {
       granted: false,
-      reason: 'Route recording works in the CGPE Connect app on your phone. The browser preview cannot record a field route.',
+      reasonCopy: textCopy('tracker.nativeOnly'),
+      reason: t ? t('tracker.nativeOnly') : 'Route recording works in the CGPE Connect app on your phone. The browser preview cannot record a field route.',
     };
   }
   try {
     if (!(await Location.hasServicesEnabledAsync())) {
       return {
         granted: false,
-        reason: 'Location is switched off on this phone. Turn on Location in your device settings, then try again.',
+        reasonCopy: textCopy('tracker.locationOff'),
+      reason: t ? t('tracker.locationOff') : 'Location is switched off on this phone. Turn on Location in your device settings, then try again.',
       };
     }
 
@@ -841,9 +867,10 @@ export async function ensureBackgroundPermission(): Promise<{ granted: boolean; 
     if (!fg.granted) {
       return {
         granted: false,
-        reason: fg.canAskAgain
-          ? 'Location permission was declined. CGPE Connect needs your location to confirm you are at the office and to record your field route.'
-          : 'Location permission is blocked for CGPE Connect. Open Settings, find CGPE Connect, and allow Location.',
+        reasonCopy: fg.canAskAgain ? textCopy('tracker.locationDeclined') : textCopy('tracker.locationBlocked'),
+      reason: fg.canAskAgain
+          ? t ? t('tracker.locationDeclined') : 'Location permission was declined. CGPE Connect needs your location to confirm you are at the office and to record your field route.'
+          : t ? t('tracker.locationBlocked') : 'Location permission is blocked for CGPE Connect. Open Settings, find CGPE Connect, and allow Location.',
       };
     }
 
@@ -855,7 +882,8 @@ export async function ensureBackgroundPermission(): Promise<{ granted: boolean; 
       const setting = Platform.OS === 'ios' ? 'Always' : 'Allow all the time';
       return {
         granted: false,
-        reason: `Background location is not allowed yet. Open Settings, find CGPE Connect, and set Location to "${setting}" so your route keeps recording while the phone is in your pocket.`,
+        reasonCopy: textCopy('tracker.backgroundBlocked', { setting: setting }),
+      reason: t ? t('tracker.backgroundBlocked', { setting: setting }) : `Background location is not allowed yet. Open Settings, find CGPE Connect, and set Location to "${setting}" so your route keeps recording while the phone is in your pocket.`,
       };
     }
 
@@ -887,7 +915,8 @@ export async function ensureBackgroundPermission(): Promise<{ granted: boolean; 
   } catch {
     return {
       granted: false,
-      reason: 'Location permission could not be checked on this phone. Restart the app and try again.',
+      reasonCopy: textCopy('tracker.checkFailed'),
+      reason: t ? t('tracker.checkFailed') : 'Location permission could not be checked on this phone. Restart the app and try again.',
     };
   }
 }
@@ -906,15 +935,19 @@ export async function ensureBackgroundPermission(): Promise<{ granted: boolean; 
  * notification, collects somebody's location all day, and then either 400s or lands on whoever
  * happens to be signed in. The caller says so on screen; see `postTrackPoints`.
  */
-export async function startTracking(sid: string): Promise<void> {
+export async function startTracking(sid: string, notif: Notif = SHIFT_NOTIF, ownerId?: string): Promise<void> {
   if (!isNative || !sid) return;
+  const initiatingOwner = ownerId ?? await notificationOwner();
+  if (!initiatingOwner || await notificationOwner() !== initiatingOwner) return;
   await serial(async () => {
     try {
+      if (await notificationOwner() !== initiatingOwner) return;
       const fg = await Location.getForegroundPermissionsAsync();
       if (!fg.granted) return;
 
       const armed = await ambientArmed();
       const state = await readState();
+      if (await notificationOwner() !== initiatingOwner) return;
 
       if (!armed) {
         // NOT consented to 24/7 — today's exact shift-only behaviour, unchanged. A new shift must
@@ -930,7 +963,9 @@ export async function startTracking(sid: string): Promise<void> {
         await writeState(state);
         await storage.remove(LEGACY_SESSION_KEY);
         api.startTrack(sid).catch(() => {});
-        await startService(SHIFT_NOTIF);
+        await writeNotif(notif, 'shift', initiatingOwner);
+        if (await notificationOwner() !== initiatingOwner) return;
+        await startService(await readNotif('shift'));
         running = true;
         return;
       }
@@ -1030,9 +1065,10 @@ export async function stopTracking(): Promise<void> {
  * The permission flow runs OUTSIDE the serial lock — it can open system dialogs and take seconds, and
  * must not block location-batch ingest that also serialises on the persisted state.
  */
-export async function startAmbientTracking({ prompt, notif }: { prompt: boolean; notif?: Notif }): Promise<void> {
+export async function startAmbientTracking({ prompt, notif, ownerId }: { prompt: boolean; notif?: Notif; ownerId?: string }): Promise<void> {
   if (!isNative) return;
-  if (notif) await writeNotif(notif);
+  const initiatingOwner = ownerId ?? await notificationOwner();
+  if (!initiatingOwner || await notificationOwner() !== initiatingOwner) return;
 
   let ok: boolean;
   if (prompt) {
@@ -1045,6 +1081,9 @@ export async function startAmbientTracking({ prompt, notif }: { prompt: boolean;
 
   await serial(async () => {
     try {
+      if (await notificationOwner() !== initiatingOwner) return;
+      if (notif) await writeNotif(notif, 'ambient', initiatingOwner);
+      if (await notificationOwner() !== initiatingOwner) return;
       await storage.set(AMBIENT_KEY, '1');
       await startService(await readNotif());
       running = true;
@@ -1072,6 +1111,7 @@ export async function stopAmbientTracking(): Promise<void> {
     running = false;
     await storage.remove(STATE_KEY);
     await storage.remove(AMBIENT_KEY);
+    await storage.remove(NOTIF_KEY);
   });
 }
 

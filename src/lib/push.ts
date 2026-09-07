@@ -34,6 +34,8 @@ const CHANNEL_ID = 'default';
 
 let handlerConfigured = false;
 let coldStartHandled = false;
+let channelName = 'General';
+let channelWork: Promise<void> = Promise.resolve();
 
 /**
  * Foreground presentation. Without a handler, a notification that arrives while the app is open is
@@ -56,16 +58,23 @@ export function configurePushHandler(): void {
 /** Android 8+ requires a channel to exist BEFORE permission is requested. Best-effort. */
 async function ensureAndroidChannel(): Promise<void> {
   if (Platform.OS !== 'android') return;
-  try {
+  channelWork = channelWork.then(async () => {
     await Notifications.setNotificationChannelAsync(CHANNEL_ID, {
-      name: 'General',
+      name: channelName,
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#155DFB',
     });
-  } catch {
+  }).catch(() => {
     // A channel failure just means default OS behaviour — never fatal.
-  }
+  });
+  await channelWork;
+}
+
+/** Display-only update: never asks permission or obtains/registers another token. */
+export function updatePushChannelName(name: string): Promise<void> {
+  channelName = name || 'General';
+  return ensureAndroidChannel();
 }
 
 /**

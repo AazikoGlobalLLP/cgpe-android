@@ -4,7 +4,7 @@
  * Thin, device-only wire between `expo-calendar` and the app. Every honest DECISION (which items
  * belong on the calendar, the idempotent create/update/delete plan, the all-day span) is delegated
  * to the pure, unit-tested `lib/calendarSync.ts`; this file only performs the native side effects
- * that can't run under Vitest — the same split as `push.ts`/`pushRouting.ts` and `tracker.ts`.
+ * that need native mocks under Vitest — the same split as `push.ts`/`pushRouting.ts` and `tracker.ts`.
  *
  * SILENT + BEST-EFFORT. The sync is invisible: a denied permission, an offline fetch, or a
  * calendar-API error just means "no sync this time," never a banner or a crash. Events land in a
@@ -18,26 +18,30 @@ import * as Calendar from 'expo-calendar';
 import { storage } from '@/lib/storage';
 import * as api from '@/data/api';
 import { getHealth } from '@/data/health';
-import { buildSyncItems, planSync, fingerprint, allDayRange, type SyncMap } from '@/lib/calendarSync';
+import type { TFn } from '@/i18n';
+import { buildSyncItems, planSync, fingerprint, allDayRange, type SyncItem, type SyncMap } from '@/lib/calendarSync';
 
 const isWeb = Platform.OS === 'web';
 const CALENDAR_TITLE = 'CGPE Connect';
 const CAL_ID_KEY = 'cal.id';       // the dedicated calendar's device id
+const CAL_OWNER_KEY = 'cal.owner'; // initiating account id; never infer it from a later session
 const CAL_MAP_KEY = 'cal.map';     // JSON SyncMap: item key → { eventId, fp }
 const CAL_ASKED_KEY = 'cal.asked'; // '1' once we've prompted for permission (so we don't nag)
 
 const MIN_SYNC_GAP_MS = 15 * 60 * 1000; // throttle foreground syncs
 let lastSyncAt = 0;
-let syncing = false; // guard against overlapping passes
 
-async function ensurePermission(): Promise<boolean> {
+async function ensurePermission(request: SyncRequest): Promise<boolean> {
   try {
     let perm = await Calendar.getCalendarPermissions();
+    if (!isCurrent(request)) return false;
     if (perm.granted) return true;
     const asked = await storage.get(CAL_ASKED_KEY).catch(() => null);
+    if (!isCurrent(request)) return false;
     // Ask at most once: if the user declines, we never nag again — auto-sync simply stays off.
     if (perm.canAskAgain && !asked) {
       await storage.set(CAL_ASKED_KEY, '1').catch(() => {});
+      if (!isCurrent(request)) return false;
       perm = await Calendar.requestCalendarPermissions();
     }
     return !!perm.granted;
@@ -47,10 +51,11 @@ async function ensurePermission(): Promise<boolean> {
 }
 
 /** Find-or-create the dedicated "CGPE Connect" calendar; returns the calendar object or null. */
-async function getCalendar(): Promise<Calendar.ExpoCalendar | null> {
+async function getCalendar(request: SyncRequest): Promise<Calendar.ExpoCalendar | null> {
   try {
     const cals = await Calendar.getCalendars(Calendar.EntityTypes.EVENT);
     const saved = await storage.get(CAL_ID_KEY).catch(() => null);
+    if (!isCurrent(request)) return null;
     if (saved) {
       const hit = cals.find((c) => c.id === saved && c.allowsModifications);
       if (hit) return hit;
@@ -77,129 +82,243 @@ async function getCalendar(): Promise<Calendar.ExpoCalendar | null> {
   }
 }
 
-async function readMap(): Promise<SyncMap> {
+type SyncRequest = { ownerId: string | null; tr?: TFn; generation: number };
+type MirrorState = { ownerId: string | null; map: SyncMap };
+
+// One queue owns native event/map mutations. Language requests coalesce without changing owner
+// generation; account transitions invalidate an in-flight pass immediately, before the next await.
+let currentOwner: string | null | undefined;
+let ownerGeneration = 0;
+let clearPending = false;
+let pending: SyncRequest | null = null;
+let worker: Promise<void> | null = null;
+let mirror: MirrorState | null = null;
+
+function isCurrent(request: SyncRequest): boolean {
+  return request.ownerId === currentOwner && request.generation === ownerGeneration;
+}
+
+async function readMirror(): Promise<MirrorState> {
+  if (mirror) return mirror;
+  const [ownerId, raw] = await Promise.all([storage.get(CAL_OWNER_KEY), storage.get(CAL_MAP_KEY)]);
+  const map: SyncMap = {};
   try {
-    const raw = await storage.get(CAL_MAP_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as SyncMap) : {};
-  } catch {
-    return {};
+    const parsed: unknown = raw ? JSON.parse(raw) : null;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      for (const [key, value] of Object.entries(parsed)) {
+        if (!value || typeof value !== 'object') continue;
+        const entry = value as Partial<SyncMap[string]>;
+        if (typeof entry.eventId === 'string' && typeof entry.fp === 'string') {
+          map[key] = { eventId: entry.eventId, fp: entry.fp };
+        }
+      }
+    }
+  } catch { /* unusable legacy map */ }
+  mirror = { ownerId, map };
+  return mirror;
+}
+
+// storage deliberately swallows write errors. Read back before relying on a persisted checkpoint.
+async function saveMap(state: MirrorState): Promise<boolean> {
+  const raw = JSON.stringify(state.map);
+  await storage.set(CAL_MAP_KEY, raw);
+  return (await storage.get(CAL_MAP_KEY)) === raw;
+}
+
+function isMissingEvent(error: unknown): boolean {
+  // SDK 57 next API: EventNotFoundException -> ERR_EVENT_NOT_FOUND on Android and iOS.
+  return !!error && typeof error === 'object'
+    && 'code' in error && error.code === 'ERR_EVENT_NOT_FOUND';
+}
+
+async function deleteEvent(eventId: string): Promise<boolean> {
+  try {
+    const event = await Calendar.ExpoCalendarEvent.get(eventId);
+    await event.delete();
+    return true;
+  } catch (error) {
+    // Permission/transient failures must retain the tracked id for a later cleanup attempt.
+    return isMissingEvent(error);
   }
 }
 
-/**
- * One full reconciliation pass: mirror this user's dated, open tasks + reminders into the dedicated
- * calendar, creating/updating/deleting exactly what changed. Silent and best-effort throughout.
- */
-export async function syncCalendar(): Promise<void> {
-  if (isWeb || syncing) return;
-  syncing = true;
+/** Only called by the queue. Cleanup may finish after invalidation: no newer owner runs yet. */
+async function clearMirror(state: MirrorState): Promise<boolean> {
+  for (const [key, entry] of Object.entries(state.map)) {
+    if (await deleteEvent(entry.eventId)) delete state.map[key];
+  }
+  if (Object.keys(state.map).length) {
+    await saveMap(state);
+    return false;
+  }
+  // Remove the map before its owner. A partially completed clear remains attributable on restart.
+  await storage.remove(CAL_MAP_KEY);
+  if ((await storage.get(CAL_MAP_KEY)) !== null) return false;
+  await storage.remove(CAL_OWNER_KEY);
+  if ((await storage.get(CAL_OWNER_KEY)) !== null) return false;
+  state.ownerId = null;
+  return true;
+}
+
+async function runSync(request: SyncRequest): Promise<void> {
+  if (!isCurrent(request)) return;
+  const state = await readMirror();
+  if (!isCurrent(request)) return;
+
+  // Unknown legacy ownership is never silently adopted by the next account on a shared handset.
+  if (request.ownerId === null || clearPending || state.ownerId !== request.ownerId) {
+    const cleared = await clearMirror(state);
+    if (!isCurrent(request) || !cleared) return;
+    clearPending = false;
+  }
+  if (request.ownerId === null) return;
+
+  // Establish ownership before creating events, even when the source is currently empty/offline.
+  await storage.set(CAL_OWNER_KEY, request.ownerId);
+  const savedOwner = await storage.get(CAL_OWNER_KEY);
+  if (!isCurrent(request) || savedOwner !== request.ownerId) return;
+  state.ownerId = request.ownerId;
+
   try {
-    // Build the desired set FIRST (network only, no calendar permission needed). If there is nothing
-    // to mirror and nothing was ever mirrored, return WITHOUT prompting for calendar access — a
-    // member with no dated work is never asked for a permission they don't need yet.
     const [tasks, reminders] = await Promise.all([api.getTasks(true), api.getReminders()]);
-    const desired = buildSyncItems(tasks, reminders);
-    const map = await readMap();
-    const plan = planSync(desired, map);
-    // GUARD THE DESTRUCTIVE HALF. getTasks/getReminders NEVER throw on an outage — a failed read reports
-    // to data/health and resolves to the EMPTY write buffer. An outage-empty `desired` would make
-    // planSync mark every mirrored event for REMOVAL, wiping the user's phone-calendar mirror for tasks
-    // that still exist server-side (recreated only on the next successful sync). So skip the removes
-    // whenever either source is currently known-failed; create/update still run (loophole audit round 3,
-    // 2026-08-25). The failures list is sticky until the endpoint itself succeeds, so this also covers a
-    // cached-empty re-serve that didn't re-stamp health.
-    const sourceDown = getHealth().failures.some((k) => k === '/tasks' || k === '/reminders');
+    if (!isCurrent(request)) return;
+    const desired = buildSyncItems(tasks, reminders, request.tr);
+    const plan = planSync(desired, state.map);
+    // API outage reads can resolve empty. Never treat that empty result as completed/deleted work.
+    const sourceDown = getHealth().failures.some((key) => key === '/tasks' || key === '/reminders');
     const removes = sourceDown ? [] : plan.remove;
     if (!plan.create.length && !plan.update.length && !removes.length) return;
 
-    if (!(await ensurePermission())) return;
-    const cal = await getCalendar();
-    if (!cal) return;
+    if (!(await ensurePermission(request)) || !isCurrent(request)) return;
+    const cal = await getCalendar(request);
+    if (!cal || !isCurrent(request)) return;
 
-    const next: SyncMap = { ...map };
+    const create = async (item: SyncItem): Promise<boolean> => {
+      if (!isCurrent(request)) return false;
+      const range = allDayRange(item.startISO);
+      if (!range) return true;
+      try {
+        const event = await cal.createEvent({
+          title: item.title, startDate: range.start, endDate: range.end,
+          allDay: true, notes: item.notes,
+        });
+        if (!event?.id) return true;
+        // Record the id immediately, including one returned after sign-out. The finally cleanup
+        // owns this old-account journal and removes partially created events before the next pass.
+        state.map[item.key] = { eventId: event.id, fp: fingerprint(item) };
+        if (!isCurrent(request)) return false;
+        if (await saveMap(state)) return isCurrent(request);
+        // Do not knowingly leave an uncheckpointed new event. Keep failed rollback ids in memory.
+        if (await deleteEvent(event.id)) delete state.map[item.key];
+        await saveMap(state);
+        return false;
+      } catch {
+        return isCurrent(request); // leave unmapped; a later pass can retry
+      }
+    };
 
     for (const item of plan.create) {
-      const range = allDayRange(item.startISO);
-      if (!range) continue;
-      try {
-        const ev = await cal.createEvent({
-          title: item.title, startDate: range.start, endDate: range.end, allDay: true, notes: item.notes,
-        });
-        if (ev?.id) next[item.key] = { eventId: ev.id, fp: fingerprint(item) };
-      } catch {
-        /* leave unmapped → retried next sync */
-      }
+      if (!(await create(item))) return;
     }
 
     for (const { item, eventId } of plan.update) {
+      if (!isCurrent(request)) return;
       const range = allDayRange(item.startISO);
       if (!range) continue;
-      const detail = { title: item.title, startDate: range.start, endDate: range.end, allDay: true, notes: item.notes };
+      let event: Calendar.ExpoCalendarEvent;
       try {
-        const ev = await Calendar.ExpoCalendarEvent.get(eventId);
-        await ev.update(detail);
-        next[item.key] = { eventId, fp: fingerprint(item) };
+        event = await Calendar.ExpoCalendarEvent.get(eventId);
+      } catch (error) {
+        if (!isCurrent(request)) return;
+        // Recreate only a known missing event; a notes-only update failure must not duplicate it.
+        if (isMissingEvent(error) && !(await create(item))) return;
+        continue;
+      }
+      if (!isCurrent(request)) return;
+      try {
+        await event.update({
+          title: item.title, startDate: range.start, endDate: range.end,
+          allDay: true, notes: item.notes,
+        });
+        if (!isCurrent(request)) return;
+        state.map[item.key] = { eventId, fp: fingerprint(item) };
+        if (!(await saveMap(state)) || !isCurrent(request)) return;
       } catch {
-        // The user deleted the event out from under us → recreate it so the calendar stays truthful.
-        try {
-          const ev = await cal.createEvent(detail);
-          if (ev?.id) next[item.key] = { eventId: ev.id, fp: fingerprint(item) };
-        } catch {
-          /* leave the stale entry; next sync retries */
-        }
+        /* keep the original id/fingerprint so a later pass retries the update */
       }
     }
 
     for (const { key, eventId } of removes) {
+      if (!isCurrent(request)) return;
+      // Check after lookup and before delete; an old request must not begin another native mutation.
       try {
-        const ev = await Calendar.ExpoCalendarEvent.get(eventId);
-        await ev.delete();
-      } catch {
-        /* already gone — fine */
+        const event = await Calendar.ExpoCalendarEvent.get(eventId);
+        if (!isCurrent(request)) return;
+        await event.delete();
+      } catch (error) {
+        if (!isCurrent(request)) return;
+        if (!isMissingEvent(error)) continue;
       }
-      delete next[key];
+      delete state.map[key];
+      if (!isCurrent(request)) return;
+      if (!(await saveMap(state)) || !isCurrent(request)) return;
     }
-
-    await storage.set(CAL_MAP_KEY, JSON.stringify(next)).catch(() => {});
-  } catch {
-    /* a calendar failure is never surfaced */
   } finally {
-    syncing = false;
+    // A same-owner language request leaves generation unchanged and keeps all native event IDs.
+    // Account changes/sign-out always clean the entire old journal, including partial creations.
+    if (!isCurrent(request)) await clearMirror(state);
   }
 }
 
-/** Throttled entry point: force on sign-in, throttle repeated foreground syncs. */
-export async function maybeSyncCalendar(force = false): Promise<void> {
-  if (isWeb) return;
-  const now = Date.now();
-  if (!force && now - lastSyncAt < MIN_SYNC_GAP_MS) return;
-  lastSyncAt = now;
-  await syncCalendar();
-}
-
-/**
- * Remove this user's mirrored events on sign-out, so a shared handset never leaves one person's
- * tasks in the next person's calendar. Best-effort. A no-op when nothing was ever mirrored (empty
- * map ⇒ no permission prompt, no native calls) — safe to call on a signed-out boot.
- */
-export async function clearCalendarSync(): Promise<void> {
-  if (isWeb) return;
-  const map = await readMap();
-  const keys = Object.keys(map);
-  lastSyncAt = 0;
-  if (!keys.length) {
-    await storage.remove(CAL_MAP_KEY).catch(() => {});
-    return;
-  }
-  for (const key of keys) {
-    try {
-      const ev = await Calendar.ExpoCalendarEvent.get(map[key].eventId);
-      await ev.delete();
-    } catch {
-      /* already gone */
+function startWorker(): Promise<void> {
+  if (worker) return worker;
+  worker = Promise.resolve().then(async () => {
+    while (pending) {
+      const request = pending;
+      pending = null;
+      try { await runSync(request); } catch { /* silent best-effort; queue remains usable */ }
     }
+  }).finally(() => {
+    worker = null;
+    // Cover a request queued in the microtask gap between the drain and this finalizer.
+    if (pending) return startWorker();
+  });
+  return worker;
+}
+
+function enqueue(ownerId: string | null, force: boolean, tr?: TFn): Promise<void> {
+  if (isWeb) return Promise.resolve();
+  const ownerChanged = currentOwner !== ownerId;
+  if (ownerChanged) {
+    if (currentOwner !== undefined) clearPending = true;
+    currentOwner = ownerId;
+    ownerGeneration += 1;
+    lastSyncAt = 0;
   }
-  await storage.remove(CAL_MAP_KEY).catch(() => {});
+  // Explicit clear stays sticky even if a subsequent sync coalesces it away before the worker runs.
+  if (ownerId === null) clearPending = true;
+  const now = Date.now();
+  if (ownerId !== null && !force && !ownerChanged && now - lastSyncAt < MIN_SYNC_GAP_MS) {
+    return worker ?? Promise.resolve();
+  }
+  if (ownerId !== null) lastSyncAt = now;
+  pending = { ownerId, tr, generation: ownerGeneration };
+  return startWorker();
+}
+
+/** Owner and translator are captured at the UI boundary; neither is imported from React here. */
+export function syncCalendar(ownerId: string, tr?: TFn): Promise<void> {
+  if (!ownerId) return Promise.resolve();
+  return enqueue(ownerId, true, tr);
+}
+
+/** Force on sign-in/language change; throttle ordinary foreground reconciliation for that owner. */
+export function maybeSyncCalendar(ownerId: string, force = false, tr?: TFn): Promise<void> {
+  if (!ownerId) return Promise.resolve();
+  return enqueue(ownerId, force, tr);
+}
+
+/** Serializes with sync; invalidates any old in-flight request immediately and never prompts. */
+export function clearCalendarSync(): Promise<void> {
+  return enqueue(null, true);
 }
