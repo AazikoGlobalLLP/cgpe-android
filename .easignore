@@ -66,6 +66,8 @@ credentials/
 *-firebase-adminsdk-*.json
 google-service-account*.json
 .env*.local
+cgpe-connect.staff_unified.json
+*.staff_unified.json
 
 # Voice probe captures
 e2e/voice-probe/
