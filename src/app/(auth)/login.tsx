@@ -1,3 +1,4 @@
+import { textCopy, renderText, resolveCopy, type CopyText, type LocalCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -54,7 +55,7 @@ type Mode = 'password' | 'otp';
  * in time (a slow/stalled round-trip, NOT a down connection — so it must not say "check your
  * connection"); `refused` was rejected by the server.
  */
-type Failure = { kind: 'network' | 'timeout' | 'refused'; message: string };
+type Failure = { kind: 'network' | 'timeout' | 'refused'; message: CopyText };
 
 /** Built inside the screen (see `modes`) so the two labels can reach the translator. */
 const MODE_KEYS: Mode[] = ['password', 'otp'];
@@ -66,10 +67,11 @@ const ON_HERO_SUB = 'rgba(255,255,255,0.75)';
 const ON_HERO_FAINT = 'rgba(255,255,255,0.55)';
 
 /** Split "could not reach the server" from "the server is slow" from "the server refused us". */
-function describe(e: unknown, fallback: string): Failure {
-  if (e instanceof api.NetworkError) return { kind: e.kind, message: e.message };
-  const message = (e as { message?: string } | null)?.message;
-  return { kind: 'refused', message: message || fallback };
+function describe(e: unknown, fallback: CopyText): Failure {
+  if (e instanceof api.NetworkError) return { kind: e.kind, message: e.messageCopy ?? e.message };
+  const error = e as { message?: string; messageCopy?: LocalCopy } | null;
+  const message = error?.message;
+  return { kind: 'refused', message: message ? error?.messageCopy ?? message : fallback };
 }
 
 export default function Login() {
@@ -111,10 +113,10 @@ export default function Login() {
   const [canRestore, setCanRestore] = useState(false);
   const [restoring, setRestoring] = useState(false);
 
-  const [idErr, setIdErr] = useState('');
-  const [pwErr, setPwErr] = useState('');
-  const [phoneErr, setPhoneErr] = useState('');
-  const [otpErr, setOtpErr] = useState('');
+  const [idErr, setIdErr] = useState<CopyText>('');
+  const [pwErr, setPwErr] = useState<CopyText>('');
+  const [phoneErr, setPhoneErr] = useState<CopyText>('');
+  const [otpErr, setOtpErr] = useState<CopyText>('');
   const [failure, setFailure] = useState<Failure | null>(null);
 
   const cardMax = Math.min(width - 32, 440);
@@ -147,8 +149,8 @@ export default function Login() {
 
   const doPassword = useCallback(async () => {
     setFailure(null);
-    const nextId = id.trim() ? '' : t('login.errIdentifierRequired');
-    const nextPw = pw ? '' : t('login.errPasswordRequired');
+    const nextId = id.trim() ? '' : textCopy('login.errIdentifierRequired');
+    const nextPw = pw ? '' : textCopy('login.errPasswordRequired');
     setIdErr(nextId);
     setPwErr(nextPw);
     if (nextId || nextPw) { haptics.warn(); return; }
@@ -162,7 +164,7 @@ export default function Login() {
         if (!ok) {
           setLoading(false);
           haptics.warn();
-          setFailure({ kind: 'refused', message: t('login.msgUnlockNotConfirmed') });
+          setFailure({ kind: 'refused', message: textCopy('login.msgUnlockNotConfirmed') });
           return;
         }
       }
@@ -170,7 +172,7 @@ export default function Login() {
     } catch (e) {
       if (!alive.current) return;
       haptics.error();
-      setFailure(describe(e, t('login.msgDetailsRefused')));
+      setFailure(describe(e, textCopy('login.msgDetailsRefused')));
       setLoading(false);
       return;
     }
@@ -179,7 +181,7 @@ export default function Login() {
     // is not fenced by `alive` the way the state writes above are.
     haptics.success();
     router.replace('/(tabs)/home');
-  }, [id, pw, useBio, authenticateBiometric, login, router, t]);
+  }, [id, pw, useBio, authenticateBiometric, login, router]);
 
   const doSendOtp = useCallback(async () => {
     setFailure(null);
@@ -190,12 +192,12 @@ export default function Login() {
     const looksEmail = raw.includes('@');
     const digits = raw.replace(/\D/g, '');
     if (!looksEmail && digits.length < 10) {
-      setPhoneErr(t('login.errIdentifierShape'));
+      setPhoneErr(textCopy('login.errIdentifierShape'));
       haptics.warn();
       return;
     }
     if (looksEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(raw)) {
-      setPhoneErr(t('login.errEmailShape'));
+      setPhoneErr(textCopy('login.errEmailShape'));
       haptics.warn();
       return;
     }
@@ -217,18 +219,18 @@ export default function Login() {
         setOtpErr('');
         setOtpSent(true);
         haptics.success();
-        toast(res.message, 'success');
+        toast(resolveCopy(t, res.message, res.messageCopy), 'success');
         return;
       }
       // `ok: false` means the server declined to send. Advancing to code entry here would
       // strand the user waiting for a message that is never coming.
       haptics.error();
-      setFailure({ kind: 'refused', message: res.message });
+      setFailure({ kind: 'refused', message: res.messageCopy ?? res.message });
     } catch (e) {
       if (!alive.current) return;
       setLoading(false);
       haptics.error();
-      setFailure(describe(e, t('login.msgCodeSendFailed')));
+      setFailure(describe(e, textCopy('login.msgCodeSendFailed')));
     }
   }, [phone, toast, t]);
 
@@ -239,8 +241,8 @@ export default function Login() {
       // with their email sends them looking in an app where nothing was ever delivered —
       // and it appeared directly under a toast that had just said "Code sent to your email".
       setOtpErr(otpChannel === 'email'
-        ? t('login.errOtpRequiredEmail')
-        : t('login.errOtpRequired'));
+        ? textCopy('login.errOtpRequiredEmail')
+        : textCopy('login.errOtpRequired'));
       haptics.warn();
       return;
     }
@@ -255,7 +257,7 @@ export default function Login() {
       if (!alive.current) return;
       setLoading(false);
       haptics.error();
-      setFailure(describe(e, t('login.msgCodeCheckFailed')));
+      setFailure(describe(e, textCopy('login.msgCodeCheckFailed')));
       return;
     }
     if (!ok) {
@@ -264,14 +266,14 @@ export default function Login() {
       haptics.error();
       setFailure({
         kind: 'refused',
-        message: t('login.msgCodeNotAccepted'),
+        message: textCopy('login.msgCodeNotAccepted'),
       });
       return;
     }
     // Session issued. Outside the try for the same reason as the password path above.
     haptics.success();
     router.replace('/(tabs)/home');
-  }, [otp, phone, otpChannel, loginOtp, router, t]);
+  }, [otp, phone, otpChannel, loginOtp, router]);
 
   /** Phase 48: fingerprint-only restore. One biometric prompt → exchange the sealed refresh
    *  credential for a fresh session, no id/password/OTP. Every non-'ok' path routes to manual
@@ -298,7 +300,7 @@ export default function Login() {
       haptics.warn();
       setFailure({
         kind: 'refused',
-        message: t('login.msgQuickUnlockGone'),
+        message: textCopy('login.msgQuickUnlockGone'),
       });
       return;
     }
@@ -311,9 +313,9 @@ export default function Login() {
     haptics.error();
     setFailure({
       kind: 'network',
-      message: t('login.msgUnlockFailed'),
+      message: textCopy('login.msgUnlockFailed'),
     });
-  }, [restoring, expiredNotice, clearExpiredNotice, restoreBiometricSession, router, t]);
+  }, [restoring, expiredNotice, clearExpiredNotice, restoreBiometricSession, router]);
 
   /** Retry re-runs whatever the user was actually doing, so the Banner's action is never
    *  a dead end that just dismisses itself. */
@@ -340,7 +342,7 @@ export default function Login() {
               : otpSent ? t('login.bannerCodeNotChecked')
                 : t('login.bannerCodeRequestNotSent')
         }
-        message={failure.message}
+        message={renderText(t, failure.message)}
         action={{ label: t('common.tryAgain'), onPress: retry }}
         onDismiss={() => setFailure(null)}
       />
@@ -352,7 +354,7 @@ export default function Login() {
             : otpSent ? t('login.bannerCodeNotAccepted')
               : t('login.bannerCodeNotSent')
         }
-        message={failure.message}
+        message={renderText(t, failure.message)}
         onDismiss={() => setFailure(null)}
       />
     )
@@ -419,7 +421,7 @@ export default function Login() {
                 <Banner
                   tone="info"
                   title={t('login.bannerSessionEnded')}
-                  message={expiredNotice}
+                  message={t(`session.${expiredNotice}`)}
                   onDismiss={clearExpiredNotice}
                 />
               ) : null}
@@ -450,10 +452,10 @@ export default function Login() {
                     label={t('login.identifierLabel')}
                     value={id}
                     onChange={(v) => { setId(v); if (idErr) setIdErr(''); touch(); }}
-                    placeholder="you@cgpe.in or 98250 ..."
+                    placeholder={t('auth.identifierExampleShort')}
                     keyboardType="email-address"
                     icon="person-outline"
-                    error={idErr || undefined}
+                    error={idErr ? renderText(t, idErr) : undefined}
                   />
                   <Field
                     label={t('login.passwordLabel')}
@@ -462,7 +464,7 @@ export default function Login() {
                     placeholder={t('login.passwordPlaceholder')}
                     secure
                     icon="lock-closed-outline"
-                    error={pwErr || undefined}
+                    error={pwErr ? renderText(t, pwErr) : undefined}
                   />
                   {failureBanner}
                   <Button
@@ -496,11 +498,11 @@ export default function Login() {
                       if (phoneErr) setPhoneErr('');
                       touch();
                     }}
-                    placeholder="you@cgpe.in  or  98250 00000"
+                    placeholder={t('auth.identifierExample')}
                     keyboardType={phone.includes('@') ? 'email-address' : 'default'}
                     autoCapitalize="none"
                     icon="at-outline"
-                    error={phoneErr || undefined}
+                    error={phoneErr ? renderText(t, phoneErr) : undefined}
                     hint={t('login.otpChannelHint')}
                   />
 
@@ -513,7 +515,7 @@ export default function Login() {
                         placeholder={t('login.otpPlaceholder')}
                         keyboardType="numeric"
                         icon="keypad-outline"
-                        error={otpErr || undefined}
+                        error={otpErr ? renderText(t, otpErr) : undefined}
                       />
                       {failureBanner}
                       <Button

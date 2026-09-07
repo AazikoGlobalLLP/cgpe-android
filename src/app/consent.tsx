@@ -11,6 +11,7 @@ import { haptics } from '@/lib/haptics';
 import { useT } from '@/i18n';
 import { setLocationConsent } from '@/data/api';
 import { startAmbientTracking } from '@/lib/tracker';
+import { useAuth } from '@/store/auth';
 
 /* ------------------------------------------------------------------ *
  * PHASE 41a-ii — the 24/7 location consent notice.
@@ -47,6 +48,7 @@ const NOTICE_KEYS = [
 ] as const;
 
 export default function Consent() {
+  const { user } = useAuth();
   const c = useTheme();
   const router = useRouter();
   const t = useT();
@@ -71,6 +73,7 @@ export default function Consent() {
       // background permission just means recording waits — consent itself is already recorded, so we
       // still proceed. The gate redirects here and this replace lands the user on Home for good.
       await startAmbientTracking({
+        ownerId: user?.id,
         prompt: true,
         notif: { title: t('consent.serviceTitle'), body: t('consent.serviceBody') },
       });

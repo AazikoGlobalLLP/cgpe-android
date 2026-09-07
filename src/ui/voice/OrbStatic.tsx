@@ -1,3 +1,4 @@
+import { useT } from '@/i18n';
 /**
  * The gradient/Reanimated orb — native-free (no Skia, no SVG). It is BOTH the immediate premium
  * character (ships in the native-free foundation) AND the fallback the Skia orb degrades to (Expo Go,
@@ -75,6 +76,7 @@ const SMOOTH = { duration: motion.smooth.duration, easing: Easing.bezier(...moti
 
 export function OrbStatic({ persona, state, level, glow, size = 200, muted, reduced, style }: OrbStaticProps) {
   const c = useTheme();
+  const t = useT();
   const base = personaBase(persona, c);
   const glowHue = personaGlow(persona, c);
 
@@ -139,7 +141,7 @@ export function OrbStatic({ persona, state, level, glow, size = 200, muted, redu
   const circle = (d: number): ViewStyle => ({ width: d, height: d, borderRadius: d / 2 });
 
   return (
-    <View style={[circle(D), { alignItems: 'center', justifyContent: 'center' }, style]} accessibilityRole="image" accessibilityLabel={`Voice ${state}`}>
+    <View style={[circle(D), { alignItems: 'center', justifyContent: 'center' }, style]} accessibilityRole="image" accessibilityLabel={t('voice.accessibilityState', { state: t(({ idle: 'voice.stateIdle', listening: 'voice.stateListening', thinking: 'voice.stateThinking', speaking: 'voice.stateSpeaking', error: 'voice.stateError' })[state]) })}>
       {/* aura: three stacked translucent circles approximating a soft bloom */}
       <Animated.View style={[{ position: 'absolute' }, auraStyle]} pointerEvents="none">
         <View style={[circle(D), { position: 'absolute', left: -D / 2, top: -D / 2, backgroundColor: alpha(glow.accent, 0.16) }]} />

@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText } from '@/i18n/copy';
 /**
  * The voice turn pipeline — record → askVoice → parse → decide → speak/navigate — lifted verbatim from
  * the original VoiceSheet so both the sheet and the new full-screen VoiceMode share ONE glue path and
@@ -8,7 +9,7 @@
  * VoiceMode (← `_layout`, no route, no test). `level` is a Reanimated SharedValue the character reads on
  * the UI thread with zero re-render; unit 1 drives it synthetically, unit 2 swaps in real mic metering.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, type Href } from 'expo-router';
 import { useAudioRecorder, RecordingPresets } from 'expo-audio';
 import {
@@ -66,10 +67,10 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
   const [state, setState] = useState<VoiceCharacterState>('idle');
   const [transcript, setTranscript] = useState('');
   const [reply, setReply] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<CopyText | null>(null);
   // The technical reason behind `error`, shown UNDER the friendly sentence. See `voice/cause.ts`:
   // without it a failed turn is undiagnosable from anything but a USB cable.
-  const [cause, setCause] = useState<string | null>(null);
+  const [cause, setCause] = useState<CopyText | null>(null);
   // True when no retry can help — the server has voice switched off. Drives whether the banner is
   // allowed to offer "Try again", which for this case would be a promise the app cannot keep.
   const [permanent, setPermanent] = useState(false);
@@ -158,7 +159,7 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
     setPermanent(false);
   }, []);
 
-  const fail = useCallback((msg: string, why?: string | null, isPermanent = false) => {
+  const fail = useCallback((msg: CopyText, why?: CopyText | null, isPermanent = false) => {
     haptics.error();
     setState('error');
     setError(msg);
@@ -179,6 +180,7 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
    * normal transport error — the probe must never block the mic on its own inability to answer. Placed
    * AFTER `fail`/`toast` so it does not read a block-scoped callback before its declaration.
    */
+  const showTextOnly = useEffectEvent(() => toast(t('voice.textOnly'), 'info'));
   useEffect(() => {
     let alive = true;
     void getVoiceStatus().then((s) => {
@@ -186,16 +188,16 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       statusRef.current = s;
       if (!s.ready) {
         fail(
-          t('voice.notSetUp'),
-          s.missing.length ? `Server voice config missing: ${s.missing.join(', ')}` : null,
+          textCopy('voice.notSetUp'),
+          s.missing.length ? textCopy('voice.missingConfig', { items: s.missing.join(', ') }) : null,
           true,
         );
       } else if (!s.hasTts) {
-        toast(t('voice.textOnly'), 'info');
+        showTextOnly();
       }
     });
     return () => { alive = false; };
-  }, [fail, t, toast]);
+  }, [fail]);
 
   /**
    * Stop and release the recorder if we ever started one. Idempotent and never throws, so it is safe
@@ -231,8 +233,8 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
     if (statusRef.current && statusRef.current.ready === false) {
       heldRef.current = false;
       fail(
-        t('voice.notSetUp'),
-        statusRef.current.missing.length ? `Server voice config missing: ${statusRef.current.missing.join(', ')}` : null,
+        textCopy('voice.notSetUp'),
+        statusRef.current.missing.length ? textCopy('voice.missingConfig', { items: statusRef.current.missing.join(', ') }) : null,
         true,
       );
       return;
@@ -312,7 +314,7 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       // The recorder is the likeliest thing to fail on a handset we have never tested on, and it is
       // the one failure the user CAN see. Keep what it actually said, and never leave it live.
       await teardown();
-      fail(t('voice.failed'), describeCause(firstPrepareError ?? e));
+      fail(textCopy('voice.failed'), describeCause(firstPrepareError ?? e));
     }
   }, [recorder, teardown, toast, t, fail]);
 
@@ -363,10 +365,10 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
         // NOT carry "please try again": voice is off at the server and no retry can turn it on.
         fail(
           result.transport === 'unconfigured'
-            ? t('voice.notSetUp')
+            ? textCopy('voice.notSetUp')
             : result.transport === 'timeout' || result.transport === 'server'
-              ? t('voice.failed')
-              : t('voice.offline'),
+              ? textCopy('voice.failed')
+              : textCopy('voice.offline'),
           describeTransport(result.transport, result.status, result.detail),
           result.transport === 'unconfigured',
         );
@@ -374,7 +376,7 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       }
       if (!result.ok) {
         if (result.transcript) setTranscript(result.transcript);
-        fail(t('voice.notUnderstood'));
+        fail(textCopy('voice.notUnderstood'));
         return;
       }
 
@@ -400,7 +402,7 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
       // 'none' or a confirm_write (display only in v1): leave the answer on screen, then relax to idle.
       setTimeout(() => setState((s) => (s === 'speaking' ? 'idle' : s)), 1400);
     } catch (e) {
-      fail(t('voice.failed'), describeCause(e));
+      fail(textCopy('voice.failed'), describeCause(e));
     } finally {
       clearTimeout(slow);
       busy.current = false;
@@ -429,5 +431,5 @@ export function useVoiceTurn(onClose: () => void): VoiceTurn {
     onClose();
   }, [onClose, reset, teardown]);
 
-  return { state, transcript, setTranscript, reply, error, cause, permanent, level, startedAtRef, startCapture, finishCapture, close, reset };
+  return { state, transcript, setTranscript, reply, error: error ? renderText(t, error) : null, cause: cause ? renderText(t, cause) : null, permanent, level, startedAtRef, startCapture, finishCapture, close, reset };
 }

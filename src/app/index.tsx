@@ -1,3 +1,4 @@
+import { useT } from '@/i18n';
 import { Redirect } from 'expo-router';
 import { useAuth } from '@/store/auth';
 import { Loader } from '@/ui/feedback';
@@ -8,7 +9,8 @@ import { Loader } from '@/ui/feedback';
  * decides which layout even applies.
  */
 export default function Index() {
+  const t = useT();
   const { user, ready } = useAuth();
-  if (!ready) return <Loader label="Restoring your session" />;
+  if (!ready) return <Loader label={t('auth.restoringSession')} />;
   return <Redirect href={user ? '/(tabs)/home' : '/(auth)/login'} />;
 }

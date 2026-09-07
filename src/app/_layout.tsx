@@ -17,10 +17,10 @@ import 'react-native-gesture-handler';
  * `startAmbientTracking`, which the boot gate below calls to arm the 24/7 recorder for an
  * already-consented user (PHASE-41 §12.5).
  */
-import { startAmbientTracking, syncConsentWithPermission } from '@/lib/tracker';
-import { configurePushHandler, subscribeToPushTaps, syncPushRegistration } from '@/lib/push';
+import { startAmbientTracking, syncConsentWithPermission, updateTrackingNotificationCopies } from '@/lib/tracker';
+import { configurePushHandler, subscribeToPushTaps, syncPushRegistration, updatePushChannelName } from '@/lib/push';
 import { maybeSyncCalendar, clearCalendarSync } from '@/lib/calendar';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useEffectEvent, useMemo, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -65,16 +65,14 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
  *  1. FAIL OPEN. `needsConsentGate` redirects ONLY on a confirmed `ok` + non-granted read; an outage,
  *     a pre-Phase-43 backend, or a dead network all read `error` → no redirect. A failed read can
  *     never trap staff behind the wall.
- *  2. FIRE ONCE per signed-in session. The `checked` ref gates the read to a single fetch per cold
- *     start (reset only on sign-OUT so the next person is re-checked), so it cannot loop — and the
- *     consent screen's own success path `replace`s to Home, which never re-triggers this.
+ *  2. CHECK EACH OWNER. The effect follows auth readiness and owner identity. Language changes
+ *     update notification snapshots separately without repeating consent reads or recorder arming.
+ *     The consent screen's own success path replaces Home without changing those dependencies.
  *  3. NATIVE ONLY. The gate exists to enable the native background recorder; web has none (and the
  *     e2e web harness must keep reaching every screen), so web is skipped outright.
  *
- * There is deliberately no `let alive` cancel guard: this component never unmounts (root-level, like
- * AppLock) and the effect performs NO setState — only a one-shot `router.replace`, which is safe to
- * fire whenever the read resolves. A per-effect `alive` flag would in fact swallow the redirect under
- * React StrictMode's dev double-mount.
+ * Cleanup ignores a late read from an outgoing owner or a superseded effect. StrictMode's second
+ * effect starts its own read; the discarded first read cannot redirect or arm the recorder.
  *
  * DEVICE-ONLY to verify (no test stub reaches boot navigation): that a non-granted user lands on
  * `/consent` without a Home flash-then-bounce or a loop, that it survives Expo's restored-route cold
@@ -85,15 +83,27 @@ function ConsentGate() {
   const { user, ready } = useAuth();
   const router = useRouter();
   const t = useT();
-  const checked = useRef(false);
+  const ownerId = user?.id;
+  const armConsentedOwner = useEffectEvent((id: string) => {
+    void startAmbientTracking({
+      ownerId: id, prompt: false,
+      notif: { title: t('consent.serviceTitle'), body: t('consent.serviceBody') },
+    });
+  });
+  useEffect(() => {
+    if (!ownerId || !ready) return;
+    void updateTrackingNotificationCopies(ownerId,
+      { title: t('consent.serviceTitle'), body: t('consent.serviceBody') },
+      { title: t('tracker.shiftTitle'), body: t('tracker.shiftBody') });
+  }, [ownerId, ready, t]);
 
   useEffect(() => {
     if (Platform.OS === 'web') return;          // native-only: no background recorder on web
-    if (!user) { checked.current = false; return; }   // signed out — re-check the next person
-    if (!ready || checked.current) return;
-    checked.current = true;
+    if (!ownerId || !ready) return;
+    let alive = true;
     void (async () => {
       const r = await getLocationConsent();      // silent + fail-open by design (api.ts)
+      if (!alive) return;
       if (needsConsentGate(r)) {
         // `/consent` postdates the last generated route type (as `/earnings` does in attendance.tsx),
         // so cast to Href until `expo start` regenerates .expo/types.
@@ -105,13 +115,11 @@ function ConsentGate() {
       // cold start; the resolved (translated) neutral notification is captured here while i18n exists.
       // FAIL-OPEN holds: an `error` read is not `granted`, so nothing is armed (§12.7.7).
       if (r.status === 'ok' && r.consent === 'granted') {
-        void startAmbientTracking({
-          prompt: false,
-          notif: { title: t('consent.serviceTitle'), body: t('consent.serviceBody') },
-        });
+        armConsentedOwner(ownerId);
       }
     })();
-  }, [user, ready, router, t]);
+    return () => { alive = false; };
+  }, [ownerId, ready, router]);
 
   return null;
 }
@@ -170,6 +178,10 @@ function PermissionMonitor() {
 function PushGate() {
   const { user } = useAuth();
   const router = useRouter();
+  const t = useT();
+  useEffect(() => {
+    void updatePushChannelName(user ? t('record.general') : 'General');
+  }, [user, t]);
   useEffect(() => {
     if (Platform.OS === 'web') return; // native-only: no push on web
     configurePushHandler();            // foreground presentation; idempotent, safe every mount
@@ -191,16 +203,19 @@ function PushGate() {
  * once at the root beside `PushGate`; the sync decisions are pure + unit-tested in `calendarSync.ts`.
  */
 function CalendarGate() {
-  const { user } = useAuth();
+  const { user, ready } = useAuth();
+  const t = useT();
+  const ownerId = user?.id;
   useEffect(() => {
-    if (Platform.OS === 'web') return; // native-only: no phone calendar on web
-    if (!user) { void clearCalendarSync(); return; } // signed out → remove this user's events (no-op if none)
-    void maybeSyncCalendar(true); // force a pass on sign-in
-    const sub = AppState.addEventListener('change', (s) => {
-      if (s === 'active') void maybeSyncCalendar(); // throttled re-sync on foreground
+    if (Platform.OS === 'web' || !ready) return;
+    if (!ownerId) { void clearCalendarSync(); return; }
+    // A language change queues the latest copy even while another pass is still in flight.
+    void maybeSyncCalendar(ownerId, true, t);
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void maybeSyncCalendar(ownerId, false, t);
     });
     return () => sub.remove();
-  }, [user]);
+  }, [ownerId, ready, t]);
   return null;
 }
 

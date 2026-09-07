@@ -1,17 +1,17 @@
+import { useT, refreshI18nUser } from '@/i18n';
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { storage } from '@/lib/storage';
 import * as api from '@/data/api';
-import { EXPIRY_MESSAGE, ExpiryReason, onSessionExpired, resetSessionGuard } from '@/lib/session';
+import { ExpiryReason, onSessionExpired, resetSessionGuard } from '@/lib/session';
 import { resetHealth } from '@/data/health';
 import { resetFreshness } from '@/data/freshness';   // Phase 57a — clear stale-cache marks on sign-out
 // One-directional: i18n imports nothing from this store, so there is no require cycle.
 // Language is persisted per user (`cgpe.lang.<userId>`), and the provider only re-reads which
 // user is signed in when it is told to. Without these calls a user switch inside one app run
 // would keep showing the previous person's language until the app was next foregrounded.
-import { refreshI18nUser } from '@/i18n';
 // Hardware-bound biometric identity. A biometric unlock must resolve to the account that was
 // genuinely authenticated ON THIS INSTALL, never to whoever happens to be cached. Phase 48 wires
 // the READ half (`resolveBoundIdentity`) to restore a session from the sealed 30-day refresh
@@ -51,7 +51,7 @@ type AuthState = {
    * screen reads it to explain why the user is suddenly back at sign-in, instead of
    * appearing to have logged them out at random.
    */
-  expiredNotice: string | null;
+  expiredNotice: ExpiryReason | null;
   clearExpiredNotice: () => void;
   setViewAs: (t: Tier | null) => void;
   login: (id: string, pw: string) => Promise<void>;
@@ -76,13 +76,14 @@ type AuthState = {
 const AuthContext = createContext<AuthState>({} as AuthState);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const tr = useT();
   const [user, setUser] = useState<User | null>(null);
   const [ready, setReady] = useState(false);
   const [restoredSession, setRestoredSession] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [viewAs, setViewAsState] = useState<Tier | null>(null);
-  const [expiredNotice, setExpiredNotice] = useState<string | null>(null);
+  const [expiredNotice, setExpiredNotice] = useState<ExpiryReason | null>(null);
 
   /**
    * The server is the authority on whether our token is still good. `data/api` reports a
@@ -92,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
    */
   useEffect(() => {
     const off = onSessionExpired((reason: ExpiryReason) => {
-      setExpiredNotice(EXPIRY_MESSAGE[reason]);
+      setExpiredNotice(reason);
       api.setAuthToken(null);
       // Mirror clear()'s teardown, not a partial one. Nulling the current user drops the outgoing
       // user's id/name (used as ownership/assignedBy defaults) and their reactive write-queue; and
@@ -107,7 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       resetHealth();
       resetFreshness();
       void storage.remove(TOKEN_KEY);
-      void storage.remove(USER_KEY);
+      void storage.remove(USER_KEY).then(refreshI18nUser);
       // A silent 401 expiry must tear down the OUTGOING user's per-user artifacts the SAME way an
       // explicit logout does — NOT just null the token. Otherwise the still-running recorder's shift
       // sid (in track.state) and the device push-token binding (push.sentToken) survive into the NEXT
@@ -157,7 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           // no clients" screens until they force-quit (audit 2026-08-21, #6).
           resetSessionGuard();
           const pu = JSON.parse(savedUser);
-          api.setCurrentUser(pu.id, pu.name);
+          api.setCurrentUser(pu.id, pu.name, pu.nameCopy);
           setUser(pu);
           setRestoredSession(true);
         }
@@ -195,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch { /* a malformed stored user must never block a fresh sign-in */ }
     api.setAuthToken(token);
-    api.setCurrentUser(u.id, u.name);
+    api.setCurrentUser(u.id, u.name, u.nameCopy);
     resetSessionGuard();   // re-arm expiry detection for the new session
     resetHealth();         // a previous outage must not colour a fresh sign-in
     setExpiredNotice(null);
@@ -214,7 +215,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
      * fail closed next time. Seal only when we actually have one (a login without a refresh token
      * leaves any prior binding untouched — it may still be valid server-side). */
     if (biometricEnabled && !isWeb && refreshToken) {
-      await saveBoundIdentity(u.id, refreshToken).catch(() => false);
+      await saveBoundIdentity(u.id, refreshToken, tr('auth.confirmQuickUnlock')).catch(() => false);
     }
   };
 
@@ -336,7 +337,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const enrolled = await LocalAuthentication.isEnrolledAsync().catch(() => false);
         if (!has || !enrolled) return false;
         const res = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Enable biometric unlock for CGPE Connect',
+          promptMessage: tr('auth.enableBiometricPrompt'),
         }).catch(() => ({ success: false }));
         if (!res.success) return false;
       }
@@ -350,7 +351,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!isWeb) {
         if (on) {
           const rt = await storage.get(REFRESH_KEY);
-          if (user && rt) await saveBoundIdentity(user.id, rt).catch(() => false);
+          if (user && rt) await saveBoundIdentity(user.id, rt, tr('auth.confirmQuickUnlock')).catch(() => false);
         } else {
           await clearBoundIdentity().catch(() => {});
         }
@@ -380,14 +381,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (!has || !enrolled) {
           // Try the device passcode before giving up on proving identity.
           const fallback = await LocalAuthentication.authenticateAsync({
-            promptMessage: 'Unlock CGPE Connect',
+            promptMessage: tr('auth.unlockPrompt'),
             disableDeviceFallback: false,
           }).catch(() => null);
           // Only open when the OS genuinely offers no credential to check against.
           return fallback ? !!fallback.success : true;
         }
         const res = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Unlock CGPE Connect',
+          promptMessage: tr('auth.unlockPrompt'),
           disableDeviceFallback: false,
         });
         return !!res.success;
@@ -408,7 +409,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (isWeb) return 'unavailable';
       // Open the biometric-gated binding. This is the ONE prompt; it returns the sealed
       // (userId, refreshToken) or null. A null carries no identity — never a fallback.
-      const bound = await resolveBoundIdentity();
+      const bound = await resolveBoundIdentity(tr('auth.unlockPrompt'));
       if (!bound) {
         const outcome = getLastResolveOutcome();
         // Transient (user cancelled, prompt timed out, sensor busy) → let them tap again.
