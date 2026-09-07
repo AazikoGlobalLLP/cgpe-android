@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy, textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -5,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useT } from '@/i18n';
+import { taskCategoryLabel } from '@/i18n/display';
 import { font, radius, spacing, useTheme } from '@/theme/theme';
 import { Header, KeyboardScroll, Row, Screen, Txt } from '@/ui/base';
 import { Button, Chips, Field, Segmented, SearchBar } from '@/ui/controls';
@@ -111,18 +113,19 @@ export default function TaskNew() {
     && (uiReady ? can('can_assign_task_to_others') !== false : true);
 
   const [title, setTitle] = useState('');
-  const [titleError, setTitleError] = useState('');
+  const [titleError, setTitleError] = useState<CopyText>('');
   const [desc, setDesc] = useState('');
   const [client, setClient] = useState('');
   const [priority, setPriority] = useState<TaskPriority>('medium');
   const [category, setCategory] = useState('Follow-up');
   const [when, setWhen] = useState<When>('today');
   const [assignee, setAssignee] = useState(UNASSIGNED);
+  const [assigneeCopy, setAssigneeCopy] = useState<LocalCopy | undefined>();
   const [members, setMembers] = useState<TeamMember[] | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerQuery, setPickerQuery] = useState('');
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message: CopyText } | null>(null);
 
   /** The leak guard. Nothing lands on this form once it has been left. */
   const live = useRef(true);
@@ -148,7 +151,8 @@ export default function TaskNew() {
 
   const pick = <T,>(set: (v: T) => void) => (v: T) => { haptics.select(); set(v); };
 
-  const choose = (name: string) => {
+  const choose = (name: string, nameCopy?: LocalCopy) => {
+    setAssigneeCopy(nameCopy);
     haptics.select();
     setAssignee(name);
     setPickerOpen(false);
@@ -160,7 +164,7 @@ export default function TaskNew() {
 
     if (!title.trim()) {
       haptics.warn();
-      setTitleError('Give the task a title so it can be recognised in a list.');
+      setTitleError(textCopy('task.titleRequiredBody'));
       return;
     }
     setTitleError('');
@@ -187,8 +191,8 @@ export default function TaskNew() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'The server has not enabled this yet',
-        message: 'Creating your own tasks has been approved but is not switched on on the server yet. Ask your branch admin to add the task for now.',
+        title: textCopy('task.creationNotEnabled'),
+        message: textCopy('task.creationNotEnabledBody'),
       });
       return;
     }
@@ -197,8 +201,8 @@ export default function TaskNew() {
       haptics.error();
       setNotice({
         tone: 'warning',
-        title: 'Task was not created',
-        message: 'The server refused the request, so nothing was added. Check the details and try again in a moment.',
+        title: textCopy('task.createFailed'),
+        message: textCopy('task.createFailedBody'),
       });
       return;
     }
@@ -212,7 +216,7 @@ export default function TaskNew() {
 
     // created.status === 'saved' — the server accepted it.
     haptics.success();
-    toast(assignee !== UNASSIGNED ? `Task assigned to ${assignee}.` : 'Task created.', 'success');
+    toast(assignee !== UNASSIGNED ? t('task.assignedToast', { name: resolveCopy(t, assignee, assigneeCopy) }) : t('task.createdToast'), 'success');
     router.replace(`/task/${created.task.id}`);
   };
 
@@ -230,12 +234,12 @@ export default function TaskNew() {
   if (!canCreateTask) {
     return (
       <Screen>
-        <Header title="New task" back />
+        <Header title={t('task.newTitle')} back />
         <View style={{ flex: 1, justifyContent: 'center', padding: spacing.lg }}>
           <EmptyState
             icon="lock-closed-outline"
-            title="Only admins can create tasks"
-            subtitle="Creating work for the team needs an admin, leader, or super admin role. Ask your branch admin to add the task, or to raise your access."
+            title={t('task.adminOnlyTitle')}
+            subtitle={t('task.adminOnlyBody')}
           />
         </View>
       </Screen>
@@ -244,7 +248,7 @@ export default function TaskNew() {
 
   return (
     <Screen keyboard>
-      <Header title="New task" back subtitle="Assign work to yourself or the team" />
+      <Header title={t('task.newTitle')} back subtitle={t('task.assignSubtitle')} />
 
       <KeyboardScroll
         contentStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xl }}
@@ -253,8 +257,8 @@ export default function TaskNew() {
         {notice ? (
           <Banner
             tone={notice.tone}
-            title={notice.title}
-            message={notice.message}
+            title={renderText(t, notice.title)}
+            message={renderText(t, notice.message)}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
@@ -262,28 +266,28 @@ export default function TaskNew() {
         <Appear>
           <View style={{ gap: spacing.xl }}>
             <Field
-              label="Task title"
+              label={t('task.titleField')}
               value={title}
               onChange={(v) => { setTitle(v); if (titleError) setTitleError(''); }}
-              placeholder="Collect KYC from the client"
-              error={titleError}
-              hint="Required. What has to happen, in a few words."
+              placeholder={t('task.titleExample')}
+              error={renderText(t, titleError)}
+              hint={t('task.titleHint')}
               maxLength={140}
             />
             <Field
-              label="Details"
+              label={t('task.detailsLabel')}
               value={desc}
               onChange={setDesc}
-              placeholder="Anything the person doing this needs to know"
+              placeholder={t('task.detailsPlaceholder')}
               multiline
             />
             <Field
-              label="Client"
+              label={t('task.clientLabel')}
               value={client}
               onChange={setClient}
-              placeholder="Client name"
+              placeholder={t('task.clientNamePlaceholder')}
               icon="person-outline"
-              hint="Optional. Links the task to a name in the book."
+              hint={t('task.clientNameHint')}
             />
           </View>
         </Appear>
@@ -299,7 +303,7 @@ export default function TaskNew() {
               disabled={!canAssignOthers}
               accessibilityRole="button"
               accessibilityState={{ disabled: !canAssignOthers }}
-              accessibilityLabel={`Assign to. Currently ${assignee}`}
+              accessibilityLabel={t('task.assignCurrentA11y', { name: assignee === UNASSIGNED ? t('task.unassignedLabel') : resolveCopy(t, assignee, assigneeCopy) })}
               style={({ pressed }) => [{
                 flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                 height: 50, paddingHorizontal: 15,
@@ -310,11 +314,11 @@ export default function TaskNew() {
               {assignee === UNASSIGNED ? (
                 <Ionicons name="person-add-outline" size={19} color={c.faint} />
               ) : (
-                <Avatar name={assignee} size={30} />
+                <Avatar name={resolveCopy(t, assignee, assigneeCopy)} size={30} />
               )}
               <Txt size={font.body} weight="500" color={assignee === UNASSIGNED ? c.faint : c.text}
                 numberOfLines={1} style={{ flex: 1 }}>
-                {assignee === UNASSIGNED ? 'Nobody yet' : assignee}
+                {assignee === UNASSIGNED ? t('task.nobodyYet') : resolveCopy(t, assignee, assigneeCopy)}
               </Txt>
               <Ionicons name="chevron-down" size={18} color={c.faint} />
             </Pressable>
@@ -323,7 +327,7 @@ export default function TaskNew() {
 
         {/* WHEN. Closed set, and the choice resolves to a real date underneath. */}
         <Appear index={2}>
-          <Group label={t('task.due')} hint={`${fmtDate(due)} at ${fmtTime(due)}`}>
+          <Group label={t('task.due')} hint={t('task.dueDateTime', { date: fmtDate(due), time: fmtTime(due) })}>
             <Segmented<When>
               full
               options={[
@@ -355,7 +359,7 @@ export default function TaskNew() {
         <Appear index={4}>
           <Group label={t('task.category')}>
             <Chips
-              options={CATEGORIES.map((x) => ({ key: x, label: x }))}
+              options={CATEGORIES.map((x) => ({ key: x, label: taskCategoryLabel(t, x) }))}
               value={category}
               onChange={pick<string>(setCategory)}
             />
@@ -374,15 +378,15 @@ export default function TaskNew() {
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: c.hairline,
       }}>
-        <Button label="Create task" icon="checkmark" onPress={save} loading={saving} size="lg" full />
+        <Button label={t('task.createAction')} icon="checkmark" onPress={save} loading={saving} size="lg" full />
       </View>
 
       {/* ---------- assignee picker ---------- */}
       <Sheet
         visible={pickerOpen}
         onClose={() => { setPickerOpen(false); setPickerQuery(''); }}
-        title="Assign to"
-        subtitle={assignee === UNASSIGNED ? 'Leave it unassigned to keep it on your own list' : `Currently ${assignee}`}
+        title={t('task.assignTo')}
+        subtitle={assignee === UNASSIGNED ? t('task.leaveOwnListBody') : t('task.currentStatus', { status: resolveCopy(t, assignee, assigneeCopy) })}
       >
         <View style={{ paddingTop: spacing.xs }}>
           {/* Search — shown only when the roster is large enough to need narrowing. The sheet's own
@@ -393,7 +397,7 @@ export default function TaskNew() {
                 value={pickerQuery}
                 onChange={setPickerQuery}
                 onSubmit={() => {}}
-                placeholder="Search colleagues"
+                placeholder={t('task.searchColleagues')}
               />
             </View>
           ) : null}
@@ -403,7 +407,7 @@ export default function TaskNew() {
             <Pressable
               onPress={() => choose(UNASSIGNED)}
               accessibilityRole="button"
-              accessibilityLabel="Leave unassigned"
+              accessibilityLabel={t('task.leaveUnassigned')}
               accessibilityState={{ selected: assignee === UNASSIGNED }}
               style={({ pressed }) => [{
                 flexDirection: 'row', alignItems: 'center', gap: spacing.md,
@@ -420,10 +424,9 @@ export default function TaskNew() {
                 <Ionicons name="person-outline" size={20} color={c.faint} />
               </View>
               <View style={{ flex: 1 }}>
-                <Txt size={font.body} weight="700" numberOfLines={1}>Leave unassigned</Txt>
+                <Txt size={font.body} weight="700" numberOfLines={1}>{t('task.leaveUnassigned')}</Txt>
                 <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>
-                  Stays on your own list
-                </Txt>
+                  {t('task.staysOwnList')}</Txt>
               </View>
               {assignee === UNASSIGNED ? <Ionicons name="checkmark" size={19} color={c.primary} /> : null}
             </Pressable>
@@ -444,25 +447,25 @@ export default function TaskNew() {
           ) : roster.length === 0 ? (
             <EmptyState
               icon={health.degraded ? 'cloud-offline-outline' : 'people-outline'}
-              title={health.degraded ? 'The roster did not load' : 'No team members yet'}
+              title={health.degraded ? t('home.rosterFailed') : t('task.noTeamYet')}
               subtitle={health.degraded
-                ? 'The server could not be reached, so this list is not confirmed. The task can still be created unassigned.'
-                : 'There is nobody else on your roster, so this task can only stay on your own list.'}
+                ? t('task.rosterUnconfirmedCreateBody')
+                : t('task.onlyOwnListBody')}
             />
           ) : shownRoster.length === 0 ? (
             <EmptyState
               icon="search-outline"
-              title={`No colleague matches "${pickerQuery.trim()}"`}
-              subtitle="Try a shorter piece of the name, or clear the search to see everyone."
+              title={t('task.noColleagueMatch', { query: pickerQuery.trim() })}
+              subtitle={t('task.colleagueSearchHint')}
             />
           ) : (
             <>
               {shownRoster.map((m) => (
                 <PersonRow
                   key={m.id}
-                  name={m.name}
+                  name={resolveCopy(t, m.name, m.nameCopy)}
                   subtitle={m.branch || m.role}
-                  onPress={() => choose(m.name)}
+                  onPress={() => choose(m.name, m.nameCopy)}
                   right={m.name === assignee
                     ? <Ionicons name="checkmark" size={19} color={c.primary} />
                     : undefined}
@@ -472,7 +475,7 @@ export default function TaskNew() {
               ))}
               {filteredRoster.length > ROSTER_CAP ? (
                 <Txt size={font.sub} color={c.faint} style={{ paddingVertical: spacing.md, textAlign: 'center' }}>
-                  {`Showing ${ROSTER_CAP} of ${filteredRoster.length} — search by name to find more`}
+                  {t('task.transferShowingCount', { shown: ROSTER_CAP, total: filteredRoster.length })}
                 </Txt>
               ) : null}
             </>

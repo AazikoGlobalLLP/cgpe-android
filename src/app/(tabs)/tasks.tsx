@@ -1,3 +1,4 @@
+import { resolveCopy, textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,6 +22,7 @@ import { setDropCount } from '@/data/pendingWrites';
 import { haptics } from '@/lib/haptics';
 
 import { useT } from '@/i18n';
+import { taskCategoryLabel } from '@/i18n/display';
 import { useAuth } from '@/store/auth';
 import { useAppUi } from '@/store/appUi';
 import { capabilitiesOf } from '@/store/roles';
@@ -211,7 +213,7 @@ export default function Tasks() {
   // freeze "today" at first mount and — since the hero's `todayWorkload(list)` re-reads the clock on each
   // focus refetch — the calendar ring would disagree with the header after the app crosses midnight.
   const [todayMs, setTodayMs] = useState(() => startOfDayMs(new Date()));
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message: CopyText } | null>(null);
   // Band 2 #2 (owner backlog Point 2, 2026-08-24): a local, in-memory search over the already-
   // loaded list. Typing here searches the WHOLE list (not just the active time view), so a task
   // in a future month — unreachable from Today/Week/Month — is still findable. The scorer is the
@@ -362,7 +364,7 @@ export default function Tasks() {
    * restoring it would undo any other tick the user landed while this request was in the
    * air — the failure of one write must never revert a different, successful one.
    */
-  const setStatus = async (task: Task, status: TaskStatus, refusedTitle: string) => {
+  const setStatus = async (task: Task, status: TaskStatus, refusedTitle: CopyText) => {
     // Snapshot completedAt too: the optimistic write stamps it now (below) so `todayWorkload`
     // credits the close to today; a rollback must put the prior value (usually undefined) back.
     const before = { status: task.status, steps: task.steps, completedAt: task.completedAt };
@@ -386,8 +388,8 @@ export default function Tasks() {
         tone: 'warning',
         title: refusedTitle,
         message: res.forbidden
-          ? 'This task is assigned to someone else, so it cannot be changed from here.'
-          : 'The server did not accept the change. Try again in a moment.',
+          ? textCopy('tasks.otherAssigneeBody')
+          : textCopy('home.changeRefused'),
       });
       return;
     }
@@ -395,8 +397,8 @@ export default function Tasks() {
     setNotice(null);
   };
 
-  const quickDone = (task: Task) => setStatus(task, 'done', 'Task was not closed');
-  const reopen = (task: Task) => setStatus(task, 'todo', 'Task was not reopened');
+  const quickDone = (task: Task) => setStatus(task, 'done', textCopy('home.taskNotClosed'));
+  const reopen = (task: Task) => setStatus(task, 'todo', textCopy('tasks.reopenFailed'));
 
   // Per-view empty copy. The A2 "you have overdue work" caveat is no longer needed: the Today
   // view's set (todayWorkloadTasks) ALREADY includes open-overdue tasks, so if it is empty there
@@ -422,7 +424,7 @@ export default function Tasks() {
     <Screen>
       <Header
         title={t('tasks.title')}
-        subtitle={`${counts.today + counts.overdue} ${t('tasks.dueNow')} · ${counts.done} ${t('tasks.doneLabel')}`}
+        subtitle={t('tasks.countSummary', { due: counts.today + counts.overdue, done: counts.done })}
       />
 
       {/* Band 2 #2: local search over the loaded list. Fixed below the header so it stays put
@@ -469,8 +471,8 @@ export default function Tasks() {
             {notice ? (
               <Banner
                 tone={notice.tone}
-                title={notice.title}
-                message={notice.message}
+                title={renderText(t, notice.title)}
+                message={renderText(t, notice.message)}
                 onDismiss={() => setNotice(null)}
               />
             ) : null}
@@ -482,11 +484,11 @@ export default function Tasks() {
                 <Card>
                   <EmptyState
                     icon="file-tray-outline"
-                    title={`No task matches "${searchTerm}"`}
+                    title={t('tasks.noSearchMatch', { query: searchTerm })}
                     subtitle={
                       outage
-                        ? 'Some tasks could not be loaded, so this may be incomplete. Pull down to refresh, then search again.'
-                        : 'Nothing in your tasks carries that. Try a shorter piece of the title, the client name, or the last four digits of a mobile.'
+                        ? t('tasks.incompleteSearch')
+                        : t('tasks.searchHint')
                     }
                     action={{ label: t('common.clearSearch'), onPress: () => setQuery('') }}
                   />
@@ -494,7 +496,7 @@ export default function Tasks() {
               ) : (
                 <View style={{ gap: 10 }}>
                   <Txt size={font.sub} color={c.muted} numberOfLines={1}>
-                    {`${searchResults.length} ${searchResults.length === 1 ? 'result' : 'results'} for "${searchTerm}"`}
+                {t('tasks.searchCount', { count: searchResults.length, query: searchTerm })}
                   </Txt>
                   {searchResults.map((task, i) => (
                     <TaskCard
@@ -525,17 +527,15 @@ export default function Tasks() {
                           </Txt>
                         </Row>
                         <Txt size={font.sub} color={c.muted} numberOfLines={1}>
-                          {counts.overdue > 0 ? `done · ${counts.overdue} overdue` : 'tasks done today'}
+                          {counts.overdue > 0 ? t('home.doneOverdue', { count: counts.overdue }) : t('home.tasksDoneToday')}
                         </Txt>
                       </>
                     ) : (
                       <>
                         <Txt size={font.h3} weight="800" style={{ marginTop: 5 }} numberOfLines={1}>
-                          Nothing scheduled
-                        </Txt>
+                          {t('home.nothingScheduled')}</Txt>
                         <Txt size={font.sub} color={c.muted} style={{ marginTop: 3 }} numberOfLines={2}>
-                          No task is due today.
-                        </Txt>
+                          {t('home.noTaskDueToday')}</Txt>
                       </>
                     )}
                   </View>
@@ -640,19 +640,19 @@ export default function Tasks() {
               <Card>
                 <EmptyState
                   icon="cloud-offline"
-                  title="Tasks did not load"
-                  subtitle="The server could not be reached, so this is not a confirmed empty list. Pull down to refresh."
-                  action={{ label: 'Retry', onPress: () => load(true) }}
+                  title={t('tasks.loadFailed')}
+                  subtitle={t('tasks.unconfirmedList')}
+                  action={{ label: t('tasks.retry'), onPress: () => load(true) }}
                 />
               </Card>
             ) : bookEmpty ? (
               <Card>
                 <EmptyState
                   icon="clipboard-outline"
-                  title="No tasks yet"
+                  title={t('tasks.noTasksYet')}
                   subtitle={canCreateTask
-                    ? 'Nothing has been assigned to you, and you have not created anything. Add the first task to start your day.'
-                    : 'Nothing has been assigned to you yet. New tasks will appear here as soon as someone assigns you work.'}
+                    ? t('tasks.noWorkCreateBody')
+                    : t('tasks.noAssignedWorkBody')}
                   action={canCreateTask ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                 />
               </Card>
@@ -739,13 +739,14 @@ export default function Tasks() {
  * Since D4 the screen navigates by time view, so these are an at-a-glance read-out of the day's
  * shape (overdue / in progress / upcoming) rather than filters. */
 function HeroStat({ label, value, tint }: { label: string; value: number; tint: string }) {
+  const t = useT();
   const c = useTheme();
   const { font } = c;
   return (
     <View
       style={{ flex: 1, minHeight: 44, justifyContent: 'center', paddingVertical: 6 }}
       accessible
-      accessibilityLabel={`${label}, ${value} tasks`}
+      accessibilityLabel={t('tasks.statCountA11y', { label, count: value })}
     >
       <Metric value={String(value)} size={19} color={value > 0 ? tint : c.faint} />
       <Txt size={font.tiny} weight="600" color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>
@@ -858,14 +859,15 @@ function GridDay({ cell, tally, selected, isToday, onPress }: {
   isToday: boolean;
   onPress: () => void;
 }) {
+  const t = useT();
   const c = useTheme();
   const { radius } = c;
   const total = tally?.total ?? 0;
   const allDone = total > 0 && (tally?.open ?? 0) === 0;
   const overdue = (tally?.overdue ?? 0) > 0;
   const countColor = selected ? c.onPrimary : allDone ? c.success : overdue ? c.danger : c.accent;
-  const state = total === 0 ? 'no tasks'
-    : `${total} ${total === 1 ? 'task' : 'tasks'}${allDone ? ', all done' : overdue ? ', overdue' : ''}`;
+  const state = total === 0 ? t('tasks.noTasksShort')
+    : t(allDone ? 'tasks.dayAllDoneCount' : overdue ? 'tasks.dayOverdueCount' : 'tasks.dayCount', { count: total });
 
   return (
     <Pressable
@@ -931,9 +933,13 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
   if (!isPending && !isDone && task.clientPhone) {
     actions.push({ icon: 'call', label: t('common.call'), tone: 'primary', onPress: () => { haptics.tap(); call(task.clientPhone!); } });
   }
-  if (!isPending && isDone && onReopen) actions.push({ icon: 'arrow-undo', label: 'Reopen', tone: 'warning', onPress: onReopen });
+  if (!isPending && isDone && onReopen) actions.push({ icon: 'arrow-undo', label: t('tasks.reopenAction'), tone: 'warning', onPress: onReopen });
 
-  const due = `${overdue ? 'Overdue · ' : ''}${fmtDay(task.dueDate)} · ${fmtTime(task.dueDate)}${task.client ? ` · ${task.client}` : ''}`;
+  const due = overdue
+    ? t(task.client ? 'tasks.overdueAtClient' : 'tasks.overdueAt', {
+      date: fmtDay(task.dueDate), time: fmtTime(task.dueDate), client: task.client ?? '',
+    })
+    : [fmtDay(task.dueDate), fmtTime(task.dueDate), task.client].filter(Boolean).join(' · ');
 
   return (
     <Appear index={index}>
@@ -961,7 +967,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
               <View style={{ flex: 1, gap: 3 }}>
                 <Txt size={14.5} weight="700" numberOfLines={2}
                   style={{ textDecorationLine: isDone ? 'line-through' : 'none' }}>
-                  {task.title}
+                  {resolveCopy(t, task.title, task.titleCopy)}
                 </Txt>
                 <Txt size={font.cap} color={overdue ? c.danger : c.muted} numeric numberOfLines={1}>
                   {due}
@@ -974,7 +980,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
                   size={38}
                   bg={c.successSoft}
                   color={c.success}
-                  accessibilityLabel={`Mark ${task.title} done`}
+                  accessibilityLabel={t('home.markTaskDone', { task: resolveCopy(t, task.title, task.titleCopy) })}
                   onPress={onDone}
                 />
               ) : null}
@@ -983,7 +989,7 @@ export function TaskCard({ task, index = 0, onPress, onDone, onReopen }: {
             <Row style={{ gap: 6, flexWrap: 'wrap' }}>
               {isPending ? <PendingBadge /> : <Pill label={t(st.labelKey)} tone={st.tone} small />}
               <Pill label={t(pr.labelKey)} tone={pr.tone} small />
-              <Pill label={task.category} tone="neutral" small />
+              <Pill label={task.categoryCopy ? resolveCopy(t, task.category, task.categoryCopy) : taskCategoryLabel(t, task.category)} tone="neutral" small />
             </Row>
 
             {task.steps.length > 0 ? (

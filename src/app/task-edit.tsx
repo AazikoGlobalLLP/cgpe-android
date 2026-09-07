@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -77,13 +78,13 @@ export default function TaskEdit() {
   const originalDue = String(params.dueDate ?? '');
 
   const [title, setTitle] = useState(String(params.title ?? ''));
-  const [titleError, setTitleError] = useState('');
+  const [titleError, setTitleError] = useState<CopyText>('');
   const [desc, setDesc] = useState(String(params.description ?? ''));
   const [client, setClient] = useState(String(params.client ?? ''));
   const [priority, setPriority] = useState<TaskPriority>(isPriority(params.priority) ? params.priority : 'medium');
   const [dueChoice, setDueChoice] = useState<DueChoice>('keep');
   const [saving, setSaving] = useState(false);
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message: CopyText } | null>(null);
 
   /** The leak guard. Nothing lands on this form once it has been left. */
   const live = useRef(true);
@@ -96,17 +97,17 @@ export default function TaskEdit() {
 
   const newDue = dueChoice === 'keep' ? null : dueDateFor(dueChoice);
   const dueHint = newDue
-    ? `${fmtDate(newDue)} at ${fmtTime(newDue)}`
+    ? t('task.dueDateTime', { date: fmtDate(newDue), time: fmtTime(newDue) })
     : originalDue
-      ? `Unchanged — ${fmtDate(originalDue)} at ${fmtTime(originalDue)}`
-      : 'No due date set';
+      ? t('task.unchangedDue', { date: fmtDate(originalDue), time: fmtTime(originalDue) })
+      : t('task.noDueDate');
 
   const save = async () => {
     if (saving) return;
 
     if (!title.trim()) {
       haptics.warn();
-      setTitleError('Give the task a title so it can be recognised in a list.');
+      setTitleError(textCopy('task.titleRequiredBody'));
       return;
     }
     setTitleError('');
@@ -129,15 +130,15 @@ export default function TaskEdit() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'Task was not updated',
+        title: textCopy('task.updateFailed'),
         message: res.reason === 'network'
-          ? 'The change could not be sent. Check your connection and try again.'
-          : 'The server did not accept the change, so nothing was altered. Try again in a moment.',
+          ? textCopy('task.changeSendFailed')
+          : textCopy('task.changeNotAccepted'),
       });
       return;
     }
     haptics.success();
-    toast('Task updated.', 'success');
+    toast(t('task.updatedToast'), 'success');
     router.back();
   };
 
@@ -145,12 +146,12 @@ export default function TaskEdit() {
   if (!id) {
     return (
       <Screen>
-        <Header title="Edit task" back />
+        <Header title={t('task.editTitle')} back />
         <View style={{ flex: 1, justifyContent: 'center', padding: spacing.lg }}>
           <EmptyState
             icon="alert-circle-outline"
-            title="Nothing to edit"
-            subtitle="This task could not be opened for editing. Go back and open it again."
+            title={t('task.nothingToEdit')}
+            subtitle={t('task.cannotEditBody')}
           />
         </View>
       </Screen>
@@ -159,7 +160,7 @@ export default function TaskEdit() {
 
   return (
     <Screen keyboard>
-      <Header title="Edit task" back subtitle="Change the title, priority, due date or details" />
+      <Header title={t('task.editTitle')} back subtitle={t('task.editSubtitle')} />
 
       <KeyboardScroll
         contentStyle={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, gap: spacing.xl }}
@@ -168,8 +169,8 @@ export default function TaskEdit() {
         {notice ? (
           <Banner
             tone={notice.tone}
-            title={notice.title}
-            message={notice.message}
+            title={renderText(t, notice.title)}
+            message={renderText(t, notice.message)}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
@@ -177,28 +178,28 @@ export default function TaskEdit() {
         <Appear>
           <View style={{ gap: spacing.xl }}>
             <Field
-              label="Task title"
+              label={t('task.titleField')}
               value={title}
               onChange={(v) => { setTitle(v); if (titleError) setTitleError(''); }}
-              placeholder="Collect KYC from the client"
-              error={titleError}
-              hint="Required. What has to happen, in a few words."
+              placeholder={t('task.titleExample')}
+              error={renderText(t, titleError)}
+              hint={t('task.titleHint')}
               maxLength={140}
             />
             <Field
-              label="Details"
+              label={t('task.detailsLabel')}
               value={desc}
               onChange={setDesc}
-              placeholder="Anything the person doing this needs to know"
+              placeholder={t('task.detailsPlaceholder')}
               multiline
             />
             <Field
-              label="Client"
+              label={t('task.clientLabel')}
               value={client}
               onChange={setClient}
-              placeholder="Client name"
+              placeholder={t('task.clientNamePlaceholder')}
               icon="person-outline"
-              hint="Optional. Links the task to a name in the book."
+              hint={t('task.clientNameHint')}
             />
           </View>
         </Appear>
@@ -245,7 +246,7 @@ export default function TaskEdit() {
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: c.hairline,
       }}>
-        <Button label="Save changes" icon="checkmark" onPress={save} loading={saving} size="lg" full />
+        <Button label={t('task.saveChanges')} icon="checkmark" onPress={save} loading={saving} size="lg" full />
       </View>
     </Screen>
   );

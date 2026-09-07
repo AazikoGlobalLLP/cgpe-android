@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy, textCopy, renderText, type CopyText } from '@/i18n/copy';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,6 +26,7 @@ import type { Client } from '@/data/types';
 import { fmtDate, fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
+import { taskCategoryLabel } from '@/i18n/display';
 import { useAuth } from '@/store/auth';
 import { capabilitiesOf } from '@/store/roles';
 import { useAppUi } from '@/store/appUi';
@@ -59,10 +61,10 @@ import { useAppUi } from '@/store/appUi';
 const FLOW: TaskStatus[] = ['todo', 'in_progress', 'blocked', 'done'];
 
 const STATUS_NOTE: Record<TaskStatus, string> = {
-  todo: 'Not started yet.',
-  in_progress: 'Being worked on right now.',
-  blocked: 'Waiting on someone else or on a document.',
-  done: 'Finished. Every step is ticked.',
+  todo: 'task.hintTodo',
+  in_progress: 'task.hintInProgress',
+  blocked: 'task.hintBlocked',
+  done: 'task.hintDone',
 };
 
 /** Long enough for a success toast to be read, short enough to feel like one gesture. */
@@ -153,14 +155,14 @@ export default function TaskDetail() {
   const [task, setTask] = useState<Task | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message: CopyText } | null>(null);
 
   const [statusOpen, setStatusOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferQuery, setTransferQuery] = useState('');
   const [team, setTeam] = useState<TeamMember[] | null>(null);
   const [contactOpen, setContactOpen] = useState(false);
-  const [contact, setContact] = useState<{ name: string; phone: string; clientId: string } | null>(null);
+  const [contact, setContact] = useState<{ name: string; nameCopy?: LocalCopy; phone: string; clientId: string } | null>(null);
 
   /** The leak guard for every await on this screen. */
   const live = useRef(true);
@@ -221,17 +223,17 @@ export default function TaskDetail() {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'Status was not saved',
+        title: textCopy('task.statusNotSaved'),
         message: res.forbidden
-          ? 'This task is assigned to someone else, so it cannot be changed from here.'
-          : 'The server did not accept the change. Try again in a moment.',
+          ? textCopy('tasks.otherAssigneeBody')
+          : textCopy('home.changeRefused'),
       });
       return;
     }
     haptics.success();
     setNotice(null);
     if (s === 'done') {
-      toast('Task completed.', 'success');
+      toast(t('task.completedToast'), 'success');
       leaveShortly(LEAVE_AFTER_DONE);
     }
   };
@@ -247,7 +249,7 @@ export default function TaskDetail() {
     setTeam(list);
   };
 
-  const confirmTransfer = async (to: string) => {
+  const confirmTransfer = async (to: string, toCopy?: LocalCopy) => {
     if (!task) return;
     setTransferOpen(false);
     setTransferQuery('');
@@ -261,13 +263,13 @@ export default function TaskDetail() {
       haptics.error();
       setNotice({
         tone: 'danger',
-        title: 'Transfer failed',
-        message: 'The server did not accept the reassignment. Check your connection and try again.',
+        title: textCopy('task.transferFailed'),
+        message: textCopy('task.transferFailedBody'),
       });
       return;
     }
     haptics.success();
-    toast(`Task transferred to ${to}.`, 'success');
+    toast(t('task.transferredToast', { name: resolveCopy(t, to, toCopy) }), 'success');
     leaveShortly(LEAVE_AFTER_TRANSFER);
   };
 
@@ -277,6 +279,7 @@ export default function TaskDetail() {
     let phone = task.clientPhone || '';
     let clientId = '';
     let name = task.client || 'Client';
+    let nameCopy: LocalCopy | undefined = task.client ? undefined : { key: 'task.clientLabel' };
 
     if (!phone && task.client) {
       setBusy(true);
@@ -286,19 +289,19 @@ export default function TaskDetail() {
       if (!live.current) return;
       setBusy(false);
       const match = page.items.find((cl) => cl.phone) || page.items[0];
-      if (match) { phone = match.phone; clientId = match.id; name = match.name; }
+      if (match) { phone = match.phone; clientId = match.id; name = match.name; nameCopy = match.nameCopy; }
     }
 
     if (!phone && !clientId) {
       haptics.warn();
       setNotice({
         tone: 'warning',
-        title: 'No number on file',
-        message: `There is no phone number saved for ${name}, so this client cannot be reached from here.`,
+        title: textCopy('task.noPhoneTitle'),
+        message: textCopy('task.noPhoneBody', { name: name }, { ...(nameCopy ? { name: nameCopy } : {}) }),
       });
       return;
     }
-    setContact({ name, phone, clientId });
+    setContact({ name, nameCopy, phone, clientId });
     setContactOpen(true);
   };
 
@@ -307,7 +310,7 @@ export default function TaskDetail() {
   if (loading) {
     return (
       <Screen>
-        <Header title="Task" back />
+        <Header title={t('task.titleLabel')} back />
         <DetailSkeleton />
       </Screen>
     );
@@ -316,21 +319,21 @@ export default function TaskDetail() {
   if (!task) {
     return (
       <Screen>
-        <Header title="Task" back />
+        <Header title={t('task.titleLabel')} back />
         <Card style={{ margin: spacing.lg }}>
           {health.degraded ? (
             <EmptyState
               icon="cloud-offline"
-              title="This task did not load"
-              subtitle="The server could not be reached, so we cannot confirm whether this task still exists."
+              title={t('task.detailLoadFailed')}
+              subtitle={t('task.detailLoadFailedBody')}
               action={{ label: t('common.tryAgain'), onPress: () => { setLoading(true); void load(); } }}
             />
           ) : (
             <EmptyState
               icon="alert-circle-outline"
-              title="Task not found"
-              subtitle="It may have been closed or reassigned to someone else."
-              action={{ label: 'Back to tasks', onPress: () => router.back() }}
+              title={t('task.notFound')}
+              subtitle={t('task.notFoundBody')}
+              action={{ label: t('task.backToTasks'), onPress: () => router.back() }}
             />
           )}
         </Card>
@@ -355,7 +358,7 @@ export default function TaskDetail() {
   return (
     <Screen>
       <Header
-        title={task.category}
+        title={task.categoryCopy ? resolveCopy(t, task.category, task.categoryCopy) : taskCategoryLabel(t, task.category)}
         back
         right={
           /* Band 2 #3: no Edit on a DONE task. A field-edit PATCH bumps the backend's updatedAt,
@@ -364,7 +367,7 @@ export default function TaskDetail() {
           isDone ? undefined : (
             <IconBtn
               icon="create-outline"
-              accessibilityLabel="Edit task"
+              accessibilityLabel={t('task.editTitle')}
               onPress={() => router.push({
                 pathname: '/task-edit',
                 params: {
@@ -401,10 +404,10 @@ export default function TaskDetail() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Txt size={18} weight="800" style={{ lineHeight: 24 }}>{task.title}</Txt>
+                <Txt size={18} weight="800" style={{ lineHeight: 24 }}>{resolveCopy(t, task.title, task.titleCopy)}</Txt>
                 <Row style={{ gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
                   <Pill label={t(st.labelKey)} tone={st.tone} small />
-                  <Pill label={`${t(pr.labelKey)} priority`} tone={pr.tone} small />
+                  <Pill label={t('task.priorityLabel', { priority: t(pr.labelKey) })} tone={pr.tone} small />
                 </Row>
               </View>
             </Row>
@@ -423,7 +426,7 @@ export default function TaskDetail() {
                   onPress={() => { haptics.tap(); whatsapp(task.clientPhone!); }} />
               </Row>
             ) : task.client ? (
-              <Button label="Contact client" icon="call" variant="secondary" loading={busy} full
+              <Button label={t('task.contactClient')} icon="call" variant="secondary" loading={busy} full
                 style={{ marginTop: 16 }} onPress={contactClient} />
             ) : null}
           </Card>
@@ -432,51 +435,51 @@ export default function TaskDetail() {
         {notice ? (
           <Banner
             tone={notice.tone}
-            title={notice.title}
-            message={notice.message}
+            title={renderText(t, notice.title)}
+            message={renderText(t, notice.message)}
             onDismiss={() => setNotice(null)}
           />
         ) : null}
 
         {/* THE FACTS. Grouped rows, one card, hairlines between. */}
         <Appear index={1}>
-          <ListSection title="Details">
+          <ListSection title={t('task.detailsLabel')}>
             <DataRow
               icon="time-outline"
-              label="Due"
+              label={t('task.due')}
               value={`${fmtDate(task.dueDate)} · ${fmtTime(task.dueDate)}`}
             />
-            <DataRow icon="person-outline" label="Assigned by" value={task.assignedBy || 'Not recorded'} />
+            <DataRow icon="person-outline" label={t('task.assignedByLabel')} value={resolveCopy(t, task.assignedBy, task.assignedByCopy) || t('task.notRecorded')} />
             {assignee ? (
               /* Band 2 #3: only an entitled tier may reassign; a team-tier sees it read-only. */
               <DataRow
                 icon="swap-horizontal-outline"
-                label="Assigned to"
+                label={t('task.assignedToLabel')}
                 value={assignee}
                 onPress={canAssign ? openTransfer : undefined}
               />
             ) : canAssign ? (
               <DataRow
                 icon="swap-horizontal-outline"
-                label="Assigned to"
-                value="Transfer this task"
+                label={t('task.assignedToLabel')}
+                value={t('task.transferThis')}
                 tone="primary"
                 onPress={openTransfer}
               />
             ) : (
               <DataRow
                 icon="swap-horizontal-outline"
-                label="Assigned to"
-                value="Unassigned"
+                label={t('task.assignedToLabel')}
+                value={t('task.unassignedLabel')}
               />
             )}
-            {task.client ? <DataRow icon="people-outline" label="Client" value={task.client} /> : null}
+            {task.client ? <DataRow icon="people-outline" label={t('task.clientLabel')} value={task.client} /> : null}
             {task.clientPhone ? (
-              <DataRow icon="call-outline" label="Phone" value={task.clientPhone} numeric copyable />
+              <DataRow icon="call-outline" label={t('task.phoneLabel')} value={task.clientPhone} numeric copyable />
             ) : null}
             <DataRow
               icon="flag-outline"
-              label="Status"
+              label={t('task.statusLabel')}
               value=""
               right={<Pill label={t(st.labelKey)} tone={st.tone} small />}
               onPress={() => setStatusOpen(true)}
@@ -494,7 +497,7 @@ export default function TaskDetail() {
         {task.steps.length > 0 ? (
           <Appear index={2}>
             <View>
-              <SectionHeader title="Workflow" />
+              <SectionHeader title={t('task.workflowLabel')} />
               <Card padded={false}>
                 {/* Clip on an INNER view: `overflow: hidden` alongside `elevation` kills the
                     Android shadow, and the card would lose its depth. */}
@@ -502,7 +505,7 @@ export default function TaskDetail() {
                   <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: spacing.md }}>
                     <Meter
                       value={prog}
-                      label="Steps completed"
+                      label={t('task.stepsCompleted')}
                       valueLabel={`${doneSteps}/${task.steps.length}`}
                       tone={prog >= 1 ? 'success' : 'primary'}
                     />
@@ -514,7 +517,7 @@ export default function TaskDetail() {
                       }} />
                       <View
                         accessibilityRole="text"
-                        accessibilityLabel={`${s.label}. ${s.done ? 'Completed' : 'Not completed'}.`}
+                        accessibilityLabel={`${s.label}. ${s.done ? t('task.completedLabel') : t('task.notCompletedLabel')}.`}
                         style={{
                           flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                           minHeight: 52, paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
@@ -554,10 +557,10 @@ export default function TaskDetail() {
         gap: spacing.sm,
       }}>
         {isDone ? (
-          <Button label="Reopen task" icon="arrow-undo" variant="outline" size="lg" full
+          <Button label={t('task.reopenTask')} icon="arrow-undo" variant="outline" size="lg" full
             onPress={() => setStatus('in_progress')} />
         ) : (
-          <Button label="Mark task complete" icon="checkmark-done" size="lg" full
+          <Button label={t('task.markComplete')} icon="checkmark-done" size="lg" full
             onPress={() => setStatus('done')} />
         )}
       </View>
@@ -566,8 +569,8 @@ export default function TaskDetail() {
       <Sheet
         visible={statusOpen}
         onClose={() => setStatusOpen(false)}
-        title="Move this task"
-        subtitle={`Currently ${t(st.labelKey).toLowerCase()}`}
+        title={t('task.moveTask')}
+        subtitle={t('task.currentStatus', { status: t(st.labelKey).toLowerCase() })}
       >
         <View style={{ paddingTop: spacing.xs }}>
           {FLOW.map((s, i) => {
@@ -583,7 +586,7 @@ export default function TaskDetail() {
                   disabled={active}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active, disabled: active }}
-                  accessibilityLabel={`${t(meta.labelKey)}. ${STATUS_NOTE[s]}`}
+                  accessibilityLabel={`${t(meta.labelKey)}. ${t(STATUS_NOTE[s])}`}
                   style={({ pressed }) => [{
                     flexDirection: 'row', alignItems: 'center', gap: spacing.md,
                     minHeight: 56, paddingVertical: spacing.md, paddingHorizontal: spacing.sm,
@@ -594,7 +597,7 @@ export default function TaskDetail() {
                 >
                   <Pill label={t(meta.labelKey)} tone={meta.tone} />
                   <Txt size={font.sub} color={c.muted} numberOfLines={2} style={{ flex: 1 }}>
-                    {STATUS_NOTE[s]}
+                    {t(STATUS_NOTE[s])}
                   </Txt>
                   {active ? <Ionicons name="checkmark" size={18} color={c.primary} /> : null}
                 </Pressable>
@@ -608,8 +611,8 @@ export default function TaskDetail() {
       <Sheet
         visible={transferOpen}
         onClose={() => { setTransferOpen(false); setTransferQuery(''); }}
-        title="Transfer task"
-        subtitle={assignee ? `Currently with ${assignee}` : 'Hand this task to another team member'}
+        title={t('task.transferTitle')}
+        subtitle={assignee ? t('task.currentAssignee', { name: assignee }) : t('task.handoffBody')}
       >
         {team === null ? (
           <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
@@ -626,10 +629,10 @@ export default function TaskDetail() {
         ) : transferTargets.length === 0 ? (
           <EmptyState
             icon="people-outline"
-            title="No one to transfer to"
+            title={t('task.noTransferTarget')}
             subtitle={health.degraded
-              ? 'The team roster could not be loaded, so this list is not confirmed. Close this and try again.'
-              : 'There is no other team member on your roster right now.'}
+              ? t('task.transferRosterFailed')
+              : t('task.noOtherMember')}
           />
         ) : (
           <View style={{ paddingTop: spacing.xs }}>
@@ -641,31 +644,31 @@ export default function TaskDetail() {
                   value={transferQuery}
                   onChange={setTransferQuery}
                   onSubmit={() => {}}
-                  placeholder="Search colleagues"
+                  placeholder={t('task.searchColleagues')}
                 />
               </View>
             ) : null}
             {shownTargets.length === 0 ? (
               <EmptyState
                 icon="search-outline"
-                title={`No colleague matches "${transferQuery.trim()}"`}
-                subtitle="Try a shorter piece of the name, or clear the search to see everyone."
+                title={t('task.noColleagueMatch', { query: transferQuery.trim() })}
+                subtitle={t('task.colleagueSearchHint')}
               />
             ) : (
               <>
                 {shownTargets.map((m, i) => (
                   <PersonRow
                     key={m.id}
-                    name={m.name}
+                    name={resolveCopy(t, m.name, m.nameCopy)}
                     subtitle={m.branch || m.role}
                     chevron
-                    onPress={() => confirmTransfer(m.name)}
+                    onPress={() => confirmTransfer(m.name, m.nameCopy)}
                     style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline } : undefined}
                   />
                 ))}
                 {filteredTargets.length > TRANSFER_CAP ? (
                   <Txt size={font.sub} color={c.faint} style={{ paddingVertical: spacing.md, textAlign: 'center' }}>
-                    {`Showing ${TRANSFER_CAP} of ${filteredTargets.length} — search by name to find more`}
+                    {t('task.transferShowingCount', { shown: TRANSFER_CAP, total: filteredTargets.length })}
                   </Txt>
                 ) : null}
               </>
@@ -678,8 +681,8 @@ export default function TaskDetail() {
       <Sheet
         visible={contactOpen}
         onClose={() => setContactOpen(false)}
-        title={contact ? contact.name : 'Contact'}
-        subtitle={contact?.phone ? contact.phone : 'Open the client record'}
+        title={contact ? resolveCopy(t, contact.name, contact.nameCopy) : t('filter.contact')}
+        subtitle={contact?.phone ? contact.phone : t('task.openClientRecord')}
       >
         <View style={{ gap: spacing.md, paddingTop: spacing.xs }}>
           {contact?.phone ? (
@@ -691,7 +694,7 @@ export default function TaskDetail() {
             </>
           ) : null}
           {contact?.clientId ? (
-            <Button label="Open client profile" icon="person-circle" variant="outline" size="lg" full
+            <Button label={t('task.openClientProfile')} icon="person-circle" variant="outline" size="lg" full
               onPress={() => { setContactOpen(false); router.push(`/client/${contact.clientId}`); }} />
           ) : null}
         </View>
