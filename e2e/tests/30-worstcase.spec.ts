@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { signIn } from '../helpers/session';
 import { installFault, type FaultKind } from '../helpers/mock';
-import { assertRenders, BANNER_TEXT } from '../helpers/render';
+import { assertRenders, healthBanner } from '../helpers/render';
 import { shot } from '../helpers/artifacts';
 
 /**
@@ -39,7 +39,7 @@ for (const s of SCREENS) {
         await page.goto(s.url, { waitUntil: 'load' });
 
         await assertRenders(page, `worst/${s.id}-${fault}`);
-        await expect(page.getByText(BANNER_TEXT).first(), `${s.id}/${fault}: outage must raise the health banner`).toBeVisible({ timeout: 15_000 });
+        await expect(healthBanner(page), `${s.id}/${fault}: outage must raise the health banner`).toBeVisible({ timeout: 15_000 });
         await shot(page, `worst/${s.id}-${fault}`);
         expect(errors, `${s.id}/${fault} page errors:\n${errors.join('\n')}`).toEqual([]);
       });
@@ -71,7 +71,7 @@ test('worst-case: request timeout on /leads → renders + banner (app 4.5s abort
   await page.goto('/leads', { waitUntil: 'load' });
 
   await assertRenders(page, 'worst/leads-timeout');
-  await expect(page.getByText(BANNER_TEXT).first(), 'a timeout must raise the health banner').toBeVisible({ timeout: 20_000 });
+  await expect(healthBanner(page), 'a timeout must raise the health banner').toBeVisible({ timeout: 20_000 });
   await shot(page, 'worst/leads-timeout');
   expect(errors, `leads/timeout page errors:\n${errors.join('\n')}`).toEqual([]);
 });

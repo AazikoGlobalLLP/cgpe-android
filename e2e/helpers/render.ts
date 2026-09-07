@@ -1,11 +1,13 @@
 import { expect, type Page } from '@playwright/test';
 import { shot } from './artifacts';
+import * as crashCopy from '../../src/i18n/generated/phase117';
 
 /**
  * Strings that only appear when React/RN/Metro has thrown into an error boundary or redbox.
  * None of these occur in the app's own healthy copy, so any of them on screen = a broken render.
  */
 const REDBOX = [
+  ...Object.values(crashCopy).map(copy => copy['crash.title'].toLowerCase()),
   'element type is invalid',
   'objects are not valid as a react child',
   'a component suspended while responding',
@@ -16,11 +18,28 @@ const REDBOX = [
   'too many re-renders',
 ];
 
-/** The HealthBanner's own heading (ui/health-banner.tsx:88). Its presence = degraded state. */
+/** Legacy generic English heading; new checks should use healthBanner(page). */
 export const BANNER_TEXT = 'Some data could not load';
 
+// HealthBanner always exposes health.a11yUnconfirmed as its alert name, independent of
+// timeout/network/server/generic heading. Mirror all five shipped dictionary values exactly.
+const HEALTH_BANNER_LABELS = [
+  '{n} request(s) could not be completed. Blank values are unconfirmed.',
+  '{n} રિક્વેસ્ટ પૂર્ણ થઈ શકી નથી. ખાલી મૂલ્યોની પુષ્ટિ થઈ નથી.',
+  '{n} अनुरोध पूरे नहीं हो सके। खाली मानों की पुष्टि नहीं हुई है।',
+  '{n} request(s) complete nahi ho saki. Blank values confirm nahi hui hain.',
+  '{n} request(s) complete thai shaki nathi. Blank values confirm thai nathi.',
+];
+const escapePattern = (value: string) => value.replace(/[.*+?^$(){}|[\]\\]/g, '\\$&');
+const HEALTH_BANNER_NAME = new RegExp('^(?:' + HEALTH_BANNER_LABELS
+  .map(label => label.split('{n}').map(escapePattern).join('\\d+')).join('|') + ')$');
+
+export function healthBanner(page: Page) {
+  return page.getByRole('alert', { name: HEALTH_BANNER_NAME }).first();
+}
+
 export async function bannerVisible(page: Page): Promise<boolean> {
-  return page.getByText(BANNER_TEXT).isVisible().catch(() => false);
+  return healthBanner(page).isVisible().catch(() => false);
 }
 
 /** The animated Splash's own tagline (ui/Splash.tsx:55) — a brand string, not i18n, so it is the
@@ -85,6 +104,11 @@ export const ROUTES: RouteSpec[] = [
   { id: 'campaigns', url: '/campaigns', group: 'stack' },
   { id: 'claim-new', url: '/claim-new', group: 'stack' },
   { id: 'commissions', url: '/commissions', group: 'stack' },
+  { id: 'earnings', url: '/earnings', group: 'stack' },
+  { id: 'payroll', url: '/payroll', group: 'stack' },
+  { id: 'payroll-detail', url: '/payroll-detail?user_id=0123456789abcdef01234567', group: 'detail' },
+  { id: 'performance', url: '/performance', group: 'stack' },
+  { id: 'monitor', url: '/monitor', group: 'stack' },
   { id: 'contests', url: '/contests', group: 'stack' },
   { id: 'families', url: '/families', group: 'stack' },
   { id: 'kb', url: '/kb', group: 'stack' },
@@ -101,6 +125,7 @@ export const ROUTES: RouteSpec[] = [
   { id: 'segments', url: '/segments', group: 'stack' },
   { id: 'settings', url: '/settings', group: 'stack' },
   { id: 'task-new', url: '/task-new', group: 'stack' },
+  { id: 'task-edit', url: '/task-edit?id=0123456789abcdef01234567', group: 'stack' },
   { id: 'team', url: '/team', group: 'stack' },
   { id: 'tickets', url: '/tickets', group: 'stack' },
   { id: 'whatsapp', url: '/whatsapp', group: 'stack' },

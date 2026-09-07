@@ -4664,7 +4664,11 @@ export async function getFamilies(opts: { search?: string; page?: number; limit?
 }
 
 export async function getFamilyStats(): Promise<FamilyStats | null> {
-  return await tryReal<FamilyStats>('/families/stats', {}, isObj);
+  // The screen formats these counts directly. A partial object is unconfirmed data,
+  // not zero households, and must not reach toLocaleString as undefined.
+  return await tryReal<FamilyStats>('/families/stats', {}, (data) => isObj(data)
+    && ['families', 'multi_person_families', 'persons', 'units', 'review', 'largest']
+      .every(key => typeof data[key] === 'number' && Number.isFinite(data[key])));
 }
 
 export async function getFamily(id: string): Promise<Family | undefined> {

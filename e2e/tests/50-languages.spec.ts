@@ -1,4 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 import { signIn } from '../helpers/session';
 import { assertRenders, bannerVisible, ROUTES } from '../helpers/render';
 
@@ -49,7 +51,18 @@ const LANGS = [
  * of a real key and not of prose (which has spaces / capitals), so false positives are near-zero.
  * Namespaces are the real ones in the dictionary (`src/i18n/index.tsx`).
  */
-const KEY_LEAK = /\b(tab|tasks|home|greet|act|common|premium|report|signout|settings)\.[a-z][a-z]+/g;
+// Include every shipped namespace, including the approved pending-copy modules. A fixed
+// ten-namespace list missed raw account/role/table keys even when they appeared on screen.
+const i18nDir = path.resolve(__dirname, '../../src/i18n');
+const copySources = [path.join(i18nDir, 'index.tsx'),
+  ...fs.readdirSync(path.join(i18nDir, 'generated')).filter(f => f.endsWith('.ts'))
+    .map(f => path.join(i18nDir, 'generated', f))];
+const namespaces = [...new Set(copySources.flatMap(file =>
+  [...fs.readFileSync(file, 'utf8').matchAll(/['"]([a-zA-Z]\w*)\.\w+['"]\s*:/g)].map(m => m[1])))];
+const KEY_LEAK = new RegExp(`\\b(${namespaces.join('|')})\\.[a-z][a-z0-9_]*`, 'gi');
+const selectedRoutes = process.env.E2E_ROUTES?.split(',').map(s => s.trim());
+const walkRoutes = selectedRoutes ? ROUTES.filter(route => selectedRoutes.includes(route.id)) : ROUTES;
+if (selectedRoutes && walkRoutes.length !== selectedRoutes.length) throw new Error('Unknown E2E_ROUTES selection');
 
 /** Switch the app into `label`, prove it took effect live, then prove it survives a reload. */
 async function setLanguage(page: Page, label: string, heading: string): Promise<void> {
@@ -94,7 +107,7 @@ for (const lang of LANGS) {
     await setLanguage(page, lang.label, lang.heading);
 
     const rows: Row[] = [];
-    for (const r of ROUTES) {
+    for (const r of walkRoutes) {
       await test.step(`${lang.code}/${r.id} (${r.url})`, async () => {
         try {
           await page.goto(r.url, { waitUntil: 'load' });
@@ -120,6 +133,9 @@ for (const lang of LANGS) {
 
     const leaked = rows.filter((r) => r.leaks.length);
     expect(leaked, `screens leaking a raw i18n key in ${lang.label} (DONE-2):\n${leaked.map(line).join('\n')}`).toEqual([]);
+
+    expect(rows.filter((r) => r.banner), `healthy synthetic routes showing an outage in ${lang.label}`)
+      .toEqual([]);
 
     expect(pageErrors, `uncaught page errors during the ${lang.label} walk:\n${pageErrors.join('\n')}`).toEqual([]);
   });

@@ -8,7 +8,7 @@ import type { Page, Route } from '@playwright/test';
  * and touches ZERO production data (spec §3).
  *
  * Two backends are modelled:
- *   • installHealthyBackend  — 2xx with each endpoint's real envelope SHAPE but empty contents,
+ *   • installHealthyBackend  — contract-valid empty responses plus clearly labelled E2E user/task fixtures,
  *     so screens render their healthy "nothing yet" state with no outage banner. Shapes are
  *     taken from src/data/api.ts's validators, not guessed:
  *        - most reads validate an array          → { success, data: [] }
@@ -17,8 +17,8 @@ import type { Page, Route } from '@playwright/test';
  *        - /leads reads data.leads                → { data: { leads: [] } }
  *        - /lic-plans reads data.plans            → { data: { plans: [] } }
  *        - /rbac/app-ui needs data.dashboard      → a valid, everything-visible config
- *     No business VALUES are invented — only empty containers — so nothing here can be mistaken
- *     for real customer data.
+ *     The only populated records are explicitly synthetic E2E fixtures; no customer or payroll
+ *     values are copied from a real backend. Missing payroll profiles retain their real 404.
  *   • fault injectors (installFault) — 500 / 503+Retry-After / empty / malformed / timeout /
  *     oversized, per endpoint, for the worst-case pass.
  *
@@ -55,7 +55,7 @@ function apiPath(url: string): string {
  * those breaks the screens that depend on them and raises spurious banners.
  */
 function isDetailById(path: string): boolean {
-  const m = path.split('?')[0].match(/^\/(leads|clients|profiles|families|insurance-kb|tickets|claims|team|reminders|notifications)\/([^/]+)$/);
+  const m = path.split('?')[0].match(/^\/(leads|clients|profiles|families|insurance-kb|tickets|claims|team|reminders|notifications|payroll\/profiles)\/([^/]+)$/);
   if (!m) return false;
   const id = m[2];
   return /^e2e-/.test(id)               // the harness's own synthetic ids
@@ -96,8 +96,8 @@ export function e2eUser() {
   };
 }
 
-/** Healthy body for a given app path. Empty containers only — shapes match api.ts validators. */
-function healthyBody(path: string): unknown {
+/** Contract-valid empty reads, plus explicitly synthetic records required by detail walks. */
+function healthyBody(path: string, query = new URLSearchParams()): unknown {
   const p = path.split('?')[0];
 
   if (p === '/rbac/app-ui') return appUiDoc();
@@ -107,12 +107,46 @@ function healthyBody(path: string): unknown {
   // widget. One clearly-labelled E2E member keeps getTeam/getTasks/getAgentLocations on the
   // clean task-overview path.
   if (p === '/team/task-overview') {
-    return { success: true, data: { members: [{ user_id: 'e2e-user-1', name: 'E2E Tester', role: 'advisor', phone: '', tasks: [] }] } };
+    // getTask(id) reads this overview, not GET /tasks/:id. An absent ID deliberately reports
+    // unavailable in the app, so the healthy detail walk needs one clearly synthetic task.
+    const at = new Date().toISOString();
+    const task = {
+      id: '0123456789abcdef01234567', team_task_id: '0123456789abcdef01234567',
+      title: 'E2E task', details: 'Synthetic task for offline route verification.', type: 'task',
+      priority: 'P2', status: 'open', client: '', due_at: null, created_at: at, updated_at: at,
+      created_by: 'E2E Tester', is_done: false, is_overdue: false, days_overdue: 0,
+    };
+    return { success: true, data: {
+      totals: { members: 1, total: 1, open: 1, done: 0, overdue: 0 },
+      priority_totals: { P1: 0, P2: 1, P3: 0 }, overdue_days: 4,
+      members: [{ user_id: 'e2e-user-1', name: 'E2E Tester', role: 'advisor', department: 'E2E',
+        phone: '', is_active: true, in_directory: true, manager: null,
+        counts: { total: 1, open: 1, done: 0, overdue: 0 }, completion_pct: 0, tasks: [task] }],
+      tasks: [{ ...task, assignee: 'E2E Tester', assignee_role: 'advisor', assignee_uid: 'e2e-user-1', manager: null }],
+    } };
+  }
+  if (p === '/team/task-report') {
+    return { success: true, data: {
+      month: query.get('month') ?? '', members: [],
+      totals: { members: 0, assigned: 0, completed: 0, on_time: 0, late: 0 },
+    } };
+  }
+  if (p === '/payroll/my-earnings') {
+    // Contract explicitly distinguishes not-configured (200/null) from a compute outage.
+    const month = query.get('month') ?? '';
+    const [year, number] = month.split('-').map(Number);
+    const lastDay = new Date(Date.UTC(year, number, 0)).getUTCDate();
+    return { success: true, data: null,
+      period: { start: month + '-01', end: month + '-' + String(lastDay).padStart(2, '0'), months: [month] },
+      message: 'No payroll profile configured for your account.',
+    };
   }
   if (p === '/leads') return { success: true, data: { leads: [] } };
   if (p === '/lic-plans') return { success: true, data: { plans: [] } };
   if (p === '/time-tracker/current') return { success: true, data: { active: false } };
   if (p === '/prospects/segments') return { success: true, data: [] };
+  if (p === '/clients/segments') return { success: true, data: { rows: [], total: 0,
+    segment: query.get('segment') ?? 'individual', counts: {} } };
 
   // Stat/summary object reads (isObj). Returning a bare `{}` is UNREALISTIC and dangerous: a
   // real backend always returns these fields, and several screens dereference them unguarded
@@ -120,6 +154,10 @@ function healthyBody(path: string): unknown {
   // screen that `null` would have degraded safely. Zero-FILLED shapes (fields taken verbatim
   // from the api.ts return types — no invented names) render clean "nothing yet" screens.
   const STAT_OBJECTS: Record<string, unknown> = {
+    '/families/stats': { families: 0, multi_person_families: 0, persons: 0,
+      units: 0, review: 0, largest: 0, distribution: {} },
+    '/commissions/my-summary': { thisMonth: 0, lastMonth: 0, pending: 0, ytd: 0,
+      target: null, byProduct: [], history: [], recent: [] },
     '/clients/stats/overview': { total_clients: 0, total_premium: 0, total_sum_assured: 0, birthdays_this_month: 0 },
     '/campaigns/summary': { total_clients: 0, opted_in: 0, birthday_today: 0, birthday_month: 0, anniversary_month: 0, renewal_due: 0, maturity_soon: 0 },
     '/dashboard/overview': { clients: { total: 0 }, claims: { total: 0, under_process: 0, passed: 0, paid_amount: 0 }, tickets: { total: 0 } },
@@ -181,7 +219,7 @@ export async function installBackend(page: Page, mode: SessionMode): Promise<voi
     // synthetic object (a healthy backend has no record `e2e-1`), and 404 is a suppressed
     // status so it raises no outage banner (api.ts reportIfOutage).
     if (isDetailById(path)) { await route.fulfill({ status: 404, contentType: 'application/json', headers: CORS, body: JSON.stringify({ success: false, error: 'Not found' }) }); return; }
-    await route.fulfill(json(healthyBody(path)));
+    await route.fulfill(json(healthyBody(path, new URL(route.request().url()).searchParams)));
   });
 }
 
