@@ -1,3 +1,5 @@
+import { resolveCopy } from '@/i18n/copy';
+import { roleLabel } from '@/i18n/display';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -47,6 +49,9 @@ export default function Team() {
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    // A cold deep link can mount before the persisted session is restored. Wait for
+    // its owner so the API does not report that temporary absence as a roster outage.
+    if (!ready || !user?.id) return;
     let alive = true;
     (async () => {
       // The activity feed is not wired to any endpoint yet, so it resolves `[]` and reports
@@ -64,7 +69,7 @@ export default function Team() {
       setLoading(false);
     })();
     return () => { alive = false; };
-  }, [attempt]);
+  }, [attempt, ready, user?.id]);
 
   // Raised here, not inside the effect: a synchronous setState in an effect body costs an
   // extra render pass on every run.
@@ -76,22 +81,23 @@ export default function Team() {
 
   const kpis: KpiItem[] = useMemo(() => {
     const out: KpiItem[] = [
-      { label: 'On duty now', value: `${onDuty.length}/${team.length}`, icon: 'location-outline', tone: 'primary' },
-      { label: 'Signed in', value: String(online), icon: 'pulse-outline', tone: 'info' },
+      { label: t('team.onDutyNow'), value: `${onDuty.length}/${team.length}`, icon: 'location-outline', tone: 'primary' },
+      { label: t('team.signedIn'), value: String(online), icon: 'pulse-outline', tone: 'info' },
     ];
     // Premium only appears when the roster actually carries it. A confident "₹0" against a
     // team that sold all month is a lie the aggregation cannot back up.
     if (premiumMtd > 0) {
-      out.unshift({ label: 'Team premium (MTD)', value: inrShort(premiumMtd), icon: 'cash-outline', tone: 'success' });
+      out.unshift({ label: t('team.teamPremiumMtd'), value: inrShort(premiumMtd), icon: 'cash-outline', tone: 'success' });
     }
     return out;
-  }, [onDuty.length, team.length, online, premiumMtd]);
+  }, [onDuty.length, team.length, online, premiumMtd, t]);
 
   const shown = useMemo(() => {
     const s = q.trim().toLowerCase();
     const matched = s
       ? team.filter((m) => m.name.toLowerCase().includes(s)
         || m.role.toLowerCase().includes(s)
+        || roleLabel(t, m.role).toLowerCase().includes(s)
         || (m.branch || '').toLowerCase().includes(s))
       : team;
     // On duty first, then the higher earner, then by name so the order is stable.
@@ -100,7 +106,7 @@ export default function Team() {
       if (b.stats.premiumMtd !== a.stats.premiumMtd) return b.stats.premiumMtd - a.stats.premiumMtd;
       return a.name.localeCompare(b.name);
     });
-  }, [team, q]);
+  }, [team, q, t]);
 
   const searching = q.trim().length > 0;
 
@@ -112,9 +118,9 @@ export default function Team() {
   if (ready && !capabilitiesOf(user, viewAs).manageTeam) {
     return (
       <RestrictedNotice
-        title="Team"
-        heading="Team view is for managers"
-        subtitle="The team roster and each member's figures are visible to team leads and admins. You can see your own work from the Home and Tasks tabs."
+        title={t('dash.team')}
+        heading={t('team.managersOnly')}
+        subtitle={t('team.managersOnlyBody')}
       />
     );
   }
@@ -122,8 +128,8 @@ export default function Team() {
   return (
     <Screen>
       <Header
-        title="Team"
-        subtitle={loading ? 'Loading the roster' : `${team.length} member${team.length === 1 ? '' : 's'}, ${onDuty.length} on duty`}
+        title={t('dash.team')}
+        subtitle={loading ? t('team.loadingRoster') : t(team.length === 1 ? 'team.rosterSummaryOne' : 'team.rosterSummary', { members: team.length, onDuty: onDuty.length })}
         back
       />
 
@@ -137,10 +143,10 @@ export default function Team() {
           <View style={{ paddingHorizontal: spacing.lg }}>
             <EmptyState
               icon={health.degraded ? 'cloud-offline-outline' : 'people-outline'}
-              title={health.degraded ? 'The roster could not load' : 'No team members yet'}
+              title={health.degraded ? t('team.rosterFailed') : t('team.noMembersYet')}
               subtitle={health.degraded
-                ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
-                : 'People appear here once they are added to your branch in the admin panel.'}
+                ? t('team.unconfirmed')
+                : t('team.noMembersBody')}
               action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           </View>
@@ -155,12 +161,12 @@ export default function Team() {
               <Appear index={1} style={{ paddingHorizontal: spacing.lg }}>
                 <Card>
                   <Row>
-                    <AvatarStack names={onDuty.map((m) => m.name)} size={34} max={5} />
+                    <AvatarStack names={onDuty.map((m) => resolveCopy(t, m.name, m.nameCopy))} size={34} max={5} />
                     <View style={{ flex: 1 }}>
                       <Txt size={font.sub} weight="700" numberOfLines={1}>
-                        {onDuty.length === 1 ? '1 agent in the field' : `${onDuty.length} agents in the field`}
+                        {onDuty.length === 1 ? t('team.oneInField') : t('team.agentsInField', { count: onDuty.length })}
                       </Txt>
-                      <Txt size={font.cap} color={c.muted} numberOfLines={1}>Clocked in today</Txt>
+                      <Txt size={font.cap} color={c.muted} numberOfLines={1}>{t('team.clockedToday')}</Txt>
                     </View>
                   </Row>
                 </Card>
@@ -169,33 +175,33 @@ export default function Team() {
 
             {activity.length > 0 ? (
               <Appear index={2} style={{ paddingHorizontal: spacing.lg }}>
-                <ListSection title="Team activity">
+                <ListSection title={t('team.activity')}>
                   {activity.slice(0, 6).map((a) => (
-                    <ActivityRow key={a.id} icon={(a.icon as IconName) || 'ellipse-outline'} text={a.text} at={a.at} />
+                    <ActivityRow key={a.id} icon={(a.icon as IconName) || 'ellipse-outline'} text={resolveCopy(t, a.text, a.textCopy)} at={a.at} />
                   ))}
                 </ListSection>
               </Appear>
             ) : null}
 
             <View style={{ paddingHorizontal: spacing.lg, gap: spacing.md }}>
-              <SectionHeader title={`Members (${team.length})`} />
+              <SectionHeader title={t('team.memberCount', { count: team.length })} />
               <SearchBar
                 value={q}
                 onChange={setQ}
-                placeholder="Name, role or branch"
+                placeholder={t('team.searchHint')}
               />
 
               {shown.length === 0 ? (
                 <Card>
                   <EmptyState
                     icon="search-outline"
-                    title={`No member matches "${q.trim()}"`}
-                    subtitle="Search runs over the names, roles and branches on the roster loaded here."
+                    title={t('team.noSearchMatch', { query: q.trim() })}
+                    subtitle={t('team.searchScope')}
                     action={{ label: t('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }}
                   />
                 </Card>
               ) : (
-                <ListSection footer={searching ? `${shown.length} of ${team.length} shown` : undefined}>
+                <ListSection footer={searching ? t('team.shownCount', { shown: shown.length, total: team.length }) : undefined}>
                   {shown.map((m, i) => (
                     <Appear key={m.id} index={i}>
                       <MemberRow m={m} onPress={() => router.push(`/team/${m.id}`)} />
@@ -218,12 +224,12 @@ export default function Team() {
 function MemberRow({ m, onPress }: { m: TeamMember; onPress: () => void }) {
   const c = useTheme();
   const t = useT();
-  const role = m.role.replace(/_/g, ' ');
+  const role = roleLabel(t, m.role);
   const subtitle = [role, m.branch].filter(Boolean).join(' · ');
 
   return (
     <PersonRow
-      name={m.name}
+      name={resolveCopy(t, m.name, m.nameCopy)}
       subtitle={subtitle}
       onPress={onPress}
       badge={{ tone: m.clockedIn ? 'success' : m.online ? 'primary' : 'neutral' }}
@@ -243,6 +249,7 @@ function MemberRow({ m, onPress }: { m: TeamMember; onPress: () => void }) {
 /** ListSection accepts any child, so the activity feed keeps the grouped-card treatment
  *  without forcing a DataRow's label/value shape onto a sentence. */
 function ActivityRow({ icon, text, at }: { icon: IconName; text: string; at: string }) {
+  const t = useT();
   const c = useTheme();
   return (
     <View style={{
@@ -256,7 +263,7 @@ function ActivityRow({ icon, text, at }: { icon: IconName; text: string; at: str
         <Ionicons name={icon} size={15} color={c.primary} />
       </View>
       <Txt size={font.sub} numberOfLines={2} style={{ flex: 1 }}>{text}</Txt>
-      <Txt size={font.tiny} color={c.faint} numeric numberOfLines={1}>{timeAgo(at)}</Txt>
+      <Txt size={font.tiny} color={c.faint} numeric numberOfLines={1}>{timeAgo(at, t)}</Txt>
     </View>
   );
 }

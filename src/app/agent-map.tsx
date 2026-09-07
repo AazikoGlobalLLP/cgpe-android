@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -50,13 +51,13 @@ type Mine = {
  * the fallback. Previously these two were merged through `as any[]`, which hid the fact
  * that the row read `m.city` off a TeamMember, a field TeamMember does not have.
  */
-type Person = { id: string; name: string; where?: string; phone?: string; onDuty: boolean };
+type Person = { id: string; name: string; nameCopy?: LocalCopy; where?: string; phone?: string; onDuty: boolean };
 
 const fromPin = (p: AgentPin): Person => ({
-  id: String(p.id), name: p.name, where: p.city, onDuty: p.onDuty,
+  id: String(p.id), name: p.name, nameCopy: p.nameCopy, where: p.city, onDuty: p.onDuty,
 });
 const fromMember = (m: TeamMember): Person => ({
-  id: m.id, name: m.name, where: m.branch || undefined, phone: m.phone || undefined, onDuty: m.clockedIn,
+  id: m.id, name: m.name, nameCopy: m.nameCopy, where: m.branch || undefined, phone: m.phone || undefined, onDuty: m.clockedIn,
 });
 
 function readMine(raw: string | null): Mine | null {
@@ -139,7 +140,7 @@ export default function AgentMap() {
   // PHASE 66: flatten the per-member break lists into the flat point array LeafletMap draws, carrying
   // each point's member name onto its popup.
   const breakPoints = useMemo<MapBreak[]>(
-    () => breaks.flatMap((m) => m.breaks.map((b) => ({ ...b, name: m.name }))),
+    () => breaks.flatMap((m) => m.breaks.map((b) => ({ ...b, name: m.name, nameCopy: m.nameCopy }))),
     [breaks],
   );
 
@@ -150,11 +151,11 @@ export default function AgentMap() {
   if (ready && !isMaster) {
     return (
       <Screen>
-        <Header title="Agent locations" back />
+        <Header title={t('agentMap.title')} back />
         <EmptyState
           icon="lock-closed-outline"
-          title="Master access only"
-          subtitle="Live agent locations are visible to the master admin. Ask them if you need to know where the field is."
+          title={t('agentMap.masterOnly')}
+          subtitle={t('agentMap.masterOnlyBody')}
         />
       </Screen>
     );
@@ -165,8 +166,8 @@ export default function AgentMap() {
   return (
     <Screen>
       <Header
-        title="Agent locations"
-        subtitle={`${onDuty.length} on duty · ${roster.length} in team · ${tracked} on map`}
+        title={t('agentMap.title')}
+        subtitle={t('agentMap.summary', { onDuty: onDuty.length, members: roster.length, mapped: tracked })}
         back
       />
 
@@ -187,11 +188,11 @@ export default function AgentMap() {
                 width: 10, height: 10, borderRadius: 5,
                 backgroundColor: onDuty.length > 0 ? c.success : c.faint,
               }} />
-              <Eyebrow style={{ flex: 1 }}>Live field status</Eyebrow>
+              <Eyebrow style={{ flex: 1 }}>{t('agentMap.fieldStatus')}</Eyebrow>
             </Row>
             <Metric value={String(onDuty.length)} size={font.display} style={{ marginTop: spacing.sm }} />
             <Txt size={font.sub} color={c.muted} style={{ marginTop: 2 }}>
-              {onDuty.length === 1 ? 'agent is clocked in right now' : 'agents are clocked in right now'}
+              {onDuty.length === 1 ? t('agentMap.oneClockedIn') : t('agentMap.manyClockedIn')}
             </Txt>
           </Card>
         </Appear>
@@ -199,16 +200,14 @@ export default function AgentMap() {
         <Appear index={1}>
           <LeafletMap pins={pins} breaks={breakPoints} height={330} onInteracting={setMapBusy} />
           <Row style={{ justifyContent: 'center', gap: spacing.lg, marginTop: spacing.md, flexWrap: 'wrap' }}>
-            <Legend color={c.success} label="Clock-in" />
+            <Legend color={c.success} label={t('agentMap.clockIn')} />
             <Legend color={c.warning} label={t('break.start')} />
-            <Legend color={c.danger} label="Clock-out" />
+            <Legend color={c.danger} label={t('agentMap.clockOut')} />
           </Row>
           {/* Said once, here, rather than as a badge on the map: the map is small and its
               own chrome should stay out of the way of the pins. */}
           <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center', marginTop: spacing.sm, lineHeight: 17 }}>
-            Drag to pan, pinch to zoom. Tap a pin for the name and time, or a numbered badge
-            to open the agents standing on the same spot.
-          </Txt>
+            {t('agentMap.gestures')}</Txt>
         </Appear>
 
         <Appear index={2}>
@@ -221,8 +220,8 @@ export default function AgentMap() {
                 <Ionicons name="navigate" size={19} color={c.primary} />
               </View>
               <View style={{ flex: 1, gap: 1 }}>
-                <Txt size={font.body} weight="700" numberOfLines={1}>Movement paths</Txt>
-                <Txt size={font.cap} color={c.muted} numberOfLines={1}>Replay where each agent went, by date</Txt>
+                <Txt size={font.body} weight="700" numberOfLines={1}>{t('agentMap.movement')}</Txt>
+                <Txt size={font.cap} color={c.muted} numberOfLines={1}>{t('agentMap.movementHint')}</Txt>
               </View>
               <Ionicons name="chevron-forward" size={18} color={c.faint} />
             </Row>
@@ -231,17 +230,17 @@ export default function AgentMap() {
 
         {mine?.in ? (
           <Appear index={3}>
-            <ListSection title="My check-in" footer={mine.outTime ? undefined : 'Still on duty. Clock out from the Today tab.'}>
+            <ListSection title={t('agentMap.myCheckIn')} footer={mine.outTime ? undefined : t('agentMap.stillOnDuty')}>
               <DataRow
                 label={t('home.clockedIn')}
-                value={mine.time ? fmtTime(mine.time) : 'Time not recorded'}
+                value={mine.time ? fmtTime(mine.time) : t('team.timeMissing')}
                 icon="log-in-outline"
                 tone="success"
                 right={mine.place ? <Pill label={mine.place} tone="neutral" small /> : undefined}
               />
               {mine.outTime ? (
                 <DataRow
-                  label="Clocked out"
+                  label={t('agentMap.clockedOut')}
                   value={fmtTime(mine.outTime)}
                   icon="log-out-outline"
                   tone="danger"
@@ -255,18 +254,18 @@ export default function AgentMap() {
         <Appear index={4}>
           {/* ListSection takes any child, so the empty case keeps the group's heading and
               its card instead of dropping to a bare paragraph. */}
-          <ListSection title={`On duty (${onDuty.length})`}>
+          <ListSection title={t('agentMap.onDutyCount', { count: onDuty.length })}>
             {onDuty.length === 0 ? (
               <EmptyState
                 icon={health.degraded ? 'cloud-offline-outline' : tracked === 0 ? 'map-outline' : 'location-outline'}
-                title={health.degraded ? 'Field status could not load'
-                  : tracked === 0 ? 'Nobody is being tracked yet'
-                    : 'Nobody is on duty'}
+                title={health.degraded ? t('agentMap.loadFailed')
+                  : tracked === 0 ? t('agentMap.nobodyTracked')
+                    : t('agentMap.nobodyOnDuty')}
                 subtitle={health.degraded
-                  ? 'The server did not answer, so an empty map here is unconfirmed rather than quiet. Check your connection and try again.'
+                  ? t('agentMap.unconfirmed')
                   : tracked === 0
-                    ? 'Pins appear once your team clocks in from the app with location on.'
-                    : 'Everyone tracked today has clocked out. Pins return as soon as someone clocks back in.'}
+                    ? t('agentMap.pinsAfterClockIn')
+                    : t('agentMap.allClockedOut')}
                 action={{ label: t('common.refresh'), onPress: retry }}
               />
             ) : onDuty.map((p, i) => (
@@ -279,18 +278,18 @@ export default function AgentMap() {
 
         {off.length > 0 ? (
           <Appear index={5}>
-            <ListSection title={`Off duty (${off.length})`}>
+            <ListSection title={t('agentMap.offDutyCount', { count: off.length })}>
               {/* B5: show the WHOLE team, not a truncated 12 — the owner explicitly wants every member. */}
               {off.map((p, i) => (
                 <Appear key={p.id} index={i}>
                   <PersonRow
-                    name={p.name}
+                    name={resolveCopy(t, p.name, p.nameCopy)}
                     subtitle={p.where}
                     subtitleIcon={p.where ? 'business-outline' : undefined}
                     size={36}
                     onPress={() => open(p.id)}
                     style={{ marginHorizontal: 0, paddingHorizontal: spacing.lg, borderRadius: 0 }}
-                    right={<Pill label="Off" tone="neutral" small />}
+                    right={<Pill label={t('agentMap.off')} tone="neutral" small />}
                   />
                 </Appear>
               ))}
@@ -299,8 +298,7 @@ export default function AgentMap() {
         ) : null}
 
         <Txt size={font.cap} color={c.faint} style={{ textAlign: 'center', lineHeight: 17 }}>
-          Shows clock-in and clock-out points only. No travel history is recorded here.
-        </Txt>
+          {t('agentMap.pointsOnly')}</Txt>
       </ScrollView>
     </Screen>
   );
@@ -315,8 +313,8 @@ function FieldRow({ p, onOpen }: { p: Person; onOpen: () => void }) {
   const t = useT();
   return (
     <PersonRow
-      name={p.name}
-      subtitle={p.where || 'On field'}
+      name={resolveCopy(t, p.name, p.nameCopy)}
+      subtitle={p.where || t('agentMap.onField')}
       subtitleIcon="location"
       onPress={onOpen}
       badge={{ tone: 'success' }}
@@ -329,7 +327,7 @@ function FieldRow({ p, onOpen }: { p: Person; onOpen: () => void }) {
             bg={c.primarySoft}
             color={c.primary}
             onPress={() => { haptics.tap(); call(p.phone as string); }}
-            accessibilityLabel={t('common.a11yCall', { name: p.name })}
+            accessibilityLabel={t('common.a11yCall', { name: resolveCopy(t, p.name, p.nameCopy) })}
           />
           <IconBtn
             icon="logo-whatsapp"
@@ -337,7 +335,7 @@ function FieldRow({ p, onOpen }: { p: Person; onOpen: () => void }) {
             bg={c.whatsappSoft}
             color={c.whatsapp}
             onPress={() => { haptics.tap(); whatsapp(p.phone as string); }}
-            accessibilityLabel={t('common.a11yWhatsapp', { name: p.name })}
+            accessibilityLabel={t('common.a11yWhatsapp', { name: resolveCopy(t, p.name, p.nameCopy) })}
           />
         </Row>
       ) : (
@@ -365,10 +363,11 @@ function Legend({ color, label }: { color: string; label: string }) {
  * ================================================================== */
 
 function MapSkeleton() {
+  const t = useT();
   const c = useTheme();
   return (
     <Screen>
-      <Header title="Agent locations" back />
+      <Header title={t('agentMap.title')} back />
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
         <Card>
           <Skeleton width={120} height={10} />

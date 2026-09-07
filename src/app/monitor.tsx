@@ -1,3 +1,5 @@
+import { resolveCopy } from '@/i18n/copy';
+import { roleLabel } from '@/i18n/display';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,10 +47,10 @@ type Lens = { icon: IconName; title: string; hint: string; href: Href; tileIndex
 
 const LENSES: Lens[] = [
   // Location first — the owner's "most important".
-  { icon: 'map', title: 'Locations', hint: 'Where the field is now', href: '/agent-map' as Href, tileIndex: 0 },
-  { icon: 'navigate', title: 'Movement', hint: 'Replay a day’s path', href: '/agent-track' as Href, tileIndex: 1 },
-  { icon: 'ribbon', title: 'Performance', hint: 'Completed-task scores', href: '/performance?view=team' as Href, tileIndex: 2 },
-  { icon: 'cash', title: 'Payroll', hint: 'Salary from days worked', href: '/payroll' as Href, tileIndex: 3 },
+  { icon: 'map', title: 'monitor.locations', hint: 'monitor.locationsHint', href: '/agent-map' as Href, tileIndex: 0 },
+  { icon: 'navigate', title: 'dash.movement', hint: 'monitor.movementHint', href: '/agent-track' as Href, tileIndex: 1 },
+  { icon: 'ribbon', title: 'monitor.performance', hint: 'monitor.performanceHint', href: '/performance?view=team' as Href, tileIndex: 2 },
+  { icon: 'cash', title: 'payroll.title', hint: 'monitor.payrollHint', href: '/payroll' as Href, tileIndex: 3 },
 ];
 
 export default function Monitor() {
@@ -81,9 +83,9 @@ export default function Monitor() {
   const online = useMemo(() => team.filter((m) => m.online).length, [team]);
 
   const kpis = useMemo<KpiItem[]>(() => [
-    { label: 'On duty now', value: `${onDuty.length}/${team.length}`, icon: 'location-outline', tone: 'primary' },
-    { label: 'Signed in', value: String(online), icon: 'pulse-outline', tone: 'info' },
-  ], [onDuty.length, team.length, online]);
+    { label: t('team.onDutyNow'), value: `${onDuty.length}/${team.length}`, icon: 'location-outline', tone: 'primary' },
+    { label: t('team.signedIn'), value: String(online), icon: 'pulse-outline', tone: 'info' },
+  ], [onDuty.length, team.length, online, t]);
 
   // On duty first, then signed-in, then by name — the "who is out there now" order.
   const shown = useMemo(() => team.slice().sort((a, b) => {
@@ -97,11 +99,11 @@ export default function Monitor() {
   if (ready && !isMaster) {
     return (
       <Screen>
-        <Header title="Monitor" back />
+        <Header title={t('monitor.title')} back />
         <EmptyState
           icon="lock-closed-outline"
-          title="Owner access only"
-          subtitle="The monitoring view — team location, performance and salary — is visible to the owner (master admin)."
+          title={t('performance.ownerOnly')}
+          subtitle={t('monitor.ownerOnlyBody')}
         />
       </Screen>
     );
@@ -109,7 +111,7 @@ export default function Monitor() {
 
   return (
     <Screen>
-      <Header title="Monitor" subtitle="Team oversight" back />
+      <Header title={t('monitor.title')} subtitle={t('monitor.subtitle')} back />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -118,7 +120,7 @@ export default function Monitor() {
       >
         {/* The four lenses. Location first (the owner's "most important"). */}
         <View style={{ gap: spacing.md }}>
-          <Eyebrow style={{ marginLeft: spacing.xs }}>Watch the team</Eyebrow>
+          <Eyebrow style={{ marginLeft: spacing.xs }}>{t('monitor.watchTeam')}</Eyebrow>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md }}>
             {LENSES.map((l, i) => (
               <Appear key={l.title} index={i} style={{ flexBasis: '47%', flexGrow: 1 }}>
@@ -130,7 +132,7 @@ export default function Monitor() {
 
         {/* The roster — tap a member for their activity (team/[id]). No task UI. */}
         <View style={{ gap: spacing.md }}>
-          <SectionHeader title="Team" />
+          <SectionHeader title={t('dash.team')} />
 
           {loading ? (
             <RosterSkeleton />
@@ -138,10 +140,10 @@ export default function Monitor() {
             <Card>
               <EmptyState
                 icon={health.degraded ? 'cloud-offline-outline' : 'people-outline'}
-                title={health.degraded ? 'The roster could not load' : 'No team members yet'}
+                title={health.degraded ? t('team.rosterFailed') : t('team.noMembersYet')}
                 subtitle={health.degraded
-                  ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
-                  : 'People appear here once they are added to your branch in the admin panel.'}
+                  ? t('team.unconfirmed')
+                  : t('team.noMembersBody')}
                 action={{ label: t('common.tryAgain'), onPress: retry }}
               />
             </Card>
@@ -152,11 +154,11 @@ export default function Monitor() {
               {onDuty.length > 0 ? (
                 <Card>
                   <Row>
-                    <AvatarStack names={onDuty.map((m) => m.name)} size={34} max={5} />
+                    <AvatarStack names={onDuty.map((m) => resolveCopy(t, m.name, m.nameCopy))} size={34} max={5} />
                     <View style={{ flex: 1 }}>
                       <MutedTitle
-                        title={onDuty.length === 1 ? '1 agent in the field' : `${onDuty.length} agents in the field`}
-                        sub="Clocked in today"
+                        title={onDuty.length === 1 ? t('team.oneInField') : t('team.agentsInField', { count: onDuty.length })}
+                        sub={t('team.clockedToday')}
                       />
                     </View>
                   </Row>
@@ -182,6 +184,7 @@ export default function Monitor() {
 
 /* ---------------- Lens card ---------------- */
 function LensCard({ lens, onPress }: { lens: Lens; onPress: () => void }) {
+  const t = useT();
   const c = useTheme();
   const tile = c.tiles[lens.tileIndex % c.tiles.length];
   return (
@@ -192,8 +195,8 @@ function LensCard({ lens, onPress }: { lens: Lens; onPress: () => void }) {
       }}>
         <Ionicons name={lens.icon} size={22} color={tile.fg} />
       </View>
-      <Txt size={font.sub} weight="700" numberOfLines={1}>{lens.title}</Txt>
-      <Txt size={font.cap} color={c.muted} numberOfLines={1}>{lens.hint}</Txt>
+      <Txt size={font.sub} weight="700" numberOfLines={1}>{t(lens.title)}</Txt>
+      <Txt size={font.cap} color={c.muted} numberOfLines={1}>{t(lens.hint)}</Txt>
     </Card>
   );
 }
@@ -202,12 +205,12 @@ function LensCard({ lens, onPress }: { lens: Lens; onPress: () => void }) {
 function MemberRow({ m, first, onPress }: { m: TeamMember; first: boolean; onPress: () => void }) {
   const c = useTheme();
   const t = useT();
-  const role = m.role.replace(/_/g, ' ');
+  const role = roleLabel(t, m.role);
   const subtitle = [role, m.branch].filter(Boolean).join(' · ');
   return (
     <View style={first ? undefined : { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.hairline, marginLeft: spacing.lg }}>
       <PersonRow
-        name={m.name}
+        name={resolveCopy(t, m.name, m.nameCopy)}
         subtitle={subtitle}
         onPress={onPress}
         badge={{ tone: m.clockedIn ? 'success' : m.online ? 'primary' : 'neutral' }}

@@ -1,3 +1,5 @@
+import { resolveCopy } from '@/i18n/copy';
+import { roleLabel } from '@/i18n/display';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -102,9 +104,9 @@ export default function TeamMemberDetail() {
   if (ready && !capabilitiesOf(user, viewAs).manageTeam) {
     return (
       <RestrictedNotice
-        title="Member"
-        heading="Member view is for managers"
-        subtitle="A team member's figures and activity are visible to team leads and admins."
+        title={t('pay.member')}
+        heading={t('team.memberManagersOnly')}
+        subtitle={t('team.memberManagersBody')}
       />
     );
   }
@@ -114,26 +116,26 @@ export default function TeamMemberDetail() {
   if (!m) {
     return (
       <Screen>
-        <Header title="Team member" back />
+        <Header title={t('team.memberTitle')} back />
         <EmptyState
           icon={health.degraded ? 'cloud-offline-outline' : 'person-circle-outline'}
-          title={health.degraded ? 'This profile could not load' : 'Member not found'}
+          title={health.degraded ? t('team.profileFailed') : t('team.memberMissing')}
           subtitle={health.degraded
-            ? 'The server did not answer, so nothing here is confirmed. Check your connection and try again.'
-            : 'This person is no longer on a roster you can see. They may have been moved or removed.'}
+            ? t('team.memberUnconfirmed')
+            : t('team.memberMissingBody')}
           action={{ label: t('common.tryAgain'), onPress: retry }}
         />
       </Screen>
     );
   }
 
-  const role = m.role.replace(/_/g, ' ');
+  const role = roleLabel(t, m.role);
   const meta = [role, m.branch].filter(Boolean).join(' · ');
   const hasPhone = !!m.phone;
 
   return (
     <Screen>
-      <Header title="Team member" subtitle={m.name} back />
+      <Header title={t('team.memberTitle')} subtitle={resolveCopy(t, m.name, m.nameCopy)} back />
 
       <ScrollView
         style={{ flex: 1 }}
@@ -143,8 +145,8 @@ export default function TeamMemberDetail() {
         {!hasPhone ? (
           <Banner
             tone="warning"
-            title="No mobile number on this profile"
-            message="Calls and WhatsApp both need a number on the staff record."
+            title={t('team.noMobile')}
+            message={t('team.noMobileBody')}
           />
         ) : null}
 
@@ -152,20 +154,20 @@ export default function TeamMemberDetail() {
           <Card>
             <Row>
               <Avatar
-                name={m.name}
+                name={resolveCopy(t, m.name, m.nameCopy)}
                 size={58}
                 badge={{ tone: m.clockedIn ? 'success' : m.online ? 'primary' : 'neutral' }}
               />
               <View style={{ flex: 1, gap: 2 }}>
-                <Txt size={19} weight="800" numberOfLines={2}>{m.name}</Txt>
+                <Txt size={19} weight="800" numberOfLines={2}>{resolveCopy(t, m.name, m.nameCopy)}</Txt>
                 {meta ? <Txt size={font.sub} color={c.muted} numberOfLines={1}>{meta}</Txt> : null}
               </View>
             </Row>
 
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: spacing.md }}>
               {m.clockedIn ? <Pill label={t('common.onDuty')} tone="success" small dot /> : null}
-              {!m.clockedIn && m.online ? <Pill label="Signed in" tone="info" small dot /> : null}
-              {m.tier ? <Pill label={`${m.tier} club`} tone="accent" small icon="star" /> : null}
+              {!m.clockedIn && m.online ? <Pill label={t('team.signedIn')} tone="info" small dot /> : null}
+              {m.tier ? <Pill label={t('team.club', { tier: m.tier })} tone="accent" small icon="star" /> : null}
               {m.agentCode ? <Pill label={m.agentCode} tone="neutral" small numeric /> : null}
             </View>
           </Card>
@@ -176,12 +178,12 @@ export default function TeamMemberDetail() {
             <Card>
               <Row style={{ alignItems: 'center', gap: spacing.md }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <Eyebrow>Live location</Eyebrow>
+                  <Eyebrow>{t('team.liveLocation')}</Eyebrow>
                   <Txt size={font.sub} color={c.muted} numberOfLines={2} style={{ marginTop: 2 }}>
-                    {(m.name.split(' ')[0] || 'This member')}&apos;s last-known position — on or off duty.
+                    {t('team.lastPositionNamed', { name: (m.nameCopy ? resolveCopy(t, m.name, m.nameCopy) : m.name.split(' ')[0]) || t('team.thisMember') })}
                   </Txt>
                 </View>
-                <Button label="Show" icon="location" size="sm" onPress={openLive} />
+                <Button label={t('team.show')} icon="location" size="sm" onPress={openLive} />
               </Row>
             </Card>
           </Appear>
@@ -195,32 +197,31 @@ export default function TeamMemberDetail() {
           <Appear index={1}>
             <Card>
               <Txt size={font.sub} color={c.muted}>
-                No performance figures have come back for this member yet.
-              </Txt>
+                {t('team.noPerformance')}</Txt>
             </Card>
           </Appear>
         )}
 
         <Appear index={2}>
-          <ListSection title="Contact">
+          <ListSection title={t('filter.contact')}>
             {hasPhone ? <DataRow label={t('common.mobile')} value={m.phone} icon="call-outline" numeric copyable /> : null}
-            {m.email ? <DataRow label="Email" value={m.email} icon="mail-outline" copyable /> : null}
-            {m.branch ? <DataRow label="Branch" value={m.branch} icon="business-outline" /> : null}
-            <DataRow label="Role" value={role} icon="ribbon-outline" />
-            <DataRow label="Last active" value={timeAgo(m.lastActive)} icon="time-outline" />
+            {m.email ? <DataRow label={t('team.email')} value={m.email} icon="mail-outline" copyable /> : null}
+            {m.branch ? <DataRow label={t('team.branch')} value={m.branch} icon="business-outline" /> : null}
+            <DataRow label={t('team.role')} value={role} icon="ribbon-outline" />
+            <DataRow label={t('team.lastActive')} value={timeAgo(m.lastActive, t)} icon="time-outline" />
           </ListSection>
         </Appear>
 
         <Appear index={3}>
           {/* The screen's single Eyebrow. ListSection draws its own label, so this is the
               one group that needs the treatment applied by hand. */}
-          <Eyebrow style={{ marginLeft: spacing.xs, marginBottom: spacing.sm }}>Recent activity</Eyebrow>
+          <Eyebrow style={{ marginLeft: spacing.xs, marginBottom: spacing.sm }}>{t('team.recentActivity')}</Eyebrow>
           {m.activity.length === 0 ? (
             <Card>
               <EmptyState
                 icon="pulse-outline"
-                title="No recorded activity"
-                subtitle="Task and field activity shows here once this member starts working from the app."
+                title={t('team.noActivity')}
+                subtitle={t('team.noActivityBody')}
               />
             </Card>
           ) : (
@@ -230,8 +231,8 @@ export default function TeamMemberDetail() {
                   key={a.id}
                   index={i}
                   last={i === m.activity.length - 1}
-                  time={timeAgo(a.at)}
-                  title={a.text}
+                  time={timeAgo(a.at, t)}
+                  title={resolveCopy(t, a.text, a.textCopy)}
                   tone="primary"
                   icon={(a.icon as IconName) || 'ellipse-outline'}
                 />
@@ -255,7 +256,7 @@ export default function TeamMemberDetail() {
           color={c.primary}
           disabled={!hasPhone}
           onPress={() => { haptics.tap(); call(m.phone); }}
-          accessibilityLabel={t('common.a11yCall', { name: m.name })}
+          accessibilityLabel={t('common.a11yCall', { name: resolveCopy(t, m.name, m.nameCopy) })}
         />
         <Button
           label={t('common.whatsapp')}
@@ -269,8 +270,8 @@ export default function TeamMemberDetail() {
       </View>
 
       {/* Master-only: the member's last-known location, on a single-pin map (Phase 66). */}
-      <Sheet visible={liveOpen} onClose={() => setLiveOpen(false)} title="Live location" subtitle={m.name} scroll={false}>
-        <LiveLocationBody res={liveRes} name={m.name} />
+      <Sheet visible={liveOpen} onClose={() => setLiveOpen(false)} title={t('team.liveLocation')} subtitle={resolveCopy(t, m.name, m.nameCopy)} scroll={false}>
+        <LiveLocationBody res={liveRes} name={resolveCopy(t, m.name, m.nameCopy)} />
       </Sheet>
     </Screen>
   );
@@ -302,22 +303,22 @@ function LiveLocationBody({ res, name }: { res: LastLocationResult | 'loading' |
     const duty = loc.isClockedIn
       ? { label: t('common.onDuty'), tone: 'success' as const }
       : loc.offDuty ? { label: t('common.offDuty'), tone: 'neutral' as const }
-        : { label: 'Last shift', tone: 'neutral' as const };
+        : { label: t('team.lastShift'), tone: 'neutral' as const };
     return (
       <View style={{ padding: spacing.lg, gap: spacing.md }}>
         <View style={{ gap: 4 }}>
-          <Eyebrow>Last known position</Eyebrow>
-          <Txt size={font.h2} weight="800">{loc.at ? timeAgo(loc.at) : 'Time not recorded'}</Txt>
+          <Eyebrow>{t('team.lastKnown')}</Eyebrow>
+          <Txt size={font.h2} weight="800">{loc.at ? timeAgo(loc.at, t) : t('team.timeMissing')}</Txt>
         </View>
         <Row style={{ gap: spacing.sm, flexWrap: 'wrap' }}>
           <Pill label={duty.label} tone={duty.tone} small dot={loc.isClockedIn} />
             {loc.accuracy != null ? <Pill label={`±${Math.round(loc.accuracy)} m`} tone="neutral" small numeric /> : null}
         </Row>
         <ListSection>
-          <DataRow label="Coordinates" value={`${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`} icon="location-outline" numeric copyable />
+          <DataRow label={t('team.coordinates')} value={`${loc.lat.toFixed(6)}, ${loc.lng.toFixed(6)}`} icon="location-outline" numeric copyable />
         </ListSection>
         <Txt size={font.tiny} color={c.faint} numberOfLines={3}>
-          The most recent position {name.split(' ')[0] || 'this member'}&apos;s device reported — not a live ping. Copy the coordinates to open them in a maps app. Off-duty location needs their consent and background permission.
+          {t('team.lastReportNote', { name: name.split(' ')[0] || t('team.thisMemberLower') })}
         </Txt>
       </View>
     );
@@ -328,8 +329,8 @@ function LiveLocationBody({ res, name }: { res: LastLocationResult | 'loading' |
       <View style={{ padding: spacing.lg }}>
         <EmptyState
           icon="location-outline"
-          title="No recent location"
-          subtitle={`${name} hasn't shared a location recently. Off-duty location needs their consent and background permission.`}
+          title={t('team.noRecentLocation')}
+          subtitle={t('team.noRecentLocationBody', { name: name })}
         />
       </View>
     );
@@ -340,8 +341,8 @@ function LiveLocationBody({ res, name }: { res: LastLocationResult | 'loading' |
     <View style={{ padding: spacing.lg }}>
       <EmptyState
         icon="cloud-offline-outline"
-        title="Couldn't load location"
-        subtitle="We couldn't reach the location service, so nothing here is confirmed. Close this and try again."
+        title={t('team.locationFailed')}
+        subtitle={t('team.locationUnconfirmed')}
       />
     </View>
   );
@@ -352,10 +353,11 @@ function LiveLocationBody({ res, name }: { res: LastLocationResult | 'loading' |
  * ================================================================== */
 
 function MemberSkeleton() {
+  const t = useT();
   const c = useTheme();
   return (
     <Screen>
-      <Header title="Team member" back />
+      <Header title={t('team.memberTitle')} back />
       <View style={{ padding: spacing.lg, gap: spacing.lg }}>
         <Card>
           <Row>

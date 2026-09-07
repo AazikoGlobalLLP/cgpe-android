@@ -1163,7 +1163,7 @@ export default function Home() {
     } finally {
       if (mounted.current) setClocking(false);
     }
-  }, [clocking, clock.in, clock.time, clock.onBreak, clockKey, t, user?.id]);
+  }, [clocking, clock.in, clock.time, clock.onBreak, clockKey, t, user]);
 
   // PHASE 50: the reason prompt re-runs the SAME clock action, this time carrying the typed reason,
   // so the success path (start/stop tracking, clock state, haptics) is reused untouched.
