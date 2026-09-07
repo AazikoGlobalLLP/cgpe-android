@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -46,7 +47,7 @@ import { useT } from '@/i18n';
  * ------------------------------------------------------------------ */
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const SEGMENT_LABEL: Record<string, string> = { day_wise: 'Day-wise', hourly: 'Hourly', base: 'Base' };
+const SEGMENT_LABEL: Record<string, string> = { day_wise: 'pay.dayWise', hourly: 'pay.hourly', base: 'pay.base' };
 const PRIORITY_TONE: Record<string, 'danger' | 'warning' | 'neutral'> = { P1: 'danger', P2: 'warning', P3: 'neutral' };
 
 /** Nothing from a wire body is trusted to be a finite number. */
@@ -87,10 +88,21 @@ export default function PayrollDetail() {
   const insets = useSafeAreaInsets();
   const health = useDataHealth();
   const { user, ready } = useAuth();
-  const params = useLocalSearchParams<{ user_id?: string; name?: string; year?: string; month?: string }>();
+  const params = useLocalSearchParams<{ user_id?: string; name?: string; nameCopy?: string; year?: string; month?: string }>();
 
   const userId = String(params.user_id ?? '');
   const paramName = typeof params.name === 'string' ? params.name : '';
+  const paramNameCopy = useMemo<LocalCopy | undefined>(() => {
+    if (typeof params.nameCopy !== 'string') return undefined;
+    try {
+      const value: unknown = JSON.parse(params.nameCopy);
+      if (!value || typeof value !== 'object' || !('key' in value) || typeof value.key !== 'string') return undefined;
+      if (!('params' in value) || value.params === undefined) return { key: value.key };
+      if (!value.params || typeof value.params !== 'object' || Array.isArray(value.params)) return undefined;
+      if (!Object.values(value.params).every(v => typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v)))) return undefined;
+      return { key: value.key, params: value.params as Record<string, string | number> };
+    } catch { return undefined; }
+  }, [params.nameCopy]);
   // The month is passed from the roster so the detail shows exactly the row the user tapped.
   const now = useRef(new Date()).current;
   const year = Number(params.year) || now.getFullYear();
@@ -171,27 +183,28 @@ export default function PayrollDetail() {
   const perDayRate = m && typeof m.per_day_rate === 'number' ? m.per_day_rate : null;
   const hourlyRate = m && typeof m.hourly_rate === 'number' ? m.hourly_rate : null;
   const salary = num(rowData?.salary_amount);
-  const segLabel = rowData ? (SEGMENT_LABEL[rowData.segment] ?? rowData.segment) : '';
-  const displayName = rowData?.name || paramName || userId || 'Member';
+  const segLabel = rowData ? (SEGMENT_LABEL[rowData.segment] ? t(SEGMENT_LABEL[rowData.segment]) : rowData.segment) : '';
+  const displayName = rowData?.name ? resolveCopy(t, rowData.name, rowData.nameCopy)
+    : paramName ? resolveCopy(t, paramName, paramNameCopy) : userId || t('pay.member');
 
   const kpis = useMemo<KpiItem[]>(() => [
-    { label: 'Present', value: String(present), icon: 'checkmark-circle', tone: present > 0 ? 'success' : 'neutral' },
-    { label: 'Payable days', value: `${present}/${workingDays}`, icon: 'calendar', tone: 'primary' },
-    { label: 'Absent', value: String(absent), icon: 'close-circle', tone: absent > 0 ? 'danger' : 'neutral' },
-    { label: 'Worked hours', value: hrs(workedHours), icon: 'time', tone: 'neutral' },
-  ], [present, workingDays, absent, workedHours]);
+    { label: t('pay.present'), value: String(present), icon: 'checkmark-circle', tone: present > 0 ? 'success' : 'neutral' },
+    { label: t('pay.payableDays'), value: `${present}/${workingDays}`, icon: 'calendar', tone: 'primary' },
+    { label: t('pay.absent'), value: String(absent), icon: 'close-circle', tone: absent > 0 ? 'danger' : 'neutral' },
+    { label: t('pay.workedHours'), value: hrs(workedHours), icon: 'time', tone: 'neutral' },
+  ], [present, workingDays, absent, workedHours, t]);
 
   // Belt-and-braces: the roster row that launched us already gated on the real role, but a leader
   // deep-linking here (mobile tier folds leader into "admin") must see an honest refusal.
   if (ready && !isAdmin) {
     return (
       <Screen>
-        <Header title="Payroll" back />
+        <Header title={t('payroll.title')} back />
         <View style={{ padding: spacing.lg }}>
           <EmptyState
             icon="lock-closed-outline"
-            title="Payroll is admin-only"
-            subtitle="Salary figures are visible to administrators and the master account. Ask an administrator if you need access."
+            title={t('payroll.restricted')}
+            subtitle={t('payroll.restrictedBody')}
           />
         </View>
       </Screen>
@@ -200,7 +213,7 @@ export default function PayrollDetail() {
 
   return (
     <Screen>
-      <Header title={displayName} subtitle={loading ? 'Loading pay' : monthLabel} back />
+      <Header title={displayName} subtitle={loading ? t('payroll.loadingPay') : monthLabel} back />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + 48, gap: spacing.lg }}
@@ -220,16 +233,16 @@ export default function PayrollDetail() {
         ) : row === 'missing' ? (
           <EmptyState
             icon="person-outline"
-            title={`No payroll profile for ${monthLabel}`}
-            subtitle="This member has no computed pay for this month. Payroll profiles are created in the admin panel; once one exists, their breakdown appears here."
+            title={t('payroll.noProfilePeriod', { period: monthLabel })}
+            subtitle={t('payroll.noProfileBody')}
           />
         ) : row === null ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="We couldn't load this member's pay"
+            title={t('payroll.memberLoadFailed')}
             subtitle={health.degraded
-              ? 'The salary service could not be reached, so this is blank rather than empty. Pull down or retry.'
-              : 'We could not load this member’s pay for this month. Pull down or retry.'}
+              ? t('earnings.unconfirmed')
+              : t('payroll.memberMonthFailed')}
             action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : (
@@ -237,18 +250,18 @@ export default function PayrollDetail() {
             {/* ---------------- Headline payable ---------------- */}
             <Appear index={0}>
               <Card>
-                <Eyebrow>{`Payable · ${monthLabel}`}</Eyebrow>
-                <View accessible accessibilityLabel={`Payable ${inr(payable)} for ${displayName}, ${monthLabel}`}>
+                <Eyebrow>{t('payroll.payablePeriod', { period: monthLabel })}</Eyebrow>
+                <View accessible accessibilityLabel={t('payroll.payableA11y', { amount: inr(payable), name: displayName, period: monthLabel })}>
                   <Metric value={inr(shownPayable)} size={font.display} style={{ marginTop: 4 }} />
                 </View>
                 <Txt size={font.sub} color={c.muted} numeric style={{ marginTop: 6 }} numberOfLines={1}>
                   {[segLabel,
-                    hourlyRate != null ? `${inr(hourlyRate)}/hour`
-                      : perDayRate != null ? `${inr(perDayRate)}/day` : null,
+                    hourlyRate != null ? t('pay.ratePerHour', { amount: inr(hourlyRate) })
+                      : perDayRate != null ? t('pay.ratePerDay', { amount: inr(perDayRate) }) : null,
                   ].filter(Boolean).join('  ·  ')}
                 </Txt>
                 <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md }} numberOfLines={2}>
-                  Computed by the server from this member&apos;s attendance. Figures are gross, before deductions.
+                  {t('payroll.memberGrossNote')}
                 </Txt>
               </Card>
             </Appear>
@@ -262,7 +275,7 @@ export default function PayrollDetail() {
             {workingDays > 0 ? (
               <Appear index={2}>
                 <Card>
-                  <Meter value={present / workingDays} label="Payable days" valueLabel={`${present} of ${workingDays}`} />
+                  <Meter value={present / workingDays} label={t('pay.payableDays')} valueLabel={t('pay.amountOfTotal', { amount: present, total: workingDays })} />
                 </Card>
               </Appear>
             ) : null}
@@ -270,16 +283,16 @@ export default function PayrollDetail() {
             {/* ---------------- How this pay was reached ---------------- */}
             <Appear index={3}>
               <View>
-                <SectionHeader title="Pay basis" />
+                <SectionHeader title={t('pay.basis')} />
                 <Card style={{ gap: spacing.md }}>
-                  <Fact label="Segment" value={segLabel} />
-                  {salary > 0 ? <Fact label="Monthly salary" value={inr(salary)} /> : null}
-                  {hourlyRate != null ? <Fact label="Hourly rate" value={`${inr(hourlyRate)}/hour`} /> : null}
-                  {perDayRate != null ? <Fact label="Per-day rate" value={`${inr(perDayRate)}/day`} /> : null}
+                  <Fact label={t('filter.segment')} value={segLabel} />
+                  {salary > 0 ? <Fact label={t('pay.monthlySalary')} value={inr(salary)} /> : null}
+                  {hourlyRate != null ? <Fact label={t('pay.hourlyRate')} value={t('pay.ratePerHour', { amount: inr(hourlyRate) })} /> : null}
+                  {perDayRate != null ? <Fact label={t('pay.perDayRate')} value={t('pay.ratePerDay', { amount: inr(perDayRate) })} /> : null}
                   {rowData && typeof rowData.office_hours === 'number'
-                    ? <Fact label="Office hours" value={`${hrs(rowData.office_hours)} h`} /> : null}
-                  <Fact label="Present days" value={`${present} of ${workingDays}`} />
-                  <Fact label="Worked hours" value={`${hrs(workedHours)} h`} />
+                    ? <Fact label={t('pay.officeHours')} value={t('pay.hoursValue', { hours: hrs(rowData.office_hours) })} /> : null}
+                  <Fact label={t('pay.presentDays')} value={t('pay.amountOfTotal', { amount: present, total: workingDays })} />
+                  <Fact label={t('pay.workedHours')} value={t('pay.hoursValue', { hours: hrs(workedHours) })} />
                 </Card>
               </View>
             </Appear>
@@ -288,15 +301,14 @@ export default function PayrollDetail() {
             {m && typeof m.days === 'number' ? (
               <Appear index={4}>
                 <View>
-                  <SectionHeader title="Working days" />
+                  <SectionHeader title={t('pay.workingDays')} />
                   <Card style={{ gap: spacing.md }}>
-                    <Fact label="Calendar days" value={String(num(m.days))} />
-                    {typeof m.sundays === 'number' ? <Fact label="Sundays off" value={String(num(m.sundays))} /> : null}
-                    {typeof m.holidays === 'number' ? <Fact label="Holidays" value={String(num(m.holidays))} /> : null}
-                    <Fact label="Working days" value={String(workingDays)} />
+                    <Fact label={t('pay.calendarDays')} value={String(num(m.days))} />
+                    {typeof m.sundays === 'number' ? <Fact label={t('pay.sundaysOff')} value={String(num(m.sundays))} /> : null}
+                    {typeof m.holidays === 'number' ? <Fact label={t('notice.holidayGroup')} value={String(num(m.holidays))} /> : null}
+                    <Fact label={t('pay.workingDays')} value={String(workingDays)} />
                     <Txt size={font.tiny} color={c.faint} numberOfLines={2}>
-                      Working days exclude Sundays and holidays. Computed by the server.
-                    </Txt>
+                      {t('pay.workingDaysNote')}</Txt>
                   </Card>
                 </View>
               </Appear>
@@ -306,20 +318,19 @@ export default function PayrollDetail() {
             {isMaster ? (
               <Appear index={5}>
                 <View>
-                  <SectionHeader title="Essential details" />
+                  <SectionHeader title={t('payroll.essential')} />
                   {essential.status === 'error' ? (
                     <Card>
                       <Txt size={font.sub} color={c.muted} numberOfLines={3}>
                         {health.degraded
-                          ? 'The bank & shift details could not be reached, so this is blank rather than empty. Pull down to try again.'
-                          : 'We couldn’t load this member’s bank & shift details. Pull down or retry.'}
+                          ? t('payroll.essentialUnconfirmed')
+                          : t('payroll.essentialFailed')}
                       </Txt>
                     </Card>
                   ) : essential.status === 'missing' ? (
                     <Card>
                       <Txt size={font.sub} color={c.muted} numberOfLines={3}>
-                        No payroll profile is set up for this member yet, so their shift and bank details are pending. An admin adds them in the panel.
-                      </Txt>
+                        {t('payroll.essentialPending')}</Txt>
                     </Card>
                   ) : essential.status === 'ok' ? (
                     <EssentialDetails profile={essential.profile} />
@@ -332,13 +343,13 @@ export default function PayrollDetail() {
             {isMaster ? (
               <Appear index={6}>
                 <View>
-                  <SectionHeader title="Completed this month" />
+                  <SectionHeader title={t('performance.completedMonth')} />
                   {activity.status === 'error' ? (
                     <Card>
                       <Txt size={font.sub} color={c.muted} numberOfLines={3}>
                         {health.degraded
-                          ? 'The activity report could not be reached, so this is blank rather than empty — not that this member did nothing. Pull down to try again.'
-                          : 'We couldn’t load this member’s task activity for this month. Pull down or retry.'}
+                          ? t('payroll.activityUnconfirmed')
+                          : t('payroll.activityFailed')}
                       </Txt>
                     </Card>
                   ) : (
@@ -369,12 +380,13 @@ function Fact({ label, value }: { label: string; value: string }) {
  * the value is blank — so a half-filled profile reads honestly rather than as an empty value. A
  * `children` slot lets the account row supply its own masked/reveal control. */
 function EssentialFact({ label, value, children }: { label: string; value?: string; children?: React.ReactNode }) {
+  const t = useT();
   const c = useTheme();
   const has = value != null && value.trim().length > 0;
   return (
     <Row style={{ justifyContent: 'space-between', alignItems: 'center', gap: spacing.md }}>
       <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ flexShrink: 1 }}>{label}</Txt>
-      {children ? children : has ? <Metric value={value!} size={font.body} /> : <Pill label="Pending" tone="warning" small />}
+      {children ? children : has ? <Metric value={value!} size={font.body} /> : <Pill label={t('claims.pending')} tone="warning" small />}
     </Row>
   );
 }
@@ -383,21 +395,22 @@ function EssentialFact({ label, value, children }: { label: string; value?: stri
  * to the master only, account masked). A blank account shows the "Pending" pill like any other field.
  * The raw number is only ever displayed on the master's explicit tap; it is never persisted. */
 function AccountReveal({ account }: { account?: string }) {
+  const t = useT();
   const c = useTheme();
   const [revealed, setRevealed] = useState(false);
   const acct = (account ?? '').trim();
-  if (!acct) return <EssentialFact label="Account no." />;
+  if (!acct) return <EssentialFact label={t('payroll.accountNo')} />;
   return (
-    <EssentialFact label="Account no.">
+    <EssentialFact label={t('payroll.accountNo')}>
       <Pressable
         onPress={() => { haptics.tap(); setRevealed((v) => !v); }}
         accessibilityRole="button"
-        accessibilityLabel={revealed ? 'Hide account number' : 'Reveal account number'}
+        accessibilityLabel={revealed ? t('payroll.hideAccount') : t('payroll.revealAccount')}
         hitSlop={8}
         style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
       >
         <Metric value={revealed ? acct : maskAccountNumber(acct)} size={font.body} />
-        <Txt size={font.tiny} color={c.primary} weight="700">{revealed ? 'Hide' : 'Reveal'}</Txt>
+        <Txt size={font.tiny} color={c.primary} weight="700">{revealed ? t('payroll.hide') : t('payroll.reveal')}</Txt>
       </Pressable>
     </EssentialFact>
   );
@@ -407,19 +420,19 @@ function AccountReveal({ account }: { account?: string }) {
  * so this panel adds only what isn't shown there: the shift window and the four bank fields. Aadhaar
  * and PAN are never included — getPayrollProfile drops them before they reach app state. */
 function EssentialDetails({ profile }: { profile: PayrollProfile }) {
+  const t = useT();
   const c = useTheme();
   const st = profile.shift_timing;
   const shift = st && (st.start || st.end) ? `${st.start ?? '—'}–${st.end ?? '—'}` : '';
   return (
     <Card style={{ gap: spacing.md }}>
-      <EssentialFact label="Shift" value={shift} />
-      <EssentialFact label="Account holder" value={profile.beneficiary_name} />
-      <EssentialFact label="Bank" value={profile.bank_name} />
+      <EssentialFact label={t('payroll.shift')} value={shift} />
+      <EssentialFact label={t('payroll.accountHolder')} value={profile.beneficiary_name} />
+      <EssentialFact label={t('payroll.bank')} value={profile.bank_name} />
       <AccountReveal account={profile.account_no} />
       <EssentialFact label="IFSC" value={profile.ifsc_code} />
       <Txt size={font.tiny} color={c.faint} numberOfLines={2}>
-        Bank details are shown to the master account only. Aadhaar and PAN are never shown on the phone.
-      </Txt>
+        {t('payroll.bankPrivacy')}</Txt>
     </Card>
   );
 }
@@ -427,9 +440,10 @@ function EssentialDetails({ profile }: { profile: PayrollProfile }) {
 /* The member's completed tasks this month — the same shape performance.tsx renders. Server order
  * is newest first. Empty (or no activity fetched) → an honest "none recorded" line. */
 function CompletedList({ tasks }: { tasks: TaskReportMember['completedTasks'] }) {
+  const tr = useT();
   const c = useTheme();
   if (tasks.length === 0) {
-    return <Txt size={font.sub} color={c.muted}>No completed tasks recorded for this month.</Txt>;
+    return <Txt size={font.sub} color={c.muted}>{tr('performance.noCompletedMonth')}</Txt>;
   }
   return (
     <Card style={{ gap: spacing.md }}>
@@ -437,12 +451,12 @@ function CompletedList({ tasks }: { tasks: TaskReportMember['completedTasks'] })
         <View key={t.id || String(i)} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md } : undefined}>
           <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm }}>
             <Txt size={font.sub} weight="600" numberOfLines={2} style={{ flex: 1 }}>{t.title}</Txt>
-            <Pill label={t.onTime ? 'On time' : 'Late'} tone={t.onTime ? 'success' : 'warning'} small />
+            <Pill label={t.onTime ? tr('performance.onTime') : tr('performance.late')} tone={t.onTime ? 'success' : 'warning'} small />
           </Row>
           <Row style={{ gap: spacing.xs, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
             {t.priority && PRIORITY_TONE[t.priority] ? <Pill label={t.priority} tone={PRIORITY_TONE[t.priority]} small /> : null}
             <Txt size={font.tiny} color={c.faint} numeric>
-              {[t.dueAt ? `Due ${fmtDay(t.dueAt)}` : null, t.completedAt ? `Done ${fmtDay(t.completedAt)}` : null].filter(Boolean).join('  ·  ')}
+              {[t.dueAt ? tr('common.dueOn', { date: fmtDay(t.dueAt) }) : null, t.completedAt ? tr('performance.doneDate', { date: fmtDay(t.completedAt) }) : null].filter(Boolean).join('  ·  ')}
             </Txt>
           </Row>
         </View>

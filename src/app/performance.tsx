@@ -111,7 +111,7 @@ export default function Performance() {
   const retry = useCallback(() => { haptics.tap(); setLoading(true); void load(); }, [load]);
 
   const report: TaskReport | null = res?.status === 'ok' ? res.report : null;
-  const title = teamView ? 'Team performance' : 'My performance';
+  const title = teamView ? t('performance.teamTitle') : t('performance.myTitle');
 
   // Gate the team roster before the skeleton, waiting for `ready` so a real master is not flashed
   // the refusal during session restore (the agent-map pattern).
@@ -121,8 +121,8 @@ export default function Performance() {
         <Header title={title} back />
         <EmptyState
           icon="lock-closed-outline"
-          title="Owner access only"
-          subtitle="The whole team's performance is visible to the owner (master admin). You can see your own from More → My performance."
+          title={t('performance.ownerOnly')}
+          subtitle={t('performance.ownerOnlyBody')}
         />
       </Screen>
     );
@@ -130,7 +130,7 @@ export default function Performance() {
 
   return (
     <Screen>
-      <Header title={title} subtitle={loading ? 'Loading' : period.label} back />
+      <Header title={title} subtitle={loading ? t('performance.loading') : period.label} back />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + 48, gap: spacing.lg }}
@@ -152,10 +152,10 @@ export default function Performance() {
         ) : res?.status !== 'ok' ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="We couldn't load performance"
+            title={t('performance.loadFailed')}
             subtitle={health.degraded
-              ? 'The report service could not be reached, so this is blank rather than empty. Pull down or retry.'
-              : 'We could not load performance for this month. Pull down or retry.'}
+              ? t('performance.unconfirmed')
+              : t('performance.monthFailed')}
             action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : teamView ? (
@@ -170,23 +170,24 @@ export default function Performance() {
 
 /* ---------------- Self view: the caller's own row (server self-scoped) ---------------- */
 function SelfReport({ member, isCurrentMonth, monthLabel }: { member: TaskReportMember | null; isCurrentMonth: boolean; monthLabel: string }) {
+  const t = useT();
   const c = useTheme();
   const counts = member?.counts;
   const noTasks = !member || member.score === null || (counts?.assigned ?? 0) === 0;
 
   const kpis = useMemo<KpiItem[]>(() => [
-    { label: 'Assigned', value: String(counts?.assigned ?? 0), icon: 'clipboard', tone: 'primary' },
-    { label: 'Completed', value: String(counts?.completed ?? 0), icon: 'checkmark-circle', tone: (counts?.completed ?? 0) > 0 ? 'success' : 'neutral' },
-    { label: 'On time', value: String(counts?.onTime ?? 0), icon: 'time', tone: (counts?.onTime ?? 0) > 0 ? 'success' : 'neutral' },
-    { label: 'Late', value: String(counts?.late ?? 0), icon: 'alert-circle', tone: (counts?.late ?? 0) > 0 ? 'warning' : 'neutral' },
-  ], [counts]);
+    { label: t('performance.assigned'), value: String(counts?.assigned ?? 0), icon: 'clipboard', tone: 'primary' },
+    { label: t('performance.completed'), value: String(counts?.completed ?? 0), icon: 'checkmark-circle', tone: (counts?.completed ?? 0) > 0 ? 'success' : 'neutral' },
+    { label: t('performance.onTime'), value: String(counts?.onTime ?? 0), icon: 'time', tone: (counts?.onTime ?? 0) > 0 ? 'success' : 'neutral' },
+    { label: t('performance.late'), value: String(counts?.late ?? 0), icon: 'alert-circle', tone: (counts?.late ?? 0) > 0 ? 'warning' : 'neutral' },
+  ], [counts, t]);
 
   if (noTasks) {
     return (
       <EmptyState
         icon="clipboard-outline"
-        title={`No assigned tasks for ${monthLabel}`}
-        subtitle="This score counts tasks a manager assigned to you and you completed. There are none for this month yet, so there is no score to show."
+        title={t('performance.noAssignedPeriod', { period: monthLabel })}
+        subtitle={t('performance.noAssignedBody')}
       />
     );
   }
@@ -196,13 +197,12 @@ function SelfReport({ member, isCurrentMonth, monthLabel }: { member: TaskReport
       <Appear index={0}>
         <Card>
           <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <Eyebrow>{`Performance · ${monthLabel}`}</Eyebrow>
-            {isCurrentMonth ? <Pill label="so far this month" tone="warning" small /> : null}
+            <Eyebrow>{t('performance.period', { period: monthLabel })}</Eyebrow>
+            {isCurrentMonth ? <Pill label={t('earnings.soFar')} tone="warning" small /> : null}
           </Row>
           <ScoreHero score={member!.score} />
           <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md }} numberOfLines={3}>
-            Scored by the server from the tasks a manager assigned you: more important tasks and finishing on time count for more. Cancelled tasks, reminders and your own to-dos do not count.
-          </Txt>
+            {t('performance.scoreNote')}</Txt>
         </Card>
       </Appear>
 
@@ -212,7 +212,7 @@ function SelfReport({ member, isCurrentMonth, monthLabel }: { member: TaskReport
 
       <Appear index={2}>
         <View>
-          <SectionHeader title="Completed this month" />
+          <SectionHeader title={t('performance.completedMonth')} />
           <CompletedList tasks={member!.completedTasks} />
         </View>
       </Appear>
@@ -222,6 +222,7 @@ function SelfReport({ member, isCurrentMonth, monthLabel }: { member: TaskReport
 
 /* ---------------- Team view: the whole roster, master-only ---------------- */
 function TeamReport({ report, isCurrentMonth }: { report: TaskReport; isCurrentMonth: boolean }) {
+  const t = useT();
   const c = useTheme();
   const { members, totals } = report;
 
@@ -229,8 +230,8 @@ function TeamReport({ report, isCurrentMonth }: { report: TaskReport; isCurrentM
     return (
       <EmptyState
         icon="people-outline"
-        title="No performance yet this month"
-        subtitle="No manager-assigned tasks have been recorded for anyone this month, so there is nothing to score."
+        title={t('performance.emptyMonth')}
+        subtitle={t('performance.emptyTeamBody')}
       />
     );
   }
@@ -240,14 +241,14 @@ function TeamReport({ report, isCurrentMonth }: { report: TaskReport; isCurrentM
       <Appear index={0}>
         <Card>
           <Row style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <Eyebrow>Team totals</Eyebrow>
-            {isCurrentMonth ? <Pill label="so far this month" tone="warning" small /> : null}
+            <Eyebrow>{t('performance.teamTotals')}</Eyebrow>
+            {isCurrentMonth ? <Pill label={t('earnings.soFar')} tone="warning" small /> : null}
           </Row>
           <Row style={{ gap: spacing.lg, marginTop: spacing.sm, flexWrap: 'wrap' }}>
-            <Stat label="Members" value={String(totals.members)} />
-            <Stat label="Completed" value={String(totals.completed)} tone="success" />
-            <Stat label="On time" value={String(totals.onTime)} tone="success" />
-            <Stat label="Late" value={String(totals.late)} tone="warning" />
+            <Stat label={t('performance.members')} value={String(totals.members)} />
+            <Stat label={t('performance.completed')} value={String(totals.completed)} tone="success" />
+            <Stat label={t('performance.onTime')} value={String(totals.onTime)} tone="success" />
+            <Stat label={t('performance.late')} value={String(totals.late)} tone="warning" />
           </Row>
         </Card>
       </Appear>
@@ -258,14 +259,14 @@ function TeamReport({ report, isCurrentMonth }: { report: TaskReport; isCurrentM
         </Appear>
       ))}
       <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.xs }} numberOfLines={2}>
-        Score counts only manager-assigned tasks that were completed — cancelled tasks, reminders and self-created tasks are excluded. Ranked highest first.
-      </Txt>
+        {t('performance.rankingNote')}</Txt>
     </>
   );
 }
 
 /** One member: score + counts, tap to expand their completed tasks. */
 function MemberCard({ member }: { member: TaskReportMember }) {
+  const t = useT();
   const c = useTheme();
   const [open, setOpen] = useState(false);
   const { counts } = member;
@@ -278,11 +279,11 @@ function MemberCard({ member }: { member: TaskReportMember }) {
         onPress={canExpand ? () => { haptics.select(); setOpen((o) => !o); } : undefined}
         accessibilityRole={canExpand ? 'button' : undefined}
         accessibilityState={canExpand ? { expanded: open } : undefined}
-        accessibilityLabel={`${member.name}, score ${member.score === null ? 'no tasks' : member.score}`}
+        accessibilityLabel={t('performance.memberScore', { name: member.name, score: member.score === null ? t('performance.noTasksLower') : member.score })}
         style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}
       >
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Txt size={font.body} weight="700" numberOfLines={1}>{member.name || 'Unnamed'}</Txt>
+          <Txt size={font.body} weight="700" numberOfLines={1}>{member.name || t('performance.unnamed')}</Txt>
           {sub ? <Txt size={font.cap} color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>{sub}</Txt> : null}
         </View>
         <ScoreBadge score={member.score} />
@@ -290,10 +291,10 @@ function MemberCard({ member }: { member: TaskReportMember }) {
       </Pressable>
 
       <Row style={{ gap: spacing.xs, flexWrap: 'wrap' }}>
-        <Pill label={`${counts.completed}/${counts.assigned} done`} tone="primary" small />
-        {counts.onTime > 0 ? <Pill label={`${counts.onTime} on time`} tone="success" small /> : null}
-        {counts.late > 0 ? <Pill label={`${counts.late} late`} tone="warning" small /> : null}
-        {counts.notCompleted > 0 ? <Pill label={`${counts.notCompleted} open`} tone="neutral" small /> : null}
+        <Pill label={t('performance.doneFraction', { completed: counts.completed, assigned: counts.assigned })} tone="primary" small />
+        {counts.onTime > 0 ? <Pill label={t('performance.onTimeCount', { count: counts.onTime })} tone="success" small /> : null}
+        {counts.late > 0 ? <Pill label={t('performance.lateCount', { count: counts.late })} tone="warning" small /> : null}
+        {counts.notCompleted > 0 ? <Pill label={t('more.openCount', { count: counts.notCompleted })} tone="neutral" small /> : null}
       </Row>
 
       {open ? (
@@ -309,6 +310,7 @@ function MemberCard({ member }: { member: TaskReportMember }) {
 
 /** The big 0–100 score + a proportional meter. `null` (no tasks) → an em dash, never a 0%. */
 function ScoreHero({ score }: { score: number | null }) {
+  const t = useT();
   const c = useTheme();
   if (score === null) {
     return <Metric value="—" size={font.display} style={{ marginTop: 4 }} />;
@@ -319,16 +321,17 @@ function ScoreHero({ score }: { score: number | null }) {
         <Metric value={String(score)} size={font.display} />
         <Txt size={font.h3} color={c.muted} numeric>/ 100</Txt>
       </Row>
-      <Meter value={score / 100} label="Score" valueLabel={`${score} / 100`} />
+      <Meter value={score / 100} label={t('performance.score')} valueLabel={`${score} / 100`} />
     </View>
   );
 }
 
 /** Compact score for a roster row. `null` → "No tasks". */
 function ScoreBadge({ score }: { score: number | null }) {
+  const t = useT();
   const c = useTheme();
   if (score === null) {
-    return <Txt size={font.cap} color={c.faint} numeric>No tasks</Txt>;
+    return <Txt size={font.cap} color={c.faint} numeric>{t('performance.noTasks')}</Txt>;
   }
   return (
     <Row style={{ alignItems: 'baseline', gap: 2 }}>
@@ -352,9 +355,10 @@ function Stat({ label, value, tone }: { label: string; value: string; tone?: 'su
 
 /** The completed-tasks list (shared by self + expanded member). Server order = newest first. */
 function CompletedList({ tasks }: { tasks: TaskReportMember['completedTasks'] }) {
+  const t = useT();
   const c = useTheme();
   if (tasks.length === 0) {
-    return <Txt size={font.sub} color={c.muted}>No completed tasks recorded.</Txt>;
+    return <Txt size={font.sub} color={c.muted}>{t('performance.noCompleted')}</Txt>;
   }
   return (
     <Card style={{ gap: spacing.md }}>
@@ -365,12 +369,12 @@ function CompletedList({ tasks }: { tasks: TaskReportMember['completedTasks'] })
         <View key={task.id || String(i)} style={i > 0 ? { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border, paddingTop: spacing.md } : undefined}>
           <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm }}>
             <Txt size={font.sub} weight="600" numberOfLines={2} style={{ flex: 1 }}>{task.title}</Txt>
-            <Pill label={task.onTime ? 'On time' : 'Late'} tone={task.onTime ? 'success' : 'warning'} small />
+            <Pill label={task.onTime ? t('performance.onTime') : t('performance.late')} tone={task.onTime ? 'success' : 'warning'} small />
           </Row>
           <Row style={{ gap: spacing.xs, marginTop: 4, alignItems: 'center', flexWrap: 'wrap' }}>
             {task.priority && PRIORITY_TONE[task.priority] ? <Pill label={task.priority} tone={PRIORITY_TONE[task.priority]} small /> : null}
             <Txt size={font.tiny} color={c.faint} numeric>
-              {[task.dueAt ? `Due ${fmtDay(task.dueAt)}` : null, task.completedAt ? `Done ${fmtDay(task.completedAt)}` : null].filter(Boolean).join('  ·  ')}
+              {[task.dueAt ? t('common.dueOn', { date: fmtDay(task.dueAt) }) : null, task.completedAt ? t('performance.doneDate', { date: fmtDay(task.completedAt) }) : null].filter(Boolean).join('  ·  ')}
             </Txt>
           </Row>
         </View>

@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -52,7 +53,7 @@ import { useT } from '@/i18n';
  * ------------------------------------------------------------------ */
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const SEGMENT_LABEL: Record<string, string> = { day_wise: 'Day-wise', hourly: 'Hourly', base: 'Base' };
+const SEGMENT_LABEL: Record<string, string> = { day_wise: 'pay.dayWise', hourly: 'pay.hourly', base: 'pay.base' };
 
 /** The empty/failed roster carries no guarantees, so nothing is trusted to be a number. */
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -152,12 +153,12 @@ export default function Payroll() {
   if (ready && !isAdmin) {
     return (
       <Screen>
-        <Header title="Payroll" back />
+        <Header title={t('payroll.title')} back />
         <View style={{ padding: spacing.lg }}>
           <EmptyState
             icon="lock-closed-outline"
-            title="Payroll is admin-only"
-            subtitle="Salary figures are visible to administrators and the master account. Ask an administrator if you need access."
+            title={t('payroll.restricted')}
+            subtitle={t('payroll.restrictedBody')}
           />
         </View>
       </Screen>
@@ -166,7 +167,7 @@ export default function Payroll() {
 
   return (
     <Screen>
-      <Header title="Payroll" subtitle={loading ? 'Loading the salary roster' : period.label} back />
+      <Header title={t('payroll.title')} subtitle={loading ? t('payroll.loadingRoster') : period.label} back />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + 48, gap: spacing.lg }}
@@ -188,20 +189,20 @@ export default function Payroll() {
         ) : roster === null ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="The payroll roster did not load"
+            title={t('payroll.rosterFailed')}
             subtitle={health.degraded
-              ? 'The salary service could not be reached, so this is blank rather than empty. Pull down to try again.'
-              : 'We could not load the payroll roster for this month. Pull down or retry.'}
+              ? t('payroll.rosterUnconfirmed')
+              : t('payroll.rosterMonthFailed')}
             action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : merged.length === 0 ? (
           <EmptyState
             icon={health.degraded ? 'cloud-offline-outline' : 'people-outline'}
-            title={health.degraded ? 'The staff directory did not load' : 'No team members to show'}
+            title={health.degraded ? t('payroll.staffFailed') : t('payroll.noMembers')}
             subtitle={health.degraded
               // The roster computed but the staff directory read failed — this is blank, not empty.
-              ? 'The salary figures came through, but the staff directory could not be reached, so this is blank rather than genuinely empty. Pull down to try again.'
-              : 'No staff are set up on the payroll roster for this month yet.'}
+              ? t('payroll.staffUnconfirmed')
+              : t('payroll.emptyMonth')}
             action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : (
@@ -209,17 +210,17 @@ export default function Payroll() {
             {/* ---------------- Total for the month ---------------- */}
             <Appear index={0}>
               <Card>
-                <Eyebrow>{`Total payable · ${period.label}`}</Eyebrow>
+                <Eyebrow>{t('payroll.totalPayable', { period: period.label })}</Eyebrow>
                 <Metric value={inr(shownTotal)} size={font.display} style={{ marginTop: 4 }} />
                 <Row style={{ marginTop: spacing.md, gap: spacing.sm, flexWrap: 'wrap' }}>
-                  <Pill label={`${stats.members} ${stats.members === 1 ? 'member' : 'members'}`} tone="neutral" small numeric />
-                  {stats.withPay > 0 ? <Pill label={`${stats.withPay} with pay`} tone="success" small numeric /> : null}
-                  {stats.pending > 0 ? <Pill label={`${stats.pending} data pending`} tone="warning" small numeric /> : null}
+                  <Pill label={t(stats.members === 1 ? 'payroll.memberCountOne' : 'payroll.memberCount', { count: stats.members })} tone="neutral" small numeric />
+                  {stats.withPay > 0 ? <Pill label={t('payroll.withPay', { count: stats.withPay })} tone="success" small numeric /> : null}
+                  {stats.pending > 0 ? <Pill label={t('payroll.dataPendingCount', { count: stats.pending })} tone="warning" small numeric /> : null}
                 </Row>
                 <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md }} numberOfLines={3}>
                   {stats.pending > 0
-                    ? 'Computed by the server from each member’s attendance (gross, before deductions). Members marked “data pending” have no salary profile yet — an admin sets one up in the panel before their pay can be computed.'
-                    : 'Computed by the server from each member’s attendance. Figures are gross, before deductions.'}
+                    ? t('payroll.grossWithPending')
+                    : t('payroll.grossNote')}
                 </Txt>
               </Card>
             </Appear>
@@ -227,7 +228,7 @@ export default function Payroll() {
             {/* ---------------- By member ---------------- */}
             <Appear index={1}>
               <View>
-                <SectionHeader title="By member" />
+                <SectionHeader title={t('payroll.byMember')} />
                 <ListSection>
                   {merged.map((e, i) => <MemberRow key={`${e.user_id}-${i}`} entry={e} year={period.year} month={period.month} />)}
                 </ListSection>
@@ -285,13 +286,14 @@ function MonthStrip({ months, sel, onPick }: { months: MonthOpt[]; sel: number; 
  * Tapping opens the per-member breakdown for THIS month (Phase 67); the detail screen itself renders
  * an honest "no payroll profile" state for a pending member, so the tap is always safe. */
 function MemberRow({ entry, year, month }: { entry: PayrollRosterEntry; year: number; month: number }) {
+  const t = useT();
   const router = useRouter();
   const row = entry.row;
   const m = row?.months?.[0];
   const parts: string[] = [];
   if (row) {
-    parts.push(SEGMENT_LABEL[row.segment] ?? row.segment);
-    if (m) parts.push(`${num(m.present_days)}/${num(m.working_days)} days`);
+    parts.push(SEGMENT_LABEL[row.segment] ? t(SEGMENT_LABEL[row.segment]) : row.segment);
+    if (m) parts.push(t('payroll.daysFraction', { present: num(m.present_days), working: num(m.working_days) }));
   } else if (entry.branch) {
     parts.push(entry.branch);                              // pending: show what we DO know
   } else if (entry.role) {
@@ -302,12 +304,12 @@ function MemberRow({ entry, year, month }: { entry: PayrollRosterEntry; year: nu
     haptics.select();
     router.push({
       pathname: '/payroll-detail',
-      params: { user_id: entry.user_id, name: entry.name ?? '', year: String(year), month: String(month) },
+      params: { user_id: entry.user_id, name: entry.name ?? '', nameCopy: entry.nameCopy ? JSON.stringify(entry.nameCopy) : undefined, year: String(year), month: String(month) },
     });
   };
   return (
     <PersonRow
-      name={entry.name || entry.user_id || 'Member'}
+      name={resolveCopy(t, entry.name, entry.nameCopy) || entry.user_id || t('pay.member')}
       subtitle={parts.length ? parts.join(' · ') : undefined}
       subtitleNumeric={!!row}
       size={40}
@@ -315,12 +317,12 @@ function MemberRow({ entry, year, month }: { entry: PayrollRosterEntry; year: nu
       style={{ marginHorizontal: 0, paddingHorizontal: spacing.lg, borderRadius: 0 }}
       right={
         entry.pending
-          ? <Pill label="Data pending" tone="warning" small />
+          ? <Pill label={t('payroll.dataPending')} tone="warning" small />
           : !row?.staff_found
-            ? <Pill label="No staff match" tone="warning" small />
+            ? <Pill label={t('payroll.noStaffMatch')} tone="warning" small />
             : payable > 0
               ? <Metric value={inr(payable)} size={font.body} />
-              : <Pill label="No pay" tone="neutral" small />
+              : <Pill label={t('payroll.noPay')} tone="neutral" small />
       }
     />
   );

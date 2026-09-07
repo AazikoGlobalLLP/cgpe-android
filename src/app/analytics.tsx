@@ -272,9 +272,9 @@ export default function Analytics() {
   if (ready && !capabilitiesOf(user, viewAs).orgAnalytics) {
     return (
       <RestrictedNotice
-        title="Portfolio analytics"
-        heading="Analytics is for managers"
-        subtitle="Organisation-wide figures are visible to team leads and admins."
+        title={t('home.portfolioAnalytics')}
+        heading={t('analytics.restricted')}
+        subtitle={t('analytics.restrictedBody')}
       />
     );
   }
@@ -282,13 +282,13 @@ export default function Analytics() {
   return (
     <Screen>
       <Header
-        title="Portfolio analytics"
-        subtitle="Organisation wide, live figures"
+        title={t('home.portfolioAnalytics')}
+        subtitle={t('analytics.subtitle')}
         back
         right={
           <IconBtn
             icon="refresh"
-            accessibilityLabel="Reload portfolio figures"
+            accessibilityLabel={t('analytics.reload')}
             onPress={reload}
             // Also inert during the first read: tapping it there queues a second identical
             // pair of aggregate requests behind the one already in flight.
@@ -310,15 +310,15 @@ export default function Analytics() {
             {health.degraded ? (
               <EmptyState
                 icon="cloud-offline"
-                title="Portfolio figures did not load"
-                subtitle="The server could not be reached, so nothing here is confirmed. Pull down to try the request again."
+                title={t('analytics.loadFailed')}
+                subtitle={t('analytics.unconfirmed')}
                 action={{ label: t('common.tryAgain'), onPress: reload }}
               />
             ) : (
               <EmptyState
                 icon="stats-chart"
-                title="No live portfolio yet"
-                subtitle="These figures are read from your CGPE account. Sign in and the whole book is measured here."
+                title={t('analytics.emptyTitle')}
+                subtitle={t('analytics.emptyBody')}
                 action={{ label: t('common.tryAgain'), onPress: reload }}
               />
             )}
@@ -328,15 +328,15 @@ export default function Analytics() {
             {/* HEADLINE — the one figure the whole book rolls up to. */}
             <Appear>
               <Card>
-                <Eyebrow>Total annual premium</Eyebrow>
+                <Eyebrow>{t('analytics.totalAnnualPremium')}</Eyebrow>
                 <Metric value={inr(shownPremium)} size={font.display} style={{ marginTop: 4 }} />
                 <Row style={{ gap: spacing.sm, marginTop: 6 }}>
                   <Txt size={font.sub} color={c.muted} numeric numberOfLines={1}>
-                    {num(stats.total_clients)} clients
+                    {t('analytics.clientsCount', { count: num(stats.total_clients) })}
                   </Txt>
                   <View style={{ width: 3, height: 3, borderRadius: 2, backgroundColor: c.faint }} />
                   <Txt size={font.sub} color={c.muted} numeric numberOfLines={1} style={{ flexShrink: 1 }}>
-                    {inrShort(stats.total_sum_assured)} sum assured
+                    {t('analytics.coverAmount', { amount: inrShort(stats.total_sum_assured) })}
                   </Txt>
                 </Row>
 
@@ -344,7 +344,7 @@ export default function Analytics() {
                   <>
                     <Sparkline data={premiumSeries} tone={c.primary} height={30} style={{ marginTop: spacing.lg }} />
                     <Txt size={font.tiny} color={c.faint} style={{ marginTop: 7 }} numberOfLines={1}>
-                      {premiumSeries.length} readings taken in this session
+                      {t('analytics.sessionReadings', { count: premiumSeries.length })}
                     </Txt>
                   </>
                 ) : null}
@@ -366,7 +366,7 @@ export default function Analytics() {
                   sparkline={seriesFor('clients')}
                 />
                 <MetricTile
-                  label="Sum assured"
+                  label={t('analytics.sumAssured')}
                   value={inrShort(stats.total_sum_assured)}
                   icon="shield-checkmark"
                   tone="info"
@@ -404,41 +404,40 @@ export default function Analytics() {
 
             {history.length > 1 ? (
               <Txt size={font.tiny} color={c.faint} style={{ marginTop: -6, marginHorizontal: spacing.xs }}>
-                Badges and strips compare readings taken in this session, not against yesterday. A tile with no strip has not been read twice with a complete answer.
-              </Txt>
+                {t('analytics.sessionComparison')}</Txt>
             ) : null}
 
             {/* REACH — the share of the book the campaigns can actually touch. */}
             <Appear index={3}>
-              <SectionHeader title="Reach" />
+              <SectionHeader title={t('analytics.reach')} />
               {!camp ? (
                 <Banner
                   tone="warning"
-                  title="Campaign counters did not load"
-                  message="The campaign aggregate did not answer, so reach and this month's counts are not shown. The portfolio totals above are unaffected."
+                  title={t('analytics.campaignFailed')}
+                  message={t('analytics.campaignUnconfirmed')}
                   action={{ label: t('common.tryAgain'), onPress: reload }}
                 />
               ) : totalClients === 0 ? (
                 <Card>
                   <EmptyState
                     icon="people-outline"
-                    title="No clients counted yet"
-                    subtitle="Reach is measured against the size of your book, and the book currently reads zero."
+                    title={t('analytics.noClients')}
+                    subtitle={t('analytics.noClientsBody')}
                   />
                 </Card>
               ) : (
                 <Card>
                   <Meter
-                    label="Reachable on WhatsApp"
+                    label={t('analytics.whatsappReach')}
                     value={reachShare}
-                    valueLabel={`${num(camp.opted_in)} of ${num(totalClients)}`}
+                    valueLabel={t('pay.amountOfTotal', { amount: num(camp.opted_in), total: num(totalClients) })}
                     color={c.whatsapp}
                   />
                   <View style={{ height: spacing.xl }} />
                   <Meter
                     label={t('premium.dueThisMonth')}
                     value={renewalShare}
-                    valueLabel={`${num(camp.renewal_due)} of ${num(totalClients)}`}
+                    valueLabel={t('pay.amountOfTotal', { amount: num(camp.renewal_due), total: num(totalClients) })}
                     tone="warning"
                   />
                 </Card>
@@ -460,8 +459,7 @@ export default function Analytics() {
                 />
                 {campAllZero ? (
                   <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md, marginHorizontal: spacing.xs }}>
-                    Every counter here was answered as zero by the campaign engine. Nothing falls due this month, and nothing is missing.
-                  </Txt>
+                    {t('analytics.confirmedZeros')}</Txt>
                 ) : null}
               </Appear>
             ) : null}
@@ -469,29 +467,29 @@ export default function Analytics() {
             {/* THE EXACT FIGURES, for anyone who came here to quote one. */}
             <Appear index={5}>
               <ListSection
-                title="Book detail"
-                footer="Averages are derived from the totals above. A counter that reads zero was answered as zero by the server."
+                title={t('analytics.bookDetail')}
+                footer={t('analytics.averagesNote')}
               >
-                <DataRow label="Total annual premium" icon="cash-outline" value={inr(stats.total_premium)} copyable />
-                <DataRow label="Total sum assured" icon="shield-outline" value={inr(stats.total_sum_assured)} copyable />
+                <DataRow label={t('analytics.totalAnnualPremium')} icon="cash-outline" value={inr(stats.total_premium)} copyable />
+                <DataRow label={t('analytics.totalCover')} icon="shield-outline" value={inr(stats.total_sum_assured)} copyable />
                 {stats.total_clients > 0 ? (
                   <DataRow
-                    label="Average annual premium"
+                    label={t('analytics.averagePremium')}
                     icon="calculator-outline"
                     value={inr(stats.total_premium / stats.total_clients)}
                   />
                 ) : null}
                 {stats.total_clients > 0 ? (
                   <DataRow
-                    label="Average cover per client"
+                    label={t('analytics.averageCover')}
                     icon="albums-outline"
                     value={inr(stats.total_sum_assured / stats.total_clients)}
                   />
                 ) : null}
-                <DataRow label="Clients on the book" icon="people-outline" value={num(stats.total_clients)} />
+                <DataRow label={t('analytics.bookClients')} icon="people-outline" value={num(stats.total_clients)} />
                 {camp ? (
                   <DataRow
-                    label="Reachable on WhatsApp"
+                    label={t('analytics.whatsappReach')}
                     icon="logo-whatsapp"
                     tone={camp.opted_in > 0 ? 'success' : 'neutral'}
                     value={num(camp.opted_in)}
