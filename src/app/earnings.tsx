@@ -39,7 +39,7 @@ import { useT } from '@/i18n';
  * ------------------------------------------------------------------ */
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const SEGMENT_LABEL: Record<string, string> = { day_wise: 'Day-wise', hourly: 'Hourly', base: 'Base' };
+const SEGMENT_LABEL: Record<string, string> = { day_wise: 'pay.dayWise', hourly: 'pay.hourly', base: 'pay.base' };
 
 /** Nothing from a wire body is trusted to be a finite number. */
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
@@ -131,24 +131,24 @@ export default function Earnings() {
   const workedHours = num(m?.worked_hours);
   const perDayRate = m && typeof m.per_day_rate === 'number' ? m.per_day_rate : null;
   const salary = num(row?.salary_amount);
-  const segLabel = row ? (SEGMENT_LABEL[row.segment] ?? row.segment) : '';
+  const segLabel = row ? (SEGMENT_LABEL[row.segment] ? t(SEGMENT_LABEL[row.segment]) : row.segment) : '';
   // A profile can exist for a month with nothing in it; per the spec that is the empty state, not a
   // fabricated ₹0. Gated on EVERYTHING being zero, not just attendance — a `base`-segment member can
   // have a non-zero payable with no present days (a flat salary), and that real figure must show.
   const nothingToShow = payable === 0 && present === 0 && workedHours === 0;
 
   const kpis = useMemo<KpiItem[]>(() => [
-    { label: 'Present', value: String(present), icon: 'checkmark-circle', tone: present > 0 ? 'success' : 'neutral' },
-    { label: 'Payable days', value: `${present}/${workingDays}`, icon: 'calendar', tone: 'primary' },
-    { label: 'Absent', value: String(absent), icon: 'close-circle', tone: absent > 0 ? 'danger' : 'neutral' },
-    { label: 'Worked hours', value: hrs(workedHours), icon: 'time', tone: 'neutral' },
-  ], [present, workingDays, absent, workedHours]);
+    { label: t('pay.present'), value: String(present), icon: 'checkmark-circle', tone: present > 0 ? 'success' : 'neutral' },
+    { label: t('pay.payableDays'), value: `${present}/${workingDays}`, icon: 'calendar', tone: 'primary' },
+    { label: t('pay.absent'), value: String(absent), icon: 'close-circle', tone: absent > 0 ? 'danger' : 'neutral' },
+    { label: t('pay.workedHours'), value: hrs(workedHours), icon: 'time', tone: 'neutral' },
+  ], [present, workingDays, absent, workedHours, t]);
 
-  const heroA11y = `Earned ${inr(payable)}${isCurrentMonth ? ' so far this month' : ''}, for ${period.label}`;
+  const heroA11y = t(isCurrentMonth ? 'earnings.earnedCurrentA11y' : 'earnings.earnedPeriodA11y', { amount: inr(payable), period: period.label });
 
   return (
     <Screen>
-      <Header title="My earnings" subtitle={loading ? 'Loading your pay' : period.label} back />
+      <Header title={t('earnings.title')} subtitle={loading ? t('earnings.loading') : period.label} back />
 
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: spacing.lg, paddingBottom: insets.bottom + 48, gap: spacing.lg }}
@@ -170,25 +170,25 @@ export default function Earnings() {
         ) : res?.status === 'empty' ? (
           <EmptyState
             icon="briefcase-outline"
-            title="No pay profile yet"
-            subtitle="You don't have a payroll profile set up yet. Once an administrator configures your salary, your monthly pay and attendance-based days appear here."
-            action={{ label: 'Open attendance', onPress: () => router.push('/attendance' as Href) }}
+            title={t('earnings.noProfile')}
+            subtitle={t('earnings.noProfileBody')}
+            action={{ label: t('earnings.openAttendance'), onPress: () => router.push('/attendance' as Href) }}
           />
         ) : res?.status !== 'ok' ? (
           <EmptyState
             icon="cloud-offline-outline"
-            title="We couldn't load your earnings"
+            title={t('earnings.loadFailed')}
             subtitle={health.degraded
-              ? 'The salary service could not be reached, so this is blank rather than empty. Pull down or retry.'
-              : 'We could not load your pay for this month. Pull down or retry.'}
+              ? t('earnings.unconfirmed')
+              : t('earnings.monthFailed')}
             action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : nothingToShow ? (
           <EmptyState
             icon="calendar-outline"
-            title={`No attendance recorded for ${period.label}`}
-            subtitle="There are no clock-ins for this month, so there is nothing to pay yet. Clock in from the Today tab, and this fills in as the month goes on."
-            action={{ label: 'Open attendance', onPress: () => router.push('/attendance' as Href) }}
+            title={t('earnings.noAttendance', { period: period.label })}
+            subtitle={t('earnings.noAttendanceBody')}
+            action={{ label: t('earnings.openAttendance'), onPress: () => router.push('/attendance' as Href) }}
           />
         ) : (
           <>
@@ -196,18 +196,17 @@ export default function Earnings() {
             <Appear index={0}>
               <Card>
                 <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Eyebrow>{`Earned · ${period.label}`}</Eyebrow>
-                  {isCurrentMonth ? <Pill label="so far this month" tone="warning" small /> : null}
+                  <Eyebrow>{t('earnings.earnedPeriod', { period: period.label })}</Eyebrow>
+                  {isCurrentMonth ? <Pill label={t('earnings.soFar')} tone="warning" small /> : null}
                 </Row>
                 <View accessible accessibilityLabel={heroA11y}>
                   <Metric value={inr(shownPayable)} size={font.display} style={{ marginTop: 4 }} />
                 </View>
                 <Txt size={font.sub} color={c.muted} numeric style={{ marginTop: 6 }} numberOfLines={1}>
-                  {[segLabel, perDayRate != null ? `${inr(perDayRate)}/day` : null].filter(Boolean).join('  ·  ')}
+                  {[segLabel, perDayRate != null ? t('pay.ratePerDay', { amount: inr(perDayRate) }) : null].filter(Boolean).join('  ·  ')}
                 </Txt>
                 <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.md }} numberOfLines={2}>
-                  Computed by the server from your own attendance. This figure is gross, before any deductions.
-                </Txt>
+                  {t('earnings.grossNote')}</Txt>
               </Card>
             </Appear>
 
@@ -222,8 +221,8 @@ export default function Earnings() {
                 <Card>
                   <Meter
                     value={present / workingDays}
-                    label="Payable days"
-                    valueLabel={`${present} of ${workingDays}`}
+                    label={t('pay.payableDays')}
+                    valueLabel={t('pay.amountOfTotal', { amount: present, total: workingDays })}
                   />
                 </Card>
               </Appear>
@@ -232,14 +231,14 @@ export default function Earnings() {
             {/* ---------------- Pay basis ---------------- */}
             <Appear index={3}>
               <View>
-                <SectionHeader title="Pay basis" />
+                <SectionHeader title={t('pay.basis')} />
                 <Card style={{ gap: spacing.md }}>
-                  <Fact label="Segment" value={segLabel} />
-                  {salary > 0 ? <Fact label="Monthly salary" value={inr(salary)} /> : null}
-                  {perDayRate != null ? <Fact label="Per-day rate" value={inr(perDayRate)} /> : null}
+                  <Fact label={t('filter.segment')} value={segLabel} />
+                  {salary > 0 ? <Fact label={t('pay.monthlySalary')} value={inr(salary)} /> : null}
+                  {perDayRate != null ? <Fact label={t('pay.perDayRate')} value={inr(perDayRate)} /> : null}
                   {row && typeof row.office_hours === 'number'
-                    ? <Fact label="Office hours" value={`${hrs(row.office_hours)} h`} /> : null}
-                  <Fact label="Worked hours" value={`${hrs(workedHours)} h`} />
+                    ? <Fact label={t('pay.officeHours')} value={t('pay.hoursValue', { hours: hrs(row.office_hours) })} /> : null}
+                  <Fact label={t('pay.workedHours')} value={t('pay.hoursValue', { hours: hrs(workedHours) })} />
                 </Card>
               </View>
             </Appear>

@@ -22,6 +22,7 @@ import * as api from '@/data/api';
 import { fmtDay, fmtTime } from '@/lib/format';
 import { useAuth } from '@/store/auth';
 import { useT } from '@/i18n';
+import type { TFn } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * My attendance — the clock-in history.
@@ -81,19 +82,19 @@ function dayLabel(v?: string): string {
 }
 
 /** Hours worked, only when both ends are real timestamps. Never estimated. */
-function workedLabel(a?: string, b?: string): string {
+function workedLabel(tr: TFn, a?: string, b?: string): string {
   const t1 = stamp(a);
   const t2 = stamp(b);
   if (Number.isNaN(t1) || Number.isNaN(t2) || t2 <= t1) return '';
   const mins = Math.round((t2 - t1) / 60000);
   const h = Math.floor(mins / 60);
   const m = mins % 60;
-  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return h > 0 ? tr('duration.hoursMinutesCompact', { hours: h, minutes: m }) : tr('duration.minutesCompact', { minutes: m });
 }
 
-function monthOf(v?: string): { key: string; label: string } {
+function monthOf(tr: TFn, v?: string): { key: string; label: string } {
   const t = stamp(v);
-  if (Number.isNaN(t)) return { key: 'undated', label: 'Undated entries' };
+  if (Number.isNaN(t)) return { key: 'undated', label: tr('attendance.undated') };
   const d = new Date(t);
   return { key: `${d.getFullYear()}-${d.getMonth()}`, label: `${MONTH_LONG[d.getMonth()]} ${d.getFullYear()}` };
 }
@@ -198,14 +199,14 @@ export default function Attendance() {
     const out: Group[] = [];
     let seen = 0;
     for (const r of sorted) {
-      const m = monthOf(r.date);
+      const m = monthOf(t, r.date);
       const tail = out[out.length - 1];
       if (tail && tail.key === m.key) tail.rows.push(r);
       else { out.push({ key: m.key, label: m.label, rows: [r], offset: seen }); }
       seen += 1;
     }
     return out;
-  }, [rows]);
+  }, [rows, t]);
 
   const { logged, closed } = useMemo(() => ({
     logged: rows.reduce((n, r) => (r.inTime ? n + 1 : n), 0),
@@ -213,9 +214,9 @@ export default function Attendance() {
   }), [rows]);
 
   const kpis = useMemo<KpiItem[]>(() => [
-    { label: 'Days logged', value: String(logged), icon: 'calendar', tone: 'primary' },
-    { label: 'Closed days', value: String(closed), icon: 'checkmark-done', tone: closed > 0 ? 'success' : 'neutral' },
-  ], [logged, closed]);
+    { label: t('attendance.daysLogged'), value: String(logged), icon: 'calendar', tone: 'primary' },
+    { label: t('attendance.closedDays'), value: String(closed), icon: 'checkmark-done', tone: closed > 0 ? 'success' : 'neutral' },
+  ], [logged, closed, t]);
 
   const clockedAt = today?.in ? timeLabel(today.time) : '';
 
@@ -223,7 +224,7 @@ export default function Attendance() {
 
   return (
     <Screen>
-      <Header title="My attendance" subtitle="Your GPS clock-in history" back />
+      <Header title={t('more.attendanceTitle')} subtitle={t('attendance.subtitle')} back />
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.lg }}
@@ -247,8 +248,8 @@ export default function Attendance() {
               <Ionicons name="wallet-outline" size={20} color={c.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Txt size={font.body} weight="700" numberOfLines={1}>My earnings</Txt>
-              <Txt size={font.sub} color={c.muted} numberOfLines={1}>Your pay for the month, from these days</Txt>
+              <Txt size={font.body} weight="700" numberOfLines={1}>{t('earnings.title')}</Txt>
+              <Txt size={font.sub} color={c.muted} numberOfLines={1}>{t('attendance.payLink')}</Txt>
             </View>
             <Ionicons name="chevron-forward" size={18} color={c.faint} />
           </Row>
@@ -297,12 +298,12 @@ export default function Attendance() {
                     )}
                     <Txt size={font.sub} color={c.muted} numberOfLines={1} style={{ marginTop: 2 }}>
                       {today?.in
-                        ? (today.place || 'Location not recorded')
-                        : 'Clock in from the Today tab to start the day.'}
+                        ? (today.place || t('attendance.locationMissing'))
+                        : t('attendance.startToday')}
                     </Txt>
                   </View>
 
-                  {today?.in ? <Pill label="Present" tone="success" small /> : null}
+                  {today?.in ? <Pill label={t('pay.present')} tone="success" small /> : null}
                 </Row>
               </Card>
             </Appear>
@@ -319,16 +320,16 @@ export default function Attendance() {
                   {health.degraded ? (
                     <EmptyState
                       icon="cloud-offline-outline"
-                      title="Attendance could not load"
-                      subtitle="The server did not answer, so this history is unconfirmed rather than empty."
+                      title={t('attendance.loadFailed')}
+                      subtitle={t('attendance.unconfirmed')}
                       action={{ label: t('common.tryAgain'), onPress: retry }}
                     />
                   ) : (
                     <EmptyState
                       icon="calendar-outline"
-                      title="No clock-in history yet"
-                      subtitle="Every day you clock in appears here with its times and the location it was marked from."
-                      action={{ label: 'Go to Today', onPress: () => router.push('/(tabs)/home') }}
+                      title={t('attendance.emptyTitle')}
+                      subtitle={t('attendance.emptyBody')}
+                      action={{ label: t('attendance.goToday'), onPress: () => router.push('/(tabs)/home') }}
                     />
                   )}
                 </Card>
@@ -344,7 +345,7 @@ export default function Attendance() {
                     {g.rows.map((r, i) => {
                       const inAt = timeLabel(r.inTime);
                       const outAt = timeLabel(r.outTime);
-                      const worked = workedLabel(r.inTime, r.outTime);
+                      const worked = workedLabel(t, r.inTime, r.outTime);
 
                       const state: 'closed' | 'open' | 'none' =
                         inAt && outAt ? 'closed' : inAt ? 'open' : 'none';
@@ -364,12 +365,12 @@ export default function Attendance() {
                               : 'ellipse-outline';
 
                       const title =
-                        autoClosed ? `In at ${inAt} · auto-closed`
-                          : state === 'closed' ? `${inAt} to ${outAt}`
-                            : state === 'open' ? `In at ${inAt}`
-                              : 'No clock-in recorded';
+                        autoClosed ? t('attendance.inAutoClosed', { time: inAt })
+                          : state === 'closed' ? t('map.timeRange', { from: inAt, to: outAt })
+                            : state === 'open' ? t('attendance.inAt', { time: inAt })
+                              : t('attendance.noClockIn');
 
-                      const subtitle = [autoClosed ? 'Auto-closed at the shift cap — clock-out not recorded' : worked, r.location].filter(Boolean).join(' · ');
+                      const subtitle = [autoClosed ? t('attendance.autoClosedBody') : worked, r.location].filter(Boolean).join(' · ');
 
                       return (
                         <SpineRow
@@ -383,7 +384,7 @@ export default function Attendance() {
                           icon={icon}
                           right={
                             <Pill
-                              label={autoClosed ? 'Auto' : state === 'closed' ? 'Full day' : state === 'open' ? 'Open' : 'No entry'}
+                              label={autoClosed ? t('attendance.auto') : state === 'closed' ? t('attendance.fullDay') : state === 'open' ? t('attendance.open') : t('attendance.noEntry')}
                               tone={pillTone}
                               small
                             />

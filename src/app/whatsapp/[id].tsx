@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Platform, StyleSheet, TextInput, View } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
@@ -17,6 +18,8 @@ import type { WaMessage, WaThread } from '@/data/types';
 import { daysUntil, fmtDate, fmtTime } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
 import { useT } from '@/i18n';
+import { whatsappTagLabel } from '@/i18n/display';
+import type { TFn } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
  * One WhatsApp conversation.
@@ -69,7 +72,7 @@ type Outgoing = { msg: WaMessage; state: 'sending' | 'sent' };
 type Notice = { tone: 'danger' | 'warning'; title: string; message: string };
 
 /** The banner for a send that did not go out. Every branch also returns the text to the box. */
-function failureNotice(r: Extract<api.SendWaResult, { ok: false }>): Notice {
+function failureNotice(tr: TFn, r: Extract<api.SendWaResult, { ok: false }>): Notice {
   switch (r.reason) {
     case 'undelivered':
       // WHY ONE BRANCH QUOTES THE SERVER AND THE OTHER DOES NOT. When the gateway is not
@@ -79,21 +82,21 @@ function failureNotice(r: Extract<api.SendWaResult, { ok: false }>): Notice {
       // When the gateway REFUSED the message we do not know why, and the server's note is the
       // only place the reason (its status code) exists — so there it is rendered, not invented.
       return r.configured
-        ? { tone: 'danger', title: 'Message not sent',
-            message: `The WhatsApp gateway did not accept it. Your text is back in the box, so you can try again.${r.note ? `\n\n${r.note}` : ''}` }
-        : { tone: 'warning', title: 'WhatsApp sending is switched off on this server',
-            message: 'Your message was saved but nothing was sent, and trying again will not change that until someone switches sending on. Use "Open in WhatsApp" to send it yourself.' };
+        ? { tone: 'danger', title: tr('waThread.notSent'),
+            message: tr('waThread.gatewayRejected', { note: r.note ? `\n\n${r.note}` : '' }) }
+        : { tone: 'warning', title: tr('waThread.sendingDisabled'),
+            message: tr('waThread.sendingDisabledBody') };
     case 'invalid':
-      return { tone: 'danger', title: 'Message not sent', message: r.message };
+      return { tone: 'danger', title: tr('waThread.notSent'), message: resolveCopy(tr, r.message, r.messageCopy) };
     case 'forbidden':
-      return { tone: 'danger', title: 'Message not sent',
-        message: 'This account is not allowed to send WhatsApp messages. Your text is back in the box.' };
+      return { tone: 'danger', title: tr('waThread.notSent'),
+        message: tr('waThread.forbidden') };
     case 'unsupported':
-      return { tone: 'danger', title: 'Sending is not available',
-        message: 'This server has no WhatsApp send endpoint, so nothing can go out from here.' };
+      return { tone: 'danger', title: tr('waThread.unavailable'),
+        message: tr('waThread.endpointMissing') };
     default:
-      return { tone: 'danger', title: 'Message not sent',
-        message: 'That message did not go out. Your text is back in the box, so you can try again.' };
+      return { tone: 'danger', title: tr('waThread.notSent'),
+        message: tr('waThread.sendFailed') };
   }
 }
 
@@ -122,12 +125,12 @@ function dayKey(iso: string): string {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 
-function dayLabel(iso: string): string {
+function dayLabel(tr: TFn, iso: string): string {
   const t = stamp(iso);
   if (Number.isNaN(t)) return '';
   const diff = daysUntil(new Date(t));
-  if (diff === 0) return 'Today';
-  if (diff === -1) return 'Yesterday';
+  if (diff === 0) return tr('tab.home');
+  if (diff === -1) return tr('tasks.yesterday');
   return fmtDate(new Date(t));
 }
 
@@ -139,7 +142,7 @@ function dayLabel(iso: string): string {
  * bubble below any insertion — including the routine one where a pending local message is
  * replaced by the server's echo of it.
  */
-function buildRows(messages: WaMessage[], states: Map<string, 'sending' | 'sent'>): ChatRow[] {
+function buildRows(tr: TFn, messages: WaMessage[], states: Map<string, 'sending' | 'sent'>): ChatRow[] {
   const rows: ChatRow[] = [];
   const seen = new Set<string>();
   let lastDay = '';
@@ -147,7 +150,7 @@ function buildRows(messages: WaMessage[], states: Map<string, 'sending' | 'sent'
     const key = dayKey(m.at);
     if (key && key !== lastDay) {
       lastDay = key;
-      rows.push({ kind: 'day', key: `day-${key}`, label: dayLabel(m.at) });
+      rows.push({ kind: 'day', key: `day-${key}`, label: dayLabel(tr, m.at) });
     }
     const rowKey = seen.has(m.id) ? `${m.id}-${i}` : m.id;
     seen.add(m.id);
@@ -167,7 +170,10 @@ export default function Chat() {
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
   const [outbox, setOutbox] = useState<Outgoing[]>([]);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [noticeResult, setNotice] = useState<Extract<api.SendWaResult, { ok: false }> | 'simulated' | null>(null);
+  const notice: Notice | null = noticeResult === 'simulated'
+    ? { tone: 'warning', title: tr('waThread.testMode'), message: tr('waThread.testModeBody') }
+    : noticeResult ? failureNotice(tr, noticeResult) : null;
   const [composerFocused, setComposerFocused] = useState(false);
 
   const listRef = useRef<FlatList<ChatRow>>(null);
@@ -230,8 +236,8 @@ export default function Chat() {
   const rows = useMemo(() => {
     const states = new Map<string, 'sending' | 'sent'>();
     outbox.forEach((o) => states.set(o.msg.id, o.state));
-    return buildRows(messages, states);
-  }, [messages, outbox]);
+    return buildRows(tr, messages, states);
+  }, [messages, outbox, tr]);
 
   /* ---------- staying on the newest message ----------
    * Pinned only while the user is already reading the bottom. Yanking someone back down
@@ -294,14 +300,14 @@ export default function Chat() {
       // Defensive only — `sendWaMessage` reports through its result and does not reject.
       if (!alive.current) return;
       returnToComposer();
-      setNotice(failureNotice({ ok: false, reason: 'network' }));
+      setNotice({ ok: false, reason: 'network' });
       return;
     }
     if (!alive.current) return;
 
     if (!result.ok) {
       returnToComposer();
-      setNotice(failureNotice(result));
+      setNotice(result);
       return;
     }
 
@@ -316,19 +322,15 @@ export default function Chat() {
       // n8n took it and deliberately did not deliver it (dev safe-mode). The tick is still
       // honest — it only ever meant "the gateway accepted this" — but the customer has not
       // received anything, and that is not something to leave the user to discover.
-      setNotice({
-        tone: 'warning',
-        title: 'Sent in test mode',
-        message: 'The gateway accepted this message but is simulating sends, so it has not reached the customer.',
-      });
+      setNotice('simulated');
     }
   }, [thread, text]);
 
   /* ---------- header ---------- */
   const phone = thread?.phone ?? '';
   const subtitle = thread
-    ? [phone, thread.tag].filter(Boolean).join(' · ') || 'WhatsApp conversation'
-    : loading ? 'Opening the conversation' : 'Conversation unavailable';
+    ? [phone, thread.tag ? whatsappTagLabel(tr, thread.tag) : null].filter(Boolean).join(' · ') || tr('waThread.conversation')
+    : loading ? tr('waThread.opening') : tr('waThread.conversationUnavailable');
 
   const headerActions = phone ? (
     <Row style={{ gap: spacing.sm }}>
@@ -336,7 +338,7 @@ export default function Chat() {
         icon="call"
         size={38}
         onPress={() => { haptics.tap(); call(phone); }}
-        accessibilityLabel={tr('common.a11yCall', { name: thread?.name ?? 'this contact' })}
+        accessibilityLabel={tr('common.a11yCall', { name: thread ? resolveCopy(tr, thread.name, thread.nameCopy) : tr('waThread.contactFallback') })}
       />
       <IconBtn
         icon="logo-whatsapp"
@@ -344,14 +346,14 @@ export default function Chat() {
         bg={c.whatsappSoft}
         color={c.whatsapp}
         onPress={() => { haptics.tap(); whatsapp(phone); }}
-        accessibilityLabel="Open this chat in WhatsApp"
+        accessibilityLabel={tr('waThread.openChatA11y')}
       />
     </Row>
   ) : undefined;
 
   return (
     <Screen keyboard>
-      <Header title={thread?.name || 'Chat'} subtitle={subtitle} back right={headerActions} />
+      <Header title={(thread ? resolveCopy(tr, thread.name, thread.nameCopy) : '') || tr('waThread.chat')} subtitle={subtitle} back right={headerActions} />
 
       {loading ? (
         <ChatSkeleton />
@@ -359,10 +361,10 @@ export default function Chat() {
         <View style={{ flex: 1, justifyContent: 'center' }}>
           <EmptyState
             icon="cloud-offline-outline"
-            title="This conversation could not be opened"
+            title={tr('waThread.openFailed')}
             subtitle={health.degraded
-              ? 'The server did not answer, so no message history is confirmed. Check your connection and try again.'
-              : 'The chat history did not come back from the server. Try again in a moment.'}
+              ? tr('waThread.unconfirmed')
+              : tr('waThread.historyFailed')}
             action={{ label: tr('common.tryAgain'), onPress: retry }}
           />
         </View>
@@ -390,9 +392,9 @@ export default function Chat() {
           ListEmptyComponent={
             <EmptyState
               icon="chatbubble-ellipses-outline"
-              title="No messages in this chat yet"
-              subtitle="Anything you send from here goes out over WhatsApp to this number."
-              action={phone ? { label: 'Open in WhatsApp', onPress: () => { haptics.tap(); whatsapp(phone); } } : undefined}
+              title={tr('waThread.emptyTitle')}
+              subtitle={tr('waThread.emptyBody')}
+              action={phone ? { label: tr('waThread.openWhatsapp'), onPress: () => { haptics.tap(); whatsapp(phone); } } : undefined}
             />
           }
           renderItem={({ item, index }) => (
@@ -441,10 +443,10 @@ export default function Chat() {
                 onChangeText={onChangeText}
                 onFocus={() => setComposerFocused(true)}
                 onBlur={() => setComposerFocused(false)}
-                placeholder="Type a message"
+                placeholder={tr('waThread.typeMessage')}
                 placeholderTextColor={c.faint}
                 multiline
-                accessibilityLabel="Message"
+                accessibilityLabel={tr('waThread.message')}
                 style={[{ color: c.text, ...type('500', font.body), lineHeight: 20, paddingVertical: 0 }, noOutline]}
               />
             </View>
@@ -456,7 +458,7 @@ export default function Chat() {
               color={canSend ? c.onPrimary : c.faint}
               disabled={!canSend}
               onPress={send}
-              accessibilityLabel="Send message"
+              accessibilityLabel={tr('waThread.sendMessage')}
             />
           </View>
         </View>
@@ -479,6 +481,7 @@ function DayDivider({ label }: { label: string }) {
 }
 
 function Bubble({ msg, state }: { msg: WaMessage; state?: 'sending' | 'sent' }) {
+  const t = useT();
   const c = useTheme();
   const mine = msg.fromMe;
   const when = timeLabel(msg.at);
@@ -488,10 +491,10 @@ function Bubble({ msg, state }: { msg: WaMessage; state?: 'sending' | 'sent' }) 
   // Read as one utterance. Without grouping, a screen reader announces the text, the clock
   // and the tick as three unrelated nodes with no idea who said any of it.
   const spoken = [
-    mine ? 'You said' : 'They said',
+    mine ? t('voice.transcriptLabel') : t('waThread.theySaid'),
     msg.text,
     when,
-    state === 'sending' ? 'sending' : state === 'sent' ? 'sent from this app' : '',
+    state === 'sending' ? t('waThread.sending') : state === 'sent' ? t('waThread.sentFromApp') : '',
   ].filter(Boolean).join(', ');
 
   return (

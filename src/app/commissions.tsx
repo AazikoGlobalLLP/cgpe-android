@@ -165,14 +165,14 @@ export default function Commissions() {
   }, [load]);
 
   const subtitle = loading
-    ? 'Loading your earnings'
+    ? t('commissions.loading')
     : blank
-      ? 'Earnings and payouts'
-      : `${inrShort(ytd)} year to date`;
+      ? t('commissions.subtitle')
+      : t('commissions.ytdAmount', { amount: inrShort(ytd) });
 
   return (
     <Screen>
-      <Header title="Commissions" subtitle={subtitle} back />
+      <Header title={t('more.commissionsTitle')} subtitle={subtitle} back />
 
       <ScrollView
         contentContainerStyle={{
@@ -204,15 +204,15 @@ export default function Commissions() {
           health.degraded ? (
             <EmptyState
               icon="cloud-offline-outline"
-              title="Your earnings did not load"
-              subtitle="The commission ledger could not be reached, so these blanks are unconfirmed rather than zero. Pull down to try again."
+              title={t('commissions.loadFailed')}
+              subtitle={t('commissions.unconfirmed')}
               action={{ label: t('common.tryAgain'), onPress: retry }}
             />
           ) : (
             <EmptyState
               icon="wallet-outline"
-              title="No commission recorded yet"
-              subtitle="Once a policy you booked is processed, the earning, its payout status and the running year total appear here."
+              title={t('commissions.emptyTitle')}
+              subtitle={t('commissions.emptyBody')}
               action={{ label: t('common.refresh'), onPress: retry }}
             />
           )
@@ -227,12 +227,11 @@ export default function Commissions() {
                 <View style={{ marginTop: spacing.md }}>
                   {growth == null ? (
                     <Txt size={font.cap} color={c.faint} numberOfLines={2}>
-                      No figure for last month, so there is nothing to compare against yet.
-                    </Txt>
+                      {t('commissions.noComparison')}</Txt>
                   ) : (
                     <Pill
                       label={growthPct === 0
-                        ? 'Level with last month'
+                        ? t('commissions.level')
                         : t('home.vsLastPct', { pct: `${growthPct > 0 ? '+' : '-'}${Math.abs(growthPct)}` })}
                       tone={growthPct === 0 ? 'neutral' : growthPct > 0 ? 'success' : 'danger'}
                       icon={growthPct === 0 ? 'remove' : growthPct > 0 ? 'trending-up' : 'trending-down'}
@@ -248,13 +247,13 @@ export default function Commissions() {
             <Appear index={1}>
               <Row style={{ alignItems: 'stretch' }}>
                 <MetricTile
-                  label="Last month"
+                  label={t('pay.lastMonth')}
                   value={inrShort(lastMonth)}
                   icon="calendar-outline"
                   tone="neutral"
                 />
                 <MetricTile
-                  label="Pending payout"
+                  label={t('commissions.pendingPayout')}
                   value={inrShort(pending)}
                   icon="hourglass-outline"
                   tone="warning"
@@ -268,12 +267,12 @@ export default function Commissions() {
             {byProduct.length > 0 ? (
               <Appear index={2}>
                 <View>
-                  <SectionHeader title="This year by product" />
+                  <SectionHeader title={t('commissions.byProduct')} />
                   <Card style={{ gap: spacing.md }}>
                     {byProduct.map((p, i) => (
                       <Meter
                         key={`${p.product}-${i}`}
-                        label={p.count > 0 ? `${p.product} · ${p.count} ${p.count === 1 ? 'credit' : 'credits'}` : p.product}
+                        label={p.count > 0 ? t(p.count === 1 ? 'commissions.productCredit' : 'commissions.productCredits', { product: p.product, count: p.count }) : p.product}
                         value={ytd > 0 ? num(p.amount) / ytd : 0}
                         valueLabel={inrShort(num(p.amount))}
                         tone="primary"
@@ -287,15 +286,15 @@ export default function Commissions() {
             {/* ---------------- Trend ---------------- */}
             <Appear index={3}>
               <View>
-                <SectionHeader title={series.length > 1 ? `Last ${series.length} months` : 'Year to date'} />
+                <SectionHeader title={series.length > 1 ? t('commissions.lastMonths', { count: series.length }) : t('commissions.ytd')} />
                 <Card>
                   <Row style={{ alignItems: 'flex-start' }}>
                     <View style={{ flex: 1 }}>
-                      <Txt size={font.cap} weight="600" color={c.muted}>Year to date</Txt>
+                      <Txt size={font.cap} weight="600" color={c.muted}>{t('commissions.ytd')}</Txt>
                       <Metric value={inr(ytd)} size={font.h2} style={{ marginTop: 2 }} />
                     </View>
                     {peak > 0 ? (
-                      <Pill label={`Best ${inrShort(peak)}`} tone="primary" small numeric />
+                      <Pill label={t('commissions.best', { amount: inrShort(peak) })} tone="primary" small numeric />
                     ) : null}
                   </Row>
 
@@ -330,8 +329,7 @@ export default function Commissions() {
                     </>
                   ) : (
                     <Txt size={font.sub} color={c.muted} style={{ marginTop: spacing.md }} numberOfLines={2}>
-                      Not enough months on record yet to draw a trend.
-                    </Txt>
+                      {t('commissions.noTrend')}</Txt>
                   )}
                 </Card>
               </View>
@@ -340,13 +338,13 @@ export default function Commissions() {
             {/* ---------------- Recent credits ---------------- */}
             <Appear index={4}>
               <View>
-                <SectionHeader title="Recent commissions" />
+                <SectionHeader title={t('commissions.recent')} />
                 {recent.length === 0 ? (
                   <Card>
                     <EmptyState
                       icon="receipt-outline"
-                      title="No individual payouts listed"
-                      subtitle="The totals above are in, but the ledger has not returned the line items behind them."
+                      title={t('commissions.noItems')}
+                      subtitle={t('commissions.itemsMissing')}
                     />
                   </Card>
                 ) : (
@@ -359,7 +357,7 @@ export default function Commissions() {
                           key={`${r.id ?? 'credit'}-${i}`}
                           // `client` can be absent on a raw ledger row, and an empty name
                           // reaches colorFromString, which indexes into the string.
-                          name={r.client || 'Client'}
+                          name={r.client || t('commissions.clientFallback')}
                           subtitle={sub || undefined}
                           subtitleNumeric={!!when}
                           size={40}
@@ -400,6 +398,7 @@ export default function Commissions() {
  * ================================================================== */
 
 function MdrtTierCard({ tier }: { tier: MdrtTier }) {
+  const t = useT();
   const c = useTheme();
   const { current, next, nextPremium, toNext, totalPremium } = tier;
   const atTop = next == null || nextPremium == null;      // TOT — nothing above
@@ -408,17 +407,17 @@ function MdrtTierCard({ tier }: { tier: MdrtTier }) {
   return (
     <Appear index={0}>
       <View>
-        <SectionHeader title="MDRT tier" />
+        <SectionHeader title={t('commissions.mdrtTier')} />
         <Card>
-          <Eyebrow>First-year premium</Eyebrow>
+          <Eyebrow>{t('commissions.firstYearPremium')}</Eyebrow>
           <Metric value={inr(totalPremium)} size={font.h2} style={{ marginTop: 2 }} />
 
           <View style={{ marginTop: spacing.md }}>
             {current ? (
-              <Pill label={`${current} reached`} tone="success" icon="ribbon" small />
+              <Pill label={t('commissions.tierReached', { tier: current })} tone="success" icon="ribbon" small />
             ) : (
               <Txt size={font.cap} color={c.faint} numberOfLines={2}>
-                {`Not at the first tier yet — ${next ?? 'Quarter MDRT'} begins at ${inrShort(nextPremium ?? 0)} of first-year premium.`}
+                {t('commissions.firstTier', { tier: next ?? 'Quarter MDRT', amount: inrShort(nextPremium ?? 0) })}
               </Txt>
             )}
           </View>
@@ -431,18 +430,18 @@ function MdrtTierCard({ tier }: { tier: MdrtTier }) {
           }}>
             {atTop ? (
               <Txt size={font.sub} weight="600" color={c.text} numberOfLines={2}>
-                {`You've reached ${current ?? 'the top'} — the highest tier.`}
+                {t('commissions.topReached', { tier: current ?? t('commissions.topFallback') })}
               </Txt>
             ) : (
               <>
                 <Meter
-                  label={`Next: ${next}`}
+                  label={t('commissions.nextTier', { tier: next })}
                   value={progress}
-                  valueLabel={`${inrShort(totalPremium)} of ${inrShort(nextPremium ?? 0)}`}
+                  valueLabel={t('pay.amountOfTotal', { amount: inrShort(totalPremium), total: inrShort(nextPremium ?? 0) })}
                   tone="primary"
                 />
                 <Txt size={font.tiny} color={c.faint} style={{ marginTop: spacing.sm }}>
-                  {`${inr(toNext)} more to reach ${next}.`}
+                  {t('commissions.moreToTier', { amount: inr(toNext), tier: next })}
                 </Txt>
               </>
             )}
@@ -454,10 +453,11 @@ function MdrtTierCard({ tier }: { tier: MdrtTier }) {
 }
 
 function TierSkeleton() {
+  const t = useT();
   const c = useTheme();
   return (
     <View>
-      <SectionHeader title="MDRT tier" />
+      <SectionHeader title={t('commissions.mdrtTier')} />
       <View style={{
         backgroundColor: c.card,
         borderRadius: radius.lg,
