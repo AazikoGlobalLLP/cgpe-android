@@ -33,3 +33,9 @@ Status: implemented and locally verified, 2026-09-07; production and native-devi
 `../contracts/api.md`, `models.md`, `enums.md`, `CHANGELOG.md` — September 7 account-deletion request sections; the full September 7 INBOX thread; `../cgpe-backend-main/services/accountDeletion.js` and registered auth routes.
 
 Actual deletion/retention policy and fulfillment remain owner/server work. Deployment is separate from source implementation. No production writes are used for verification.
+
+## Final integration recheck — 7 September 2026
+
+All four account browser scenarios pass again after the shared-copy integration.
+Final TypeScript passes; the full suite passes 1,494 tests across 92 files; lint has
+zero errors and 12 existing warnings. Production/policy/handset gates remain open.
