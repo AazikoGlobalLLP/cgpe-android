@@ -123,7 +123,7 @@ describe('adaptClient', () => {
     vi.spyOn(Math, 'random').mockReturnValue(0.5);
     expect(adaptClient(null)).toEqual({
       id: 'Customer',
-      name: 'Customer',
+      name: 'Customer', nameCopy: { key: 'record.customer' },
       phone: '',
       email: undefined,
       city: '',
@@ -133,7 +133,7 @@ describe('adaptClient', () => {
       totalCover: 0,
       policies: [{
         id: '0.5',            // adapt.ts:84 falls through to String(Math.random())
-        plan: 'LIC Policy',
+        plan: 'LIC Policy', planCopy: { key: 'record.licPolicy' },
         number: '-',
         sumAssured: 0,
         premium: 0,
@@ -178,7 +178,7 @@ describe('adaptClient', () => {
       totalCover: 500000,
       policies: [{
         id: 'P123',
-        plan: 'LIC Policy',
+        plan: 'LIC Policy', planCopy: { key: 'record.licPolicy' },
         number: 'P123',
         sumAssured: 500000,
         premium: 0,
@@ -456,8 +456,8 @@ describe('annualFactor', () => {
 describe('adaptUser', () => {
   it('turns null into every literal default, and never sets photo', () => {
     expect(adaptUser(null)).toEqual({
-      id: 'u1', name: 'Advisor', email: '', phone: '', role: 'advisor',
-      designation: 'Advisor', branch: '', agentCode: '', tier: 'Growth',
+      id: 'u1', name: 'Advisor', nameCopy: { key: 'record.advisor' }, email: '', phone: '', role: 'advisor',
+      designation: 'Advisor', designationCopy: { key: 'record.advisor' }, branch: '', agentCode: '', tier: 'Growth',
     });
     // `photo` is optional on User but adaptUser never assigns it, so the key is genuinely
     // ABSENT rather than present-and-undefined.
@@ -653,7 +653,7 @@ describe('adaptClaim', () => {
     expect(adaptClaim(null)).toEqual({
       id: 'undefined',
       ref: '',
-      clientName: 'Claimant',
+      clientName: 'Claimant', clientNameCopy: { key: 'record.claimant' },
       clientPhone: '',
       type: 'Health',
       policyNumber: '',
@@ -672,7 +672,7 @@ describe('adaptClaim', () => {
     const created = new Date(Date.now() - 10 * DAY).toISOString();
     const out = adaptClaim({ id: 'cl1', status: 'in_process', created_at: created });
     expect(out.timeline).toEqual([
-      { id: 't0', label: 'Claim registered', at: created, by: 'System' },
+      { id: 't0', label: 'Claim registered', labelCopy: { key: 'record.claimRegistered' }, at: created, by: 'System', byCopy: { key: 'record.system' } },
     ]);
     expect(out.openedAt).toBe(created);
     expect(out.ageDays).toBe(10);
@@ -682,7 +682,7 @@ describe('adaptClaim', () => {
     const out = adaptClaim({
       id: 'cl2', status_history: [{}], created_at: new Date(Date.now() - DAY).toISOString(),
     });
-    expect(out.timeline).toEqual([{ id: '0', label: 'Update', at: '', by: 'System' }]);
+    expect(out.timeline).toEqual([{ id: '0', label: 'Update', labelCopy: { key: 'record.update' }, at: '', by: 'System', byCopy: { key: 'record.system' } }]);
   });
 
   it('rounds ageDays on the raw millisecond difference, with no midnight normalisation', () => {
@@ -707,7 +707,7 @@ describe('adaptClaim', () => {
 
   it('collapses documents_received into one synthetic "All required documents" row', () => {
     expect(adaptClaim({ id: 'cl4', documents_received: true }).docs).toEqual([
-      { id: 'd0', name: 'All required documents', received: true },
+      { id: 'd0', name: 'All required documents', nameCopy: { key: 'record.allDocuments' }, received: true },
     ]);
   });
 
@@ -760,7 +760,7 @@ describe('adaptWaThread / adaptWaMessage', () => {
     // adapt.ts:250 ends its chain in p10 (''), so this one does NOT produce the string
     // 'undefined' that adaptLead / adaptClaim / adaptReminder / adaptNotification do.
     expect(adaptWaThread(null)).toEqual({
-      id: '', name: 'WhatsApp user', phone: '', lastMessage: '', lastAt: '',
+      id: '', name: 'WhatsApp user', nameCopy: { key: 'record.whatsAppUser' }, phone: '', lastMessage: '', lastAt: '',
       unread: 0, tag: undefined, messages: [],
     });
   });
@@ -782,7 +782,7 @@ describe('adaptWaThread / adaptWaMessage', () => {
 describe('adaptReminder', () => {
   it('turns null into every literal default', () => {
     expect(adaptReminder(null)).toEqual({
-      id: 'undefined', type: 'followup', title: 'Reminder', subtitle: '',
+      id: 'undefined', type: 'followup', title: 'Reminder', titleCopy: { key: 'record.reminder' }, subtitle: '',
       clientName: undefined, phone: undefined,
       date: '',   // NOT normalised through parseDate/iso — whatever the backend sent, verbatim
       done: false,
@@ -925,7 +925,7 @@ describe('pinned known bugs — these must be updated deliberately when fixed', 
   it('a STRING missing_info is discarded, and the claim then reports all documents received', () => {
     // adapt.ts:215 keeps only an array; the "everything received" row is emitted anyway.
     expect(adaptClaim({ id: 'b8', missing_info: 'PAN', documents_received: true }).docs)
-      .toEqual([{ id: 'd0', name: 'All required documents', received: true }]);
+      .toEqual([{ id: 'd0', name: 'All required documents', nameCopy: { key: 'record.allDocuments' }, received: true }]);
   });
 
   it('the claim status "New Claim" does not reach the intake arm (exact equality, not regex)', () => {

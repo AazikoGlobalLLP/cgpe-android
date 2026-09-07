@@ -37,6 +37,7 @@ import { expireSession, resetSessionGuard } from '@/lib/session';
 // `nbsp` is the house guarantee that a value never wraps between its number and its unit.
 import { nbsp } from '@/lib/format';
 import { humanApiMessage } from '@/lib/apiMessage';
+import { localMessage, type LocalCopy } from '@/i18n/copy';
 // Voice multi-turn context is module-scope per-user state that a storage purge does not touch — same
 // shared-handset class as `state`/`clientCache` below, so it is torn down in `resetApiState()` too.
 import { resetVoiceSession } from '@/voice/session';
@@ -89,6 +90,7 @@ let authToken: string | null = null;
 let sessionReal = false;
 let currentUserId: string | null = null;
 let currentUserName: string | null = null;
+let currentUserNameCopy: LocalCopy | undefined;
 
 export function setAuthToken(t: string | null) {
   authToken = t;
@@ -97,9 +99,10 @@ export function setAuthToken(t: string | null) {
   // switch. `store/auth.tsx` calls `resetHealth()` alongside this on both sign-in and out.
   suppressed.clear();
 }
-export function setCurrentUser(id: string | null, name?: string | null) {
+export function setCurrentUser(id: string | null, name?: string | null, nameCopy?: LocalCopy) {
   const changed = id !== currentUserId;
   currentUserId = id; currentUserName = name || null;
+  currentUserNameCopy = id && name ? nameCopy : undefined;
   // PHASE 57b: mirror this user's persisted write queue into the reactive bus (drops the previous
   // user's on sign-out). Fire-and-forget — a screen re-renders when it lands.
   if (id) {
@@ -388,12 +391,15 @@ function adaptTask(raw: any): Task {
   return {
     id: String(raw._id || raw.id),
     title: raw.title || raw.task || raw.name || 'Task',
+    ...(!(raw.title || raw.task || raw.name) ? { titleCopy: { key: 'record.task' } } : {}),
     description: raw.description || raw.details || raw.aiUnderstanding || '',
     status: (raw.status || raw.state || 'todo') as TaskStatus,
     priority: raw.priority === 'P0' || raw.priority === 'high' ? 'high' : raw.priority === 'low' || raw.priority === 'P3' ? 'low' : 'medium',
     category: raw.category || raw.type || 'General',
+    ...(!(raw.category || raw.type) ? { categoryCopy: { key: 'record.general' } } : {}),
     dueDate: raw.due_date || raw.dueDate || raw.due || raw.createdAt || new Date().toISOString(),
     assignedBy: raw.assigned_by || raw.created_by || raw.by || 'Self',
+    ...(!(raw.assigned_by || raw.created_by || raw.by) ? { assignedByCopy: { key: 'record.self' } } : {}),
     client: raw.client_name || raw.clientName || raw.client,
     clientPhone: raw.client_phone || raw.clientPhone,
     steps: Array.isArray(raw.steps || raw.subtasks) ? (raw.steps || raw.subtasks).map((s: any, i: number) => ({ id: String(s._id || s.id || i), label: s.label || s.title || String(s), done: !!(s.done || s.completed) })) : [],
@@ -422,12 +428,15 @@ function adaptTeamTask(raw: any, assignee?: string): Task {
   return {
     id: String(raw.id || raw._id || raw.team_task_id),
     title: String(raw.title || raw.task || 'Task'),
+    ...(!(raw.title || raw.task) ? { titleCopy: { key: 'record.task' } } : {}),
     description: String(raw.details || raw.description || ''),
     status,
     priority: P2PRIORITY[String(raw.priority || 'P2').toUpperCase()] || 'medium',
     category: String(raw.type || 'Task').replace(/^\w/, (m) => m.toUpperCase()),
+    ...(!raw.type ? { categoryCopy: { key: 'record.task' } } : {}),
     dueDate: due,
     assignedBy: raw.created_by || raw.createdBy || 'Admin',
+    ...(!(raw.created_by || raw.createdBy) ? { assignedByCopy: { key: 'record.admin' } } : {}),
     client: raw.client || undefined,
     clientPhone: raw.client_phone || undefined,
     steps: [],
@@ -742,8 +751,11 @@ export type AddTaskResult =
 export async function addTask(data: Partial<Task> & { assigneeName?: string }): Promise<AddTaskResult> {
   const local: Task = {
     id: 't' + (Date.now() % 100000), title: data.title || 'New task', description: data.description || '',
+    titleCopy: data.title ? data.titleCopy : { key: 'record.newTask' },
     status: 'todo', priority: data.priority || 'medium', category: data.category || 'Task',
+    categoryCopy: data.category ? data.categoryCopy : { key: 'record.task' },
     dueDate: data.dueDate || new Date().toISOString(), assignedBy: currentUserName || 'Admin', client: data.client,
+    assignedByCopy: currentUserName ? currentUserNameCopy : { key: 'record.admin' },
     steps: [], createdAt: new Date().toISOString(),
   };
   // The exact create fields, resolved ONCE so an online POST and an offline replay send an identical
@@ -752,6 +764,9 @@ export async function addTask(data: Partial<Task> & { assigneeName?: string }): 
     title: local.title, description: local.description, client: local.client ?? '',
     priority: local.priority, category: local.category, dueDate: local.dueDate,
     assigneeName: data.assigneeName || currentUserName || 'Unassigned',
+    // Local draft metadata only: taskCreateBody explicitly omits these fields on first send/replay.
+    ...(local.titleCopy ? { titleCopy: local.titleCopy } : {}),
+    ...(local.categoryCopy ? { categoryCopy: local.categoryCopy } : {}),
   };
   if (FORCE_DEMO) { state.tasks.unshift(local); await wait(200); return { status: 'saved', task: clone(local) }; }
   if (!sessionReal) return { status: 'failed' };
@@ -810,17 +825,21 @@ export async function updateTask(
 export function taskDraftToTask(d: QueuedWrite): Task {
   const p = d.payload as {
     title?: string; description?: string; client?: string;
+    titleCopy?: LocalCopy; categoryCopy?: LocalCopy;
     priority?: TaskPriority; category?: string; dueDate?: string;
   };
   return {
     id: d.id,
     title: String(p.title ?? 'New task'),
+    titleCopy: p.title == null ? { key: 'record.newTask' } : p.titleCopy,
     description: String(p.description ?? ''),
     status: 'todo',
     priority: (p.priority as TaskPriority) ?? 'medium',
     category: String(p.category ?? 'Task'),
+    categoryCopy: p.category == null ? { key: 'record.task' } : p.categoryCopy,
     dueDate: String(p.dueDate ?? ''),
     assignedBy: currentUserName ?? '',
+    assignedByCopy: currentUserName == null ? undefined : currentUserNameCopy,
     client: p.client ? String(p.client) : undefined,
     steps: [],
     createdAt: d.createdAt,
@@ -929,6 +948,7 @@ async function cachedList<T extends { id: string }>(
  */
 export class NetworkError extends Error {
   readonly kind: 'timeout' | 'network';
+  readonly messageCopy?: LocalCopy;
   constructor(kind: 'timeout' | 'network' = 'network', message?: string) {
     super(
       message ??
@@ -938,6 +958,9 @@ export class NetworkError extends Error {
     );
     this.name = 'NetworkError';
     this.kind = kind;
+    if (message == null) {
+      this.messageCopy = { key: kind === 'timeout' ? 'api.timeout' : 'api.unreachable' };
+    }
   }
 }
 
@@ -1017,7 +1040,10 @@ export async function login(
     // in the product: a typo in the address. Verified against live prod 2026-08-27.
     // `humanApiMessage` still prefers a PROSE `error` (which most routes send), so no
     // other refusal loses its wording. See `lib/apiMessage.ts`.
-    throw new Error(humanApiMessage(json, 'Invalid credentials. Please check and try again.'));
+    const serverMessage = humanApiMessage(json, '');
+    if (serverMessage) throw new Error(serverMessage);
+    const fallback = localMessage('api.invalidCredentials', 'Invalid credentials. Please check and try again.');
+    throw Object.assign(new Error(fallback.message), { messageCopy: fallback.messageCopy });
   } catch (e: any) {
     if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
     throw e;
@@ -1031,7 +1057,7 @@ export async function login(
  */
 export async function sendOtp(
   phone: string,
-): Promise<{ ok: boolean; message: string; channel?: 'email' | 'whatsapp' }> {
+): Promise<{ ok: boolean; message: string; messageCopy?: LocalCopy; channel?: 'email' | 'whatsapp' }> {
   try {
     const { ok, json } = await req('/auth/request-otp', {
       method: 'POST',
@@ -1050,19 +1076,22 @@ export async function sendOtp(
       return {
         ok: true,
         channel,
-        message:
-          (typeof json?.message === 'string' && json.message.trim())
-            ? json.message.trim()
-            // The success body carries no `message` at all (verified on deployed
-            // `origin/main`), so this is what the user actually reads.
-            : channel === 'email'
-              ? 'Code sent to your email.'
-              : 'Code sent to your WhatsApp number.',
+        ...((typeof json?.message === 'string' && json.message.trim())
+          ? { message: json.message.trim() }
+          : channel === 'email'
+            ? localMessage('api.codeSentEmail', 'Code sent to your email.')
+            : localMessage('api.codeSentWhatsApp', 'Code sent to your WhatsApp number.')),
       };
     }
     // `OTP_NOT_CONFIGURED` / `OTP_DELIVERY_FAILED` arrive as a TOKEN in `error` with the
     // sentence in `message` — same inversion as `/auth/login`. See `lib/apiMessage.ts`.
-    return { ok: false, channel, message: humanApiMessage(json, 'Could not send the code. Please try again.') };
+    const serverMessage = humanApiMessage(json, '');
+    return {
+      ok: false, channel,
+      ...(serverMessage
+        ? { message: serverMessage }
+        : localMessage('login.msgCodeSendFailed', 'Could not send the code. Please try again.')),
+    };
   } catch (e: any) {
     if (isUnreachable(e)) throw new NetworkError(unreachableKind(e));
     // `channel` is returned here too, even though the caller only reads it on success today.
@@ -1071,7 +1100,7 @@ export async function sendOtp(
     return {
       ok: false,
       channel: phone.includes('@') ? 'email' : 'whatsapp',
-      message: 'Could not send the code. Please try again.',
+      ...localMessage('login.msgCodeSendFailed', 'Could not send the code. Please try again.'),
     };
   }
 }
@@ -1382,7 +1411,7 @@ export type AddLeadResult =
   /** The server created it. `lead` is the server's own record. */
   | { ok: true; lead: Lead }
   /** HTTP 400: the server understood and refused. Nothing was written, here or there. */
-  | { ok: false; reason: 'invalid'; message: string }
+  | { ok: false; reason: 'invalid'; message: string; messageCopy?: LocalCopy }
   /** The write never landed. `lead` is what the user typed, held in the local buffer. */
   | { ok: false; reason: Exclude<WriteFailure, 'invalid'>; lead: Lead };
 
@@ -1409,7 +1438,9 @@ export type AddLeadResult =
 export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
   const local: Lead = {
     id: 'l' + (Date.now() % 100000), name: data.name || 'New Lead', phone: data.phone || '',
+    nameCopy: data.name ? data.nameCopy : { key: 'record.newLead' },
     stage: 'new_lead', source: data.source || 'Manual', interest: data.interest || '',
+    sourceCopy: data.source ? data.sourceCopy : { key: 'record.manual' },
     potential: data.potential || 0, city: data.city || '',
     // 'cold', not the old invented 'warm'. This record has to read the same way the server's
     // copy of it would: `probability` defaults to 10 (`models/Lead.js:47-52`) and `adaptLead`'s
@@ -1446,7 +1477,10 @@ export async function addLead(data: Partial<Lead>): Promise<AddLeadResult> {
         // play use different keys for the summary (`error` from routers, `message` from
         // middleware — `enums.md` §15), so both are read.
         const msg = json?.details?.[0]?.msg || json?.error || json?.message;
-        return { ok: false, reason: 'invalid', message: String(msg || 'The server refused this lead.') };
+        return {
+          ok: false, reason: 'invalid',
+          ...(msg ? { message: String(msg) } : localMessage('api.leadRefused', 'The server refused this lead.')),
+        };
       }
       if (ok) { reportFailure('/leads'); reason = 'server'; }          // 2xx with no `data.lead`
       else {
@@ -1497,9 +1531,11 @@ export function leadDraftToLead(d: QueuedWrite): Lead {
   return {
     id: d.id,
     name: String(p.name ?? 'New Lead'),
+    ...(p.name == null ? { nameCopy: { key: 'record.newLead' } } : {}),
     phone: String(p.phone ?? ''),
     stage: 'new_lead',
     source: String(p.source ?? 'Manual'),
+    ...(p.source == null ? { sourceCopy: { key: 'record.manual' } } : {}),
     interest: String(p.insurance_need ?? ''),
     potential: Number.isFinite(premium) ? premium : 0,
     city: String(p.address?.city ?? ''),
@@ -1608,7 +1644,7 @@ export async function getClients(): Promise<Client[]> {
  * super_admin, so we scan the real client book (fupDate within `days`) ourselves,
  * page by page, reporting progress. Bounded so a huge book can't hang the UI.
  */
-export type RenewalClient = { id: string; name: string; phone: string; premium: number; policyNo: string; dueDate: string };
+export type RenewalClient = { id: string; name: string; nameCopy?: LocalCopy; phone: string; premium: number; policyNo: string; dueDate: string };
 export async function scanRenewals(
   days = 30,
   onProgress?: (scanned: number, found: number, total: number) => void,
@@ -1620,7 +1656,7 @@ export async function scanRenewals(
     const now = new Date();
     return state.clients
       .filter((c) => { const d = c.policies[0]?.nextRenewal; return d && new Date(d).getMonth() === now.getMonth(); })
-      .map((c) => ({ id: c.id, name: c.name, phone: c.phone, premium: c.totalPremium, policyNo: c.policies[0]?.number || '', dueDate: c.policies[0]?.nextRenewal || '' }));
+      .map((c) => ({ id: c.id, name: c.name, nameCopy: c.nameCopy, phone: c.phone, premium: c.totalPremium, policyNo: c.policies[0]?.number || '', dueDate: c.policies[0]?.nextRenewal || '' }));
   }
   const today = new Date(); today.setHours(0, 0, 0, 0);
   let page = 1, totalPages = 1, scanned = 0, consecutiveFailures = 0;
@@ -1647,8 +1683,9 @@ export async function scanRenewals(
       if (diff >= 0 && diff <= days) {
         const digits = String(raw.mobile || raw.phone || raw.phoneLast10 || '').replace(/\D/g, '');
         if (!digits) continue;
+        const client = adaptClient(raw);
         found.push({
-          id: String(raw._id || raw.id), name: adaptClient(raw).name,
+          id: String(raw._id || raw.id), name: client.name, nameCopy: client.nameCopy,
           phone: digits.length === 10 ? '+91' + digits : '+' + digits,
           premium: Number(raw.premium || raw.premium_amount) || 0,
           policyNo: String(raw.policyNo || raw.policy_number || ''), dueDate: due.toISOString(),
@@ -1706,20 +1743,26 @@ export async function getClaim(id: string): Promise<Claim | undefined> {
 const CLAIM_TYPE_TO_SERVER: Record<Claim['type'], string> = {
   Health: 'health', Death: 'life', Maturity: 'life', Surrender: 'other', Accident: 'motor',
 };
-export type NewClaimInput = { clientId?: string; clientName?: string; clientPhone?: string; policyNumber?: string; type?: Claim['type']; amount?: number; insurer?: string; notes?: string; docs?: any[] };
+export type NewClaimInput = { clientId?: string; clientName?: string; clientNameCopy?: LocalCopy; clientPhone?: string; policyNumber?: string; type?: Claim['type']; amount?: number; insurer?: string; notes?: string; docs?: any[] };
 
 /** Create a real register claim via POST /claims/ (needs an existing client_id +
  *  a valid claim_type). Returns { forbidden } on 403, { error } on validation. */
-export async function addClaim(data: NewClaimInput): Promise<Claim & { forbidden?: boolean; error?: string }> {
+export async function addClaim(data: NewClaimInput): Promise<Claim & { forbidden?: boolean; error?: string; errorCopy?: LocalCopy }> {
   const type = (data.type as Claim['type']) || 'Health';
   const local: Claim = {
     id: 'cl' + (Date.now() % 100000), ref: 'CLM-' + String(1000 + (Date.now() % 9000)),
     clientName: data.clientName || 'New Client', clientPhone: data.clientPhone || '',
+    clientNameCopy: data.clientName ? data.clientNameCopy : { key: 'record.newClient' },
     type, policyNumber: data.policyNumber || '', amount: data.amount || 0, status: 'submitted',
     insurer: data.insurer || 'LIC of India', openedAt: new Date().toISOString(), ageDays: 0,
     docs: data.docs || [],
-    timeline: [{ id: 't' + Date.now(), label: 'Claim registered', at: new Date().toISOString(), by: currentUserName || 'Admin' }],
+    timeline: [{
+      id: 't' + Date.now(), label: 'Claim registered', labelCopy: { key: 'record.claimRegistered' },
+      at: new Date().toISOString(), by: currentUserName || 'Admin',
+      byCopy: currentUserName ? currentUserNameCopy : { key: 'record.admin' },
+    }],
     aiSummary: data.notes || 'New claim created. Collect required documents to proceed.',
+    ...(!data.notes ? { aiSummaryCopy: { key: 'record.newClaimSummary' } } : {}),
   };
   if (sessionReal && !FORCE_DEMO && data.clientId) {
     try {
@@ -1735,15 +1778,24 @@ export async function addClaim(data: NewClaimInput): Promise<Claim & { forbidden
       if (status === 403) return { ...local, forbidden: true };
       const created = json?.data;
       if (ok && (created?.id || json?.success)) {
-        return adaptClaim({
+        const claim = adaptClaim({
           id: created?.id, claim_number: created?.claim_number, patient_name: data.clientName,
           claimant: { name: data.clientName, phone: data.clientPhone }, policy_number: data.policyNumber,
           claim_amount: body.claim_amount, claim_type: body.claim_type, status: 'submitted',
           insurer_company: data.insurer, last_note: data.notes, created_at: new Date().toISOString(),
         });
+        return data.clientNameCopy && String(data.clientName || '').trim()
+          ? { ...claim, clientNameCopy: data.clientNameCopy }
+          : claim;
       }
-      return { ...local, error: json?.message || 'Could not create the claim. Pick a client and try again.' };
-    } catch (e: any) { return { ...local, error: e?.message || 'Could not reach the server.' }; }
+      return json?.message
+        ? { ...local, error: json.message }
+        : { ...local, error: 'Could not create the claim. Pick a client and try again.', errorCopy: { key: 'api.claimCreateFailed' } };
+    } catch (e: any) {
+      return e?.message
+        ? { ...local, error: e.message }
+        : { ...local, error: 'Could not reach the server.', errorCopy: { key: 'api.serverUnreachable' } };
+    }
   }
   state.claims.unshift(local); await wait(300); return clone(local);
 }
@@ -2019,7 +2071,7 @@ export async function getWaThread(id: string): Promise<WaThread | undefined> {
         // could call, WhatsApp, or send to. The id carries the number — see `waPhoneFromThreadId`.
         const p10 = waPhoneFromThreadId(id);
         const stub: WaThread = {
-          id, name: 'WhatsApp user', phone: p10 ? '+91' + p10 : '',
+          id, name: 'WhatsApp user', nameCopy: { key: 'record.whatsAppUser' }, phone: p10 ? '+91' + p10 : '',
           lastMessage: '', lastAt: '', unread: 0, messages: [],
         };
         return { ...(meta || stub), messages };
@@ -2040,7 +2092,7 @@ export type SendWaResult =
   /** 200, but the gateway never took it. The row is in the server's log and nothing was sent. */
   | { ok: false; reason: 'undelivered'; configured: boolean; note: string }
   /** 400: the server understood and refused — or we knew it would and did not ask. */
-  | { ok: false; reason: 'invalid'; message: string }
+  | { ok: false; reason: 'invalid'; message: string; messageCopy?: LocalCopy }
   /** The request itself did not land. */
   | { ok: false; reason: Exclude<WriteFailure, 'invalid'> };
 
@@ -2073,7 +2125,7 @@ export type SendWaResult =
  */
 export async function sendWaMessage(threadId: string, text: string): Promise<SendWaResult> {
   const body = String(text || '').trim();
-  if (!body) return { ok: false, reason: 'invalid', message: 'There is nothing to send.' };
+  if (!body) return { ok: false, reason: 'invalid', ...localMessage('api.nothingToSend', 'There is nothing to send.') };
 
   // Cache first, then the id itself. See `waPhoneFromThreadId` for why the id is authoritative.
   const cached = waThreadCache.get(threadId);
@@ -2081,7 +2133,7 @@ export async function sendWaMessage(threadId: string, text: string): Promise<Sen
   if (!p10) {
     // The server's answer is already known (400, `:821`), and we can say something truer than it
     // can: it is this conversation that has no number, not the message that is malformed.
-    return { ok: false, reason: 'invalid', message: 'This chat has no phone number, so nothing can be sent to it.' };
+    return { ok: false, reason: 'invalid', ...localMessage('api.chatMissingPhone', 'This chat has no phone number, so nothing can be sent to it.') };
   }
 
   if (!sessionReal || FORCE_DEMO) return { ok: false, reason: 'network' };
@@ -2140,7 +2192,10 @@ export async function sendWaMessage(threadId: string, text: string): Promise<Sen
       // This endpoint's two refusals are both `{ success:false, message }` (`:821`, `:824`).
       // `error` is read as well because `enums.md` §15 records both keys in play across routers.
       const msg = json?.message || json?.error;
-      return { ok: false, reason: 'invalid', message: String(msg || 'The server refused this message.') };
+      return {
+        ok: false, reason: 'invalid',
+        ...(msg ? { message: String(msg) } : localMessage('api.messageRefused', 'The server refused this message.')),
+      };
     }
 
     if (ok) { reportFailure(KEY); return { ok: false, reason: 'server' }; }   // 2xx, no usable body
@@ -2252,9 +2307,9 @@ export async function dispatchNotification(input: {
   priority?: 'low' | 'medium' | 'high';
   audience: 'all' | 'selected';
   user_ids?: string[];
-}): Promise<{ ok: boolean; created: number; message: string; needsRole?: boolean; needsDeploy?: boolean }> {
+}): Promise<{ ok: boolean; created: number; message: string; messageCopy?: LocalCopy; needsRole?: boolean; needsDeploy?: boolean }> {
   if (!sessionReal || FORCE_DEMO) {
-    return { ok: false, created: 0, message: 'Not signed in. Sign in to send notifications.' };
+    return { ok: false, created: 0, ...localMessage('api.notificationSignIn', 'Not signed in. Sign in to send notifications.') };
   }
   try {
     const { ok, status, json } = await req('/notifications/dispatch', {
@@ -2268,22 +2323,33 @@ export async function dispatchNotification(input: {
       }),
     });
     if (status === 403) {
-      return { ok: false, created: 0, needsRole: true, message: 'Your role cannot send team notifications.' };
+      return { ok: false, created: 0, needsRole: true, ...localMessage('api.notificationRole', 'Your role cannot send team notifications.') };
     }
     if (status === 404) {
       return {
         ok: false, created: 0, needsDeploy: true,
-        message: 'The server does not support team notifications yet. It needs the latest backend deploy.',
+        ...localMessage('api.notificationUnsupported', 'The server does not support team notifications yet. It needs the latest backend deploy.'),
       };
     }
     if (!ok || json?.success === false) {
-      return { ok: false, created: 0, message: json?.message || json?.error || 'Could not send the notification.' };
+      const serverMessage = json?.message || json?.error;
+      return {
+        ok: false, created: 0,
+        ...(serverMessage ? { message: serverMessage } : localMessage('api.notificationFailed', 'Could not send the notification.')),
+      };
     }
     const created = Number(json?.data?.created ?? json?.created ?? 0);
-    return { ok: true, created, message: json?.message || `Sent to ${created} ${created === 1 ? 'person' : 'people'}.` };
+    return {
+      ok: true, created,
+      ...(json?.message ? { message: json.message } : localMessage(
+        created === 1 ? 'api.notificationSent_one' : 'api.notificationSent_other',
+        `Sent to ${created} ${created === 1 ? 'person' : 'people'}.`,
+        { count: created },
+      )),
+    };
   } catch (e: any) {
-    if (isUnreachable(e)) return { ok: false, created: 0, message: 'Could not reach the server. Check your connection.' };
-    return { ok: false, created: 0, message: 'Could not send the notification.' };
+    if (isUnreachable(e)) return { ok: false, created: 0, ...localMessage('api.connectionCheck', 'Could not reach the server. Check your connection.') };
+    return { ok: false, created: 0, ...localMessage('api.notificationFailed', 'Could not send the notification.') };
   }
 }
 
@@ -2358,6 +2424,7 @@ function adaptMember(raw: any): TeamMember {
   return {
     id: String(raw.user_id || raw._id || raw.id),
     name: raw.full_name || raw.name || 'Member',
+    ...(!(raw.full_name || raw.name) ? { nameCopy: { key: 'record.member' } } : {}),
     role: raw.role || 'advisor',
     phone: raw.phone || raw.mobile || '',
     email: raw.email,
@@ -2413,6 +2480,7 @@ export async function getTeam(): Promise<TeamMember[]> {
         id: String(t.id || i),
         icon: 'checkbox-outline',
         text: `${String(t.status || 'open').toLowerCase() === 'done' ? 'Completed' : 'Working on'}: ${t.title}`,
+        textCopy: { key: String(t.status || 'open').toLowerCase() === 'done' ? 'activity.completed' : 'activity.working', params: { title: String(t.title) } },
         at: t.updated_at || t.created_at || new Date().toISOString(),
       })),
     })) as TeamMember[];
@@ -2450,9 +2518,13 @@ export async function getAssignableTeam(): Promise<TeamMember[]> {
  * of invented colleagues, and selecting one queried movement tracks for a user id that does
  * not exist. Empty is the correct answer: the picker then shows its empty state.
  */
-export async function getTrackableMembers(): Promise<{ id: string; name: string; role: string }[]> {
+export async function getTrackableMembers(): Promise<{ id: string; name: string; nameCopy?: LocalCopy; role: string }[]> {
   const real = await tryReal<any[]>('/profiles?limit=100', {}, isArr);
-  if (real) return real.filter((p) => p.user_id).map((p) => ({ id: String(p.user_id), name: p.full_name || p.name || 'Member', role: p.role || 'advisor' }));
+  if (real) return real.filter((p) => p.user_id).map((p) => ({
+    id: String(p.user_id), name: p.full_name || p.name || 'Member',
+    ...(!(p.full_name || p.name) ? { nameCopy: { key: 'record.member' } } : {}),
+    role: p.role || 'advisor',
+  }));
   return unavailable('/profiles', [] as { id: string; name: string; role: string }[]);
 }
 
@@ -2506,11 +2578,11 @@ export async function search(q: string) {
 
 /* ------------------------------------------------------- Office geofence */
 export type Geofence = {
-  lat: number; lng: number; radius_m: number; label: string; enforce: boolean;
+  lat: number; lng: number; radius_m: number; label: string; labelCopy?: LocalCopy; enforce: boolean;
   // PHASE 50: the org may run more than one office (Adajan + Katargam) and in-range means within
   // the radius of the NEAREST. Always at least one entry — the primary pin — so single-office
   // callers and a not-yet-deployed backend behave exactly as before.
-  offices: { lat: number; lng: number; label: string }[];
+  offices: { lat: number; lng: number; label: string; labelCopy?: LocalCopy }[];
 };
 
 /**
@@ -2552,6 +2624,7 @@ export async function getGeofence(): Promise<Geofence | null> {
   const lat = Number(real.lat);
   const lng = Number(real.lng);
   const label = String(real.label || 'Office');
+  const labelCopy: LocalCopy | undefined = real.label ? undefined : { key: 'record.office' };
   // PHASE 50: consume the additive `offices:[{lat,lng,label}]` the server now returns
   // (`routes/timeTracker.js` GET /geofence), keeping only well-formed entries. A legacy
   // single-office body (no `offices`, e.g. before the Phase-64 deploy) degrades to the one
@@ -2559,16 +2632,20 @@ export async function getGeofence(): Promise<Geofence | null> {
   const rawOffices = Array.isArray(real.offices) ? real.offices : [];
   const offices = rawOffices
     .filter((o: any) => o && Number.isFinite(Number(o.lat)) && Number.isFinite(Number(o.lng)))
-    .map((o: any) => ({ lat: Number(o.lat), lng: Number(o.lng), label: String(o.label || label) }));
+    .map((o: any) => ({
+      lat: Number(o.lat), lng: Number(o.lng), label: String(o.label || label),
+      ...(!o.label && labelCopy ? { labelCopy } : {}),
+    }));
   return {
     lat,
     lng,
     radius_m: Number(real.radius_m),
     label,
+    ...(labelCopy ? { labelCopy } : {}),
     // Mirrors the server's own reading of the flag (`utils/geofence.js:62`): anything but an
     // explicit false means the fence is on.
     enforce: real.enforce !== false,
-    offices: offices.length ? offices : [{ lat, lng, label }],
+    offices: offices.length ? offices : [{ lat, lng, label, ...(labelCopy ? { labelCopy } : {}) }],
   };
 }
 
@@ -2610,6 +2687,7 @@ export type GeofenceCheck = {
   distance_m: number | null;
   radius_m: number | null;
   message: string;
+  messageCopy?: LocalCopy;
 };
 
 /**
@@ -2640,7 +2718,7 @@ export async function checkGeofence(lat?: number, lng?: number, accuracy?: numbe
   if (!g) return { allowed: true, known: false, distance_m: null, radius_m: null, message: '' };
   if (!g.enforce) return { allowed: true, known: true, distance_m: null, radius_m: g.radius_m, message: '' };
   if (lat == null || lng == null || !isFinite(lat) || !isFinite(lng)) {
-    return { allowed: false, known: true, distance_m: null, radius_m: g.radius_m, message: 'Enable location to clock in.' };
+    return { allowed: false, known: true, distance_m: null, radius_m: g.radius_m, ...localMessage('api.enableClockLocation', 'Enable location to clock in.') };
   }
   // PHASE 50: distance to the NEAREST office — in-range means within radius of ANY of them, which
   // is exactly what the server now decides (`utils/geofence.checkNearestGeofence`). For a
@@ -2652,7 +2730,7 @@ export async function checkGeofence(lat?: number, lng?: number, accuracy?: numbe
   const tol = Number.isFinite(acc) ? Math.max(0, Math.min(acc, 100)) : 0;
   // How far past the fence this fix is, with the accuracy credit already spent. <= 0 is inside.
   if (dist - tol - g.radius_m <= 0) {
-    return { allowed: true, known: true, distance_m: Math.round(dist), radius_m: g.radius_m, message: 'Within the office area' };
+    return { allowed: true, known: true, distance_m: Math.round(dist), radius_m: g.radius_m, ...localMessage('api.withinOffice', 'Within the office area') };
   }
   return {
     allowed: false, known: true, distance_m: Math.round(dist), radius_m: g.radius_m,
@@ -2667,7 +2745,11 @@ export async function checkGeofence(lat?: number, lng?: number, accuracy?: numbe
     // repeats. `dist - radius` is sufficient whatever the next fix looks like. Advice has to
     // still be true after somebody follows it, so it is the conservative number that ships; the
     // cost is asking for up to 100 m more walking than strictly needed.
-    message: `You're ${distanceText(dist)} from the office. Move about ${distanceText(dist - g.radius_m)} closer to clock in.`,
+    ...localMessage(
+      'api.moveCloser',
+      `You're ${distanceText(dist)} from the office. Move about ${distanceText(dist - g.radius_m)} closer to clock in.`,
+      { distance: distanceText(dist), closer: distanceText(dist - g.radius_m) },
+    ),
   };
 }
 
@@ -2867,6 +2949,7 @@ export type PayrollMonth = {
 export type PayrollRow = {
   user_id: string;
   name: string | null;
+  nameCopy?: LocalCopy;
   /** false = no staff Profile matched this payroll `user_id` (an orphan row). */
   staff_found: boolean;
   segment: string;            // 'day_wise' | 'hourly' | 'base'
@@ -3259,7 +3342,7 @@ export function needsConsentGate(read: ConsentReadResult): boolean {
 
 /* ------------------------------------------------------- Agent locations */
 export type AgentPin = {
-  id: string; name: string; city?: string;
+  id: string; name: string; nameCopy?: LocalCopy; city?: string;
   inLat?: number; inLng?: number; inTime?: string;
   outLat?: number; outLng?: number; outTime?: string;
   onDuty: boolean;
@@ -3282,6 +3365,7 @@ const toPin = (row: any, p: any, live = true): AgentPin | null => {
   return {
     id: String(p.user_id),
     name: row.user_name || p.full_name || p.name || 'Agent',
+    ...(!(row.user_name || p.full_name || p.name) ? { nameCopy: { key: 'record.agent' } } : {}),
     city: ci.city || undefined,
     inLat, inLng, inTime: ci.time || undefined,
     outLat: num2(co.lat), outLng: num2(co.lng), outTime: co.time || undefined,
@@ -3302,6 +3386,7 @@ export function mapLiveLocation(row: any): LiveLocation | null {
   return {
     userId: String(uid),
     name: String(row?.full_name || row?.name || 'Member'),
+    ...(!(row?.full_name || row?.name) ? { nameCopy: { key: 'record.member' } } : {}),
     email: typeof row?.email === 'string' && row.email ? row.email : undefined,
     role: String(row?.role || 'advisor'),
     isClockedIn: !!row?.isClockedIn,
@@ -3415,7 +3500,7 @@ export type BreakPoint = {
   reason?: string | null; active?: boolean;
 };
 export type MemberBreaks = {
-  userId: string; name: string; role: string; onBreak: boolean; breaks: BreakPoint[];
+  userId: string; name: string; nameCopy?: LocalCopy; role: string; onBreak: boolean; breaks: BreakPoint[];
 };
 
 /**
@@ -3451,6 +3536,7 @@ export async function getBreakLocations(userId?: string): Promise<MemberBreaks[]
     return members.map((m): MemberBreaks => ({
       userId: String(m?.user_id ?? ''),
       name: String(m?.full_name || 'Member'),
+      ...(!m?.full_name ? { nameCopy: { key: 'record.member' } } : {}),
       role: String(m?.role || ''),
       onBreak: !!m?.is_on_break,
       breaks: (Array.isArray(m?.breaks) ? m.breaks : [])
@@ -3962,25 +4048,31 @@ export async function getCampaignAudience(type: 'renewal' | 'birthday' | 'annive
   return { count: real.count ?? 0, matched: real.matched ?? real.count ?? 0, sample: real.sample || [] };
 }
 /** One-click BULK send: premium reminders (type:'renewal'), birthday, etc. */
-export async function sendCampaign(type: 'renewal' | 'birthday' | 'anniversary' | 'maturity' | 'marketing', opts: { text?: string; limit?: number; filters?: any } = {}): Promise<{ ok: boolean; count?: number; message: string; needsRole?: boolean }> {
+export async function sendCampaign(type: 'renewal' | 'birthday' | 'anniversary' | 'maturity' | 'marketing', opts: { text?: string; limit?: number; filters?: any } = {}): Promise<{ ok: boolean; count?: number; message: string; messageCopy?: LocalCopy; needsRole?: boolean }> {
   if (sessionReal && !FORCE_DEMO) {
     try {
       const { ok, status, json } = await req('/campaigns/send', { method: 'POST', body: JSON.stringify({ type, ...opts }) }, 30000);
-      if (status === 403) return { ok: false, count: 0, message: 'Only admin/leader can send bulk campaigns.', needsRole: true };
+      if (status === 403) return { ok: false, count: 0, ...localMessage('api.campaignRole', 'Only admin/leader can send bulk campaigns.'), needsRole: true };
       const data = json?.data ?? {};
       // Pass the server's count THROUGH, undefined and all: an explicit 0 (nobody dispatched) must not
       // read as "no number" and fall back to the whole audience (loophole audit round 3, 2026-08-25).
       const rawCount = typeof data.count === 'number' ? data.count : undefined;
-      return { ok: !!(json?.success), count: rawCount, message: json?.message || (ok ? 'Sent' : 'Send failed') };
+      return {
+        ok: !!(json?.success), count: rawCount,
+        ...(json?.message ? { message: json.message } : localMessage(ok ? 'api.sent' : 'api.sendFailed', ok ? 'Sent' : 'Send failed')),
+      };
     } catch (e: any) {
-      return { ok: false, count: 0, message: e?.message || 'Send failed' };
+      return {
+        ok: false, count: 0,
+        ...(e?.message ? { message: e.message } : localMessage('api.sendFailed', 'Send failed')),
+      };
     }
   }
   // No live session. Reporting a fake "queued N messages" here would be the worst possible
   // lie in this app: the user would believe renewal reminders went out to real policyholders
   // when nothing was dispatched at all.
   reportFailure('/campaigns/send');
-  return { ok: false, count: 0, message: 'Not signed in. Sign in to send campaigns.' };
+  return { ok: false, count: 0, ...localMessage('api.campaignSignIn', 'Not signed in. Sign in to send campaigns.') };
 }
 
 /* ==================================================================== *
@@ -4648,7 +4740,7 @@ export type AppUiConfig = {
     tabs: string[];
     /** `collapsed_by_default` is part of the ui_rbac_config.json contract; it was missing
      *  here, so the config provider was silently dropping it during normalisation. */
-    more_sections?: { title: string; items: string[]; collapsed_by_default?: boolean }[];
+    more_sections?: { title: string; titleKey?: string; items: string[]; collapsed_by_default?: boolean }[];
     hidden: string[];
   };
   features: Record<string, boolean | string[]>;

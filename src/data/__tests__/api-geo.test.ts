@@ -294,6 +294,7 @@ describe('checkGeofence — the fence is known', () => {
     await withFence();
     expect(await api.checkGeofence(FENCE.lat + M(100), FENCE.lng)).toEqual({
       allowed: true, known: true, distance_m: 100, radius_m: 200, message: 'Within the office area',
+      messageCopy: { key: 'api.withinOffice' },
     });
   });
 
@@ -424,6 +425,7 @@ describe('checkGeofence — the fence is known', () => {
     const expected = {
       allowed: false, known: true, distance_m: null, radius_m: 200,
       message: 'Enable location to clock in.',
+      messageCopy: { key: 'api.enableClockLocation' },
     };
     expect(await api.checkGeofence(undefined, FENCE.lng)).toEqual(expected);
     expect(await api.checkGeofence(FENCE.lat, undefined)).toEqual(expected);
@@ -439,5 +441,20 @@ describe('checkGeofence — the fence is known', () => {
     const res = await api.checkGeofence(0, 0);
     expect(res.message).not.toBe('Enable location to clock in.');
     expect(res.allowed).toBe(false);
+  });
+});
+
+describe('Phase 115 geofence message metadata', () => {
+  it('retains measured verdicts and exact formatted distance parameters', async () => {
+    await withFence();
+    const result = await api.checkGeofence(FENCE.lat + M(500), FENCE.lng);
+    expect(result).toEqual({
+      allowed: false, known: true, distance_m: 500, radius_m: 200,
+      message: `You're 500${NB}m from the office. Move about 300${NB}m closer to clock in.`,
+      messageCopy: { key: 'api.moveCloser', params: { distance: `500${NB}m`, closer: `300${NB}m` } },
+    });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBeUndefined();
   });
 });

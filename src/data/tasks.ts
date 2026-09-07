@@ -2,6 +2,7 @@
  *  fabricated seed array was removed (see the note below) and no sample data remains. */
 import { buildQuery, matchesFields, W_ID, W_SECOND, W_TEXT, type Field } from '@/lib/searchScore';
 import type { TKey } from '@/i18n';
+import type { LocalCopy } from '@/i18n/copy';
 
 export type TaskStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
 export type TaskPriority = 'high' | 'medium' | 'low';
@@ -9,12 +10,15 @@ export type TaskStep = { id: string; label: string; done: boolean };
 export type Task = {
   id: string;
   title: string;
+  titleCopy?: LocalCopy;
   description: string;
   status: TaskStatus;
   priority: TaskPriority;
   category: string;
+  categoryCopy?: LocalCopy;
   dueDate: string;
   assignedBy: string;
+  assignedByCopy?: LocalCopy;
   client?: string;
   clientPhone?: string;
   steps: TaskStep[];

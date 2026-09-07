@@ -19,12 +19,14 @@
  * vanished. Duty (`clockedIn`) comes straight from each live row, so it needs no join at all.
  */
 import type { AgentPin } from './api';
+import type { LocalCopy } from '@/i18n/copy';
 import type { TeamActivity, TeamMember } from './team';
 
 /** One row of `GET /time-tracker/live-locations` after `api.ts` maps it (see `mapLiveLocation`). */
 export type LiveLocation = {
   userId: string;        // profile._id (24-hex). Resolves via `/profiles/:id` findById on tap.
   name: string;
+  nameCopy?: LocalCopy;
   email?: string;
   role: string;
   isClockedIn: boolean;
@@ -71,12 +73,14 @@ export function mergeRoster(live: LiveLocation[], overview: OverviewMember[]): T
       id: String(t.id || i),
       icon: 'checkbox-outline',
       text: `${norm(t.status) === 'done' ? 'Completed' : 'Working on'}: ${t.title}`,
+      textCopy: { key: norm(t.status) === 'done' ? 'activity.completed' : 'activity.working', params: { title: String(t.title) } },
       at: t.updated_at || t.created_at || new Date().toISOString(),
     })) as TeamActivity[];
 
     return {
       id: String(p.userId),
       name: p.name || 'Member',
+      ...(p.name ? (p.nameCopy ? { nameCopy: p.nameCopy } : {}) : { nameCopy: { key: 'record.member' } }),
       role: m?.role || p.role || 'advisor',
       phone: phoneFmt(m?.phone),
       email: p.email || undefined,
@@ -115,6 +119,7 @@ export function liveOnDutyPins(live: LiveLocation[]): AgentPin[] {
     pins.push({
       id: String(p.userId),
       name: p.name || 'Agent',
+      ...(p.name ? (p.nameCopy ? { nameCopy: p.nameCopy } : {}) : { nameCopy: { key: 'record.agent' } }),
       inLat: p.lat,
       inLng: p.lng,
       inTime: p.lastActivity || undefined,

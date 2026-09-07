@@ -67,7 +67,7 @@ describe('scanRenewals — date rollover', () => {
 
     expect(await api.scanRenewals(30)).toEqual([{
       id: 'r1',
-      name: 'Customer',
+      name: 'Customer', nameCopy: { key: 'record.customer' },
       phone: '+919876543210',
       premium: 0,
       policyNo: '',

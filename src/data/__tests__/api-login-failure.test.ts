@@ -58,6 +58,7 @@ describe('login — timeout is not "unreachable"', () => {
     const err = await api.login('a@b.com', 'pw').catch((e) => e);
     expect(err).toBeInstanceOf(api.NetworkError);
     expect(err.kind).toBe('timeout');
+    expect(err.messageCopy).toEqual({ key: 'api.timeout' });
   });
 
   it('classifies a dead network (no route to host) as network, keeping the reach-copy', async () => {
@@ -65,6 +66,7 @@ describe('login — timeout is not "unreachable"', () => {
     const err = await api.login('a@b.com', 'pw').catch((e) => e);
     expect(err).toBeInstanceOf(api.NetworkError);
     expect(err.kind).toBe('network');
+    expect(err.messageCopy).toEqual({ key: 'api.unreachable' });
     expect(err.message).toMatch(/could not reach/i);
   });
 
@@ -77,6 +79,8 @@ describe('login — timeout is not "unreachable"', () => {
     const err = await api.login('a@b.com', 'wrong').catch((e) => e);
     expect(err).not.toBeInstanceOf(api.NetworkError);
     expect(err.message).toMatch(/invalid credentials/i);
+    // This server fixture is deliberately identical to the local English fallback.
+    expect(err.messageCopy).toBeUndefined();
   });
 });
 
@@ -86,6 +90,7 @@ describe('sendOtp / verifyOtp — same timeout honesty', () => {
     const err = await api.sendOtp('9876543210').catch((e) => e);
     expect(err).toBeInstanceOf(api.NetworkError);
     expect(err.kind).toBe('timeout');
+    expect(err.messageCopy).toEqual({ key: 'api.timeout' });
   });
 
   it('verifyOtp throws a network-kind NetworkError on a dead link', async () => {
@@ -93,5 +98,75 @@ describe('sendOtp / verifyOtp — same timeout honesty', () => {
     const err = await api.verifyOtp('9876543210', '12345').catch((e) => e);
     expect(err).toBeInstanceOf(api.NetworkError);
     expect(err.kind).toBe('network');
+    expect(err.messageCopy).toEqual({ key: 'api.unreachable' });
+  });
+});
+
+describe('Phase 115 local sign-in copy provenance', () => {
+  it.each(['timeout', 'network'] as const)('marks only the %s constructor default, preserving Error classification', (kind) => {
+    const local = new api.NetworkError(kind);
+    expect(local).toBeInstanceOf(Error);
+    expect(local.name).toBe('NetworkError');
+    expect(local.kind).toBe(kind);
+    expect(local.messageCopy).toEqual({ key: kind === 'timeout' ? 'api.timeout' : 'api.unreachable' });
+
+    // Equal words are insufficient evidence: an explicitly supplied string stays raw.
+    const custom = new api.NetworkError(kind, local.message);
+    expect(custom.message).toBe(local.message);
+    expect(custom.messageCopy).toBeUndefined();
+    const blank = new api.NetworkError(kind, '');
+    expect(blank.message).toBe('');
+    expect(blank.messageCopy).toBeUndefined();
+  });
+
+  it('marks the local invalid-credentials fallback when the server supplied only a machine code', async () => {
+    fetchSpy.mockResolvedValue({ ok: false, status: 401, json: async () => ({ error: 'INVALID_CREDENTIALS' }) });
+    const err = await api.login('a@b.com', 'wrong').catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err).not.toBeInstanceOf(api.NetworkError);
+    expect(err.message).toBe('Invalid credentials. Please check and try again.');
+    expect(err.messageCopy).toEqual({ key: 'api.invalidCredentials' });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    { identifier: 'person@example.com', channel: 'email', key: 'api.codeSentEmail', message: 'Code sent to your email.' },
+    { identifier: '9876543210', channel: 'whatsapp', key: 'api.codeSentWhatsApp', message: 'Code sent to your WhatsApp number.' },
+  ] as const)('keeps the $channel OTP fallback local and preserves its request body', async ({ identifier, channel, key, message }) => {
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: true }) });
+    expect(await api.sendOtp(identifier)).toEqual({ ok: true, channel, message, messageCopy: { key } });
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(/\/auth\/request-otp$/);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(String(init.body))).toEqual({ email_or_phone: identifier, phone: identifier });
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the served OTP channel even when it differs from the identifier derivation', async () => {
+    fetchSpy.mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: true, channel: 'email' }) });
+    expect(await api.sendOtp('9876543210')).toEqual({
+      ok: true, channel: 'email', message: 'Code sent to your email.', messageCopy: { key: 'api.codeSentEmail' },
+    });
+  });
+
+  it.each([
+    { ok: true, status: 200, channel: 'email', message: 'Code sent to your email.' },
+    { ok: true, status: 200, channel: 'whatsapp', message: 'Code sent to your WhatsApp number.' },
+    { ok: false, status: 400, channel: 'email', message: 'Could not send the code. Please try again.' },
+  ] as const)('keeps the server OTP message raw for $channel / status $status', async ({ ok, status, channel, message }) => {
+    fetchSpy.mockResolvedValue({ ok, status, json: async () => ({ success: ok, channel, message: `  ${message}  ` }) });
+    // The adapter's existing whitespace trimming remains; provenance still belongs to the server.
+    expect(await api.sendOtp('person@example.com')).toEqual({ ok, channel, message });
+  });
+
+  it('marks missing human OTP refusal prose and the existing local non-network catch', async () => {
+    fetchSpy.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: 'OTP_DELIVERY_FAILED' }) });
+    const expected = {
+      ok: false, channel: 'email', message: 'Could not send the code. Please try again.',
+      messageCopy: { key: 'login.msgCodeSendFailed' },
+    };
+    expect(await api.sendOtp('person@example.com')).toEqual(expected);
+    fetchSpy.mockRejectedValueOnce(new Error('serialization failed'));
+    expect(await api.sendOtp('person@example.com')).toEqual(expected);
   });
 });

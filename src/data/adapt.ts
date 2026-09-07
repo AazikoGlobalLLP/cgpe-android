@@ -102,6 +102,7 @@ export function adaptLicPlan(raw: any): LicPlan {
   // carries; the numeric arm is defence only, because `s()` would silently drop a number and this
   // is the ONLY identifier those rows have.
   const code = s(r.plan_table) || (typeof r.plan_table === 'number' ? String(r.plan_table) : '');
+  const namedPlan = realPlanName(s(r.plan_name));
   return {
     id: s(r.product_id) || s(r._id),
     /**
@@ -123,7 +124,8 @@ export function adaptLicPlan(raw: any): LicPlan {
      * a number still falls through to the screen's own "Unnamed plan". The proper fix is the owner
      * supplying the 11 names for the seed file; this stops the rows being indistinguishable today.
      */
-    name: realPlanName(s(r.plan_name)) || (code ? `LIC Plan ${code}` : ''),
+    name: namedPlan || (code ? `LIC Plan ${code}` : ''),
+    ...(!namedPlan && code ? { nameCopy: { key: 'record.licPlan', params: { code } } } : {}),
     code,
     type: s(r.category_label) || s(r.category),
     minAge: 0,
@@ -169,7 +171,8 @@ export function adaptClient(raw: any): Client {
   // substituted — the same rule the backend states at greetingEngine.normalizeClient,
   // because the book arrives in three shapes at once and dropping one nulls a field
   // across every row that carries only that spelling.
-  const name = titleCase(raw.name || raw.clientName || raw.fullName || raw.insuredName || raw['Insured Name']) || 'Customer';
+  const namedClient = titleCase(raw.name || raw.clientName || raw.fullName || raw.insuredName || raw['Insured Name']);
+  const name = namedClient || 'Customer';
   const dob = parseDate(raw.dob || pi.date_of_birth || raw.date_of_birth || raw.dateOfBirth || raw['Date of Birth']);
   const commencement = parseDate(raw.commencementDate || raw.policy_start_date || raw.startDate);
   const maturity = parseDate(raw.maturityDate || raw.maturity_dt || raw.policy_end_date || raw.maturity_date);
@@ -177,7 +180,8 @@ export function adaptClient(raw: any): Client {
   const premium = num(raw.premium != null ? raw.premium : raw.premium_amount);
   const sumAssured = num(raw.sumAssured != null ? raw.sumAssured : (pd.sum_assured != null ? pd.sum_assured : raw.sum_assured));
   const policyNo = String(raw.policyNo || raw.policy_number || raw.policyNumber || '').trim();
-  const plan = String(raw.policy_type || raw.planName || raw.plan || 'LIC Policy').trim() || 'LIC Policy';
+  const namedPolicy = String(raw.policy_type || raw.planName || raw.plan || '').trim();
+  const plan = namedPolicy || 'LIC Policy';
   const mode = String(raw.mode || pd.premium_frequency || '').trim();
   const city = String((raw.address && raw.address.city) || raw.city || raw.Area || '').trim();
 
@@ -211,6 +215,7 @@ export function adaptClient(raw: any): Client {
   const policy: Policy = {
     id: policyNo || String(raw._id || raw.id || Math.random()),
     plan,
+    ...(!namedPolicy ? { planCopy: { key: 'record.licPolicy' } } : {}),
     number: policyNo || '-',
     sumAssured,
     premium,
@@ -232,6 +237,7 @@ export function adaptClient(raw: any): Client {
   return {
     id: String(raw._id || raw.id || policyNo || name),
     name,
+    ...(!namedClient ? { nameCopy: { key: 'record.customer' } } : {}),
     phone: pickPhone(raw),
     email: raw.email || raw.E_mail || undefined,
     city,
@@ -260,10 +266,12 @@ export function adaptUser(raw: any): User {
   return {
     id: String(raw.user_id || raw._id || raw.id || 'u1'),
     name: raw.full_name || raw.name || 'Advisor',
+    ...(!(raw.full_name || raw.name) ? { nameCopy: { key: 'record.advisor' } } : {}),
     email: raw.email || '',
     phone: raw.phone || raw.mobile || '',
     role: raw.role || 'advisor',
     designation: raw.designation || raw.title || 'Advisor',
+    ...(!(raw.designation || raw.title) ? { designationCopy: { key: 'record.advisor' } } : {}),
     branch: raw.branch || raw.branch_name || '',
     agentCode: raw.agent_code || raw.employee_id || raw.code || '',
     tier: (raw.tier || raw.club || 'Growth') as User['tier'],
@@ -353,9 +361,11 @@ export function adaptLead(raw: any): Lead {
     || parseBudget(notesRaw) || parseBudget(raw.interest);
   const prob = num(raw.probability);
   const p10 = String(raw.phoneLast10 || '').replace(/\D/g, '');
+  const namedLead = titleCase(raw.name || raw.clientName || raw.fullName);
   return {
     id: String(raw._id || raw.id || raw.leadId),
-    name: titleCase(raw.name || raw.clientName || raw.fullName) || 'Lead',
+    name: namedLead || 'Lead',
+    ...(!namedLead ? { nameCopy: { key: 'record.lead' } } : {}),
     phone: raw.phone ? String(raw.phone) : (p10.length === 10 ? '+91' + p10 : ''),
     // PHASE 4: `status` first. It used to be `stage || status`, which is also what the backend's
     // own `reports.js:121` does — but `status` is the ONLY one of the two any endpoint will
@@ -363,6 +373,7 @@ export function adaptLead(raw: any): Lead {
     // and every save would read as unconfirmed.
     stage: mapLeadStage(raw.status || raw.stage),
     source: raw.source || 'Manual',
+    ...(!raw.source ? { sourceCopy: { key: 'record.manual' } } : {}),
     // `insurance_need` is the schema's field for what the lead wants (`models/Lead.js:25-28`)
     // and was the one source this never read, so the Interest column was blank for real leads.
     interest: raw.insurance_need || raw.interest || raw.product || (typeof notesRaw === 'string' ? notesRaw.slice(0, 90) : '') || '',
@@ -407,26 +418,30 @@ export function adaptClaim(raw: any): Claim {
   raw = raw || {};
   const claimant = raw.claimant || {};
   const client = raw.client || {};
+  const namedClaimant = titleCase(raw.patient_name || claimant.name || client.name);
   const created = parseDate(raw.created_at || raw.submitted_date || raw.createdAt);
   const ageDays = created ? Math.max(0, Math.round((Date.now() - created.getTime()) / 86400000)) : 0;
   const ctype = String(raw.claim_type || raw.insurance_subtype || '').toLowerCase();
   const amount = num(raw.claim_amount != null ? raw.claim_amount : (raw.claimable_amount != null ? raw.claimable_amount : raw.settlement_amount));
   const missing: string[] = Array.isArray(raw.missing_info) ? raw.missing_info : [];
-  const docs = missing.length
+  const docs: Claim['docs'] = missing.length
     ? missing.map((m, i) => ({ id: 'd' + i, name: String(m), received: false }))
-    : (raw.documents_received ? [{ id: 'd0', name: 'All required documents', received: true }] : []);
+    : (raw.documents_received ? [{ id: 'd0', name: 'All required documents', nameCopy: { key: 'record.allDocuments' }, received: true }] : []);
   const hist = Array.isArray(raw.status_history) ? raw.status_history : [];
-  const timeline = hist.map((h: any, i: number) => ({
+  const timeline: Claim['timeline'] = hist.map((h: any, i: number) => ({
     id: String(h._id || i),
     label: String(h.label || h.status || h.stage || 'Update'),
+    ...(!(h.label || h.status || h.stage) ? { labelCopy: { key: 'record.update' } } : {}),
     at: h.at || h.createdAt || h.date || '',
     by: h.by || h.actor || 'System',
+    ...(!(h.by || h.actor) ? { byCopy: { key: 'record.system' } } : {}),
   }));
-  if (!timeline.length && created) timeline.push({ id: 't0', label: 'Claim registered', at: iso(created), by: 'System' });
+  if (!timeline.length && created) timeline.push({ id: 't0', label: 'Claim registered', labelCopy: { key: 'record.claimRegistered' }, at: iso(created), by: 'System', byCopy: { key: 'record.system' } });
   return {
     id: String(raw.id || raw._id),
     ref: String(raw.claim_number || raw.claimId || raw.ref || raw.id || ''),
-    clientName: titleCase(raw.patient_name || claimant.name || client.name) || 'Claimant',
+    clientName: namedClaimant || 'Claimant',
+    ...(!namedClaimant ? { clientNameCopy: { key: 'record.claimant' } } : {}),
     clientPhone: pickPhone({ phone: claimant.phone || client.phone || raw.mobileNumber }),
     type: CLAIM_TYPE_LABEL[ctype] || 'Health',
     policyNumber: String(raw.policy_number || raw.policyNumber || ''),
@@ -445,9 +460,11 @@ export function adaptClaim(raw: any): Claim {
 export function adaptWaThread(raw: any): WaThread {
   raw = raw || {};
   const p10 = String(raw.phone_last10 || raw.phoneLast10 || '').replace(/\D/g, '');
+  const namedThread = titleCase(raw.name || raw.clientName);
   return {
     id: String(raw.thread_ref || raw.threadRef || raw.id || p10),
-    name: titleCase(raw.name || raw.clientName) || 'WhatsApp user',
+    name: namedThread || 'WhatsApp user',
+    ...(!namedThread ? { nameCopy: { key: 'record.whatsAppUser' } } : {}),
     phone: p10.length === 10 ? '+91' + p10 : (p10 ? '+' + p10 : ''),
     lastMessage: raw.preview || raw.lastMessageText || '',
     lastAt: raw.last_at || raw.lastMessageAt || raw.updatedAt || '',
@@ -482,6 +499,7 @@ export function adaptReminder(raw: any): Reminder {
     id: String(raw._id || raw.id),
     type: REMINDER_TYPE[t] || 'followup',
     title: raw.title || raw.message || 'Reminder',
+    ...(!(raw.title || raw.message) ? { titleCopy: { key: 'record.reminder' } } : {}),
     subtitle: raw.message || raw.description || '',
     clientName: raw.client_name || raw.clientName || undefined,
     phone: raw.phone || undefined,
@@ -506,6 +524,7 @@ export function adaptNotification(raw: any): AppNotification {
     id: String(raw._id || raw.id),
     icon: NOTIF_ICON[kind] || 'notifications',
     title: raw.title || raw.message || 'Notification',
+    ...(!(raw.title || raw.message) ? { titleCopy: { key: 'record.notification' } } : {}),
     body: raw.body || raw.message || raw.description || '',
     at: raw.at || raw.createdAt || raw.created_at || '',
     read: !!(raw.read ?? raw.is_read),
@@ -535,7 +554,8 @@ export function adaptContest(raw: any, userId?: string | null): Contest {
   const progressUnits = num(raw.user_progress);
   const progress = target > 0 ? Math.min(1, Math.max(0, progressUnits / target)) : 0;
 
-  const unit = String(raw.target_unit || 'points').trim() || 'points';
+  const suppliedUnit = String(raw.target_unit || '').trim();
+  const unit = suppliedUnit || 'points';
   const metric = target > 0 ? `${progressUnits} of ${target} ${unit}` : unit;
 
   let rank: number | undefined;
@@ -548,9 +568,14 @@ export function adaptContest(raw: any, userId?: string | null): Contest {
   const out: Contest = {
     id: String(raw._id || raw.id || ''),
     name: String(raw.title || raw.name || 'Contest').trim(),
+    ...(!(raw.title || raw.name) ? { nameCopy: { key: 'record.contest' } } : {}),
     reward: String(raw.reward_description || raw.reward || '').trim(),
     progress,
     metric,
+    ...(target > 0
+      ? { metricCopy: { key: 'contests.metricProgress', params: { progress: progressUnits, target, unit } },
+          ...(!suppliedUnit ? { metricUnitCopy: { key: 'contests.pointsUnit' } } : {}) }
+      : !suppliedUnit ? { metricCopy: { key: 'contests.pointsUnit' } } : {}),
     ends: iso(parseDate(raw.end_date || raw.ends)),
   };
   if (rank != null) out.rank = rank;

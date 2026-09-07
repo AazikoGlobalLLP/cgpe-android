@@ -1,14 +1,20 @@
 /** Domain types — mirror the CGPE backend shapes the mobile app consumes. */
+import type { LocalCopy } from '@/i18n/copy';
+
+/** Optional *Copy companions describe app-owned display fallbacks. They survive local caches,
+ * but never replace raw fields or belong in outbound API bodies. Older cached rows may omit them. */
 
 export type Role = 'advisor' | 'learn_advisor' | 'leader' | 'admin' | 'payroll_staff' | 'super_admin';
 
 export interface User {
   id: string;
   name: string;
+  nameCopy?: LocalCopy;
   email: string;
   phone: string;
   role: Role;
   designation: string;
+  designationCopy?: LocalCopy;
   branch: string;
   agentCode: string;
   photo?: string;
@@ -46,9 +52,11 @@ export type LeadStage = 'new_lead' | 'meeting_scheduled' | 'docs_shared' | 'poli
 export interface Lead {
   id: string;
   name: string;
+  nameCopy?: LocalCopy;
   phone: string;
   stage: LeadStage;
   source: string;
+  sourceCopy?: LocalCopy;
   interest: string;
   potential: number; // premium potential ₹
   city: string;
@@ -72,6 +80,7 @@ export interface LeadNote {
 export interface Policy {
   id: string;
   plan: string;
+  planCopy?: LocalCopy;
   number: string;
   sumAssured: number;
   premium: number;
@@ -85,6 +94,7 @@ export interface Policy {
 export interface Client {
   id: string;
   name: string;
+  nameCopy?: LocalCopy;
   phone: string;
   email?: string;
   city: string;
@@ -110,20 +120,24 @@ export type ClaimStatus = 'intake' | 'docs_pending' | 'under_review' | 'submitte
 export interface ClaimDoc {
   id: string;
   name: string;
+  nameCopy?: LocalCopy;
   received: boolean;
 }
 
 export interface ClaimEvent {
   id: string;
   label: string;
+  labelCopy?: LocalCopy;
   at: string;
   by: string;
+  byCopy?: LocalCopy;
 }
 
 export interface Claim {
   id: string;
   ref: string;
   clientName: string;
+  clientNameCopy?: LocalCopy;
   clientPhone: string;
   type: 'Maturity' | 'Death' | 'Health' | 'Surrender' | 'Accident';
   policyNumber: string;
@@ -135,6 +149,7 @@ export interface Claim {
   docs: ClaimDoc[];
   timeline: ClaimEvent[];
   aiSummary?: string;
+  aiSummaryCopy?: LocalCopy;
 }
 
 export type ReminderType = 'birthday' | 'anniversary' | 'renewal' | 'maturity' | 'followup' | 'meeting';
@@ -143,6 +158,7 @@ export interface Reminder {
   id: string;
   type: ReminderType;
   title: string;
+  titleCopy?: LocalCopy;
   subtitle: string;
   clientName?: string;
   phone?: string;
@@ -197,6 +213,7 @@ export interface WaMessage {
 export interface WaThread {
   id: string;
   name: string;
+  nameCopy?: LocalCopy;
   phone: string;
   lastMessage: string;
   lastAt: string;
@@ -209,6 +226,7 @@ export interface AppNotification {
   id: string;
   icon: string;
   title: string;
+  titleCopy?: LocalCopy;
   body: string;
   at: string;
   read: boolean;
@@ -218,6 +236,7 @@ export interface AppNotification {
 export interface LicPlan {
   id: string;
   name: string;
+  nameCopy?: LocalCopy;
   code: string;
   type: string;
   minAge: number;
@@ -230,9 +249,13 @@ export interface LicPlan {
 export interface Contest {
   id: string;
   name: string;
+  nameCopy?: LocalCopy;
   reward: string;
   progress: number; // 0..1
   metric: string;
+  metricCopy?: LocalCopy;
+  /** Only the locally supplied unit inside metricCopy; custom server units remain raw. */
+  metricUnitCopy?: LocalCopy;
   ends: string;
   rank?: number;
 }

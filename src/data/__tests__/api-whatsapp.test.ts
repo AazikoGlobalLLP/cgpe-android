@@ -181,7 +181,10 @@ describe('sendWaMessage — which number it sends to', () => {
 
   it('makes NO request when no number can be resolved, and says which thing is wrong', async () => {
     const r = await api.sendWaMessage('custom:', 'Namaste');
-    expect(r).toEqual({ ok: false, reason: 'invalid', message: 'This chat has no phone number, so nothing can be sent to it.' });
+    expect(r).toEqual({
+      ok: false, reason: 'invalid', message: 'This chat has no phone number, so nothing can be sent to it.',
+      messageCopy: { key: 'api.chatMissingPhone' },
+    });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -196,7 +199,9 @@ describe('sendWaMessage — which number it sends to', () => {
 
   it('sends nothing when the text is blank', async () => {
     const r = await api.sendWaMessage('custom:9876543210', '   ');
-    expect(r).toEqual({ ok: false, reason: 'invalid', message: 'There is nothing to send.' });
+    expect(r).toEqual({
+      ok: false, reason: 'invalid', message: 'There is nothing to send.', messageCopy: { key: 'api.nothingToSend' },
+    });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
@@ -398,5 +403,31 @@ describe('getWaThread — the cold-cache stub', () => {
     fetchSpy.mockResolvedValue(ok({ success: true, data: [] }));
     const t = await api.getWaThread('custom:9876543210');
     expect(t?.name).toBe('Asha Patel');
+  });
+});
+
+describe('Phase 115 WhatsApp refusal provenance', () => {
+  it('marks a missing-prose 400 fallback and keeps an equal-English server refusal raw', async () => {
+    const message = 'The server refused this message.';
+    fetchSpy.mockResolvedValueOnce(reply(400, { success: false }));
+    expect(await api.sendWaMessage('custom:9876543210', 'Namaste')).toEqual({
+      ok: false, reason: 'invalid', message, messageCopy: { key: 'api.messageRefused' },
+    });
+    fetchSpy.mockResolvedValueOnce(reply(400, { success: false, message }));
+    expect(await api.sendWaMessage('custom:9876543210', 'Namaste')).toEqual({ ok: false, reason: 'invalid', message });
+    expect(sent(0).body).toEqual({ phone: '9876543210', name: '', text: 'Namaste', purpose: 'custom' });
+    expect(sent(1).body).toEqual(sent(0).body);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps accepted messages as WaMessage objects without string-message metadata', async () => {
+    fetchSpy.mockResolvedValue(sendReply({}));
+    const result = await api.sendWaMessage('custom:9876543210', 'Namaste');
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('Expected an accepted message');
+    expect(result.message).toEqual({
+      id: 'ADM-1754820000000-123456', fromMe: true, text: 'Namaste', at: '2026-08-10T06:00:00.000Z',
+    });
+    expect(result).not.toHaveProperty('messageCopy');
   });
 });

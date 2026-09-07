@@ -10,6 +10,8 @@
  * Pure: no React, no native imports, safe to reach from the Vitest graph without a stub.
  */
 
+import type { LocalCopy } from '@/i18n/copy';
+
 export type CampaignSendResult = {
   ok: boolean;
   /**
@@ -21,6 +23,7 @@ export type CampaignSendResult = {
    */
   count?: number;
   message?: string;
+  messageCopy?: LocalCopy;
   /** The server refused the bulk send for this role (a 403 from /campaigns/send). */
   needsRole?: boolean;
 };
@@ -34,6 +37,7 @@ export type CampaignOutcome = {
   /** A refusal is an informational outcome, not an error line. */
   logState: 'info' | 'error';
   logText: string;
+  logCopy?: LocalCopy;
 };
 
 /**
@@ -54,5 +58,7 @@ export function campaignOutcome(res: CampaignSendResult, total: number): Campaig
   const logText = needsRole
     ? 'Bulk send blocked for this role.'
     : (res.message || (res.ok ? 'Campaign dispatched.' : 'Send failed.'));
-  return { status, needsRole, sent, logState, logText };
+  const logCopy = needsRole ? { key: 'campaign.roleBlocked' }
+    : res.message ? res.messageCopy : { key: res.ok ? 'campaign.dispatched' : 'campaign.sendFailed' };
+  return { status, needsRole, sent, logState, logText, ...(logCopy ? { logCopy } : {}) };
 }

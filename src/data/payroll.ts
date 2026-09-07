@@ -20,11 +20,13 @@
  * Aadhaar / PAN stay off the phone (payroll.tsx "NO PII ON THE PHONE") pending the owner's decision.
  */
 import type { PayrollRow } from './api';
+import type { LocalCopy } from '@/i18n/copy';
 import type { TeamMember } from './team';
 
 export type PayrollRosterEntry = {
   user_id: string;
   name: string;
+  nameCopy?: LocalCopy;
   role: string;
   branch: string;
   /** The server-computed payroll row, or null when this member has no payroll profile. */
@@ -80,7 +82,7 @@ export function mergePayrollRoster(directory: TeamMember[], roster: PayrollRow[]
     const nameHit = dirNameCount.get(norm(mem.name)) === 1 ? byName.get(norm(mem.name)) : null;
     const row = byId.get(norm(mem.id)) ?? nameHit ?? null;
     if (row) used.add(row);
-    return { user_id: mem.id, name: mem.name, role: mem.role, branch: mem.branch, row, pending: !row };
+    return { user_id: mem.id, name: mem.name, ...(mem.nameCopy ? { nameCopy: mem.nameCopy } : {}), role: mem.role, branch: mem.branch, row, pending: !row };
   });
 
   // Payroll rows that matched no directory member (an orphan profile, a `staff_found:false` row, or a
@@ -90,6 +92,8 @@ export function mergePayrollRoster(directory: TeamMember[], roster: PayrollRow[]
     entries.push({
       user_id: String(r.user_id),
       name: r.name || String(r.user_id) || 'Member',
+      ...(r.name ? (r.nameCopy ? { nameCopy: r.nameCopy } : {})
+        : String(r.user_id) ? {} : { nameCopy: { key: 'record.member' } }),
       role: '',
       branch: '',
       row: r,
