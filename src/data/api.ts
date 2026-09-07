@@ -221,12 +221,15 @@ async function req(
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);
     try {
+      // A response can outlive a shared-handset account switch. Its rejection applies only
+      // to the token actually sent, never the new identity that happens to be signed in now.
+      const requestToken = authToken;
       const res = await fetch(`${API_BASE_URL}${path}`, {
         ...opts,
         signal: controller.signal,
         headers: {
           'Content-Type': 'application/json',
-          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+          ...(requestToken ? { Authorization: `Bearer ${requestToken}` } : {}),
           ...(opts.headers || {}),
         },
       });
@@ -238,7 +241,7 @@ async function req(
       }
       const json = await res.json().catch(() => null);
       clearTimeout(timer);
-      reportAuth(res.status, !!authToken, key);
+      if (requestToken === authToken) reportAuth(res.status, !!requestToken, key);
       return { ok: res.ok, status: res.status, json };
     } catch (e) {
       clearTimeout(timer);
@@ -1196,26 +1199,56 @@ export async function me(): Promise<User | null> {
   const u = real?.user ?? real; // /auth/me nests under data.user
   return u && (u.user_id || u.full_name || u.email) ? adaptUser(u) : null;
 }
-/**
- * Erase this account on the server.
- *
- * THE BACKEND HAS NO SUCH ROUTE. `routes/auth.js` declares no `router.delete` at all, so this
- * request reaches the catch-all 404. It previously discarded that and returned a hardcoded
- * `{ ok: true }`, which signed the user out, fired a success haptic and left every record in
- * place — after a two-step confirm promising the opposite in writing. That is a data-deletion
- * claim the server cannot honour, so it now reports `unsupported` and the caller keeps the
- * session. See `../contracts/INBOX.md` — `DELETE /api/auth/me` is filed with `cgpe-api`.
- */
-export async function deleteAccount(): Promise<{ ok: boolean; reason?: WriteFailure }> {
-  if (FORCE_DEMO) { await wait(500); return { ok: true }; }
-  if (!sessionReal) return { ok: false, reason: 'network' };
+/** Phase 100: a request for review, never a deletion or a reason to clear the session. */
+export type AccountDeletionStatus = 'pending' | 'under_review' | 'rejected';
+export type AccountDeletionRequest = {
+  requestId: string;
+  status: AccountDeletionStatus;
+  reviewNotes: string;
+};
+type DeletionFailure = { ok: false; reason: 'network' | 'server' | 'forbidden' | 'unsupported' };
+
+function parseDeletionRequest(data: any): AccountDeletionRequest | null {
+  if (!data || typeof data.request_id !== 'string' || !data.request_id.trim()
+      || !['pending', 'under_review', 'rejected'].includes(data.status)
+      || (data.review_notes !== undefined && typeof data.review_notes !== 'string')) return null;
+  return { requestId: data.request_id, status: data.status, reviewNotes: data.review_notes ?? '' };
+}
+
+function deletionFailure(status: number): DeletionFailure {
+  return { ok: false, reason: status === 403 ? 'forbidden'
+    : [404, 405, 501].includes(status) ? 'unsupported' : 'server' };
+}
+
+/** The server binds the subject to its token. No identity, status, or deletion policy in the body. */
+export async function requestAccountDeletion(): Promise<
+  { ok: true; request: AccountDeletionRequest } | DeletionFailure
+> {
+  if (FORCE_DEMO || !sessionReal) return { ok: false, reason: 'network' };
+  const token = authToken;
   try {
-    const { ok, status } = await req('/auth/me', { method: 'DELETE' });
-    if (ok) return { ok: true };
-    if (status === 403) return { ok: false, reason: 'forbidden' };
-    // 404/405/501 = the route does not exist. Today that is every call.
-    if (status === 404 || status === 405 || status === 501) return { ok: false, reason: 'unsupported' };
-    return { ok: false, reason: 'server' };
+    const { status, json } = await req('/auth/me/deletion-request', { method: 'POST', body: '{}' });
+    // A late reply belongs to the account that submitted it, not a new shared-handset user.
+    if (token !== authToken) return { ok: false, reason: 'network' };
+    const request = status === 202 && json?.success === true ? parseDeletionRequest(json.data) : null;
+    return request ? { ok: true, request } : deletionFailure(status);
+  } catch {
+    return { ok: false, reason: 'network' };
+  }
+}
+
+/** A 404 is no request returned, not proof that a legacy server implements the route. */
+export async function getAccountDeletionRequest(): Promise<
+  { ok: true; request: AccountDeletionRequest | null } | DeletionFailure
+> {
+  if (FORCE_DEMO || !sessionReal) return { ok: false, reason: 'network' };
+  const token = authToken;
+  try {
+    const { status, json } = await req('/auth/me/deletion-request');
+    if (token !== authToken) return { ok: false, reason: 'network' };
+    if (status === 404) return { ok: true, request: null };
+    const request = status === 200 && json?.success === true ? parseDeletionRequest(json.data) : null;
+    return request ? { ok: true, request } : deletionFailure(status);
   } catch {
     return { ok: false, reason: 'network' };
   }

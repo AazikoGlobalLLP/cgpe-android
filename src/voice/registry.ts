@@ -59,13 +59,13 @@ export const VOICE_INTENTS: Record<string, VoiceIntent> = {
  *  - `clockIn` / `clockOut` (direct): must go through the home flow (see `clock.in`/`clock.out` above).
  *  - `sendWaMessage`: the send endpoint has no scope check — any token could message any number.
  *  - `dispatchNotification`: admin broadcast; not a spoken action.
- *  - `deleteNote` / `deleteAccount`: destructive; never voice-triggered.
+ *  - `deleteNote` / `requestAccountDeletion`: require explicit user action; never voice-triggered.
  *  - `setLocationConsent`: a consent decision must be an explicit tap, never spoken.
  *  - `generateReport`: kicks off slow n8n work; belongs to the JobPill flow, not a voice write.
  */
 export const NOT_VOICE_EXPOSED: readonly string[] = [
   'clockIn', 'clockOut', 'sendWaMessage', 'dispatchNotification',
-  'deleteNote', 'deleteAccount', 'setLocationConsent', 'generateReport',
+  'deleteNote', 'requestAccountDeletion', 'setLocationConsent', 'generateReport',
 ];
 
 /** Look up an intent by id. `undefined` for an id the registry does not know (⇒ an `unknown` outcome). */

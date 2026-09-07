@@ -41,7 +41,7 @@ describe('i18n dictionaries — parity and value quality', () => {
     expect(Object.keys(DICT).sort()).toEqual([...CODES].sort());
   });
 
-  it('English carries the full 94-key set (guards against a silent key deletion)', () => {
+  it('English carries the full recorded key set (guards against a silent key deletion)', () => {
     // A hard count so removing a key without updating this file is caught, not absorbed.
     // Bumped 74 → 75 for `common.today` (Phase 21 P1, 2026-08-12) — a dedup key lifted from
     // the existing `tab.home`/`tasks.today` human copy, not a new translation.
@@ -90,7 +90,8 @@ describe('i18n dictionaries — parity and value quality', () => {
     // five dictionaries — NOT machine-translated. The 2026-08-27 waiver covered one batch and is not
     // standing permission, and DONE-4 above says an honest English fallback beats a wrong romanised
     // guess. Same sanctioned precedent as `tab.search`; owner copy requested as Batch 6h.
-    expect(EN_KEYS.length).toBe(453);
+    // September 7: 32 account/privacy keys under the owner's pending-scope authorization.
+    expect(EN_KEYS.length).toBe(485);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });
@@ -128,6 +129,16 @@ describe('i18n dictionaries — parity and value quality', () => {
     for (const code of CODES) {
       const holes = [...union].filter((k) => isBlank((DICT[code as Lang] as Record<string, string>)[k]));
       expect({ code, holes }).toEqual({ code, holes: [] });
+    }
+  });
+
+  it('translations preserve every named interpolation value', () => {
+    const placeholders = (value: string) => [...new Set(value.match(/\{\w+\}/g) ?? [])].sort();
+    for (const code of CODES) {
+      for (const key of EN_KEYS) {
+        expect(placeholders((DICT[code] as Record<string, string>)[key]), `${code}/${key}`)
+          .toEqual(placeholders((DICT.en as Record<string, string>)[key]));
+      }
     }
   });
 });

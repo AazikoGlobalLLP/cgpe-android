@@ -7,7 +7,6 @@ import * as api from '@/data/api';
 import { EXPIRY_MESSAGE, ExpiryReason, onSessionExpired, resetSessionGuard } from '@/lib/session';
 import { resetHealth } from '@/data/health';
 import { resetFreshness } from '@/data/freshness';   // Phase 57a — clear stale-cache marks on sign-out
-import { purgeQueue } from '@/data/offlineStore';
 // One-directional: i18n imports nothing from this store, so there is no require cycle.
 // Language is persisted per user (`cgpe.lang.<userId>`), and the provider only re-reads which
 // user is signed in when it is told to. Without these calls a user switch inside one app run
@@ -58,7 +57,6 @@ type AuthState = {
   login: (id: string, pw: string) => Promise<void>;
   loginOtp: (phone: string, code: string) => Promise<boolean>;
   logout: () => Promise<void>;
-  deleteAccount: () => Promise<void>;
   setBiometric: (on: boolean) => Promise<boolean>;
   authenticateBiometric: () => Promise<boolean>;
   /**
@@ -330,28 +328,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await clearPushRegistration();
       }
       await clear();
-    },
-    async deleteAccount() {
-      const res = await api.deleteAccount();
-      if (!res.ok) {
-        /* PHASE 1: the session is deliberately KEPT.
-         *
-         * This used to clear the keychain and sign the user out regardless, because
-         * `api.deleteAccount` could not fail. The account still exists on the server, so
-         * signing them out is precisely the lie that made the failure invisible — it looks
-         * exactly like a successful deletion. Throwing reaches the already-written failure
-         * branch in `app/account.tsx`. */
-        throw Object.assign(new Error('Account deletion was not confirmed'), { reason: res.reason });
-      }
-      // The account can never sign in again, so its persisted write queue — which sign-out
-      // deliberately keeps for re-sync — would be stranded on disk forever, holding customer names
-      // and phone numbers from unsent drafts. Purge it explicitly; there is no future flush to clear
-      // it. (`clear()`'s cache sweep does not touch the queue, by design.)
-      const deletedId = user?.id;
-      if (deletedId) await purgeQueue(deletedId).catch(() => {});
-      await clear();
-      await storage.remove(BIO_KEY);
-      setBiometricEnabled(false);
     },
     async setBiometric(on) {
       if (isWeb) return false;

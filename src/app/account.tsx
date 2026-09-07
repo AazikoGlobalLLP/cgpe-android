@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 
@@ -16,93 +16,136 @@ import { useAuth } from '@/store/auth';
 import { useT } from '@/i18n';
 
 /* ------------------------------------------------------------------ *
- * Account and privacy — including the deletion path the app stores require.
- *
- * THE TWO-STEP CONFIRM IS DELIBERATE AND IS PRESERVED EXACTLY. The first dialog states
- * what is destroyed; the second one makes you say it again in different words. Account
- * deletion is the only irreversible action in this app, and a single tap-through
- * confirmation is not a real gate.
- *
- * A REFUSED DELETE RAISES A BANNER, NOT A TOAST. If the server does not confirm the
- * deletion, the user needs to know their account still exists and that nothing was half
- * done. A toast that vanishes in three seconds is the wrong carrier for that: it can be
- * missed entirely, and the user is left unsure whether their data is gone.
- *
- * HAPTICS: `warn` before the destructive confirm opens, `success` only once the server
- * has actually accepted the deletion, `error` when it refuses. Nothing on plain reads.
+ * Account and privacy. Deletion is a REQUEST FOR REVIEW, not erasure. The September 7
+ * contract leaves fulfillment to a separate owner policy; even a 202 keeps this session,
+ * biometric binding and offline drafts intact. Never reconnect the old deletion cleanup.
  * ------------------------------------------------------------------ */
 
 const PRIVACY_URL = 'https://cgpe.in/privacy';
+
+function DeletionRequestPanel() {
+  const c = useTheme();
+  const t = useT();
+  const { confirm } = useConfirm();
+  const [request, setRequest] = useState<api.AccountDeletionRequest | null>(null);
+  const [reading, setReading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [failure, setFailure] = useState<string | null>(null);
+  const live = useRef(true);
+  const busy = useRef(false);
+  const readingRef = useRef(false);
+  const readId = useRef(0);
+
+  const refresh = useCallback(async () => {
+    if (busy.current || readingRef.current) return;
+    readingRef.current = true;
+    const id = ++readId.current;
+    setReading(true);
+    setFailure(null);
+    const res = await api.getAccountDeletionRequest();
+    if (!live.current || id !== readId.current) return;
+    readingRef.current = false;
+    setReading(false);
+    if (res.ok) setRequest(res.request);
+    else setFailure(res.reason === 'unsupported'
+      ? t('account.deletionUnavailable')
+      : res.reason === 'forbidden'
+        ? t('account.deletionReadForbidden')
+        : t('account.deletionRefreshFailed'));
+  }, [t]);
+
+  useEffect(() => {
+    live.current = true;
+    void refresh();
+    return () => { live.current = false; readingRef.current = false; ++readId.current; };
+  }, [refresh]);
+
+  const submit = async () => {
+    // Guard the dialog too: state alone does not close the double-tap window before a render.
+    if (busy.current || readingRef.current || reading || request || failure) return;
+    busy.current = true;
+    setSubmitting(true);
+    try {
+      const accepted = await confirm({
+        title: t('account.deletionConfirmTitle'),
+        message: t('account.deletionConfirmBody'),
+        confirmText: t('account.deletionSubmit'),
+        cancelText: t('common.cancel'),
+        icon: 'document-text-outline',
+      });
+      if (!accepted || !live.current) return;
+      ++readId.current; // An older status read must never overwrite the accepted submission.
+      const res = await api.requestAccountDeletion();
+      if (!live.current) return;
+      if (res.ok) {
+        setRequest(res.request);
+        haptics.success();
+      } else {
+        haptics.error();
+        setFailure(res.reason === 'unsupported'
+          ? t('account.deletionUnavailable')
+          : res.reason === 'forbidden'
+            ? t('account.deletionSubmitForbidden')
+            : t('account.deletionSubmitFailed'));
+      }
+    } finally {
+      busy.current = false;
+      if (live.current) setSubmitting(false);
+    }
+  };
+
+  const statusLabel = request?.status === 'pending' ? t('account.deletionPending')
+    : request?.status === 'under_review' ? t('claimStatus.review') : t('account.deletionRejected');
+
+  return (
+    <View style={{ gap: spacing.sm }}>
+      <Eyebrow style={{ marginLeft: spacing.xs }}>{t('account.deletionEyebrow')}</Eyebrow>
+      <Card>
+        <Txt size={font.h3} weight="800">{t('account.deletionTitle')}</Txt>
+        <Txt size={font.sub} color={c.muted} style={{ marginTop: spacing.sm, lineHeight: 20 }}>
+          {t('account.deletionDescription')}
+        </Txt>
+        <View style={{ marginTop: spacing.lg, gap: spacing.md }}>
+          {reading ? <Skeleton height={48} radius={radius.md} /> : null}
+          {!reading && failure ? <Banner tone="warning" title={t('account.deletionStatusUnconfirmed')} message={failure} /> : null}
+          {!reading && request ? (
+            <Banner
+              tone={request.status === 'rejected' ? 'warning' : 'info'}
+              title={failure ? t('account.deletionLastKnown', { statusLabel }) : statusLabel}
+              message={request.reviewNotes || (request.status === 'rejected'
+                ? t('account.deletionRejectedBody')
+                : t('account.deletionRecordedBody'))}
+            />
+          ) : null}
+          {!reading && !request && !failure ? (
+            <Button label={t('account.deletionAction')} icon="document-text-outline" full onPress={() => void submit()} loading={submitting} />
+          ) : null}
+          <Button label={t('common.refresh')} variant="outline" icon="refresh-outline" full
+            onPress={() => void refresh()} disabled={reading || submitting} />
+        </View>
+      </Card>
+    </View>
+  );
+}
 
 export default function Account() {
   const c = useTheme();
   const t = useT();
   const router = useRouter();
-  const { user, ready, deleteAccount } = useAuth();
-  const { confirm } = useConfirm();
+  const { user, ready } = useAuth();
   const toast = useToast();
-  const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportingRef = useRef(false);
-  const [failure, setFailure] = useState<string | null>(null);
 
   /**
-   * False once this screen is gone. Both confirms and the delete request are awaits that
-   * can outlive it: the modal is dismissible and the back gesture works behind it, so a
-   * refusal must not try to raise a banner on a screen that is no longer there.
+   * An export response may arrive after navigation away; do not update an unmounted screen.
    */
   const live = useRef(true);
   useEffect(() => () => { live.current = false; }, []);
 
-  const confirmDelete = async () => {
-    // The pause before an irreversible dialog is the point of this one.
-    haptics.warn();
-    const first = await confirm({
-      title: 'Delete your account?',
-      message: 'This permanently deletes your CGPE Connect account and all associated personal data (profile, leads, client notes). This cannot be undone.',
-      confirmText: t('common.continue'),
-      destructive: true,
-      icon: 'trash',
-    });
-    if (!first) return;
-
-    const second = await confirm({
-      title: 'Are you absolutely sure?',
-      message: 'Your data will be erased. This action is irreversible.',
-      confirmText: 'Yes, delete everything',
-      cancelText: 'Keep my account',
-      destructive: true,
-    });
-    if (second && live.current) await runDelete();
-  };
-
-  const runDelete = async () => {
-    setFailure(null);
-    setDeleting(true);
-    try {
-      await deleteAccount();
-      haptics.success();
-      router.replace('/(auth)/login');
-    } catch (e) {
-      if (!live.current) return;
-      setDeleting(false);
-      haptics.error();
-      /* `unsupported` means the route is not there — today that is every call, because the
-       * backend declares no DELETE on /auth/me. Telling that user to check their connection
-       * would send them round a loop that cannot succeed, so the retry sentence is dropped.
-       * Both strings are the existing copy; nothing new is invented here. */
-      const reason = (e as { reason?: string } | null)?.reason;
-      setFailure(
-        reason === 'unsupported'
-          ? 'The server did not confirm the deletion, so your account is unchanged.'
-          : 'The server did not confirm the deletion, so your account is unchanged. Check your connection and try again.',
-      );
-    }
-  };
-
   const openPrivacy = () => {
     Linking.openURL(PRIVACY_URL).catch(() => {
-      toast('Could not open the browser. The policy is at cgpe.in/privacy.', 'warning');
+      toast(t('account.privacyOpenFailed'), 'warning');
     });
   };
 
@@ -119,13 +162,13 @@ export default function Account() {
       if (res.ok) {
         // The server returns a short-lived SIGNED link (no auth header) — open it in the system
         // browser, which downloads the workbook. The app never handles the bytes.
-        toast('Your data export is ready — opening the download.', 'success');
-        Linking.openURL(res.downloadUrl).catch(() => toast('Could not open the download link. Please try again.', 'warning'));
+        toast(t('account.exportReady'), 'success');
+        Linking.openURL(res.downloadUrl).catch(() => toast(t('account.exportOpenFailed'), 'warning'));
       } else if (res.reason === 'not_available') {
         // The endpoint is not deployed on this server yet — honest, not a transient error.
-        toast('Data export is not switched on for this server yet. Please try again later.', 'info');
+        toast(t('account.exportUnavailable'), 'info');
       } else {
-        toast('Could not create your data export right now. Please try again.', 'warning');
+        toast(t('account.exportFailed'), 'warning');
       }
     } finally {
       if (live.current) setExporting(false);
@@ -136,7 +179,7 @@ export default function Account() {
   if (!ready) {
     return (
       <Screen>
-        <Header title="Account and privacy" back />
+        <Header title={t('more.accountTitle')} back />
         <View style={{ padding: spacing.lg, gap: spacing.xl }}>
           <Card>
             <Row>
@@ -176,11 +219,11 @@ export default function Account() {
   if (!user) {
     return (
       <Screen>
-        <Header title="Account and privacy" back />
+        <Header title={t('more.accountTitle')} back />
         <EmptyState
           icon="shield-outline"
-          title="You are signed out"
-          subtitle="Sign in to export your data or to delete your account. You can also request deletion at cgpe.in/delete-account."
+          title={t('account.signedOut')}
+          subtitle={t('account.signedOutBody')}
           action={{ label: t('common.goToSignIn'), onPress: () => router.replace('/(auth)/login') }}
         />
       </Screen>
@@ -189,24 +232,12 @@ export default function Account() {
 
   return (
     <Screen>
-      <Header title="Account and privacy" back />
+      <Header title={t('more.accountTitle')} back />
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.xl }}
         showsVerticalScrollIndicator={false}
       >
-        {failure ? (
-          <Banner
-            tone="danger"
-            title="Your account was not deleted"
-            message={failure}
-            // Re-runs the full two-step confirm. A one-tap retry on a banner would be a
-            // back door around the gate the rest of this screen exists to build.
-            action={{ label: t('common.tryAgain'), onPress: () => void confirmDelete() }}
-            onDismiss={() => setFailure(null)}
-          />
-        ) : null}
-
         <Appear>
           <Card>
             <PersonRow
@@ -222,52 +253,31 @@ export default function Account() {
             two reads as a stutter rather than as one arrival. */}
         <Banner
           tone="success"
-          title="Your data is protected"
-          message="Encrypted in transit. We follow India's DPDP Act for personal and policy data."
+          title={t('account.dataProtected')}
+          message={t('account.dataProtectionBody')}
         />
 
-        <ListSection title="Your data" footer="A copy of your own records, downloaded to this phone as a spreadsheet.">
+        <ListSection title={t('account.yourData')} footer={t('account.exportDescription')}>
           <Appear index={0}>
             <DataRow
               icon="download-outline"
-              label="Export my data"
-              value={exporting ? 'Preparing…' : ''}
+              label={t('account.export')}
+              value={exporting ? t('account.preparing') : ''}
               onPress={exportData}
             />
           </Appear>
           <Appear index={1}>
             <DataRow
               icon="document-text-outline"
-              label="Privacy policy"
+              label={t('account.privacy')}
               value="cgpe.in"
               onPress={openPrivacy}
             />
           </Appear>
         </ListSection>
 
-        {/* The single Eyebrow on this screen, and it is spent on the one block that must
-            not be mistaken for another settings group. */}
-        <View style={{ gap: spacing.sm }}>
-          <Eyebrow color={c.danger} style={{ marginLeft: spacing.xs }}>Danger zone</Eyebrow>
-          <Card style={{ borderColor: c.danger + '40' }}>
-            <Txt size={font.h3} weight="800" color={c.danger}>Delete account</Txt>
-            <Txt size={font.sub} color={c.muted} style={{ marginTop: spacing.sm, lineHeight: 20 }}>
-              Permanently delete your account and all associated personal data. You can also request
-              deletion at{' '}
-              <Txt size={font.sub} weight="700" color={c.primary}>cgpe.in/delete-account</Txt>. This
-              action is irreversible.
-            </Txt>
-            <Button
-              label="Delete my account"
-              icon="trash-outline"
-              variant="danger"
-              full
-              onPress={confirmDelete}
-              loading={deleting}
-              style={{ marginTop: spacing.lg }}
-            />
-          </Card>
-        </View>
+        {/* A new identity remounts the panel; late status replies cannot bleed between users. */}
+        <DeletionRequestPanel key={user.id} />
       </ScrollView>
     </Screen>
   );
