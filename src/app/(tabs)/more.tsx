@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -15,7 +16,7 @@ import { Sheet } from '@/ui/sheet';
 import { Appear } from '@/ui/motion';
 import { useConfirm } from '@/ui/Confirm';
 import { haptics } from '@/lib/haptics';
-import { useT, type TFn, type TKey } from '@/i18n';
+import { useT, type TKey } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { arrangeMoreSections, useAppUi } from '@/store/appUi';
 import { canViewClients, canViewOwnClients, capabilitiesOf, canViewAs, TIER_THEME } from '@/store/roles';
@@ -74,9 +75,9 @@ const TIER_TONE: Record<Tier, Tone> = { master: 'warning', admin: 'primary', tea
 const TIER_RANK: Record<Tier, number> = { team: 0, admin: 1, master: 2 };
 
 const VIEW_OPTIONS: { tier: Tier; label: string; hint: string; icon: IconName }[] = [
-  { tier: 'master', label: 'Master', hint: 'Full oversight', icon: 'shield-checkmark' },
-  { tier: 'admin', label: 'Admin', hint: 'Runs a team', icon: 'people-circle' },
-  { tier: 'team', label: 'Team member', hint: 'Own work only', icon: 'person' },
+  { tier: 'master', label: 'more.masterLabel', hint: 'more.fullOversight', icon: 'shield-checkmark' },
+  { tier: 'admin', label: 'more.adminLabel', hint: 'more.runsTeam', icon: 'people-circle' },
+  { tier: 'team', label: 'more.teamMemberLabel', hint: 'more.ownWorkOnly', icon: 'person' },
 ];
 
 /* ------------------------------------------------------------------ *
@@ -131,25 +132,8 @@ const MORE_CATALOGUE: Record<string, { icon: IconName; titleKey: TKey; subKey?: 
 /** Catalogue keys in declaration order — the module universe `arrangeMoreSections` may place. */
 const MORE_KEYS = Object.keys(MORE_CATALOGUE);
 
-/* The content-group SECTION HEADINGS come from the server's nav.more_sections (or DEFAULT_UI when a
- * role is unseeded — the prod reality), so they are strings, not keys. This maps the known default
- * headings to i18n keys so the rows do not sit under an English header; an unrecognised (custom
- * server) title falls through untranslated, and the "More" catch-all reuses `tab.more`. */
-const MORE_SECTION_TITLE_KEYS: Record<string, TKey> = {
-  'The book': 'more.groupBook',
-  'Day to day': 'more.groupDayToDay',
-  'Board': 'more.groupBoard',
-  'Reference': 'more.groupReference',
-  'You': 'more.groupYou',
-  'More': 'tab.more',
-};
-const sectionTitle = (raw: string, t: TFn): string => {
-  const key = MORE_SECTION_TITLE_KEYS[raw];
-  return key ? t(key) : raw;
-};
-
+// Local group headings carry titleKey. Authored server titles remain raw.
 export default function More() {
-  const c = useTheme();
   const router = useRouter();
   const { user, ready, logout, viewAs, setViewAs } = useAuth();
   const { confirm } = useConfirm();
@@ -191,7 +175,7 @@ export default function More() {
     setViewAs(tier);
     setViewSheet(false);
     const picked = VIEW_OPTIONS.find((o) => o.tier === tier);
-    toast(picked ? `Now previewing the ${picked.label} side` : 'Back to your own view', 'info');
+    toast(picked ? t('more.previewSide', { role: t(picked.label) }) : t('more.backOwnView'), 'info');
   };
 
   const doLogout = async () => {
@@ -242,7 +226,7 @@ export default function More() {
      department document; a leader is folded into "admin" by tierOf, so Payroll (an admin-only
      endpoint that 403s a leader) still gates on the REAL role. `nav.hidden` still filters each row. */
   const adminGroup: { title: string; items: Entry[] } | null = isAdmin ? {
-    title: caps.tier === 'master' ? 'Master control' : 'Admin',
+    title: caps.tier === 'master' ? t('more.masterControl') : t('more.adminLabel'),
     items: ([
       // The dedicated monitoring hub (Phase 39) — master-only, the owner's "main side". It gathers
       // location / performance / salary + the roster in one place. Fixed and master-gated (real
@@ -250,12 +234,12 @@ export default function More() {
       // role, this tile is only the affordance. No navKey — it is not a server nav module (like
       // Payroll), so it is never reorderable-away or in nav.hidden.
       ...(caps.tier === 'master'
-        ? [{ icon: 'eye' as IconName, label: 'Monitor', value: 'Team oversight', href: '/monitor' as Href }]
+        ? [{ icon: 'eye' as IconName, label: t('more.monitorLabel'), value: t('more.teamOversight'), href: '/monitor' as Href }]
         : []),
       {
         icon: 'people-circle' as IconName,
-        label: caps.overseeAdmins ? 'All teams and admins' : 'Team members',
-        value: 'Roster',
+        label: caps.overseeAdmins ? t('more.allTeamsAdmins') : t('more.teamMembers'),
+        value: t('more.rosterLabel'),
         href: '/team' as Href,
         navKey: 'team',
       },
@@ -263,19 +247,19 @@ export default function More() {
       // real super_admin role, so these tiles follow the same rule and stay off the Admin/leader menu.
       ...(caps.tier === 'master'
         ? [
-            { icon: 'map' as IconName, label: 'Agent locations', value: 'Live', href: '/agent-map' as Href, navKey: 'agent-map' },
-            { icon: 'navigate' as IconName, label: 'Movement paths', value: 'Replay', href: '/agent-track' as Href, navKey: 'agent-track' },
+            { icon: 'map' as IconName, label: t('more.agentLocations'), value: t('more.liveLabel'), href: '/agent-map' as Href, navKey: 'agent-map' },
+            { icon: 'navigate' as IconName, label: t('more.movementPaths'), value: t('more.replayLabel'), href: '/agent-track' as Href, navKey: 'agent-track' },
             // Team performance (Phase 45) — the whole roster's scores, master-only. The SCREEN
             // gates on the real super_admin role, so this tile follows the same rule.
-            { icon: 'ribbon' as IconName, label: 'Team performance', value: 'Scores', href: '/performance?view=team' as Href, navKey: 'performance' },
+            { icon: 'ribbon' as IconName, label: t('more.teamPerformance'), value: t('more.scoresLabel'), href: '/performance?view=team' as Href, navKey: 'performance' },
           ]
         : []),
-      { icon: 'stats-chart' as IconName, label: 'Portfolio analytics', value: 'Org-wide', href: '/analytics' as Href, navKey: 'analytics' },
+      { icon: 'stats-chart' as IconName, label: t('home.portfolioAnalytics'), value: t('more.orgWide'), href: '/analytics' as Href, navKey: 'analytics' },
       ...((user.role === 'admin' || user.role === 'super_admin')
-        ? [{ icon: 'cash' as IconName, label: 'Payroll', value: 'Salary roster', href: '/payroll' as Href }]
+        ? [{ icon: 'cash' as IconName, label: t('more.payrollLabel'), value: t('more.salaryRoster'), href: '/payroll' as Href }]
         : []),
-      { icon: 'paper-plane' as IconName, label: 'Campaigns', value: 'Bulk sends', href: '/campaigns' as Href, navKey: 'campaigns' },
-      { icon: 'megaphone' as IconName, label: 'Notify team', value: 'Send alert', href: '/notify' as Href, navKey: 'notify' },
+      { icon: 'paper-plane' as IconName, label: t('dash.campaigns'), value: t('more.bulkSends'), href: '/campaigns' as Href, navKey: 'campaigns' },
+      { icon: 'megaphone' as IconName, label: t('more.notifyTeam'), value: t('more.sendAlert'), href: '/notify' as Href, navKey: 'notify' },
     ] as Entry[]).filter((it) => !it.navKey || !isHidden(it.navKey)),
   } : null;
 
@@ -288,8 +272,9 @@ export default function More() {
     config.nav.more_sections,
     MORE_KEYS,
     isHidden,
+    t('tab.more'),
   ).map((g) => ({
-    title: sectionTitle(g.title, t),
+    title: g.titleKey ? t(g.titleKey) : g.title,
     items: g.keys.flatMap((key): Entry[] => {
       // Point 9: drop the client-book modules for a team-tier user. 'premium' routes to
       // /campaigns, whose audience preview shows client names + phones from the whole book.
@@ -302,7 +287,7 @@ export default function More() {
       const value = cat.subKey ? t(cat.subKey) : '';
       const icon = cat.icon;
       const href = cat.href;
-      if (key === 'profile') return [{ icon, label, value: user.name, href, navKey: key }];
+      if (key === 'profile') return [{ icon, label, value: resolveCopy(t, user.name, user.nameCopy), href, navKey: key }];
       if (key === 'tickets') {
         // Silence rather than a fabricated zero when the count did not come back.
         return [{
@@ -325,15 +310,15 @@ export default function More() {
   const personalItems: Entry[] = [
     ...(canViewAs(user) ? [{
       icon: 'swap-horizontal' as IconName,
-      label: 'Viewing as',
-      value: caps.label,
+      label: t('more.viewingAs'),
+      value: t(TIER_THEME[caps.tier].labelKey),
       onPress: () => setViewSheet(true),
-      right: viewAs ? <Pill label="Preview" tone="warning" small /> : undefined,
+      right: viewAs ? <Pill label={t('more.previewLabel')} tone="warning" small /> : undefined,
     }] : []),
-    { icon: 'wallet' as IconName, label: 'My earnings', value: 'Salary and days', href: '/earnings' as Href },
+    { icon: 'wallet' as IconName, label: t('more.myEarnings'), value: t('more.salaryDays'), href: '/earnings' as Href },
     // My performance (Phase 45) — the member's OWN completed-tasks score. Self-scoped by the
     // server (`?scope=own`), so it carries no gate and is shown to every member, like My earnings.
-    { icon: 'ribbon' as IconName, label: 'My performance', value: 'Task score', href: '/performance' as Href },
+    { icon: 'ribbon' as IconName, label: t('more.myPerformance'), value: t('more.taskScore'), href: '/performance' as Href },
   ];
 
   /* One ordered list of everything grouped: fixed admin first, then the config-driven content
@@ -342,7 +327,7 @@ export default function More() {
   const groups: { title: string; items: Entry[] }[] = [
     ...(adminGroup ? [adminGroup] : []),
     ...moduleGroups,
-    ...(personalItems.length ? [{ title: 'Personal', items: personalItems }] : []),
+    ...(personalItems.length ? [{ title: t('more.personalLabel'), items: personalItems }] : []),
   ];
 
   // Fixed tileIndex per module (it selects the tile's colour), so hiding one tile does not
@@ -356,14 +341,14 @@ export default function More() {
     .filter((qa) => !isHidden(qa.navKey));
 
   const about: Entry[] = [
-    { icon: 'cube-outline', label: 'Version', value: APP.version, numeric: true },
+    { icon: 'cube-outline', label: t('more.versionLabel'), value: APP.version, numeric: true },
     {
       icon: liveSession ? 'cloud-done-outline' : 'cloud-offline-outline',
-      label: 'Data',
-      value: liveSession ? 'Live' : 'Not verified',
+      label: t('more.dataLabel'),
+      value: liveSession ? t('more.liveLabel') : t('more.notVerified'),
       tone: liveSession ? 'success' : 'warning',
     },
-    { icon: 'mail-outline', label: 'Signed in as', value: user.email, copyable: true },
+    { icon: 'mail-outline', label: t('more.signedInAs'), value: user.email, copyable: true },
   ];
 
   const renderRow = (it: Entry, i: number) => {
@@ -378,6 +363,7 @@ export default function More() {
           right={it.right}
           copyable={it.copyable}
           numeric={it.numeric}
+          stacked
           // Plain navigation gets no haptic. The budget is spent on writes and refusals.
           onPress={href ? () => router.push(href) : it.onPress}
         />
@@ -387,7 +373,7 @@ export default function More() {
 
   return (
     <Screen>
-      <Header title={t('tab.more')} subtitle={`${caps.label} access`} />
+      <Header title={t('tab.more')} subtitle={t('more.accessSubtitle', { role: t(TIER_THEME[caps.tier].labelKey) })} />
 
       <ScrollView
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 48, gap: spacing.xl }}
@@ -398,16 +384,16 @@ export default function More() {
         <Appear>
           <Card onPress={() => router.push('/profile')}>
             <PersonRow
-              name={user.name}
-              subtitle={user.designation}
+              name={resolveCopy(t, user.name, user.nameCopy)}
+              subtitle={resolveCopy(t, user.designation, user.designationCopy)}
               photo={user.photo}
               size={52}
               chevron
             />
             <Row style={{ marginTop: spacing.md, flexWrap: 'wrap', gap: spacing.sm }}>
-              <Pill label={TIER_THEME[caps.tier].badge} tone={TIER_TONE[caps.tier]} small />
+              <Pill label={t(TIER_THEME[caps.tier].labelKey).toUpperCase()} tone={TIER_TONE[caps.tier]} small />
               {user.agentCode ? <Pill label={user.agentCode} tone="neutral" small numeric /> : null}
-              {viewAs ? <Pill label="Preview mode" tone="warning" icon="eye" small /> : null}
+              {viewAs ? <Pill label={t('more.previewMode')} tone="warning" icon="eye" small /> : null}
             </Row>
           </Card>
         </Appear>
@@ -440,7 +426,7 @@ export default function More() {
           </ListSection>
         ))}
 
-        <ListSection title="About" footer={`${APP.name} for ${APP.org}. ${APP.since}.`}>
+        <ListSection title={t('more.aboutLabel')} footer={t('more.brandFooter', { app: APP.name, org: APP.org, since: APP.since })}>
           {about.map(renderRow)}
         </ListSection>
 
@@ -456,21 +442,21 @@ export default function More() {
       <Sheet
         visible={viewSheet}
         onClose={() => setViewSheet(false)}
-        title="Preview another side"
-        subtitle="Changes what this app shows you. It does not change anyone's permissions."
+        title={t('more.previewAnother')}
+        subtitle={t('more.previewPermissionsBody')}
       >
-        <ListSection footer="A preview only affects your own screen, and it ends when you switch back.">
+        <ListSection footer={t('more.previewScreenOnly')}>
           {VIEW_OPTIONS
             .filter((o) => TIER_RANK[o.tier] <= TIER_RANK[realCaps.tier])
             .map((o, i) => (
               <Appear key={o.tier} index={i}>
                 <DataRow
                   icon={o.icon}
-                  label={o.label}
-                  value={o.hint}
+                  label={t(o.label)}
+                  value={t(o.hint)}
                   onPress={() => applyView(o.tier)}
                   right={caps.tier === o.tier
-                    ? <Pill label="Current" tone={TIER_TONE[o.tier]} small />
+                    ? <Pill label={t('common.current')} tone={TIER_TONE[o.tier]} small />
                     : undefined}
                 />
               </Appear>
@@ -479,8 +465,8 @@ export default function More() {
             <Appear index={3}>
               <DataRow
                 icon="arrow-undo"
-                label="My own view"
-                value="Stop previewing"
+                label={t('more.myOwnView')}
+                value={t('more.stopPreviewing')}
                 tone="primary"
                 onPress={() => applyView(null)}
               />

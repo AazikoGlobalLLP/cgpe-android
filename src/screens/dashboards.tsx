@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 /**
  * Tier dashboards — the admin and master surfaces that render below the hero on Home.
  *
@@ -19,6 +20,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useT } from '@/i18n';
+import { roleLabel } from '@/i18n/display';
 import { radius, shadow, spacing, type, useTheme } from '@/theme/theme';
 import { Card, Grad, IconName, Metric, SectionHeader, Txt } from '@/ui/base';
 import { Pill } from '@/ui/data';
@@ -44,6 +46,7 @@ const NO_VALUE = '-';
 export function TierHero({ tier, title, big, sub, right, children }: {
   tier: Tier; title: string; big: string; sub?: string; right?: React.ReactNode; children?: React.ReactNode;
 }) {
+  const t = useT();
   const c = useTheme();
   const th = TIER_THEME[tier];
   return (
@@ -56,7 +59,7 @@ export function TierHero({ tier, title, big, sub, right, children }: {
                 backgroundColor: th.accent + '26', borderWidth: 1, borderColor: th.accent + '55',
                 paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill,
               }}>
-                <Txt style={{ ...type('900', 10), letterSpacing: 1 }} color={th.accent}>{th.badge}</Txt>
+                <Txt style={{ ...type('900', 10), letterSpacing: 1 }} color={th.accent}>{t(th.labelKey).toUpperCase()}</Txt>
               </View>
               <Txt size={12.5} color="rgba(255,255,255,0.65)">{title}</Txt>
             </View>
@@ -140,11 +143,12 @@ function MemberRow({ member, onPress, showDuty, trailing }: {
   showDuty?: boolean;
   trailing?: React.ReactNode;
 }) {
+  const t = useT();
   const c = useTheme();
   return (
     <Card onPress={onPress} padded={false} style={{ padding: 12, flexDirection: 'row', alignItems: 'center' }}>
       <View>
-        <Avatar name={member.name} size={42} />
+        <Avatar name={resolveCopy(t, member.name, member.nameCopy)} size={42} />
         {showDuty ? (
           <View style={{
             position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6,
@@ -153,9 +157,9 @@ function MemberRow({ member, onPress, showDuty, trailing }: {
         ) : null}
       </View>
       <View style={{ flex: 1, marginLeft: 12 }}>
-        <Txt weight="700" size={14} numberOfLines={1}>{member.name}</Txt>
+        <Txt weight="700" size={14} numberOfLines={1}>{resolveCopy(t, member.name, member.nameCopy)}</Txt>
         <Txt size={12} color={c.muted} numberOfLines={1} style={{ marginTop: 1 }}>
-          {member.role.replace('_', ' ')}{member.branch ? ` · ${member.branch}` : ''}
+          {roleLabel(t, member.role)}{member.branch ? ` · ${member.branch}` : ''}
         </Txt>
       </View>
       {trailing}
@@ -182,20 +186,20 @@ function MemberDetailRow({ member, onPress }: { member: TeamMember; onPress: () 
   const c = useTheme();
   const t = useT();
   const s = member.stats;
-  const meta = [member.role.replace(/_/g, ' '), member.branch].filter(Boolean).join(' · ');
+  const meta = [roleLabel(t, member.role), member.branch].filter(Boolean).join(' · ');
   const figures: { label: string; tone: Tone; icon: IconName }[] = [];
   if (s.premiumMtd > 0) figures.push({ label: inrShort(s.premiumMtd), tone: 'success', icon: 'cash-outline' });
-  if (s.clients > 0) figures.push({ label: `${s.clients} clients`, tone: 'primary', icon: 'people-outline' });
-  if (s.policiesMtd > 0) figures.push({ label: `${s.policiesMtd} done`, tone: 'accent', icon: 'documents-outline' });
-  if (s.renewalPct > 0) figures.push({ label: `${s.renewalPct}% renewals`, tone: 'info', icon: 'refresh-outline' });
-  if (s.leads > 0) figures.push({ label: `${s.leads} open work`, tone: 'warning', icon: 'flame-outline' });
-  if (s.openClaims > 0) figures.push({ label: `${s.openClaims} claims`, tone: 'danger', icon: 'shield-half-outline' });
+  if (s.clients > 0) figures.push({ label: t('dash.clientsCount', { count: s.clients }), tone: 'primary', icon: 'people-outline' });
+  if (s.policiesMtd > 0) figures.push({ label: t('dash.policiesDoneCount', { count: s.policiesMtd }), tone: 'accent', icon: 'documents-outline' });
+  if (s.renewalPct > 0) figures.push({ label: t('dash.renewalsPercent', { percent: s.renewalPct }), tone: 'info', icon: 'refresh-outline' });
+  if (s.leads > 0) figures.push({ label: t('dash.openWorkCount', { count: s.leads }), tone: 'warning', icon: 'flame-outline' });
+  if (s.openClaims > 0) figures.push({ label: t('dash.claimsCount', { count: s.openClaims }), tone: 'danger', icon: 'shield-half-outline' });
 
   return (
     <Card onPress={onPress} style={{ gap: 10 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
         <View>
-          <Avatar name={member.name} size={40} />
+          <Avatar name={resolveCopy(t, member.name, member.nameCopy)} size={40} />
           <View style={{
             position: 'absolute', right: -1, bottom: -1, width: 12, height: 12, borderRadius: 6,
             backgroundColor: member.clockedIn ? c.success : member.online ? c.primary : c.faint,
@@ -203,12 +207,12 @@ function MemberDetailRow({ member, onPress }: { member: TeamMember; onPress: () 
           }} />
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
-          <Txt weight="700" size={14} numberOfLines={1}>{member.name}</Txt>
-          <Txt size={12} color={c.muted} numberOfLines={1} style={{ marginTop: 1 }}>{meta || 'Team member'}</Txt>
+          <Txt weight="700" size={14} numberOfLines={1}>{resolveCopy(t, member.name, member.nameCopy)}</Txt>
+          <Txt size={12} color={c.muted} numberOfLines={1} style={{ marginTop: 1 }}>{meta || t('more.teamMemberLabel')}</Txt>
         </View>
         {member.clockedIn ? <Pill label={t('common.onDuty')} tone="success" small dot />
-          : member.online ? <Pill label="Signed in" tone="info" small dot />
-            : <Pill label="Off" tone="neutral" small />}
+          : member.online ? <Pill label={t('dash.signedInLabel')} tone="info" small dot />
+            : <Pill label={t('dash.offLabel')} tone="neutral" small />}
       </View>
 
       {figures.length > 0 ? (
@@ -216,7 +220,7 @@ function MemberDetailRow({ member, onPress }: { member: TeamMember; onPress: () 
           {figures.map((f) => <Pill key={f.icon} label={f.label} tone={f.tone} small icon={f.icon} numeric />)}
         </View>
       ) : (
-        <Txt size={12} color={c.faint}>No performance figures reported yet.</Txt>
+        <Txt size={12} color={c.faint}>{t('dash.noPerformanceYet')}</Txt>
       )}
     </Card>
   );
@@ -246,13 +250,13 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
   return (
     <View style={{ gap: spacing.lg }}>
       <TierHero
-        tier="admin" title="Team performance today"
-        big={`${done}/${total}`} sub="tasks completed across your team"
+        tier="admin" title={t('dash.teamPerformanceToday')}
+        big={`${done}/${total}`} sub={t('dash.tasksCompletedTeam')}
         right={(
           <Pressable
             onPress={() => router.push('/team')}
             accessibilityRole="button"
-            accessibilityLabel="Open team"
+            accessibilityLabel={t('home.openTeam')}
             style={{
               width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.14)',
               alignItems: 'center', justifyContent: 'center',
@@ -298,7 +302,7 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
       </View>
 
       <View>
-        <SectionHeader title={`Team (${team.length})`} action={t('home.viewAll')} onAction={() => router.push('/team')} />
+        <SectionHeader title={t('dash.teamCountTitle', { count: team.length })} action={t('home.viewAll')} onAction={() => router.push('/team')} />
         <View style={{ gap: 10 }}>
           {team.slice(0, 4).map((m, i) => (
             <Appear key={m.id} index={i}>
@@ -308,7 +312,7 @@ export function AdminDashboard({ team, tasks, snapshot, canCreateTask = true }: 
                 onPress={() => router.push(`/team/${m.id}`)}
                 trailing={m.clockedIn
                   ? <Pill label={t('common.onDuty')} tone="success" small />
-                  : <Pill label="Off" tone="neutral" small />}
+                  : <Pill label={t('dash.offLabel')} tone="neutral" small />}
               />
             </Appear>
           ))}
@@ -338,16 +342,16 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
   return (
     <View style={{ gap: spacing.lg }}>
       <TierHero
-        tier="master" title="Organisation book"
+        tier="master" title={t('dash.organisationBook')}
         big={snapshot ? snapshot.total_clients.toLocaleString('en-IN') : NO_VALUE}
         sub={snapshot
-          ? `clients · ${snapshot.leads.toLocaleString('en-IN')} active leads · ${team.length} team`
-          : 'Loading the organisation book'}
+          ? t('dash.orgBookSummary', { leads: snapshot.leads.toLocaleString('en-IN'), team: team.length })
+          : t('dash.loadingOrgBook')}
         right={(
           <Pressable
             onPress={() => router.push('/analytics')}
             accessibilityRole="button"
-            accessibilityLabel="Open analytics"
+            accessibilityLabel={t('dash.openAnalytics')}
             style={{
               width: 44, height: 44, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.14)',
               alignItems: 'center', justifyContent: 'center',
@@ -358,8 +362,8 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
         )}
       >
         <View style={{ flexDirection: 'row', gap: 22, marginTop: 16 }}>
-          <Mini label="Admins" value={String(admins.length)} tint={th.accent} />
-          <Mini label="Agents" value={String(agents.length)} tint="#7cc7ff" />
+          <Mini label={t('dash.adminsLabel')} value={String(admins.length)} tint={th.accent} />
+          <Mini label={t('dash.agentsLabel')} value={String(agents.length)} tint="#7cc7ff" />
           <Mini label={t('common.onDuty')} value={String(clockedIn)} tint="#4ee6a6" />
         </View>
       </TierHero>
@@ -401,7 +405,7 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
           tiles above). Tap a row for that member's full activity. */}
       {admins.length > 0 ? (
         <View>
-          <SectionHeader title={`Admins & leaders (${admins.length})`} action="All teams" onAction={() => router.push('/team')} />
+          <SectionHeader title={t('dash.adminLeadersCount', { count: admins.length })} action={t('dash.allTeams')} onAction={() => router.push('/team')} />
           <View style={{ gap: 10 }}>
             {byDuty(admins).map((m, i) => (
               <Appear key={m.id} index={Math.min(i, 8)}>
@@ -415,8 +419,8 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
       {agents.length > 0 ? (
         <View>
           <SectionHeader
-            title={`Agents (${agents.length})`}
-            action={admins.length ? undefined : 'All teams'}
+            title={t('dash.agentsCount', { count: agents.length })}
+            action={admins.length ? undefined : t('dash.allTeams')}
             onAction={admins.length ? undefined : () => router.push('/team')}
           />
           <View style={{ gap: 10 }}>
@@ -432,7 +436,7 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
       {/* No one on any roster the master can see — honest, distinct from an outage. */}
       {team.length === 0 ? (
         <Card>
-          <Txt size={13} color={c.muted}>No team members are on a roster you can see yet.</Txt>
+          <Txt size={13} color={c.muted}>{t('dash.noVisibleRoster')}</Txt>
         </Card>
       ) : null}
 
@@ -456,7 +460,7 @@ export function MasterDashboard({ team, tasks, snapshot, notifications, canCreat
                   <Ionicons name="pulse" size={15} color={th.accent} />
                 </View>
                 <Txt size={13} numberOfLines={1} style={{ flex: 1 }}>{n.title || n.body}</Txt>
-                <Txt size={11} color={c.faint} numeric>{n.at ? timeAgo(n.at) : ''}</Txt>
+                <Txt size={11} color={c.faint} numeric>{n.at ? timeAgo(n.at, t) : ''}</Txt>
               </View>
             ))}
           </Card>

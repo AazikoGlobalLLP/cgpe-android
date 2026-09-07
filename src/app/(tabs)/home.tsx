@@ -1,3 +1,4 @@
+import { textCopy, renderText, type CopyText, resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -332,13 +333,13 @@ const BUILT_IN_WIDGETS: DashWidget[] = [
  * remains in the More tab either way.
  */
 const LINK_WIDGETS: Record<string, { icon: IconName; title: string; subtitle: string; href: Href }> = {
-  notice_board: { icon: 'megaphone', title: 'Notice board', subtitle: 'Announcements from the firm', href: '/notice-board' },
-  campaigns: { icon: 'paper-plane', title: 'Campaigns', subtitle: 'Bulk WhatsApp sends to your book', href: '/campaigns' },
-  segments: { icon: 'pie-chart', title: 'Smart segments', subtitle: 'Slice the client book by need', href: '/segments' },
-  families: { icon: 'home', title: 'Families', subtitle: 'Households and their total cover', href: '/families' },
-  knowledge_base: { icon: 'library', title: 'Knowledge base', subtitle: 'The advisor field guide', href: '/kb' },
-  commissions: { icon: 'cash', title: 'Commissions', subtitle: 'What you have earned so far', href: '/commissions' },
-  attendance: { icon: 'time', title: 'My attendance', subtitle: 'Your GPS clock log, day by day', href: '/attendance' },
+  notice_board: { icon: 'megaphone', title: 'home.noticeBoard', subtitle: 'home.firmAnnouncements', href: '/notice-board' },
+  campaigns: { icon: 'paper-plane', title: 'dash.campaigns', subtitle: 'home.bulkBookSends', href: '/campaigns' },
+  segments: { icon: 'pie-chart', title: 'home.smartSegments', subtitle: 'home.segmentByNeed', href: '/segments' },
+  families: { icon: 'home', title: 'more.familiesTitle', subtitle: 'home.householdCover', href: '/families' },
+  knowledge_base: { icon: 'library', title: 'home.knowledgeBase', subtitle: 'home.advisorGuide', href: '/kb' },
+  commissions: { icon: 'cash', title: 'more.commissionsTitle', subtitle: 'home.earnedSoFar', href: '/commissions' },
+  attendance: { icon: 'time', title: 'more.attendanceTitle', subtitle: 'home.gpsClockLog', href: '/attendance' },
 };
 
 /* ---------- loose-document helpers ----------
@@ -383,7 +384,7 @@ function ClockRing({ on, elapsed }: { on: boolean; elapsed?: string }) {
     <Appear key={on ? 'on' : 'off'} distance={0}>
       <View
         accessible
-        accessibilityLabel={on ? (elapsed ? `On duty, ${elapsed}` : t('common.onDuty')) : t('common.offDuty')}
+        accessibilityLabel={on ? (elapsed ? t('home.onDutyElapsed', { elapsed: elapsed }) : t('common.onDuty')) : t('common.offDuty')}
         style={{
           width: RING, height: RING, borderRadius: RING / 2, overflow: 'hidden',
           alignItems: 'center', justifyContent: 'center',
@@ -646,7 +647,7 @@ export default function Home() {
   // pass (react-hooks/purity). Passing the thunk defers it to mount; the value is identical.
   const [nowTick, setNowTick] = useState(() => Date.now());
   /** Screen-specific refusals and failures. The app-wide HealthBanner covers outages. */
-  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: string; message?: string } | null>(null);
+  const [notice, setNotice] = useState<{ tone: FeedbackTone; title: CopyText; message?: CopyText } | null>(null);
   // D6b (owner, 2026-08-22): a one-time, plain-language "your day in 3 steps" card for non-tech
   // TEAM members. Starts hidden and is raised only after the flag reads unset (so it never flashes
   // for a returning user); "Got it" persists the flag. Admins/masters never see it.
@@ -795,7 +796,8 @@ export default function Home() {
     const at = new Date(since).getTime();
     if (isNaN(at)) return '';
     const mins = Math.max(0, Math.floor((nowTick - at) / 60000));
-    return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
+    return mins < 60 ? t('duration.minutesCompact', { minutes: mins })
+      : t('duration.hoursMinutesCompact', { hours: Math.floor(mins / 60), minutes: mins % 60 });
   };
 
   /**
@@ -949,8 +951,8 @@ export default function Home() {
         haptics.warn();
         setNotice({
           tone: 'warning',
-          title: 'Location needed',
-          message: 'Turn on location to clock in or out. Attendance is confirmed by GPS at the office.',
+          title: textCopy('home.locationNeeded'),
+          message: textCopy('home.locationClockBody'),
         });
         return;
       }
@@ -966,15 +968,15 @@ export default function Home() {
        * Never gate clock-OUT on it. Someone who is already on duty must always be able to end
        * their shift, whatever they have since done in Settings. */
       if (!clock.in && !webDemo) {
-        const perm = await ensureBackgroundPermission();
+        const perm = await ensureBackgroundPermission(t);
         if (!mounted.current) return;
         if (!perm.granted) {
           haptics.warn();
           setNotice({
             tone: 'warning',
-            title: 'Background location needed',
-            message: perm.reason
-              || 'Set location access to "Allow all the time" so your field route is recorded for the whole shift, then clock in again.',
+            title: textCopy('home.backgroundLocationNeeded'),
+            message: perm.reasonCopy ?? (perm.reason
+              || textCopy('home.backgroundLocationBody')),
           });
           return;
         }
@@ -1008,8 +1010,8 @@ export default function Home() {
             haptics.warn();
             setNotice({
               tone: 'warning',
-              title: 'Location needed to clock in',
-              message: geo.message,
+              title: textCopy('home.locationForClockIn'),
+              message: geo.messageCopy ?? geo.message,
             });
             return;
           }
@@ -1033,7 +1035,7 @@ export default function Home() {
         if (!mounted.current) return;
         if (res.blocked) {
           haptics.warn();
-          setNotice({ tone: 'warning', title: 'Too far to clock out', message: res.message || 'You have to be at the office to clock out.' });
+          setNotice({ tone: 'warning', title: textCopy('home.tooFarClockOut'), message: res.message || textCopy('home.officeForClockOut') });
           return;
         }
         // PHASE 50: the server ALLOWS this clock-out but needs a reason (out-of-range or early) and
@@ -1043,7 +1045,7 @@ export default function Home() {
           if (reason) {
             // A reason was already supplied but the server still refused it — say so honestly.
             haptics.warn();
-            setNotice({ tone: 'warning', title: t('clock.reasonNeededTitleOut'), message: res.message || t('clock.reasonNeededBodyOut') });
+            setNotice({ tone: 'warning', title: textCopy('clock.reasonNeededTitleOut'), message: res.message || textCopy('clock.reasonNeededBodyOut') });
             return;
           }
           haptics.warn();
@@ -1059,8 +1061,8 @@ export default function Home() {
           haptics.error();
           setNotice({
             tone: 'danger',
-            title: 'Attendance could not be recorded',
-            message: t('common.offlineBody'),
+            title: textCopy('home.attendanceFailed'),
+            message: textCopy('common.offlineBody'),
           });
           return;
         }
@@ -1078,8 +1080,8 @@ export default function Home() {
         if (clockOutFence?.known && !clockOutFence.allowed && clockOutFence.distance_m != null) {
           setNotice({
             tone: 'warning',
-            title: 'Clocked out away from the office',
-            message: `You were ${api.distanceText(clockOutFence.distance_m)} from the office when you clocked out.`,
+            title: textCopy('home.clockOutAway'),
+            message: textCopy('home.clockOutDistance', { distance: api.distanceText(clockOutFence.distance_m) }),
           });
         }
         return;
@@ -1089,7 +1091,7 @@ export default function Home() {
       if (!mounted.current) return;
       if (res.blocked) {
         haptics.warn();
-        setNotice({ tone: 'warning', title: 'Too far to clock in', message: res.message || 'You have to be inside the office area to clock in.' });
+        setNotice({ tone: 'warning', title: textCopy('home.tooFarClockIn'), message: res.message || textCopy('home.officeForClockIn') });
         return;
       }
       // PHASE 50: server allows the clock-in but needs a reason (out-of-range — the client fence and
@@ -1098,7 +1100,7 @@ export default function Home() {
       if (res.needsReason) {
         if (reason) {
           haptics.warn();
-          setNotice({ tone: 'warning', title: t('clock.reasonNeededTitleIn'), message: res.message || t('clock.reasonNeededBodyIn') });
+          setNotice({ tone: 'warning', title: textCopy('clock.reasonNeededTitleIn'), message: res.message || textCopy('clock.reasonNeededBodyIn') });
           return;
         }
         haptics.warn();
@@ -1119,8 +1121,8 @@ export default function Home() {
         haptics.error();
         setNotice({
           tone: 'danger',
-          title: 'Attendance could not be recorded',
-          message: t('common.offlineBody'),
+          title: textCopy('home.attendanceFailed'),
+          message: textCopy('common.offlineBody'),
         });
         return;
       }
@@ -1136,12 +1138,12 @@ export default function Home() {
        * The shift itself is unaffected — it is already recorded on the server — so this is a
        * warning beside a real success, not a failure. */
       if (res.sessionId) {
-        startTracking(res.sessionId).catch(() => {});
+        startTracking(res.sessionId, { title: t('tracker.shiftTitle'), body: t('tracker.shiftBody') }, user?.id).catch(() => {});
       } else if (!webDemo) {
         setNotice({
           tone: 'warning',
-          title: 'Shift started, route not recorded',
-          message: 'Your clock-in was saved, but this phone could not start recording your field route. Tell your manager if the route matters today.',
+          title: textCopy('home.routeNotRecorded'),
+          message: textCopy('home.routeNotRecordedBody'),
         });
       }
 
@@ -1155,13 +1157,13 @@ export default function Home() {
       haptics.error();
       setNotice({
         tone: 'danger',
-        title: 'Attendance could not be recorded',
-        message: t('common.offlineBody'),
+        title: textCopy('home.attendanceFailed'),
+        message: textCopy('common.offlineBody'),
       });
     } finally {
       if (mounted.current) setClocking(false);
     }
-  }, [clocking, clock.in, clock.time, clock.onBreak, clockKey, t]);
+  }, [clocking, clock.in, clock.time, clock.onBreak, clockKey, t, user?.id]);
 
   // PHASE 50: the reason prompt re-runs the SAME clock action, this time carrying the typed reason,
   // so the success path (start/stop tracking, clock state, haptics) is reused untouched.
@@ -1226,13 +1228,13 @@ export default function Home() {
       if (res.blocked) {
         haptics.warn();
         setBreakSheet(false);
-        setNotice({ tone: 'warning', title: 'Could not start break', message: res.message || 'You have to be at the office to start a break.' });
+        setNotice({ tone: 'warning', title: textCopy('home.breakStartFailed'), message: res.message || textCopy('home.officeForBreakStart') });
         return;
       }
       if (!res.ok && !webDemo) {
         haptics.error();
         setBreakSheet(false);
-        setNotice({ tone: 'danger', title: 'Break could not be recorded', message: res.message || t('common.offlineBody') });
+        setNotice({ tone: 'danger', title: textCopy('home.breakRecordFailed'), message: res.message || textCopy('common.offlineBody') });
         return;
       }
       const next: ClockState = { ...clock, onBreak: true };
@@ -1245,11 +1247,11 @@ export default function Home() {
       if (!mounted.current) return;
       haptics.error();
       setBreakSheet(false);
-      setNotice({ tone: 'danger', title: 'Break could not be recorded', message: t('common.offlineBody') });
+      setNotice({ tone: 'danger', title: textCopy('home.breakRecordFailed'), message: textCopy('common.offlineBody') });
     } finally {
       if (mounted.current) setBreaking(false);
     }
-  }, [breaking, breakReason, clock, clockKey, t]);
+  }, [breaking, breakReason, clock, clockKey]);
 
   /** End an in-progress break. */
   const pressEndBreak = useCallback(async () => {
@@ -1265,12 +1267,12 @@ export default function Home() {
       if (!mounted.current) return;
       if (res.blocked) {
         haptics.warn();
-        setNotice({ tone: 'warning', title: 'Could not end break', message: res.message || 'You have to be at the office to end a break.' });
+        setNotice({ tone: 'warning', title: textCopy('home.breakEndFailed'), message: res.message || textCopy('home.officeForBreakEnd') });
         return;
       }
       if (!res.ok && !webDemo) {
         haptics.error();
-        setNotice({ tone: 'danger', title: 'Could not end break', message: res.message || t('common.offlineBody') });
+        setNotice({ tone: 'danger', title: textCopy('home.breakEndFailed'), message: res.message || textCopy('common.offlineBody') });
         return;
       }
       const next: ClockState = { ...clock, onBreak: false };
@@ -1280,11 +1282,11 @@ export default function Home() {
     } catch {
       if (!mounted.current) return;
       haptics.error();
-      setNotice({ tone: 'danger', title: 'Could not end break', message: t('common.offlineBody') });
+      setNotice({ tone: 'danger', title: textCopy('home.breakEndFailed'), message: textCopy('common.offlineBody') });
     } finally {
       if (mounted.current) setBreaking(false);
     }
-  }, [breaking, clocking, clock, clockKey, t]);
+  }, [breaking, clocking, clock, clockKey]);
 
   const completeTask = useCallback(async (task: Task) => {
     // Optimistic: the row has to clear on the same frame as the tap. No haptic yet —
@@ -1304,10 +1306,10 @@ export default function Home() {
     haptics.warn();
     setNotice({
       tone: 'warning',
-      title: 'Task was not closed',
+      title: textCopy('home.taskNotClosed'),
       message: res.forbidden
-        ? 'This task is assigned to someone else, so it cannot be closed from here.'
-        : 'The server did not accept the change. Try again in a moment.',
+        ? textCopy('home.taskOtherAssignee')
+        : textCopy('home.changeRefused'),
     });
   }, []);
 
@@ -1345,8 +1347,8 @@ export default function Home() {
         id: `task-${tk.id}`,
         at: new Date(tk.dueDate).getTime() || 0,
         time: hhmm(tk.dueDate),
-        title: tk.title,
-        subtitle: tk.client || tk.assignedBy,
+        title: resolveCopy(t, tk.title, tk.titleCopy),
+        subtitle: tk.client || resolveCopy(t, tk.assignedBy, tk.assignedByCopy),
         tone: tk.status === 'in_progress' ? 'primary' : 'accent',
         icon: (CATEGORY_ICON[tk.category] || 'checkbox') as IconName,
         onPress: () => router.push(`/task/${tk.id}`),
@@ -1358,7 +1360,7 @@ export default function Home() {
         id: `rem-${r.id}`,
         at: new Date(r.date).getTime() || 0,
         time: hhmm(r.date),
-        title: r.clientName || r.title,
+        title: r.clientName || resolveCopy(t, r.title, r.titleCopy),
         subtitle: r.subtitle,
         tone: 'warning',
         icon: (REMINDER_ICON[r.type] ?? 'notifications') as IconName,
@@ -1367,7 +1369,7 @@ export default function Home() {
     }
     nodes.sort((a, b) => a.at - b.at);
     return nodes;
-  }, [day.dueToday, pendingReminders, router]);
+  }, [day.dueToday, pendingReminders, router, t]);
 
   const openClaims = useMemo(() => claims.filter(OPEN_CLAIM), [claims]);
   const activeTickets = useMemo(() => tickets.filter((tk) => !tk.is_closed), [tickets]);
@@ -1406,8 +1408,12 @@ export default function Home() {
   const unsure = (n: number) => health.degraded && n === 0;
 
   const dutyFor = elapsedSince(clock.time);
+  // These persisted location sentinels keep their canonical value; only their display changes.
+  const placeLabel = clock.place === 'On field' ? t('home.onField')
+    : clock.place === 'Location captured' ? t('home.locationCaptured')
+    : clock.place === 'On duty' ? t('common.onDuty') : clock.place;
   const dutyLine = clock.in
-    ? [dutyFor ? `${dutyFor} on duty` : t('common.onDuty'), clock.place].filter((s): s is string => !!s).join(' · ')
+    ? [dutyFor ? t('home.dutyDuration', { elapsed: dutyFor }) : t('common.onDuty'), placeLabel].filter((s): s is string => !!s).join(' · ')
     : t('home.gpsCheckin');
 
   /** A shift past MAX_SHIFT_MS is almost certainly a forgotten clock-out (owner: >24h seen, a real
@@ -1457,7 +1463,7 @@ export default function Home() {
     // More. It leads the strip instead, and the widget's cap is widened by one below so
     // nothing configured is displaced by this safety net.
     if (!heroClockRow && canClockIn) {
-      list.push({ key: 'attendance', icon: 'time', label: 'Attendance', onPress: () => router.push('/attendance') });
+      list.push({ key: 'attendance', icon: 'time', label: t('home.attendanceLabel'), onPress: () => router.push('/attendance') });
     }
     if (canCreateTask) {
       list.push({ key: 'task-new', icon: 'add-circle', label: t('tasks.add'), onPress: () => router.push('/task-new') });
@@ -1547,22 +1553,22 @@ export default function Home() {
               unconfirmed ? (
                 <SmallEmpty
                   icon="cloud-offline-outline"
-                  title="Today's list did not load"
-                  subtitle="The server could not be reached, so this is not a confirmed empty day. Pull down to refresh."
+                  title={t('home.todayListFailed')}
+                  subtitle={t('home.unreachableDay')}
                   action={{ label: t('common.tryAgain'), onPress: retry }}
                 />
               ) : tasks.length === 0 ? (
                 <SmallEmpty
                   icon="clipboard-outline"
-                  title="No tasks assigned yet"
-                  subtitle="Work assigned to you shows up here. Add your own to plan the day."
+                  title={t('home.noAssignedTasks')}
+                  subtitle={t('home.assignedTasksBody')}
                   action={canCreateTask ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                 />
               ) : (
                 <SmallEmpty
                   icon="checkmark-done-circle-outline"
                   title={t('tasks.allClear')}
-                  subtitle="Nothing is overdue and nothing else is due today."
+                  subtitle={t('home.todayAllClearBody')}
                   action={canCreateTask ? { label: t('tasks.add'), onPress: () => router.push('/task-new') } : undefined}
                 />
               )
@@ -1571,7 +1577,7 @@ export default function Home() {
                 <Spine>
                   {focus.map((task, i) => {
                     const isOver = bucket(task) === 'overdue';
-                    const who = task.client || task.assignedBy;
+                    const who = task.client || resolveCopy(t, task.assignedBy, task.assignedByCopy);
                     const stepsDone = task.steps.filter((s) => s.done).length;
                     return (
                       <SpineRow
@@ -1579,8 +1585,8 @@ export default function Home() {
                         index={i}
                         last={i === focus.length - 1}
                         time={isOver ? dayLabel(task.dueDate) : hhmm(task.dueDate)}
-                        title={task.title}
-                        subtitle={isOver ? `Overdue · ${who}` : who}
+                        title={resolveCopy(t, task.title, task.titleCopy)}
+                        subtitle={isOver ? t('home.overduePerson', { name: who }) : who}
                         tone={isOver ? 'danger' : task.status === 'in_progress' ? 'primary' : 'accent'}
                         icon={(CATEGORY_ICON[task.category] || 'checkbox') as IconName}
                         onPress={() => router.push(`/task/${task.id}`)}
@@ -1590,7 +1596,7 @@ export default function Home() {
                             size={34}
                             bg={c.successSoft}
                             color={c.success}
-                            accessibilityLabel={`Mark ${task.title} done`}
+                            accessibilityLabel={t('home.markTaskDone', { task: resolveCopy(t, task.title, task.titleCopy) })}
                             onPress={() => completeTask(task)}
                           />
                         }
@@ -1623,18 +1629,18 @@ export default function Home() {
         const nodes = daySpine.slice(0, w.max);
         return (
           <WidgetShell
-            title={w.title ?? 'The day, in order'}
+            title={w.title ?? t('home.dayInOrder')}
             action={t('home.viewAll')}
             onAction={() => router.push('/calendar')}
           >
             {nodes.length === 0 ? (
               <SmallEmpty
                 icon={unconfirmed ? 'cloud-offline-outline' : 'time-outline'}
-                title={unconfirmed ? 'Today did not load' : 'Nothing is timed for today'}
+                title={unconfirmed ? t('home.todayFailed') : t('home.nothingTimed')}
                 subtitle={unconfirmed
-                  ? 'The server could not be reached, so this is not a confirmed empty day. Pull down to refresh.'
-                  : 'Tasks and follow-ups dated today appear here in the order they fall due.'}
-                action={unconfirmed ? { label: t('common.tryAgain'), onPress: retry } : { label: 'Open calendar', onPress: () => router.push('/calendar') }}
+                  ? t('home.unreachableDay')
+                  : t('home.timedTasksBody')}
+                action={unconfirmed ? { label: t('common.tryAgain'), onPress: retry } : { label: t('home.openCalendar'), onPress: () => router.push('/calendar') }}
               />
             ) : (
               <Card>
@@ -1671,9 +1677,9 @@ export default function Home() {
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(pendingReminders.length) ? 'cloud-offline-outline' : 'call-outline'}
-                title={unsure(pendingReminders.length) ? 'Follow-ups did not load' : t('home.noFollowups')}
+                title={unsure(pendingReminders.length) ? t('home.followupsFailed') : t('home.noFollowups')}
                 subtitle={unsure(pendingReminders.length)
-                  ? 'The server did not answer, so an empty list here is not confirmed. Pull down to refresh.'
+                  ? t('home.unconfirmedList')
                   : t('home.followUpsEmptyBody')}
                 action={unsure(pendingReminders.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
@@ -1685,7 +1691,7 @@ export default function Home() {
                   <Appear key={r.id} index={i}>
                     <View style={{ paddingHorizontal: spacing.lg }}>
                       <PersonRow
-                        name={r.clientName || r.title}
+                        name={r.clientName || resolveCopy(t, r.title, r.titleCopy)}
                         subtitle={r.subtitle}
                         subtitleIcon={(REMINDER_ICON[r.type] ?? 'notifications') as IconName}
                         onPress={() => router.push('/reminders')}
@@ -1696,7 +1702,7 @@ export default function Home() {
                             size={38}
                             bg={c.whatsappSoft}
                             color={c.whatsapp}
-                            accessibilityLabel={`WhatsApp ${r.clientName || r.title}`}
+                            accessibilityLabel={t('home.whatsappPerson', { name: r.clientName || resolveCopy(t, r.title, r.titleCopy) })}
                             onPress={() => { haptics.tap(); whatsapp(r.phone!, `Namaste ${r.clientName || ''}`); }}
                           />
                         ) : undefined}
@@ -1722,19 +1728,19 @@ export default function Home() {
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(prospects.length) ? 'cloud-offline-outline' : 'person-add-outline'}
-                title={unsure(prospects.length) ? 'Prospects did not load' : 'No prospect in the pool yet'}
+                title={unsure(prospects.length) ? t('home.prospectsFailed') : t('home.noProspects')}
                 subtitle={unsure(prospects.length)
-                  ? 'The server did not answer, so an empty pool here is not confirmed. Pull down to refresh.'
-                  : 'People you are recruiting appear here as soon as they are added.'}
+                  ? t('home.unconfirmedPool')
+                  : t('home.recruitingBody')}
                 action={unsure(prospects.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
-                  : { label: 'Open prospects', onPress: () => router.push('/prospects') }}
+                  : { label: t('home.openProspects'), onPress: () => router.push('/prospects') }}
               />
             ) : (
               <ListSection>
                 {rows.map((p, i) => {
                   const rec = p as Record<string, unknown>;
-                  const name = pickStr(rec, PROSPECT_NAME_KEYS) || 'Unnamed prospect';
+                  const name = pickStr(rec, PROSPECT_NAME_KEYS) || t('home.unnamedProspect');
                   const sub = pickStr(rec, PROSPECT_SUB_KEYS);
                   const stage = typeof p.stage === 'string' ? p.stage : '';
                   return (
@@ -1763,22 +1769,22 @@ export default function Home() {
         const rows = activeLeads.slice(0, w.max);
         return (
           <WidgetShell
-            title={w.title ?? 'Leads pipeline'}
+            title={w.title ?? t('home.leadsPipeline')}
             action={t('common.pipeline')}
             onAction={() => router.push('/(tabs)/leads')}
           >
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(leads.length) ? 'cloud-offline-outline' : 'funnel-outline'}
-                title={unsure(leads.length) ? 'The pipeline did not load' : leads.length > 0 ? 'Every lead is closed' : 'No lead in the pipeline yet'}
+                title={unsure(leads.length) ? t('home.pipelineFailed') : leads.length > 0 ? t('home.allLeadsClosed') : t('home.noPipelineLead')}
                 subtitle={unsure(leads.length)
-                  ? 'The server did not answer, so an empty pipeline here is not confirmed. Pull down to refresh.'
+                  ? t('home.unconfirmedPipeline')
                   : leads.length > 0
-                    ? 'Nothing is open right now. Closed leads — policy issued, or lost — stay on the pipeline screen.'
-                    : 'New enquiries land here and move along the stages as you work them.'}
+                    ? t('home.closedLeadsBody')
+                    : t('home.newEnquiriesBody')}
                 action={unsure(leads.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
-                  : { label: 'Open pipeline', onPress: () => router.push('/(tabs)/leads') }}
+                  : { label: t('home.openPipeline'), onPress: () => router.push('/(tabs)/leads') }}
               />
             ) : (
               <>
@@ -1794,8 +1800,8 @@ export default function Home() {
                     <Appear key={l.id} index={i}>
                       <View style={{ paddingHorizontal: spacing.lg }}>
                         <PersonRow
-                          name={l.name}
-                          subtitle={l.interest || l.city || l.source}
+                          name={resolveCopy(t, l.name, l.nameCopy)}
+                          subtitle={l.interest || l.city || resolveCopy(t, l.source, l.sourceCopy)}
                           subtitleIcon="pricetag-outline"
                           onPress={() => router.push(`/lead/${l.id}`)}
                           right={
@@ -1827,11 +1833,11 @@ export default function Home() {
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(notes.length) ? 'cloud-offline-outline' : 'journal-outline'}
-                title={unsure(notes.length) ? 'Your notes did not load' : 'Nothing on your board yet'}
+                title={unsure(notes.length) ? t('home.notesFailed') : t('home.emptyBoard')}
                 subtitle={unsure(notes.length)
-                  ? 'The server did not answer, so an empty board here is not confirmed. Pull down to refresh.'
-                  : 'Your private board holds what you jot down here and what you dictate on WhatsApp. It is tied to your own number.'}
-                action={{ label: unsure(notes.length) ? t('common.tryAgain') : 'Open notes', onPress: unsure(notes.length) ? retry : () => router.push('/notes') }}
+                  ? t('home.unconfirmedBoard')
+                  : t('home.privateBoardBody')}
+                action={{ label: unsure(notes.length) ? t('common.tryAgain') : t('home.openNotes'), onPress: unsure(notes.length) ? retry : () => router.push('/notes') }}
               />
             ) : (
               <ListSection>
@@ -1840,7 +1846,7 @@ export default function Home() {
                     <Pressable
                       onPress={() => router.push('/notes')}
                       accessibilityRole="button"
-                      accessibilityLabel={n.text || 'Note'}
+                      accessibilityLabel={n.text || t('home.noteLabel')}
                       style={({ pressed }) => [{
                         paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
                         minHeight: 44, gap: 5,
@@ -1850,14 +1856,14 @@ export default function Home() {
                       <Row style={{ gap: spacing.sm }}>
                         {n.pinned ? <Ionicons name="pin" size={13} color={c.gold} /> : null}
                         <Txt size={font.sub} weight="600" numberOfLines={2} style={{ flex: 1 }}>
-                          {n.text || n.transcript || 'Voice note'}
+                          {n.text || n.transcript || t('home.voiceNote')}
                         </Txt>
                       </Row>
                       <Row style={{ gap: spacing.sm }}>
                         {n.category ? <Pill label={n.category} tone="neutral" small /> : null}
-                        {n.sourceType === 'voice' ? <Pill label="Voice" tone="accent" icon="mic" small /> : null}
+                        {n.sourceType === 'voice' ? <Pill label={t('home.voiceLabel')} tone="accent" icon="mic" small /> : null}
                         <Txt size={font.tiny} color={c.faint} numeric numberOfLines={1} style={{ flex: 1, textAlign: 'right' }}>
-                          {n.createdAt ? timeAgo(n.createdAt) : ''}
+                          {n.createdAt ? timeAgo(n.createdAt, t) : ''}
                         </Txt>
                       </Row>
                     </Pressable>
@@ -1874,19 +1880,19 @@ export default function Home() {
         const rows = openClaims.slice(0, w.max);
         return (
           <WidgetShell
-            title={w.title ?? 'Claim requests'}
+            title={w.title ?? t('home.claimRequests')}
             action={t('common.seeAll')}
             onAction={() => router.push('/(tabs)/claims')}
           >
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(claims.length) ? 'cloud-offline-outline' : 'shield-checkmark-outline'}
-                title={unsure(claims.length) ? 'Claims did not load' : claims.length > 0 ? 'No claim is open' : 'No claim on the register yet'}
+                title={unsure(claims.length) ? t('home.claimsFailed') : claims.length > 0 ? t('home.noOpenClaim') : t('home.noRegisterClaim')}
                 subtitle={unsure(claims.length)
-                  ? 'The server did not answer, so an empty register here is not confirmed. Pull down to refresh.'
+                  ? t('home.unconfirmedRegister')
                   : claims.length > 0
-                    ? 'Everything on the register is settled or closed. The full history stays on the Claims screen.'
-                    : 'Claims raised by your policyholders appear here from intake to settlement.'}
+                    ? t('home.settledClaimsBody')
+                    : t('home.policyholderClaimsBody')}
                 action={unsure(claims.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: t('home.openClaims'), onPress: () => router.push('/(tabs)/claims') }}
@@ -1897,7 +1903,7 @@ export default function Home() {
                   <Appear key={cl.id} index={i}>
                     <View style={{ paddingHorizontal: spacing.lg }}>
                       <PersonRow
-                        name={cl.clientName}
+                        name={resolveCopy(t, cl.clientName, cl.clientNameCopy)}
                         subtitle={cl.ref ? `${cl.ref} · ${cl.type}` : cl.type}
                         subtitleIcon="document-text-outline"
                         subtitleNumeric
@@ -1923,34 +1929,34 @@ export default function Home() {
         const rows = issueTickets.slice(0, w.max);
         return (
           <WidgetShell
-            title={w.title ?? 'Issue log'}
+            title={w.title ?? t('home.issueLog')}
             action={t('common.seeAll')}
             onAction={() => router.push('/tickets')}
           >
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(tickets.length) ? 'cloud-offline-outline' : 'checkmark-done-circle-outline'}
-                title={unsure(tickets.length) ? 'The issue log did not load' : 'Nothing needs attention'}
+                title={unsure(tickets.length) ? t('home.issueLogFailed') : t('home.nothingNeedsAttention')}
                 subtitle={unsure(tickets.length)
-                  ? 'The server did not answer, so an empty log here is not confirmed. Pull down to refresh.'
-                  : 'This log lists open tickets that are unclaimed, flagged red, or raised as P1. None of them is right now.'}
+                  ? t('home.unconfirmedLog')
+                  : t('home.issueLogEmptyBody')}
                 action={unsure(tickets.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
-                  : { label: 'Open all tickets', onPress: () => router.push('/tickets') }}
+                  : { label: t('home.openAllTickets'), onPress: () => router.push('/tickets') }}
               />
             ) : (
-              <ListSection footer="Open tickets that are unclaimed, flagged red, or raised as P1.">
+              <ListSection footer={t('home.issueLogDescription')}>
                 {rows.map((tk, i) => (
                   <Appear key={tk.id} index={i}>
                     <View style={{ paddingHorizontal: spacing.lg }}>
                       <PersonRow
-                        name={tk.client?.name || tk.ticket_ref || 'Ticket'}
+                        name={tk.client?.name || tk.ticket_ref || t('home.ticketLabel')}
                         subtitle={tk.task || tk.reason || tk.type_label}
                         subtitleIcon="alert-circle-outline"
                         onPress={() => router.push(`/tickets/${tk.id}`)}
                         right={
                           <View style={{ alignItems: 'flex-end', gap: 4, maxWidth: 118 }}>
-                            <Pill label={tk.owner ? tk.status_label : 'Unclaimed'} tone={ticketTone(tk)} small />
+                            <Pill label={tk.owner ? tk.status_label : t('home.unclaimed')} tone={ticketTone(tk)} small />
                             {tk.priority ? <Txt size={font.tiny} color={c.faint} numeric>{tk.priority}</Txt> : null}
                           </View>
                         }
@@ -1976,12 +1982,12 @@ export default function Home() {
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(tickets.length) ? 'cloud-offline-outline' : 'ticket-outline'}
-                title={unsure(tickets.length) ? 'Tickets did not load' : tickets.length > 0 ? 'Every ticket is closed' : 'No ticket in the inbox'}
+                title={unsure(tickets.length) ? t('home.ticketsFailed') : tickets.length > 0 ? t('home.allTicketsClosed') : t('home.noInboxTicket')}
                 subtitle={unsure(tickets.length)
-                  ? 'The server did not answer, so an empty inbox here is not confirmed. Pull down to refresh.'
+                  ? t('home.unconfirmedInbox')
                   : tickets.length > 0
-                    ? 'Nothing is open right now. Closed tickets stay on the Tickets screen.'
-                    : 'Requests raised by policyholders land here as tickets you can claim and work.'}
+                    ? t('home.closedTicketsBody')
+                    : t('home.policyholderTicketsBody')}
                 action={unsure(tickets.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
                   : { label: t('home.openTickets'), onPress: () => router.push('/tickets') }}
@@ -1992,7 +1998,7 @@ export default function Home() {
                   <Appear key={tk.id} index={i}>
                     <View style={{ paddingHorizontal: spacing.lg }}>
                       <PersonRow
-                        name={tk.client?.name || tk.ticket_ref || 'Ticket'}
+                        name={tk.client?.name || tk.ticket_ref || t('home.ticketLabel')}
                         subtitle={tk.type_label || tk.reason}
                         subtitleIcon="chatbubble-ellipses-outline"
                         onPress={() => router.push(`/tickets/${tk.id}`)}
@@ -2013,28 +2019,28 @@ export default function Home() {
         const onDuty = team.filter((m) => m.clockedIn).length;
         return (
           <WidgetShell
-            title={w.title ?? 'Team'}
+            title={w.title ?? t('dash.team')}
             action={t('common.seeAll')}
             onAction={() => router.push('/team')}
           >
             {rows.length === 0 ? (
               <SmallEmpty
                 icon={unsure(team.length) ? 'cloud-offline-outline' : 'people-outline'}
-                title={unsure(team.length) ? 'The roster did not load' : 'No one on your roster yet'}
+                title={unsure(team.length) ? t('home.rosterFailed') : t('home.emptyRoster')}
                 subtitle={unsure(team.length)
-                  ? 'The server did not answer, so an empty roster here is not confirmed. Pull down to refresh.'
-                  : 'People reporting to you appear here with their live task counts.'}
+                  ? t('home.unconfirmedRoster')
+                  : t('home.reportingTeamBody')}
                 action={unsure(team.length)
                   ? { label: t('common.tryAgain'), onPress: retry }
-                  : { label: 'Open team', onPress: () => router.push('/team') }}
+                  : { label: t('home.openTeam'), onPress: () => router.push('/team') }}
               />
             ) : (
-              <ListSection footer={`${onDuty} of ${team.length} on duty right now.`}>
+              <ListSection footer={t('home.teamOnDutyCount', { onDuty: onDuty, total: team.length })}>
                 {rows.map((m, i) => (
                   <Appear key={m.id} index={i}>
                     <View style={{ paddingHorizontal: spacing.lg }}>
                       <PersonRow
-                        name={m.name}
+                        name={resolveCopy(t, m.name, m.nameCopy)}
                         subtitle={m.branch || m.role}
                         subtitleIcon="briefcase-outline"
                         badge={m.clockedIn ? { tone: 'success' } : undefined}
@@ -2093,15 +2099,15 @@ export default function Home() {
             ) : health.degraded ? (
               <SmallEmpty
                 icon="cloud-offline-outline"
-                title="Analytics did not load"
-                subtitle="The server did not answer, so no total here would be confirmed. Pull down to refresh."
+                title={t('home.analyticsFailed')}
+                subtitle={t('home.unconfirmedTotals')}
                 action={{ label: t('common.tryAgain'), onPress: retry }}
               />
             ) : (
               <LinkCard
                 icon="stats-chart"
                 title={t('home.portfolioAnalytics')}
-                subtitle="Book value, cover bands and trends across the organisation"
+                subtitle={t('home.analyticsDescription')}
                 onPress={() => router.push('/analytics')}
               />
             )}
@@ -2113,11 +2119,11 @@ export default function Home() {
         const link = LINK_WIDGETS[w.key];
         if (!link) return null;
         return (
-          <WidgetShell title={w.title ?? link.title}>
+          <WidgetShell title={w.title ?? t(link.title)}>
             <LinkCard
               icon={link.icon}
-              title={link.title}
-              subtitle={link.subtitle}
+              title={t(link.title)}
+              subtitle={t(link.subtitle)}
               onPress={() => router.push(link.href)}
             />
           </WidgetShell>
@@ -2168,7 +2174,7 @@ export default function Home() {
               ) : null}
             </View>
             <Txt size={21} weight="900" numberOfLines={1} style={{ letterSpacing: -0.4, marginTop: 1 }}>
-              {user?.name?.split(' ')[0] ?? 'Team'}
+              {user ? (user.nameCopy ? resolveCopy(t, user.name, user.nameCopy) : user.name.split(' ')[0]) : t('dash.team')}
             </Txt>
           </View>
 
@@ -2182,7 +2188,7 @@ export default function Home() {
             onPress={() => { haptics.tap(); router.push('/search'); }}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Search everything"
+            accessibilityLabel={t('home.searchEverything')}
             style={({ pressed }) => [{
               width: 44, height: 44, borderRadius: 15, backgroundColor: c.card,
               alignItems: 'center', justifyContent: 'center', marginRight: 8,
@@ -2197,7 +2203,7 @@ export default function Home() {
             onPress={() => router.push('/notifications')}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+            accessibilityLabel={unread > 0 ? t('home.notificationsUnread', { count: unread }) : t('home.notificationsLabel')}
             style={({ pressed }) => [{
               width: 44, height: 44, borderRadius: 15, backgroundColor: c.card,
               alignItems: 'center', justifyContent: 'center',
@@ -2225,10 +2231,10 @@ export default function Home() {
             onPress={() => router.push('/profile')}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="Your profile"
+            accessibilityLabel={t('home.yourProfile')}
             style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
           >
-            <Avatar name={user?.name ?? 'A'} size={44} photo={user?.photo} />
+            <Avatar name={user ? resolveCopy(t, user.name, user.nameCopy) : 'A'} size={44} photo={user?.photo} />
           </Pressable>
         </View>
 
@@ -2264,7 +2270,7 @@ export default function Home() {
                           <View
                             style={{ flex: 1 }}
                             accessible
-                            accessibilityLabel={`Today, ${day.todayDone} of ${day.todayTotal} tasks done`}
+                            accessibilityLabel={t('home.todayDoneCount', { done: day.todayDone, total: day.todayTotal })}
                           >
                             <Eyebrow>{t('common.today')}</Eyebrow>
                             <Row style={{ alignItems: 'flex-end', gap: 6, marginTop: 3 }}>
@@ -2274,7 +2280,7 @@ export default function Home() {
                               </Txt>
                             </Row>
                             <Txt size={font.sub} color={c.muted} numberOfLines={1}>
-                              {day.overdue.length > 0 ? `done · ${day.overdue.length} overdue` : 'tasks done today'}
+                              {day.overdue.length > 0 ? t('home.doneOverdue', { count: day.overdue.length }) : t('home.tasksDoneToday')}
                             </Txt>
                             <ProgressBar
                               value={pct}
@@ -2287,19 +2293,19 @@ export default function Home() {
                           <View style={{ flex: 1 }}>
                             <Eyebrow>{t('common.today')}</Eyebrow>
                             <Txt size={font.h3} weight="800" style={{ marginTop: 4 }} numberOfLines={2}>
-                              {unconfirmed ? 'Not confirmed' : 'Nothing scheduled'}
+                              {unconfirmed ? t('home.notConfirmed') : t('home.nothingScheduled')}
                             </Txt>
                             <Txt size={font.sub} color={c.muted} style={{ marginTop: 3 }} numberOfLines={3}>
                               {unconfirmed
-                                ? 'The server did not answer, so this is not a confirmed empty day. Pull down to refresh.'
-                                : 'No task is due today.'}
+                                ? t('home.unconfirmedDay')
+                                : t('home.noTaskDueToday')}
                             </Txt>
                           </View>
                         )
                       ) : (
                         /* clock_only: the ring carries the state, this side carries the words. */
                         <View style={{ flex: 1 }}>
-                          <Eyebrow>Attendance</Eyebrow>
+                          <Eyebrow>{t('home.attendanceLabel')}</Eyebrow>
                           <Txt size={font.h3} weight="800" style={{ marginTop: 4 }} numberOfLines={2}>
                             {clock.in ? clockedInLine(clock.time, t('home.clockedIn'), (time) => t('home.clockedInAt', { time })) : t('home.markAttendance')}
                           </Txt>
@@ -2379,8 +2385,8 @@ export default function Home() {
               <View style={{ paddingHorizontal: spacing.lg, marginTop: showHero ? spacing.md : spacing.lg }}>
                 <Banner
                   tone={notice.tone}
-                  title={notice.title}
-                  message={notice.message}
+                  title={renderText(t, notice.title)}
+                  message={notice.message ? renderText(t, notice.message) : undefined}
                   onDismiss={() => setNotice(null)}
                 />
               </View>
@@ -2405,7 +2411,7 @@ export default function Home() {
             {!isTeam && (
               <View style={{ paddingHorizontal: spacing.lg, marginTop: spacing.xxl }}>
                 <SectionHeader
-                  title={caps.tier === 'master' ? 'Organisation' : 'Your branch'}
+                  title={caps.tier === 'master' ? t('home.organisation') : t('home.yourBranch')}
                   action={t('common.seeAll')}
                   onAction={() => router.push('/team')}
                 />
@@ -2418,16 +2424,16 @@ export default function Home() {
                     {health.degraded ? (
                       <EmptyState
                         icon="cloud-offline-outline"
-                        title="Organisation figures did not load"
-                        subtitle="The server did not answer, so no org total here would be confirmed. Pull down to refresh."
+                        title={t('home.orgFiguresFailed')}
+                        subtitle={t('home.unconfirmedOrgTotal')}
                         action={{ label: t('common.tryAgain'), onPress: retry }}
                       />
                     ) : (
                       <EmptyState
                         icon="business-outline"
-                        title="No organisation figures yet"
-                        subtitle="Team and org totals appear here once records are linked to this account."
-                        action={{ label: 'Open team', onPress: () => router.push('/team') }}
+                        title={t('home.noOrgFigures')}
+                        subtitle={t('home.orgLinkedRecordsBody')}
+                        action={{ label: t('home.openTeam'), onPress: () => router.push('/team') }}
                       />
                     )}
                   </Card>
@@ -2544,7 +2550,7 @@ function HomeGuideCard({ onDismiss }: { onDismiss: () => void }) {
           <Eyebrow>{t('guide.welcome')}</Eyebrow>
           <Txt size={font.h3} weight="800" style={{ marginTop: 2 }}>{t('guide.title')}</Txt>
         </View>
-        <IconBtn icon="close" size={34} bg={c.cardAlt} color={c.muted} accessibilityLabel="Dismiss the guide" onPress={onDismiss} />
+        <IconBtn icon="close" size={34} bg={c.cardAlt} color={c.muted} accessibilityLabel={t('home.dismissGuide')} onPress={onDismiss} />
       </Row>
       <View style={{ gap: spacing.md, marginTop: spacing.md }}>
         {steps.map((s, i) => (

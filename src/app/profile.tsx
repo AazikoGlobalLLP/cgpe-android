@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -40,7 +41,7 @@ export default function Profile() {
   if (!ready) {
     return (
       <Screen>
-        <Header title="My profile" back />
+        <Header title={t('more.profileTitle')} back />
         <View style={{ padding: spacing.lg, gap: spacing.xl }}>
           <Card>
             <Row>
@@ -65,11 +66,11 @@ export default function Profile() {
   if (!user) {
     return (
       <Screen>
-        <Header title="My profile" back />
+        <Header title={t('more.profileTitle')} back />
         <EmptyState
           icon="person-circle-outline"
-          title="You are signed out"
-          subtitle="Sign in again to see your agent code, branch and contact details."
+          title={t('account.signedOut')}
+          subtitle={t('profile.signInBody')}
           action={{ label: t('common.goToSignIn'), onPress: () => router.replace('/(auth)/login') }}
         />
       </Screen>
@@ -85,7 +86,7 @@ export default function Profile() {
   return (
     <Screen>
       <Header
-        title="My profile"
+        title={t('more.profileTitle')}
         back
         right={
           <IconBtn
@@ -103,13 +104,13 @@ export default function Profile() {
         <Appear>
           <Card>
             <PersonRow
-              name={user.name}
-              subtitle={user.designation}
+              name={resolveCopy(t, user.name, user.nameCopy)}
+              subtitle={resolveCopy(t, user.designation, user.designationCopy)}
               photo={user.photo}
               size={64}
             />
             <Row style={{ marginTop: spacing.md, flexWrap: 'wrap', gap: spacing.sm }}>
-              <Pill label={`${user.tier} Club`} tone="warning" icon="star" small />
+              <Pill label={t('profile.clubName', { tier: user.tier })} tone="warning" icon="star" small />
               {user.agentCode ? <Pill label={user.agentCode} tone="neutral" icon="id-card" small numeric /> : null}
               {user.branch ? <Pill label={user.branch} tone="info" icon="business" small /> : null}
             </Row>
@@ -117,14 +118,14 @@ export default function Profile() {
         </Appear>
 
         <ListSection
-          title="Contact"
-          footer="Tap a row to open your dialler or mail app. Tap the copy icon to put the value on the clipboard."
+          title={t('filter.contact')}
+          footer={t('profile.contactHelp')}
         >
           <Appear index={0}>
             <DataRow
               icon="call-outline"
               label={t('common.mobile')}
-              value={hasPhone ? user.phone : 'Not on file'}
+              value={hasPhone ? user.phone : t('profile.notOnFile')}
               tone={hasPhone ? 'neutral' : 'warning'}
               copyable={hasPhone}
               onPress={hasPhone ? dial : undefined}
@@ -133,41 +134,41 @@ export default function Profile() {
           <Appear index={1}>
             <DataRow
               icon="mail-outline"
-              label="Email"
-              value={hasEmail ? user.email : 'Not on file'}
+              label={t('profile.emailLabel')}
+              value={hasEmail ? user.email : t('profile.notOnFile')}
               tone={hasEmail ? 'neutral' : 'warning'}
               copyable={hasEmail}
               onPress={hasEmail ? compose : undefined}
             />
           </Appear>
           <Appear index={2}>
-            <DataRow icon="business-outline" label="Branch" value={user.branch || 'Not on file'} />
+            <DataRow icon="business-outline" label={t('profile.branchLabel')} value={user.branch || t('profile.notOnFile')} />
           </Appear>
         </ListSection>
 
         <ListSection
-          title="Role"
-          footer="Access level is set by your administrator. Ask them if something here looks wrong."
+          title={t('profile.roleLabel')}
+          footer={t('profile.accessAdminBody')}
         >
           <Appear index={0}>
             <DataRow
               icon="shield-checkmark-outline"
-              label="Access level"
+              label={t('profile.accessLevel')}
               value={user.role.replace(/_/g, ' ')}
             />
           </Appear>
           {user.department ? (
             <Appear index={1}>
-              <DataRow icon="briefcase-outline" label="Department" value={user.department} />
+              <DataRow icon="briefcase-outline" label={t('profile.departmentLabel')} value={user.department} />
             </Appear>
           ) : null}
           {user.agentCode ? (
             <Appear index={2}>
-              <DataRow icon="id-card-outline" label="Agent code" value={user.agentCode} copyable numeric />
+              <DataRow icon="id-card-outline" label={t('profile.agentCodeLabel')} value={user.agentCode} copyable numeric />
             </Appear>
           ) : null}
           <Appear index={3}>
-            <DataRow icon="ribbon-outline" label="Club tier" value={user.tier} />
+            <DataRow icon="ribbon-outline" label={t('profile.clubTier')} value={user.tier} />
           </Appear>
         </ListSection>
       </ScrollView>
