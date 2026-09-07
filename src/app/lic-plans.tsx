@@ -1,3 +1,4 @@
+import { resolveCopy, type LocalCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,7 +12,7 @@ import { Sheet } from '@/ui/sheet';
 import { Appear } from '@/ui/motion';
 import { useDataHealth } from '@/ui/health-banner';
 import { haptics } from '@/lib/haptics';
-import { useT } from '@/i18n';
+import { useT, type TFn } from '@/i18n';
 
 import * as api from '@/data/api';
 import type { LicPlan } from '@/data/types';
@@ -46,29 +47,40 @@ import type { LicPlan } from '@/data/types';
 type PlanView = {
   id: string;
   name: string;
+  nameIsFallback: boolean;
+  nameCopy?: LocalCopy;
   code: string;
   kind: string;
+  kindIsFallback: boolean;
   term: string;
   highlight: string;
   tags: string[];
-  /** "18 to 60 years", or null when the record does not carry a usable age band. */
-  ages: string | null;
+  /** Raw age bounds; the sheet resolves their presentation in its current language. */
+  minAge: number | null;
+  maxAge: number | null;
 };
 
 const str = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 const posInt = (v: unknown): number | null =>
   (typeof v === 'number' && Number.isFinite(v) && v > 0 ? Math.round(v) : null);
 
-function ageBand(min: unknown, max: unknown): string | null {
+function ageBand(min: unknown, max: unknown, t: TFn): string | null {
   const lo = posInt(min);
   const hi = posInt(max);
-  if (lo != null && hi != null) return `${lo} to ${hi} years`;
-  if (lo != null) return `From ${lo} years`;
-  if (hi != null) return `Up to ${hi} years`;
+  if (lo != null && hi != null) return t('plans.ageRange', { min: lo, max: hi });
+  if (lo != null) return t('plans.ageFrom', { age: lo });
+  if (hi != null) return t('plans.ageTo', { age: hi });
   return null;
 }
 
 const ALL = 'all';
+
+const planName = (p: PlanView, t: TFn) => p.nameIsFallback ? t('plans.unnamed') : resolveCopy(t, p.name, p.nameCopy);
+const planKind = (p: PlanView, t: TFn) => p.kindIsFallback ? t('plans.other') : p.kind;
+function groupKind(kind: string, plans: PlanView[], t: TFn): string {
+  const group = plans.filter((p) => p.kind === kind);
+  return group.length > 0 && group.every((p) => p.kindIsFallback) ? t('plans.other') : kind;
+}
 
 export default function LicPlans() {
   const c = useTheme();
@@ -104,24 +116,28 @@ export default function LicPlans() {
   const views = useMemo<PlanView[]>(() => plans.map((p, i) => ({
     id: str(p?.id) || `plan-${i}`,
     name: str(p?.name) || 'Unnamed plan',
+    nameIsFallback: !str(p?.name),
+    nameCopy: p?.nameCopy,
     code: str(p?.code),
     kind: str(p?.type) || 'Other',
+    kindIsFallback: !str(p?.type),
     term: str(p?.term),
     highlight: str(p?.highlight),
     tags: Array.isArray(p?.tags) ? p.tags.filter((t): t is string => typeof t === 'string' && !!t.trim()) : [],
-    ages: ageBand(p?.minAge, p?.maxAge),
+    minAge: posInt(p?.minAge),
+    maxAge: posInt(p?.maxAge),
   })), [plans]);
 
   const kinds = useMemo(() => {
     const counts = new Map<string, number>();
     views.forEach((p) => counts.set(p.kind, (counts.get(p.kind) ?? 0) + 1));
     return [
-      { key: ALL, label: 'All plans', count: views.length },
+      { key: ALL, label: t('plans.all'), count: views.length },
       ...Array.from(counts.entries())
         .sort((a, b) => b[1] - a[1])
-        .map(([k, n]) => ({ key: k, label: k, count: n })),
+        .map(([k, n]) => ({ key: k, label: groupKind(k, views, t), count: n })),
     ];
-  }, [views]);
+  }, [views, t]);
 
   const shown = useMemo(
     () => (kind === ALL ? views : views.filter((p) => p.kind === kind)),
@@ -155,10 +171,10 @@ export default function LicPlans() {
   }, [load]);
 
   const subtitle = loading
-    ? 'Loading the product library'
+    ? t('plans.loading')
     : views.length === 0
-      ? 'Product library'
-      : `${views.length} plan${views.length === 1 ? '' : 's'} on file`;
+      ? t('plans.library')
+      : t(views.length === 1 ? 'plans.oneOnFile' : 'plans.countOnFile', { count: views.length });
 
   return (
     <Screen>
@@ -191,16 +207,15 @@ export default function LicPlans() {
             <Card>
               <EmptyState
                 icon={health.degraded ? 'cloud-offline-outline' : 'library-outline'}
-                title={health.degraded ? 'The plan library could not load' : 'No plans on file yet'}
+                title={health.degraded ? t('plans.loadFailed') : t('plans.emptyTitle')}
                 subtitle={health.degraded
-                  ? 'The server did not answer, so nothing here is confirmed. Pull down to try again.'
-                  : 'The product catalogue is empty right now, so there is nothing to list here. Nothing has gone wrong with your account.'}
-                action={{ label: 'Check again', onPress: retry }}
+                  ? t('book.unconfirmed')
+                  : t('plans.emptyBody')}
+                action={{ label: t('plans.checkAgain'), onPress: retry }}
               />
             </Card>
             <Txt size={font.tiny} color={c.faint} style={{ textAlign: 'center', lineHeight: 16 }}>
-              Plan wordings and benefit tables stay with your branch until the library is populated.
-            </Txt>
+              {t('plans.branchWordings')}</Txt>
           </View>
         ) : (
           <>
@@ -214,9 +229,9 @@ export default function LicPlans() {
               /* FILTER MISS. Unframed, inline, and it echoes the filter that produced it. */
               <EmptyState
                 icon="funnel-outline"
-                title={`No plan is filed under "${kind}"`}
-                subtitle={`The library holds ${views.length} plan${views.length === 1 ? '' : 's'}, none of them in this group.`}
-                action={{ label: 'Show all plans', onPress: () => pickKind(ALL) }}
+                title={t('plans.noGroup', { type: groupKind(kind, views, t) })}
+                subtitle={t(views.length === 1 ? 'plans.groupEmptyOne' : 'plans.groupEmptyMany', { count: views.length })}
+                action={{ label: t('plans.showAll'), onPress: () => pickKind(ALL) }}
               />
             ) : (
               sections.map((s, si) => {
@@ -224,17 +239,17 @@ export default function LicPlans() {
                 return (
                   <ListSection
                     key={s.key}
-                    title={`${s.title} (${s.rows.length})`}
+                    title={`${groupKind(s.title, views, t)} (${s.rows.length})`}
                     footer={si === sections.length - 1
-                      ? 'Tap a plan for its entry ages, term and what it is usually sold for.'
+                      ? t('plans.tapHint')
                       : undefined}
                   >
                     {s.rows.map((p, i) => (
                       <Appear key={p.id} index={offset + i}>
                         <DataRow
                           icon="ribbon-outline"
-                          label={p.name}
-                          value={p.code ? `Plan ${p.code}` : p.term || p.kind}
+                          label={planName(p, t)}
+                          value={p.code ? t('plans.code', { code: p.code }) : p.term || planKind(p, t)}
                           onPress={() => setOpen(p)}
                         />
                       </Appear>
@@ -260,13 +275,15 @@ export default function LicPlans() {
  * ================================================================== */
 
 function PlanSheet({ plan, onClose }: { plan: PlanView | null; onClose: () => void }) {
+  const tr = useT();
   const c = useTheme();
+  const ages = plan ? ageBand(plan.minAge, plan.maxAge, tr) : null;
   return (
     <Sheet
       visible={!!plan}
       onClose={onClose}
-      title={plan?.name ?? 'Plan'}
-      subtitle={plan?.code ? `Plan number ${plan.code}` : plan?.kind}
+      title={plan ? planName(plan, tr) : tr('plans.plan')}
+      subtitle={plan?.code ? tr('plans.numberValue', { code: plan.code }) : plan ? planKind(plan, tr) : undefined}
     >
       {plan ? (
         <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
@@ -275,25 +292,24 @@ function PlanSheet({ plan, onClose }: { plan: PlanView | null; onClose: () => vo
           ) : null}
 
           <ListSection>
-            <DataRow label="Type" value={plan.kind} icon="pricetags-outline" />
-            {plan.ages ? <DataRow label="Entry age" value={plan.ages} icon="person-outline" numeric /> : null}
-            {plan.term ? <DataRow label="Term" value={plan.term} icon="time-outline" /> : null}
-            {plan.code ? <DataRow label="Plan number" value={plan.code} icon="barcode-outline" numeric copyable /> : null}
+            <DataRow label={tr('plans.type')} value={planKind(plan, tr)} icon="pricetags-outline" />
+            {ages ? <DataRow label={tr('plans.entryAge')} value={ages} icon="person-outline" numeric /> : null}
+            {plan.term ? <DataRow label={tr('plans.term')} value={plan.term} icon="time-outline" /> : null}
+            {plan.code ? <DataRow label={tr('plans.number')} value={plan.code} icon="barcode-outline" numeric copyable /> : null}
           </ListSection>
 
           {plan.tags.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
-              <Txt size={font.cap} weight="700" color={c.muted}>Riders</Txt>
+              <Txt size={font.cap} weight="700" color={c.muted}>{tr('plans.riders')}</Txt>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
                 {plan.tags.map((t) => <Pill key={t} label={t} tone="primary" small />)}
               </View>
             </View>
           ) : null}
 
-          {!plan.highlight && !plan.ages && !plan.term && plan.tags.length === 0 ? (
+          {!plan.highlight && !ages && !plan.term && plan.tags.length === 0 ? (
             <Txt size={font.sub} color={c.muted} style={{ lineHeight: 20 }}>
-              This record carries only a name and a type. Ask your branch for the full plan wording.
-            </Txt>
+              {tr('plans.incompleteRecord')}</Txt>
           ) : null}
         </View>
       ) : null}

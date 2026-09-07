@@ -19,7 +19,7 @@ import * as api from '@/data/api';
 import type { SegmentRow } from '@/data/api';
 import { fmtDay, inrShort } from '@/lib/format';
 import { call, whatsapp } from '@/lib/actions';
-import { useT } from '@/i18n';
+import { useT, type TFn, type TKey } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { canViewClients } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
@@ -79,7 +79,7 @@ function asCounts(v: unknown): Record<string, number> {
 
 /* ---------- flag catalogue ---------- */
 
-type FlagDef = { key: string; label: string; tone: Tone; units: Unit[] };
+type FlagDef = { key: string; label: string; labelKey?: TKey; tone: Tone; units: Unit[] };
 
 /** Backend tone vocabulary -> this app's semantic tones. */
 function mapTone(t: string): Tone {
@@ -102,18 +102,23 @@ function mapTone(t: string): Tone {
  * or date is ever sourced from here.
  */
 const FALLBACK_FLAGS: FlagDef[] = [
-  { key: 'hot_lead', label: 'Hot lead', tone: 'danger', units: ['individual', 'family'] },
-  { key: 'underinsured', label: 'Underinsured', tone: 'warning', units: ['individual', 'family'] },
-  { key: 'well_insured', label: 'Well insured', tone: 'success', units: ['individual', 'family'] },
-  { key: 'no_coverage', label: 'No cover on file', tone: 'neutral', units: ['individual', 'family'] },
-  { key: 'birthday_soon', label: 'Birthday soon', tone: 'accent', units: ['individual', 'family'] },
-  { key: 'birthday_today', label: 'Birthday today', tone: 'accent', units: ['individual', 'family'] },
-  { key: 'renewal_due', label: 'Renewal due', tone: 'info', units: ['individual', 'family'] },
-  { key: 'maturity_soon', label: 'Maturing soon', tone: 'info', units: ['individual', 'family'] },
-  { key: 'high_value', label: 'High value', tone: 'warning', units: ['individual', 'family'] },
-  { key: 'large_family', label: 'Large family', tone: 'primary', units: ['family'] },
-  { key: 'inactive', label: 'Inactive', tone: 'neutral', units: ['individual'] },
+  { key: 'hot_lead', label: 'Hot lead', labelKey: 'segments.flagHot', tone: 'danger', units: ['individual', 'family'] },
+  { key: 'underinsured', label: 'Underinsured', labelKey: 'segments.flagUnderinsured', tone: 'warning', units: ['individual', 'family'] },
+  { key: 'well_insured', label: 'Well insured', labelKey: 'segments.flagWellInsured', tone: 'success', units: ['individual', 'family'] },
+  { key: 'no_coverage', label: 'No cover on file', labelKey: 'segments.flagNoCover', tone: 'neutral', units: ['individual', 'family'] },
+  { key: 'birthday_soon', label: 'Birthday soon', labelKey: 'segments.flagBirthdaySoon', tone: 'accent', units: ['individual', 'family'] },
+  { key: 'birthday_today', label: 'Birthday today', labelKey: 'segments.flagBirthdayToday', tone: 'accent', units: ['individual', 'family'] },
+  { key: 'renewal_due', label: 'Renewal due', labelKey: 'premium.renewalDue', tone: 'info', units: ['individual', 'family'] },
+  { key: 'maturity_soon', label: 'Maturing soon', labelKey: 'segments.flagMaturity', tone: 'info', units: ['individual', 'family'] },
+  { key: 'high_value', label: 'High value', labelKey: 'segments.flagHighValue', tone: 'warning', units: ['individual', 'family'] },
+  { key: 'large_family', label: 'Large family', labelKey: 'segments.flagLargeFamily', tone: 'primary', units: ['family'] },
+  { key: 'inactive', label: 'Inactive', labelKey: 'segments.flagInactive', tone: 'neutral', units: ['individual'] },
 ];
+
+function flagLabel(key: string, defs: Map<string, FlagDef>, t: TFn): string {
+  const def = defs.get(key);
+  return def?.labelKey ? t(def.labelKey) : def?.label ?? key.replace(/_/g, ' ');
+}
 
 function parseFlagDefs(v: unknown): FlagDef[] {
   if (!Array.isArray(v)) return [];
@@ -127,7 +132,13 @@ function parseFlagDefs(v: unknown): FlagDef[] {
     const units: Unit[] = segs.length
       ? segs.filter((s): s is Unit => s === 'individual' || s === 'family')
       : ['individual', 'family'];
-    out.push({ key, label: asStr(o.label) || key, tone: mapTone(asStr(o.tone)), units });
+    const suppliedLabel = asStr(o.label);
+    const canonical = FALLBACK_FLAGS.find((d) => d.key === key);
+    out.push({
+      key, label: suppliedLabel || key, tone: mapTone(asStr(o.tone)), units,
+      // Recognize the fixed control vocabulary, while preserving server customizations.
+      labelKey: canonical && (!suppliedLabel || suppliedLabel === canonical.label) ? canonical.labelKey : undefined,
+    });
   }
   return out;
 }
@@ -137,15 +148,15 @@ function parseFlagDefs(v: unknown): FlagDef[] {
  * short because the current one is printed on the control that opens this list, and a
  * six-word label there either wraps or ellipsises into nonsense.
  */
-const SORTS: { key: string; label: string }[] = [
-  { key: 'priority', label: 'Priority' },
-  { key: 'birthday', label: 'Birthday first' },
-  { key: 'coverage_asc', label: 'Lowest cover' },
-  { key: 'coverage_desc', label: 'Highest cover' },
-  { key: 'premium_desc', label: 'Highest premium' },
-  { key: 'name', label: 'Name A to Z' },
+const SORTS: { key: string; labelKey: TKey }[] = [
+  { key: 'priority', labelKey: 'task.priority' },
+  { key: 'birthday', labelKey: 'segments.sortBirthday' },
+  { key: 'coverage_asc', labelKey: 'segments.sortLowestCover' },
+  { key: 'coverage_desc', labelKey: 'segments.sortHighestCover' },
+  { key: 'premium_desc', labelKey: 'segments.sortHighestPremium' },
+  { key: 'name', labelKey: 'segments.sortName' },
 ];
-const sortLabel = (k: string) => SORTS.find((s) => s.key === k)?.label ?? 'Priority';
+const sortLabel = (k: string, t: TFn) => t(SORTS.find((s) => s.key === k)?.labelKey ?? 'task.priority');
 
 /* ---------- normalised row ---------- */
 
@@ -162,6 +173,7 @@ type RowView = {
   key: string;
   kind: Unit;
   title: string;
+  titleIsFallback: boolean;
   /** The DataRow value: a phone for a person, a member count for a household. */
   value: string;
   phone: string;
@@ -210,9 +222,8 @@ function toRowView(raw: SegmentRow, i: number): RowView {
   const kind: Unit = asStr(o.type) === 'family' ? 'family' : 'individual';
   const phone = asStr(o.phone);
   const memberCount = asNum(o.memberCount);
-  const title = kind === 'family'
-    ? (asStr(o.familyName) || asStr(o.name) || 'Unnamed household')
-    : (asStr(o.name) || 'Unnamed client');
+  const namedTitle = kind === 'family' ? asStr(o.familyName) || asStr(o.name) : asStr(o.name);
+  const title = namedTitle || (kind === 'family' ? 'Unnamed household' : 'Unnamed client');
 
   const value = kind === 'family'
     ? (memberCount != null ? `${memberCount} ${memberCount === 1 ? 'member' : 'members'}` : 'Household')
@@ -222,6 +233,7 @@ function toRowView(raw: SegmentRow, i: number): RowView {
     key: asStr(o.personKey) || asStr(o.familyKey) || asStr(o.id) || `${title}-${i}`,
     kind,
     title,
+    titleIsFallback: !namedTitle,
     value,
     phone,
     flags: asStrArr(o.flags),
@@ -244,14 +256,25 @@ function toRowView(raw: SegmentRow, i: number): RowView {
   };
 }
 
-/** "in 4 days" / "today" / "in 2 months", from a day count. Never invents a date. */
-function inDays(n: number | null): string | null {
+function rowTitle(row: RowView, t: TFn): string {
+  return row.titleIsFallback ? t(row.kind === 'family' ? 'families.unnamed' : 'campaign.unnamedClient') : row.title;
+}
+
+function rowValue(row: RowView, t: TFn): string {
+  if (row.kind === 'family') return row.memberCount == null
+    ? t('segments.household')
+    : t(row.memberCount === 1 ? 'payroll.memberCountOne' : 'payroll.memberCount', { count: row.memberCount });
+  return row.phone || t('segments.noPhone');
+}
+
+/** Relative prose from a day count. Never invents or reformats a calendar date. */
+function inDays(n: number | null, t: TFn): string | null {
   if (n == null) return null;
-  if (n === 0) return 'today';
-  if (n < 0) return `${Math.abs(n)} days ago`;
-  if (n === 1) return 'tomorrow';
-  if (n < 45) return `in ${n} days`;
-  return `in ${Math.round(n / 30)} months`;
+  if (n === 0) return t('common.today');
+  if (n < 0) return t(n === -1 ? 'book.dayAgo' : 'book.daysAgo', { count: Math.abs(n) });
+  if (n === 1) return t('tasks.tomorrow');
+  if (n < 45) return t('book.inDays', { count: n });
+  return t('book.inMonths', { count: Math.round(n / 30) });
 }
 
 /* ================================================================== *
@@ -264,13 +287,14 @@ function inDays(n: number | null): string | null {
  * so the real screen's hooks are untouched.
  */
 export default function Segments() {
+  const t = useT();
   const { user, viewAs, ready } = useAuth();
   if (ready && !canViewClients(user, viewAs)) {
     return (
       <RestrictedNotice
-        title="Segments"
-        heading="Segments are master and admin only"
-        subtitle="Client segments are built from the client book, which is available to administrators and the master account."
+        title={t('more.segmentsTitle')}
+        heading={t('segments.adminOnly')}
+        subtitle={t('segments.adminOnlyBody')}
       />
     );
   }
@@ -380,10 +404,10 @@ function SegmentsScreen() {
 
   const groups: FilterGroup[] = useMemo(() => [{
     key: 'flags',
-    label: unit === 'family' ? 'Household flags' : 'Client flags',
+    label: unit === 'family' ? t('segments.householdFlags') : t('segments.clientFlags'),
     mode: 'multi',
-    options: unitDefs.map((d) => ({ key: d.key, label: d.label, count: facets[d.key] })),
-  }], [unitDefs, facets, unit]);
+    options: unitDefs.map((d) => ({ key: d.key, label: flagLabel(d.key, defMap, t), count: facets[d.key] })),
+  }], [unitDefs, facets, unit, defMap, t]);
 
   /* ---------- control handlers ---------- */
   const pickUnit = useCallback((next: Unit) => {
@@ -415,29 +439,30 @@ function SegmentsScreen() {
 
   /* ---------- readout ---------- */
   const totalDisplay = useCountUp(total);
-  const unitWord = unit === 'family' ? 'household' : 'client';
   const readout = loading
-    ? 'Working through the book'
+    ? t('segments.loading')
     : total === 0
-      ? 'Nothing matches'
-      : `${totalDisplay.toLocaleString('en-IN')} ${total === 1 ? unitWord : `${unitWord}s`} match`;
+      ? t('segments.nothingMatches')
+      : t(unit === 'family'
+        ? (total === 1 ? 'segments.householdMatch' : 'segments.householdsMatch')
+        : (total === 1 ? 'segments.clientMatch' : 'segments.clientsMatch'), { count: totalDisplay.toLocaleString('en-IN') });
 
   /* Four genuinely different emptinesses, and they must not look alike: a flag combination
      that matches nobody, a search that found nobody, an outage, and a book with nothing in
      it. Each names its own cause and offers the way out of that cause. */
   const flagTitle = query
-    ? 'No match for those flags and that search'
+    ? t('segments.flagsAndSearchEmpty')
     : flags.length === 1
-      ? 'Nobody carries that flag right now'
+      ? t('segments.oneFlagEmpty')
       : match === 'all'
-        ? 'Nobody carries all of those flags'
-        : 'Nobody carries any of those flags';
+        ? t('segments.allFlagsEmpty')
+        : t('segments.anyFlagEmpty');
 
   const flagSubtitle = query
-    ? 'The search and the flags both have to agree. Clear one of them to widen the list.'
+    ? t('segments.flagsSearchHint')
     : flags.length > 1 && match === 'all'
-      ? 'A row has to carry every flag you picked. Switch the match to "Any flag", or drop one.'
-      : 'Nothing in your book qualifies today. This changes as renewals, birthdays and maturities come round.';
+      ? t('segments.allFlagsHint')
+      : t('segments.flagTiming');
 
   const emptyView = (
     <EmptyState
@@ -446,21 +471,21 @@ function SegmentsScreen() {
           : health.degraded ? 'cloud-offline-outline' : 'people-outline'}
       title={
         flags.length > 0 ? flagTitle
-          : query ? `No ${unitWord} matches "${query}"`
-            : health.degraded ? 'Segments could not load'
-              : `No ${unitWord}s in your book yet`
+          : query ? t(unit === 'family' ? 'families.noSearchMatch' : 'segments.noClientSearch', { query })
+            : health.degraded ? t('segments.loadFailed')
+              : t(unit === 'family' ? 'segments.noHouseholds' : 'segments.noClients')
       }
       subtitle={
         flags.length > 0 ? flagSubtitle
           : query
             ? (unit === 'family'
-              ? 'Search looks at every member name and the household surname.'
-              : 'Search covers names, mobile numbers and policy numbers across the whole book.')
-            : health.degraded ? 'The server did not answer, so nothing here is confirmed. Pull down to try again.'
-              : 'Segments are built from your client book. They fill in as records are assigned to you.'
+              ? t('families.searchScope')
+              : t('segments.clientSearchScope'))
+            : health.degraded ? t('book.unconfirmed')
+              : t('segments.emptyBody')
       }
       action={
-        flags.length > 0 ? { label: 'Clear flags', onPress: clearFlags }
+        flags.length > 0 ? { label: t('segments.clearFlags'), onPress: clearFlags }
           : query ? { label: t('common.clearSearch'), onPress: () => setQ('') }
             : { label: t('common.tryAgain'), onPress: () => { haptics.tap(); void run(1, 'replace'); } }
       }
@@ -470,13 +495,13 @@ function SegmentsScreen() {
   return (
     <Screen>
       <Header
-        title="Smart segments"
-        subtitle="Build a working list from your book"
+        title={t('segments.smartTitle')}
+        subtitle={t('segments.subtitle')}
         back
         right={total > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={total.toLocaleString('en-IN')} size={font.h3} />
-            <Eyebrow>Matching</Eyebrow>
+            <Eyebrow>{t('segments.matching')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -484,13 +509,13 @@ function SegmentsScreen() {
       <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.md }}>
         <Row>
           <Segmented<Unit>
-            options={[{ key: 'individual', label: 'People' }, { key: 'family', label: 'Households' }]}
+            options={[{ key: 'individual', label: t('families.people') }, { key: 'family', label: t('more.familiesSub') }]}
             value={unit}
             onChange={pickUnit}
           />
           <View style={{ flex: 1 }} />
           <Button
-            label={sortLabel(sort)}
+            label={sortLabel(sort, t)}
             icon="swap-vertical"
             variant="ghost"
             size="sm"
@@ -506,7 +531,7 @@ function SegmentsScreen() {
           <SearchBar
             value={q}
             onChange={setQ}
-            placeholder={unit === 'family' ? 'Household or member name' : 'Name, mobile or policy number'}
+            placeholder={unit === 'family' ? t('families.searchHint') : t('segments.clientSearchHint')}
             style={{ flex: 1 }}
           />
           <View>
@@ -516,7 +541,7 @@ function SegmentsScreen() {
               bg={flags.length > 0 ? c.primarySoft : c.cardAlt}
               color={flags.length > 0 ? c.primary : c.muted}
               onPress={() => setFilterOpen(true)}
-              accessibilityLabel={flags.length > 0 ? `Flags, ${flags.length} active` : 'Filter by flag'}
+              accessibilityLabel={flags.length > 0 ? t('segments.flagsActive', { count: flags.length }) : t('segments.filterFlags')}
             />
             {flags.length > 0 ? (
               <View
@@ -537,7 +562,7 @@ function SegmentsScreen() {
         <Row style={{ gap: spacing.sm }}>
           <Txt size={font.cap} color={c.faint} numeric numberOfLines={1} style={{ flex: 1 }}>{readout}</Txt>
           {flags.length > 0 ? (
-            <Button label="Clear flags" variant="ghost" size="sm" onPress={clearFlags} />
+            <Button label={t('segments.clearFlags')} variant="ghost" size="sm" onPress={clearFlags} />
           ) : null}
         </Row>
 
@@ -545,10 +570,9 @@ function SegmentsScreen() {
         {flags.length > 1 ? (
           <Row style={{ gap: spacing.sm }}>
             <Txt size={font.cap} color={c.muted} numberOfLines={1} style={{ flex: 1 }}>
-              A row must carry
-            </Txt>
+              {t('segments.rowRequires')}</Txt>
             <Segmented<Match>
-              options={[{ key: 'all', label: 'All flags' }, { key: 'any', label: 'Any flag' }]}
+              options={[{ key: 'all', label: t('segments.allFlags') }, { key: 'any', label: t('segments.anyFlag') }]}
               value={match}
               onChange={pickMatch}
             />
@@ -604,17 +628,17 @@ function SegmentsScreen() {
         value={{ flags }}
         onChange={changeFilters}
         onReset={clearFlags}
-        title={unit === 'family' ? 'Household flags' : 'Client flags'}
+        title={unit === 'family' ? t('segments.householdFlags') : t('segments.clientFlags')}
         applyLabel={t('common.showResults')}
       />
 
       <Sheet
         visible={sortOpen}
         onClose={() => setSortOpen(false)}
-        title="Sort"
-        subtitle="Order the matching rows"
+        title={t('segments.sort')}
+        subtitle={t('segments.sortSubtitle')}
       >
-        <Chips options={SORTS} value={sort} onChange={pickSort} style={{ paddingTop: spacing.xs }} />
+        <Chips options={SORTS.map((s) => ({ key: s.key, label: t(s.labelKey) }))} value={sort} onChange={pickSort} style={{ paddingTop: spacing.xs }} />
       </Sheet>
 
       <DetailSheet row={open} defs={defMap} onClose={() => setOpen(null)} />
@@ -636,6 +660,8 @@ function SegRow({ row, defs, onOpen }: {
   row: RowView; defs: Map<string, FlagDef>; onOpen: () => void;
 }) {
   const c = useTheme();
+  const t = useT();
+  const title = rowTitle(row, t);
   const shown = row.flags.slice(0, MAX_PILLS);
   const extra = row.flags.length - shown.length;
   const hasCover = row.cover != null && row.cover > 0;
@@ -643,21 +669,21 @@ function SegRow({ row, defs, onOpen }: {
   // already says it, and an empty strip of padding reads as a rendering fault.
   const hasSecondLine = shown.length > 0 || hasCover;
 
-  const flagWords = row.flags.map((f) => defs.get(f)?.label ?? f.replace(/_/g, ' ')).join(', ');
+  const flagWords = row.flags.map((f) => flagLabel(f, defs, t)).join(', ');
 
   return (
     <Pressable
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel={flagWords ? `${row.title}, ${flagWords}` : row.title}
+      accessibilityLabel={flagWords ? `${title}, ${flagWords}` : title}
       // The row owns the card surface: the list is one continuous sheet split by hairlines,
       // not a stack of floating cards, so an opaque skin has to come from somewhere.
       style={({ pressed }) => [{ backgroundColor: pressed ? c.cardAlt : c.card }]}
     >
       <DataRow
         icon={row.kind === 'family' ? 'home-outline' : 'person-outline'}
-        label={row.title}
-        value={row.value}
+        label={title}
+        value={rowValue(row, t)}
         numeric={row.kind === 'individual'}
         right={<Ionicons name="chevron-forward" size={16} color={c.faint} />}
       />
@@ -670,13 +696,13 @@ function SegRow({ row, defs, onOpen }: {
         }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2, flex: 1 }}>
             {shown.map((f) => (
-              <Pill key={f} label={defs.get(f)?.label ?? f.replace(/_/g, ' ')} tone={defs.get(f)?.tone ?? 'neutral'} small />
+              <Pill key={f} label={flagLabel(f, defs, t)} tone={defs.get(f)?.tone ?? 'neutral'} small />
             ))}
             {extra > 0 ? <Pill label={`+${extra}`} tone="neutral" small numeric /> : null}
           </View>
           {hasCover ? (
             <Txt size={font.cap} weight="700" color={c.muted} numeric numberOfLines={1}>
-              {inrShort(row.cover ?? 0)} cover{row.coverageScore != null ? ` · ${row.coverageScore}%` : ''}
+              {t('families.coverAmount', { amount: inrShort(row.cover ?? 0) })}{row.coverageScore != null ? ` · ${row.coverageScore}%` : ''}
             </Txt>
           ) : null}
         </View>
@@ -699,17 +725,17 @@ function DetailSheet({ row, defs, onClose }: {
   const c = useTheme();
   const t = useT();
 
-  const birthday = inDays(row?.birthdayIn ?? null);
-  const renewal = inDays(row?.renewalIn ?? null);
-  const maturity = inDays(row?.maturityIn ?? null);
+  const birthday = inDays(row?.birthdayIn ?? null, t);
+  const renewal = inDays(row?.renewalIn ?? null, t);
+  const maturity = inDays(row?.maturityIn ?? null, t);
 
   return (
     <Sheet
       visible={!!row}
       onClose={onClose}
-      title={row?.title ?? ''}
+      title={row ? rowTitle(row, t) : ''}
       subtitle={row?.kind === 'family'
-        ? (row.memberCount != null ? `${row.memberCount} people in this household` : 'Household')
+        ? (row.memberCount != null ? t(row.memberCount === 1 ? 'segments.householdPerson' : 'segments.householdPeople', { count: row.memberCount }) : t('segments.household'))
         : (row?.city || undefined)}
       footer={row && row.kind === 'individual' && row.phone ? (
         <Row>
@@ -736,7 +762,7 @@ function DetailSheet({ row, defs, onClose }: {
           {row.flags.length > 0 ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm }}>
               {row.flags.map((f) => (
-                <Pill key={f} label={defs.get(f)?.label ?? f.replace(/_/g, ' ')} tone={defs.get(f)?.tone ?? 'neutral'} />
+                <Pill key={f} label={flagLabel(f, defs, t)} tone={defs.get(f)?.tone ?? 'neutral'} />
               ))}
             </View>
           ) : null}
@@ -746,23 +772,23 @@ function DetailSheet({ row, defs, onClose }: {
               ? <DataRow label={t('common.mobile')} value={row.phone} icon="call-outline" numeric copyable />
               : null}
             {row.kind === 'individual' && row.age != null
-              ? <DataRow label="Age" value={`${row.age} years`} icon="person-outline" numeric />
+              ? <DataRow label={t('segments.age')} value={t('book.years', { age: row.age })} icon="person-outline" numeric />
               : null}
             {row.memberCount != null
-              ? <DataRow label="Members" value={String(row.memberCount)} icon="people-outline" numeric />
+              ? <DataRow label={t('performance.members')} value={String(row.memberCount)} icon="people-outline" numeric />
               : null}
             {row.policyCount != null
-              ? <DataRow label="Policies" value={String(row.policyCount)} icon="document-text-outline" numeric />
+              ? <DataRow label={t('client.policies')} value={String(row.policyCount)} icon="document-text-outline" numeric />
               : null}
             {row.cover != null
-              ? <DataRow label="Life cover" value={inrShort(row.cover)} icon="shield-checkmark-outline" numeric />
+              ? <DataRow label={t('segments.lifeCover')} value={inrShort(row.cover)} icon="shield-checkmark-outline" numeric />
               : null}
             {/* Derived coverage adequacy. Only drawn when the server sent a score; a null row
                 (no cover on file) shows nothing here — never a fabricated 0%. Tone follows the
                 server's own invariant: 100 ⟺ well insured, <100 ⟺ underinsured. */}
             {row.coverageScore != null
               ? <DataRow
-                  label="Coverage"
+                  label={t('segments.coverage')}
                   value={`${row.coverageScore}%`}
                   icon="pie-chart-outline"
                   numeric
@@ -770,15 +796,15 @@ function DetailSheet({ row, defs, onClose }: {
                 />
               : null}
             {row.premium != null
-              ? <DataRow label="Yearly premium" value={inrShort(row.premium)} icon="cash-outline" numeric />
+              ? <DataRow label={t('families.yearlyPremium')} value={inrShort(row.premium)} icon="cash-outline" numeric />
               : null}
           </ListSection>
 
           {birthday || renewal || maturity ? (
-            <ListSection title="Dates">
+            <ListSection title={t('segments.dates')}>
               {birthday ? (
                 <DataRow
-                  label={row.birthdayName ? `Birthday, ${row.birthdayName}` : t('seg.birthday')}
+                  label={row.birthdayName ? t('segments.birthdayNamed', { name: row.birthdayName }) : t('seg.birthday')}
                   value={birthday}
                   icon="gift-outline"
                   tone={row.birthdayIn === 0 ? 'accent' : 'neutral'}
@@ -794,7 +820,7 @@ function DetailSheet({ row, defs, onClose }: {
               ) : null}
               {maturity ? (
                 <DataRow
-                  label="Next maturity"
+                  label={t('segments.nextMaturity')}
                   value={row.maturityDate ? `${fmtDay(row.maturityDate)}, ${maturity}` : maturity}
                   icon="trophy-outline"
                 />
@@ -804,12 +830,12 @@ function DetailSheet({ row, defs, onClose }: {
 
           {row.members.length > 0 ? (
             <View style={{ gap: spacing.sm }}>
-              <Txt size={font.cap} weight="700" color={c.muted}>Household</Txt>
+              <Txt size={font.cap} weight="700" color={c.muted}>{t('segments.household')}</Txt>
               {row.members.map((m, i) => (
                 <Appear key={m.key} index={i}>
                   <PersonRow
                     name={m.name}
-                    subtitle={[m.role, m.age != null ? `${m.age} yrs` : '', m.phone].filter(Boolean).join(' · ') || undefined}
+                    subtitle={[m.role, m.age != null ? t('book.yearsShort', { age: m.age }) : '', m.phone].filter(Boolean).join(' · ') || undefined}
                     subtitleNumeric
                     size={38}
                     right={m.phone ? (
@@ -834,8 +860,7 @@ function DetailSheet({ row, defs, onClose }: {
 
           {row.kind === 'individual' && !row.phone ? (
             <Txt size={font.sub} color={c.muted} style={{ lineHeight: 20 }}>
-              No mobile number is on file for this client, so there is nothing to dial from here.
-            </Txt>
+              {t('segments.noMobileBody')}</Txt>
           ) : null}
         </View>
       ) : null}
@@ -890,7 +915,7 @@ function ListFooter({ loadingMore, hasMore, count, total, onLoadMore }: {
         <Button label={t('common.loadMore')} variant="ghost" size="sm" onPress={onLoadMore} />
       ) : (
         <Txt size={font.cap} color={c.faint} numeric>
-          All {total.toLocaleString('en-IN')} shown
+          {t('book.allShown', { count: total.toLocaleString('en-IN') })}
         </Txt>
       )}
     </View>

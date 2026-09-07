@@ -17,7 +17,7 @@ import * as api from '@/data/api';
 import type { Family } from '@/data/api';
 import { inrShort } from '@/lib/format';
 import { call } from '@/lib/actions';
-import { useT } from '@/i18n';
+import { useT, type TFn } from '@/i18n';
 import { useAuth } from '@/store/auth';
 import { canViewClients } from '@/store/roles';
 import { RestrictedNotice } from '@/ui/RestrictedNotice';
@@ -77,6 +77,7 @@ type UnitView = {
 type FamilyView = {
   id: string;
   head: string;
+  headIsFallback: boolean;
   surname: string;
   memberCount: number | null;
   unitCount: number | null;
@@ -146,11 +147,13 @@ function toFamilyView(raw: Family, i: number): FamilyView {
   const o = raw as Record<string, unknown>;
   const units = parseUnits(o.units);
   const surname = asStr(o.surname);
-  const head = asStr(o.head_name) || asStr(o.root) || units[0]?.head || surname || 'Unnamed household';
+  const namedHead = asStr(o.head_name) || asStr(o.root) || units[0]?.head || surname;
+  const head = namedHead || 'Unnamed household';
 
   return {
     id: asStr(o.family_id) || asStr(o.id) || `family-${i}`,
     head,
+    headIsFallback: !namedHead,
     surname,
     memberCount: asNum(o.member_count) ?? (units.length ? units.reduce((n, u) => n + u.members.length, 0) : null),
     unitCount: asNum(o.unit_count) ?? (units.length || null),
@@ -168,19 +171,22 @@ function toFamilyView(raw: Family, i: number): FamilyView {
  * Screen
  * ================================================================== */
 
+const familyHead = (family: FamilyView, t: TFn) => family.headIsFallback ? t('families.unnamed') : family.head;
+
 /**
  * Point 9 (owner decision, 2026-08-24): Families groups the client book into households, so it is
  * part of the master/admin-only client surface — a team user gets the restricted panel. Thin
  * wrapper so the real screen's hooks are untouched.
  */
 export default function Families() {
+  const t = useT();
   const { user, viewAs, ready } = useAuth();
   if (ready && !canViewClients(user, viewAs)) {
     return (
       <RestrictedNotice
-        title="Families"
-        heading="Families are master and admin only"
-        subtitle="Household groupings are built from the client book, which is available to administrators and the master account."
+        title={t('more.familiesTitle')}
+        heading={t('families.adminOnly')}
+        subtitle={t('families.adminOnlyBody')}
       />
     );
   }
@@ -276,33 +282,35 @@ function FamiliesScreen() {
     if (!stats) return [];
     const n = (v: number) => v.toLocaleString('en-IN');
     const items: KpiItem[] = [
-      { label: 'Households', value: n(stats.families), icon: 'home', tone: 'primary' },
-      { label: 'People', value: n(stats.persons), icon: 'people', tone: 'accent' },
-      { label: 'Multi-person', value: n(stats.multi_person_families), icon: 'git-merge', tone: 'info' },
+      { label: t('more.familiesSub'), value: n(stats.families), icon: 'home', tone: 'primary' },
+      { label: t('families.people'), value: n(stats.persons), icon: 'people', tone: 'accent' },
+      { label: t('families.multiPerson'), value: n(stats.multi_person_families), icon: 'git-merge', tone: 'info' },
     ];
-    if (stats.review > 0) items.push({ label: 'Needs a check', value: n(stats.review), icon: 'alert-circle', tone: 'warning' });
-    if (stats.largest > 0) items.push({ label: 'Largest', value: n(stats.largest), icon: 'trending-up', tone: 'success' });
+    if (stats.review > 0) items.push({ label: t('families.needsCheck'), value: n(stats.review), icon: 'alert-circle', tone: 'warning' });
+    if (stats.largest > 0) items.push({ label: t('families.largest'), value: n(stats.largest), icon: 'trending-up', tone: 'success' });
     return items;
-  }, [stats]);
+  }, [stats, t]);
 
   const readout = loading
-    ? 'Grouping your book into households'
+    ? t('families.grouping')
     : total === 0
-      ? 'No households'
-      : `${total.toLocaleString('en-IN')} household${total === 1 ? '' : 's'}${hasMore ? ', keep scrolling' : ''}`;
+      ? t('families.none')
+      : t(hasMore
+        ? (total === 1 ? 'families.countOneMore' : 'families.countMore')
+        : (total === 1 ? 'families.countOne' : 'families.count'), { count: total.toLocaleString('en-IN') });
 
   const emptyView = (
     <EmptyState
       icon={query ? 'search-outline' : health.degraded ? 'cloud-offline-outline' : 'home-outline'}
       title={
-        query ? `No household matches "${query}"`
-          : health.degraded ? 'Households could not load'
-            : 'No households to group yet'
+        query ? t('families.noSearchMatch', { query })
+          : health.degraded ? t('families.loadFailed')
+            : t('families.emptyTitle')
       }
       subtitle={
-        query ? 'Search looks at every member name and the household surname.'
-          : health.degraded ? 'The server did not answer, so nothing here is confirmed. Pull down to try again.'
-            : 'Households are grouped from your client book. They appear once records are assigned to you.'
+        query ? t('families.searchScope')
+          : health.degraded ? t('book.unconfirmed')
+            : t('families.emptyBody')
       }
       action={
         query ? { label: t('common.clearSearch'), onPress: () => setQ('') }
@@ -314,13 +322,13 @@ function FamiliesScreen() {
   return (
     <Screen>
       <Header
-        title="Families"
-        subtitle="Your book, grouped into households"
+        title={t('more.familiesTitle')}
+        subtitle={t('families.subtitle')}
         back
         right={stats && stats.families > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={stats.families.toLocaleString('en-IN')} size={font.h3} />
-            <Eyebrow>Households</Eyebrow>
+            <Eyebrow>{t('more.familiesSub')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -334,7 +342,7 @@ function FamiliesScreen() {
       ) : null}
 
       <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm }}>
-        <SearchBar value={q} onChange={setQ} placeholder="Household or member name" />
+        <SearchBar value={q} onChange={setQ} placeholder={t('families.searchHint')} />
         <Txt size={font.cap} color={c.faint} numeric numberOfLines={1}>{readout}</Txt>
       </View>
 
@@ -389,12 +397,13 @@ function FamiliesScreen() {
  * ================================================================== */
 
 function FamilyRow({ family, onOpen }: { family: FamilyView; onOpen: () => void }) {
+  const t = useT();
   const c = useTheme();
 
   const bits: string[] = [];
-  if (family.memberCount != null) bits.push(`${family.memberCount} ${family.memberCount === 1 ? 'person' : 'people'}`);
-  if (family.unitCount != null && family.unitCount > 1) bits.push(`${family.unitCount} units`);
-  if (family.generations != null && family.generations > 1) bits.push(`${family.generations} generations`);
+  if (family.memberCount != null) bits.push(t(family.memberCount === 1 ? 'families.personCount' : 'families.peopleCount', { count: family.memberCount }));
+  if (family.unitCount != null && family.unitCount > 1) bits.push(t('families.unitsCount', { count: family.unitCount }));
+  if (family.generations != null && family.generations > 1) bits.push(t('families.generationsCount', { count: family.generations }));
 
   // The surface lives on a wrapper, not on PersonRow's own `style`: PersonRow applies the
   // caller's style AFTER its pressed tint, so a backgroundColor passed there would silently
@@ -402,7 +411,7 @@ function FamilyRow({ family, onOpen }: { family: FamilyView; onOpen: () => void 
   return (
     <View style={{ backgroundColor: c.card }}>
       <PersonRow
-        name={family.head}
+        name={familyHead(family, t)}
         subtitle={bits.join(' · ') || family.surname || undefined}
         subtitleIcon="people-outline"
         subtitleNumeric
@@ -414,9 +423,9 @@ function FamilyRow({ family, onOpen }: { family: FamilyView; onOpen: () => void 
               <Metric value={inrShort(family.premium)} size={font.sub} />
             ) : null}
             {family.reviewCount > 0 ? (
-              <Pill label={`${family.reviewCount} to check`} tone="warning" small numeric />
+              <Pill label={t('families.toCheckCount', { count: family.reviewCount })} tone="warning" small numeric />
             ) : family.cover != null && family.cover > 0 ? (
-              <Txt size={font.tiny} color={c.faint} numeric numberOfLines={1}>{inrShort(family.cover)} cover</Txt>
+              <Txt size={font.tiny} color={c.faint} numeric numberOfLines={1}>{t('families.coverAmount', { amount: inrShort(family.cover) })}</Txt>
             ) : null}
           </View>
         }
@@ -468,24 +477,24 @@ function FamilySheet({ family, onClose }: { family: FamilyView | null; onClose: 
   const showSkeleton = busy && units.length === 0;
 
   const subtitleBits: string[] = [];
-  if (shown?.memberCount != null) subtitleBits.push(`${shown.memberCount} people`);
-  if (shown?.unitCount != null && shown.unitCount > 1) subtitleBits.push(`${shown.unitCount} units`);
+  if (shown?.memberCount != null) subtitleBits.push(t(shown.memberCount === 1 ? 'families.personCount' : 'families.peopleCount', { count: shown.memberCount }));
+  if (shown?.unitCount != null && shown.unitCount > 1) subtitleBits.push(t('families.unitsCount', { count: shown.unitCount }));
 
   return (
     <Sheet
       visible={!!family}
       onClose={onClose}
-      title={shown?.head ?? ''}
+      title={shown ? familyHead(shown, t) : ''}
       subtitle={subtitleBits.join(' · ') || undefined}
     >
       <View style={{ gap: spacing.lg, paddingTop: spacing.xs }}>
         {failed ? (
           <Banner
             tone="offline"
-            title={units.length > 0 ? 'Could not refresh this household' : 'This household could not be opened'}
+            title={units.length > 0 ? t('families.refreshFailed') : t('families.openFailed')}
             message={units.length > 0
-              ? 'Showing the copy that arrived with the list. It may be a few minutes old.'
-              : 'The server did not answer. Nothing is missing from your book, it just could not be read right now.'}
+              ? t('families.staleCopy')
+              : t('families.readFailed')}
             action={{ label: t('common.tryAgain'), onPress: () => { haptics.tap(); setAttempt((n) => n + 1); } }}
           />
         ) : null}
@@ -497,25 +506,25 @@ function FamilySheet({ family, onClose }: { family: FamilyView | null; onClose: 
             {shown ? (
               <ListSection>
                 {shown.memberCount != null
-                  ? <DataRow label="People" value={String(shown.memberCount)} icon="people-outline" numeric />
+                  ? <DataRow label={t('families.people')} value={String(shown.memberCount)} icon="people-outline" numeric />
                   : null}
                 {shown.unitCount != null
-                  ? <DataRow label="Units" value={String(shown.unitCount)} icon="git-branch-outline" numeric />
+                  ? <DataRow label={t('families.units')} value={String(shown.unitCount)} icon="git-branch-outline" numeric />
                   : null}
                 {shown.generations != null
-                  ? <DataRow label="Generations" value={String(shown.generations)} icon="layers-outline" numeric />
+                  ? <DataRow label={t('families.generations')} value={String(shown.generations)} icon="layers-outline" numeric />
                   : null}
                 {shown.policies != null
-                  ? <DataRow label="Policies" value={String(shown.policies)} icon="document-text-outline" numeric />
+                  ? <DataRow label={t('client.policies')} value={String(shown.policies)} icon="document-text-outline" numeric />
                   : null}
                 {shown.cover != null && shown.cover > 0
-                  ? <DataRow label="Total cover" value={inrShort(shown.cover)} icon="shield-checkmark-outline" numeric />
+                  ? <DataRow label={t('families.totalCover')} value={inrShort(shown.cover)} icon="shield-checkmark-outline" numeric />
                   : null}
                 {shown.premium != null && shown.premium > 0
-                  ? <DataRow label="Yearly premium" value={inrShort(shown.premium)} icon="cash-outline" numeric />
+                  ? <DataRow label={t('families.yearlyPremium')} value={inrShort(shown.premium)} icon="cash-outline" numeric />
                   : null}
                 {shown.reviewCount > 0
-                  ? <DataRow label="Weak matches" value={String(shown.reviewCount)} icon="alert-circle-outline" tone="warning" numeric />
+                  ? <DataRow label={t('families.weakMatches')} value={String(shown.reviewCount)} icon="alert-circle-outline" tone="warning" numeric />
                   : null}
               </ListSection>
             ) : null}
@@ -523,14 +532,14 @@ function FamilySheet({ family, onClose }: { family: FamilyView | null; onClose: 
             {units.map((u, ui) => (
               <View key={u.key} style={{ gap: spacing.sm }}>
                 <Txt size={font.cap} weight="700" color={c.muted}>
-                  {u.head ? `${u.head}'s family` : `Unit ${u.no}`}
-                  {u.generation != null ? `  ·  generation ${u.generation}` : ''}
+                  {u.head ? t('families.namedFamily', { name: u.head }) : t('families.unitNumber', { number: u.no })}
+                  {u.generation != null ? `  ·  ${t('families.generationNumber', { number: u.generation })}` : ''}
                 </Txt>
                 {u.members.map((m, mi) => (
                   <Appear key={m.key} index={ui + mi}>
                     <PersonRow
                       name={m.name}
-                      subtitle={[m.role, m.age != null ? `${m.age} yrs` : '', m.phone]
+                      subtitle={[m.role, m.age != null ? t('book.yearsShort', { age: m.age }) : '', m.phone]
                         .filter(Boolean).join(' · ') || undefined}
                       subtitleNumeric
                       size={40}
@@ -552,16 +561,14 @@ function FamilySheet({ family, onClose }: { family: FamilyView | null; onClose: 
             {!showSkeleton && units.length === 0 && !failed ? (
               <EmptyState
                 icon="people-outline"
-                title="No members on this household"
-                subtitle="The grouping engine returned this household without any member records."
+                title={t('families.noMembers')}
+                subtitle={t('families.noMembersBody')}
               />
             ) : null}
 
             {units.some((u) => u.members.some((m) => m.weak)) ? (
               <Txt size={font.tiny} color={c.faint} style={{ lineHeight: 16 }}>
-                Members marked with a question mark were matched to this household by name alone.
-                Confirm the relation before you use it in a conversation.
-              </Txt>
+                {t('families.weakMatchNote')}</Txt>
             ) : null}
           </>
         )}
@@ -594,6 +601,7 @@ function RowSeparator() {
 function ListFooter({ loadingMore, hasMore, count, total, onLoadMore }: {
   loadingMore: boolean; hasMore: boolean; count: number; total: number; onLoadMore: () => void;
 }) {
+  const t = useT();
   const c = useTheme();
   if (count === 0) return null;
 
@@ -613,9 +621,9 @@ function ListFooter({ loadingMore, hasMore, count, total, onLoadMore }: {
       borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: c.border,
     }}>
       {hasMore ? (
-        <Button label="Load more households" variant="ghost" size="sm" onPress={onLoadMore} />
+        <Button label={t('families.loadMore')} variant="ghost" size="sm" onPress={onLoadMore} />
       ) : (
-        <Txt size={font.cap} color={c.faint} numeric>All {total.toLocaleString('en-IN')} shown</Txt>
+        <Txt size={font.cap} color={c.faint} numeric>{t('book.allShown', { count: total.toLocaleString('en-IN') })}</Txt>
       )}
     </View>
   );

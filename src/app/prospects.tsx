@@ -71,7 +71,6 @@ const PAGE = 100;
 const SEARCH_DEBOUNCE = 400;
 
 const num = (n: number) => n.toLocaleString('en-IN');
-const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 /* ---------- coercion, because the envelope is loose ---------- */
 const asStr = (v: unknown): string => (v == null ? '' : String(v).trim());
@@ -119,6 +118,7 @@ const RESPONDED_KEYS = ['respondedOn', 'responseDate', 'repliedOn'];
 const NOTE_KEYS = ['notes', 'note', 'remark', 'remarks', 'comment', 'comments'];
 
 const nameOf = (p: Prospect) => pick(p, NAME_KEYS) || pick(p, FIRM_KEYS) || 'Unnamed prospect';
+const nameLabel = (p: Prospect, t: TFn) => pick(p, NAME_KEYS) || pick(p, FIRM_KEYS) || t('prospect.unnamed');
 const firmOf = (p: Prospect) => pick(p, FIRM_KEYS);
 const phoneOf = (p: Prospect) => pick(p, PHONE_KEYS);
 const stageOf = (p: Prospect) => pick(p, ['stage', 'funnelStage', 'outreachStatus', 'outreach_status', 'outreach']);
@@ -222,10 +222,11 @@ function ProspectRow({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
   const reminders = asNum(pick(p, REMINDER_KEYS));
   const firm = firmOf(p);
 
-  const sub = phone || (firm && firm !== name ? firm : '') || pick(p, CITY_KEYS) || pick(p, CATEGORY_KEYS) || 'No number on record';
+  const subValue = phone || (firm && firm !== name ? firm : '') || pick(p, CITY_KEYS) || pick(p, CATEGORY_KEYS);
+  const sub = subValue || t('campaign.noNumber');
   const subIcon: IconName = phone ? 'call-outline'
     : firm && firm !== name ? 'business-outline'
-      : sub === 'No number on record' ? 'alert-circle-outline' : 'location-outline';
+      : !subValue ? 'alert-circle-outline' : 'location-outline';
 
   const actions: SwipeAction[] = phone ? [
     { icon: 'call', label: t('common.call'), tone: 'primary', onPress: () => { haptics.tap(); call(phone); } },
@@ -238,7 +239,7 @@ function ProspectRow({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
   return (
     <SwipeRow actions={actions} onPress={onOpen} radius={0} surface={c.card}>
       <PersonRow
-        name={name}
+        name={nameLabel(p, t)}
         subtitle={sub}
         subtitleIcon={subIcon}
         subtitleNumeric={!!phone}
@@ -248,7 +249,7 @@ function ProspectRow({ p, onOpen }: { p: Prospect; onOpen: () => void }) {
             {stage ? <Pill label={stageLabel(stage, t)} tone={stageTone(stage)} small /> : null}
             {reminders > 0 ? (
               <Txt size={11} color={c.faint} numeric numberOfLines={1}>
-                {num(reminders)} {plural(reminders, 'touch', 'touches')}
+                {t(reminders === 1 ? 'prospect.touchOne' : 'prospect.touchesCount', { count: num(reminders) })}
               </Txt>
             ) : null}
           </View>
@@ -286,7 +287,7 @@ export default function Prospects() {
   const [selected, setSelected] = useState<Prospect | null>(null);
   const [note, setNote] = useState('');
   const [acting, setActing] = useState<Action | null>(null);
-  const [sheetError, setSheetError] = useState<string | null>(null);
+  const [sheetError, setSheetError] = useState<TKey | null>(null);
 
   /** Latest read wins: a slow page 1 must never overwrite a newer search. */
   const reqId = useRef(0);
@@ -376,13 +377,13 @@ export default function Prospects() {
     const reminders = asNum(outreach.reminders_total);
     if (universe === 0 && contacted === 0 && notContacted === 0) return [];
     return [
-      { label: 'In the pool', value: num(universe), tone: 'primary', icon: 'people' },
-      { label: 'Not contacted', value: num(notContacted), tone: 'warning', icon: 'ellipse-outline' },
-      { label: 'Contacted', value: num(contacted), tone: 'info', icon: 'checkmark-circle-outline' },
-      { label: 'Responded', value: num(responded), tone: 'accent', icon: 'chatbubble-ellipses-outline' },
-      { label: 'Touches logged', value: num(reminders), tone: 'neutral', icon: 'repeat-outline' },
+      { label: t('prospect.inPool'), value: num(universe), tone: 'primary', icon: 'people' },
+      { label: t('prospect.stageNotContacted'), value: num(notContacted), tone: 'warning', icon: 'ellipse-outline' },
+      { label: t('prospect.stageContacted'), value: num(contacted), tone: 'info', icon: 'checkmark-circle-outline' },
+      { label: t('prospect.stageResponded'), value: num(responded), tone: 'accent', icon: 'chatbubble-ellipses-outline' },
+      { label: t('prospect.touches'), value: num(reminders), tone: 'neutral', icon: 'repeat-outline' },
     ];
-  }, [outreach, universe]);
+  }, [outreach, universe, t]);
 
   /* ---------- stage chips ----------
    * Vocabulary comes from the pool-wide facets so a stage the pool has does not vanish
@@ -420,12 +421,12 @@ export default function Prospects() {
   }, [stage]);
 
   const readout = stage !== 'all'
-    ? `${num(shown.length)} of ${num(rows.length)} loaded ${plural(rows.length, 'row', 'rows')} match this stage`
+    ? t(rows.length === 1 ? 'prospect.stageRowsOne' : 'prospect.stageRowsMany', { shown: num(shown.length), loaded: num(rows.length) })
     : q.trim()
-      ? `${num(rows.length)} ${plural(rows.length, 'match', 'matches')} loaded for "${q.trim()}"`
+      ? t(rows.length === 1 ? 'prospect.searchRowsOne' : 'prospect.searchRowsMany', { count: num(rows.length), query: q.trim() })
       : total > 0
-        ? `${num(rows.length)} of ${num(total)} loaded`
-        : `${num(rows.length)} loaded`;
+        ? t('prospect.loadedFraction', { loaded: num(rows.length), total: num(total) })
+        : t('prospect.loadedCount', { count: num(rows.length) });
 
   /* ---------- the sheet ---------- */
   const selectedId = selected ? idOf(selected) : '';
@@ -443,18 +444,18 @@ export default function Prospects() {
     const id = idOf(selected);
     if (!id) {
       haptics.warn();
-      setSheetError('This record carries no id, so nothing can be saved against it. Open it in the web panel instead.');
+      setSheetError('prospect.noId');
       return;
     }
 
     const text = note.trim();
     if ((action === 'note' || action === 'respond') && !text) {
       haptics.warn();
-      setSheetError('Write the note first. The server rejects an empty one.');
+      setSheetError('prospect.noteRequired');
       return;
     }
 
-    const who = nameOf(selected);
+    const who = nameLabel(selected, t);
     setActing(action);
     setSheetError(null);
 
@@ -464,7 +465,7 @@ export default function Prospects() {
 
     if (!ok) {
       haptics.error();
-      setSheetError('That did not save. You may be signed out, or the server refused the change. Nothing was recorded.');
+      setSheetError('prospect.saveFailed');
       return;
     }
 
@@ -473,16 +474,16 @@ export default function Prospects() {
     setSelected(null);
     setNote('');
     toast(
-      action === 'connect' ? `Connect logged for ${who}.`
-        : action === 'respond' ? `Reply recorded for ${who}.`
-          : `Note saved for ${who}.`,
+      action === 'connect' ? t('prospect.connectLogged', { name: who })
+        : action === 'respond' ? t('prospect.replyLogged', { name: who })
+          : t('prospect.noteSaved', { name: who }),
       'success',
     );
     // The pool is cached server-side and the action clears that cache, so both reads are
     // re-run to keep the roster and the buckets truthful.
     void fetchPage(1, q.trim(), 'refresh');
     void loadSegments();
-  }, [selected, acting, note, toast, fetchPage, q, loadSegments]);
+  }, [selected, acting, note, toast, fetchPage, q, loadSegments, t]);
 
   /** Only facts the record actually carries. A blank row would misdescribe the prospect. */
   const facts = useMemo(() => {
@@ -498,18 +499,18 @@ export default function Prospects() {
     };
 
     add(t('common.mobile'), phoneOf(p), 'call-outline', true);
-    if (firm && firm !== name) add('Firm', firm, 'business-outline');
-    add('City', pick(p, CITY_KEYS), 'location-outline');
-    add('Category', pick(p, CATEGORY_KEYS), 'pricetag-outline');
+    if (firm && firm !== name) add(t('prospect.firm'), firm, 'business-outline');
+    add(t('prospect.city'), pick(p, CITY_KEYS), 'location-outline');
+    add(t('task.category'), pick(p, CATEGORY_KEYS), 'pricetag-outline');
     // Stage is deliberately absent here: the toned Pill at the top of the sheet already
     // carries it, and a status repeated as flat text beside its own token reads as two
     // separate facts about the record.
-    add('Owner', pick(p, OWNER_KEYS), 'person-outline');
-    if (reminders > 0) add('Touches logged', num(reminders), 'repeat-outline');
-    add('Last contacted', niceDate(pick(p, CONTACTED_KEYS)), 'calendar-outline');
-    add('Their reply', pick(p, RESPONSE_KEYS), 'chatbubble-ellipses-outline');
-    add('Replied on', niceDate(pick(p, RESPONDED_KEYS)), 'calendar-outline');
-    add('On file', pick(p, NOTE_KEYS), 'document-text-outline');
+    add(t('prospect.owner'), pick(p, OWNER_KEYS), 'person-outline');
+    if (reminders > 0) add(t('prospect.touches'), num(reminders), 'repeat-outline');
+    add(t('prospect.lastContacted'), niceDate(pick(p, CONTACTED_KEYS)), 'calendar-outline');
+    add(t('prospect.theirReply'), pick(p, RESPONSE_KEYS), 'chatbubble-ellipses-outline');
+    add(t('prospect.repliedOn'), niceDate(pick(p, RESPONDED_KEYS)), 'calendar-outline');
+    add(t('prospect.onFile'), pick(p, NOTE_KEYS), 'document-text-outline');
     return out;
   }, [selected, t]);
 
@@ -532,8 +533,8 @@ export default function Prospects() {
     return (firm && firm !== name ? firm : '')
       || pick(selected, CITY_KEYS)
       || pick(selected, CATEGORY_KEYS)
-      || 'Recruitment prospect';
-  }, [selected]);
+      || t('prospect.recruitmentProspect');
+  }, [selected, t]);
 
   /* ---------- three genuinely different empty states ---------- */
   const empty = (
@@ -544,19 +545,19 @@ export default function Prospects() {
             : health.degraded ? 'cloud-offline-outline' : 'person-add-outline'
       }
       title={
-        stage !== 'all' ? `Nothing loaded is at ${stageLabel(stage, t)}`
-          : q.trim() ? `No prospect matches "${q.trim()}"`
-            : health.degraded ? 'The prospect pool did not load'
-              : 'No prospects in the pool yet'
+        stage !== 'all' ? t('prospect.noStageRows', { stage: stageLabel(stage, t) })
+          : q.trim() ? t('prospect.noSearchMatch', { query: q.trim() })
+            : health.degraded ? t('prospect.poolFailed')
+              : t('prospect.emptyPool')
       }
       subtitle={
-        stage !== 'all' ? 'Stage filtering runs over the rows loaded so far. Clear the stage, or load more of the pool first.'
-          : q.trim() ? 'Search runs across the whole pool and matches any field on the record, including firm, city and notes.'
-            : health.degraded ? 'The server did not answer, so this is not a confirmed empty pool. Check your connection and pull to refresh.'
-              : 'Recruitment targets appear here once they are added to the pool.'
+        stage !== 'all' ? t('prospect.stageFilterScope')
+          : q.trim() ? t('prospect.searchScope')
+            : health.degraded ? t('prospect.unconfirmed')
+              : t('prospect.emptyPoolBody')
       }
       action={
-        stage !== 'all' ? { label: 'Show every stage', onPress: () => changeStage('all') }
+        stage !== 'all' ? { label: t('prospect.everyStage'), onPress: () => changeStage('all') }
           : q.trim() ? { label: t('common.clearSearch'), onPress: () => { haptics.select(); setQ(''); } }
             : { label: t('common.tryAgain'), onPress: refresh }
       }
@@ -584,10 +585,10 @@ export default function Prospects() {
           {loadingMore ? (
             <Skeleton width={168} height={13} />
           ) : hasMore ? (
-            <Button label="Load more prospects" variant="ghost" size="sm" onPress={loadMore} />
+            <Button label={t('prospect.loadMore')} variant="ghost" size="sm" onPress={loadMore} />
           ) : (
             <Txt size={font.cap} color={c.faint} numeric>
-              All {num(rows.length)} loaded
+              {t('prospect.allLoaded', { count: num(rows.length) })}
             </Txt>
           )}
         </View>
@@ -596,8 +597,8 @@ export default function Prospects() {
       {composition.length > 0 ? (
         <View style={{ padding: spacing.lg }}>
           <ListSection
-            title="Pool composition"
-            footer="Counts are for the whole prospect pool, not only the rows loaded above. A prospect can carry more than one classification."
+            title={t('prospect.composition')}
+            footer={t('prospect.compositionScope')}
           >
             {composition.map((r) => (
               <DataRow key={r.label} label={r.label} value={num(r.value)} numeric />
@@ -611,13 +612,13 @@ export default function Prospects() {
   return (
     <Screen keyboard>
       <Header
-        title="Prospects"
-        subtitle="Recruitment pipeline"
+        title={t('more.prospectsTitle')}
+        subtitle={t('prospect.subtitle')}
         back
         right={universe > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={num(universe)} size={font.h3} />
-            <Eyebrow>In the pool</Eyebrow>
+            <Eyebrow>{t('prospect.inPool')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -626,7 +627,7 @@ export default function Prospects() {
         <SearchBar
           value={q}
           onChange={setQ}
-          placeholder="Name, firm, city or number"
+          placeholder={t('prospect.searchHint')}
         />
         {stageOptions.length > 1 ? (
           <Chips options={stageOptions} value={stage} onChange={changeStage} />
@@ -670,14 +671,14 @@ export default function Prospects() {
       <Sheet
         visible={!!selected}
         onClose={closeSheet}
-        title={selected ? nameOf(selected) : 'Prospect'}
+        title={selected ? nameLabel(selected, t) : t('prospect.stageProspect')}
         subtitle={selectedSubtitle}
         footer={
           <Button
             full
             size="lg"
             icon="checkmark-done"
-            label={acting === 'connect' ? 'Logging' : 'Log a connect'}
+            label={acting === 'connect' ? t('prospect.logging') : t('prospect.logConnect')}
             loading={acting === 'connect'}
             disabled={!!acting}
             onPress={() => { void runAction('connect'); }}
@@ -691,11 +692,11 @@ export default function Prospects() {
               {selectedStage ? (
                 <Pill label={stageLabel(selectedStage, t)} tone={stageTone(selectedStage)} icon="git-branch-outline" />
               ) : (
-                <Pill label="No stage recorded" tone="neutral" icon="help-circle-outline" />
+                <Pill label={t('prospect.noStage')} tone="neutral" icon="help-circle-outline" />
               )}
               {selectedTouches > 0 ? (
                 <Pill
-                  label={`${num(selectedTouches)} ${plural(selectedTouches, 'touch', 'touches')} logged`}
+                  label={t(selectedTouches === 1 ? 'prospect.touchLoggedOne' : 'prospect.touchesLogged', { count: num(selectedTouches) })}
                   tone="neutral"
                   icon="repeat-outline"
                   numeric
@@ -707,8 +708,8 @@ export default function Prospects() {
           {sheetError ? (
             <Banner
               tone="danger"
-              title="Not saved"
-              message={sheetError}
+              title={t('prospect.notSaved')}
+              message={t(sheetError)}
               onDismiss={() => setSheetError(null)}
             />
           ) : null}
@@ -737,7 +738,7 @@ export default function Prospects() {
           ) : null}
 
           {facts.length > 0 ? (
-            <ListSection title="On record">
+            <ListSection title={t('prospect.onRecord')}>
               {facts.map((f) => (
                 <DataRow
                   key={f.label}
@@ -751,23 +752,23 @@ export default function Prospects() {
           ) : (
             <EmptyState
               icon="document-outline"
-              title="Nothing else on file"
-              subtitle="This record carries no number, city or classification. Logging a connect still works and is written to the activity history."
+              title={t('prospect.noOtherFacts')}
+              subtitle={t('prospect.noOtherFactsBody')}
             />
           )}
 
           <Field
-            label="Note"
+            label={t('prospect.note')}
             value={note}
             onChange={setNote}
-            placeholder="What was said, what was agreed, what happens next"
+            placeholder={t('prospect.noteHint')}
             multiline
-            hint="Saved to the activity history against your name. Required for a note or a reply, optional on a connect."
+            hint={t('prospect.noteStorage')}
           />
 
           <Row>
             <Button
-              label={acting === 'note' ? t('common.saving') : 'Save note'}
+              label={acting === 'note' ? t('common.saving') : t('prospect.saveNote')}
               variant="outline"
               icon="create-outline"
               style={{ flex: 1 }}
@@ -776,7 +777,7 @@ export default function Prospects() {
               onPress={() => { void runAction('note'); }}
             />
             <Button
-              label={acting === 'respond' ? t('common.saving') : 'Record a reply'}
+              label={acting === 'respond' ? t('common.saving') : t('prospect.recordReply')}
               variant="secondary"
               icon="chatbubble-ellipses-outline"
               style={{ flex: 1 }}
@@ -787,10 +788,7 @@ export default function Prospects() {
           </Row>
 
           <Txt size={font.tiny} color={c.faint} style={{ lineHeight: 16 }}>
-            A connect marks the prospect contacted, credits it to you, and moves a brand new
-            prospect to Contacted. Moving further down the pipeline, and handing a prospect to
-            someone else, are done from the web panel.
-          </Txt>
+            {t('prospect.connectExplanation')}</Txt>
         </View>
       </Sheet>
     </Screen>
