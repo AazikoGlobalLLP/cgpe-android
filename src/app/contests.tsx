@@ -1,3 +1,4 @@
+import { resolveCopy } from '@/i18n/copy';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -73,7 +74,7 @@ export default function Contests() {
     <Screen>
       <Header
         title={t('act.contests')}
-        subtitle={loading ? 'Loading your qualifications' : live > 0 ? `${live} running` : 'Leaderboards and rewards'}
+        subtitle={loading ? t('contests.loading') : live > 0 ? t('contests.runningCount', { count: live }) : t('contests.subtitle')}
         back
       />
 
@@ -91,10 +92,10 @@ export default function Contests() {
         ) : shaped.length === 0 ? (
           <EmptyState
             icon={health.degraded ? 'cloud-offline-outline' : 'trophy-outline'}
-            title={health.degraded ? 'Contests could not load' : 'No contest running right now'}
+            title={health.degraded ? t('contests.loadFailed') : t('contests.empty')}
             subtitle={health.degraded
-              ? 'The server did not answer, so this is unconfirmed rather than empty. Check your connection and try again.'
-              : 'Club and campaign contests appear here while they are open, with your live progress against each one.'}
+              ? t('team.unconfirmed')
+              : t('contests.emptyHelp')}
             action={{ label: t('common.tryAgain'), onPress: retry }}
           />
         ) : (
@@ -110,15 +111,16 @@ export default function Contests() {
  * ================================================================== */
 
 function ContestCard({ s, index }: { s: Shape; index: number }) {
+  const t = useT();
   const c = useTheme();
   const { ct, pct, left, hasEnd } = s;
   const ended = hasEnd && left < 0;
 
   const countdown = !hasEnd ? null
-    : left < 0 ? { label: 'Closed', tone: 'neutral' as const }
-      : left === 0 ? { label: 'Closes today', tone: 'danger' as const }
-        : left <= 7 ? { label: `${left} days left`, tone: 'warning' as const }
-          : { label: `${left} days left`, tone: 'neutral' as const };
+    : left < 0 ? { label: t('contests.closed'), tone: 'neutral' as const }
+      : left === 0 ? { label: t('contests.closesToday'), tone: 'danger' as const }
+        : left <= 7 ? { label: t('contests.daysLeft', { count: left }), tone: 'warning' as const }
+          : { label: t('contests.daysLeft', { count: left }), tone: 'neutral' as const };
 
   return (
     <Appear index={index}>
@@ -132,7 +134,7 @@ function ContestCard({ s, index }: { s: Shape; index: number }) {
           </View>
 
           <View style={{ flex: 1, gap: 3 }}>
-            <Txt size={16} weight="800" numberOfLines={2}>{ct.name}</Txt>
+            <Txt size={16} weight="800" numberOfLines={2}>{resolveCopy(t, ct.name, ct.nameCopy)}</Txt>
             {ct.reward ? (
               <Row style={{ gap: 5 }}>
                 <Ionicons name="gift-outline" size={13} color={c.faint} />
@@ -144,7 +146,7 @@ function ContestCard({ s, index }: { s: Shape; index: number }) {
           {ct.rank != null ? (
             <View style={{ alignItems: 'flex-end' }}>
               <Metric value={`#${ct.rank}`} size={20} color={c.accent} />
-              <Txt size={font.tiny} color={c.faint}>rank</Txt>
+              <Txt size={font.tiny} color={c.faint}>{t('contests.rank')}</Txt>
             </View>
           ) : null}
         </Row>
@@ -155,7 +157,9 @@ function ContestCard({ s, index }: { s: Shape; index: number }) {
         }}>
           <Meter
             value={pct}
-            label={ct.metric}
+            label={resolveCopy(t, ct.metric, ct.metricCopy && ct.metricUnitCopy
+              ? { ...ct.metricCopy, params: { ...ct.metricCopy.params, unit: t(ct.metricUnitCopy.key, ct.metricUnitCopy.params) } }
+              : ct.metricCopy)}
             tone={ended ? 'neutral' : s.tone}
             valueLabel={`${Math.round(pct * 100)}%`}
           />

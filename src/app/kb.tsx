@@ -72,7 +72,7 @@ function toArticle(raw: KbArticle, i: number): ArticleView {
   return {
     key: ref || `article-${i}`,
     ref,
-    title: asStr(o.title) || asStr(o.topic) || 'Untitled note',
+    title: asStr(o.title) || asStr(o.topic),
     topic: asStr(o.topic),
     domain: asStr(o.domain),
     category: asStr(o.category),
@@ -205,12 +205,12 @@ export default function Kb() {
 
   /* ---------- facets ---------- */
   const domainOptions = useMemo(
-    () => [{ key: ALL, label: 'All domains' }, ...domains.map((d) => ({ key: d, label: d }))],
-    [domains],
+    () => [{ key: ALL, label: t('kb.allDomains') }, ...domains.map((d) => ({ key: d, label: d }))],
+    [domains, t],
   );
   const categoryOptions = useMemo(
-    () => [{ key: ALL, label: 'All topics' }, ...categories.map((k) => ({ key: k, label: k }))],
-    [categories],
+    () => [{ key: ALL, label: t('kb.allTopics') }, ...categories.map((k) => ({ key: k, label: k }))],
+    [categories, t],
   );
 
   const pickDomain = useCallback((next: string) => {
@@ -237,8 +237,7 @@ export default function Kb() {
    * Grouped by domain while browsing everything, by category once a domain is picked. A
    * flat wall of eighty titles is unreadable; two levels is enough structure to scan. */
   const sections = useMemo(() => {
-    const keyOf = (a: ArticleView) =>
-      (domain === ALL ? a.domain : a.category) || (domain === ALL ? 'Other' : 'General');
+    const keyOf = (a: ArticleView) => domain === ALL ? a.domain : a.category;
     const map = new Map<string, ArticleView[]>();
     rows.forEach((a) => {
       const k = keyOf(a);
@@ -246,25 +245,27 @@ export default function Kb() {
       if (list) list.push(a);
       else map.set(k, [a]);
     });
-    return Array.from(map.entries()).map(([key, items]) => ({ key, items }));
-  }, [rows, domain]);
+    return Array.from(map.entries()).map(([key, items]) => ({
+      key, items, title: key || t(domain === ALL ? 'plans.other' : 'kb.general'),
+    }));
+  }, [rows, domain, t]);
 
   const readout = loading
-    ? 'Opening the field reference'
+    ? t('kb.loading')
     : total === 0
-      ? 'Nothing to read here'
-      : `${total.toLocaleString('en-IN')} article${total === 1 ? '' : 's'}${hasMore ? `, ${rows.length} loaded` : ''}`;
+      ? t('kb.nothingToRead')
+      : t(hasMore ? (total === 1 ? 'kb.articleCountLoaded' : 'kb.articlesCountLoaded') : (total === 1 ? 'kb.articleCount' : 'kb.articlesCount'), { count: total.toLocaleString('en-IN'), loaded: rows.length });
 
   return (
     <Screen>
       <Header
-        title="Knowledge Base"
-        subtitle="Answers you can read out loud"
+        title={t('more.kbTitle')}
+        subtitle={t('kb.subtitle')}
         back
         right={total > 0 ? (
           <View style={{ alignItems: 'flex-end' }}>
             <Metric value={total.toLocaleString('en-IN')} size={font.h3} />
-            <Eyebrow>Articles</Eyebrow>
+            <Eyebrow>{t('kb.articles')}</Eyebrow>
           </View>
         ) : undefined}
       />
@@ -273,7 +274,7 @@ export default function Kb() {
         <SearchBar
           value={q}
           onChange={setQ}
-          placeholder="Ask it the way a customer would"
+          placeholder={t('kb.searchPlaceholder')}
         />
         {domainOptions.length > 2 ? (
           <Chips options={domainOptions} value={domain} onChange={pickDomain} />
@@ -313,20 +314,20 @@ export default function Kb() {
               : facetsActive ? 'funnel-outline'
                 : health.degraded ? 'cloud-offline-outline' : 'library-outline'}
             title={
-              query ? `Nothing filed under "${query}"`
-                : facetsActive ? 'No article in this part of the library'
-                  : health.degraded ? 'The reference could not load'
-                    : 'The reference library is empty'
+              query ? t('kb.noQueryMatch', { query: query })
+                : facetsActive ? t('kb.noFacetArticles')
+                  : health.degraded ? t('kb.loadFailed')
+                    : t('kb.empty')
             }
             subtitle={
-              query ? 'Search covers titles, body text, topics, tags and the example questions each article answers. Try fewer words.'
-                : facetsActive ? 'Nothing is filed under this domain and topic together. Widen one of them.'
-                  : health.degraded ? 'The server did not answer, so nothing here is confirmed. Pull down to try again.'
-                    : 'No articles have been published to this build yet. Your branch still holds the printed circulars.'
+              query ? t('kb.searchHelp')
+                : facetsActive ? t('kb.facetHelp')
+                  : health.degraded ? t('book.unconfirmed')
+                    : t('kb.emptyHelp')
             }
             action={
               query ? { label: t('common.clearSearch'), onPress: () => setQ('') }
-                : facetsActive ? { label: 'Show everything', onPress: clearFacets }
+                : facetsActive ? { label: t('kb.showEverything'), onPress: clearFacets }
                   : { label: t('common.tryAgain'), onPress: () => { haptics.tap(); void run(1, 'refresh'); } }
             }
           />
@@ -341,7 +342,7 @@ export default function Kb() {
             {sections.map((s, si) => {
               const offset = sections.slice(0, si).reduce((n, x) => n + x.items.length, 0);
               return (
-                <ListSection key={s.key} title={`${s.key} (${s.items.length})`}>
+                <ListSection key={s.key} title={`${s.title} (${s.items.length})`}>
                   {s.items.map((a, i) => (
                     <Appear key={a.key} index={offset + i}>
                       <ArticleRow article={a} onOpen={() => setOpen(a)} />
@@ -355,10 +356,10 @@ export default function Kb() {
               {loadingMore ? (
                 <SkeletonText lines={2} lineHeight={11} style={{ width: '100%' }} />
               ) : hasMore ? (
-                <Button label="Load more articles" variant="ghost" size="sm" onPress={loadMore} />
+                <Button label={t('kb.loadMore')} variant="ghost" size="sm" onPress={loadMore} />
               ) : (
                 <Txt size={font.cap} color={c.faint} numeric>
-                  All {total.toLocaleString('en-IN')} shown
+                  {t('book.allShown', { count: total.toLocaleString('en-IN') })}
                 </Txt>
               )}
             </View>
@@ -379,6 +380,7 @@ export default function Kb() {
  * ================================================================== */
 
 function ArticleRow({ article, onOpen }: { article: ArticleView; onOpen: () => void }) {
+  const t = useT();
   const c = useTheme();
   const filed = article.topic || article.category;
 
@@ -386,7 +388,7 @@ function ArticleRow({ article, onOpen }: { article: ArticleView; onOpen: () => v
     <Pressable
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel={filed ? `${article.title}, ${filed}` : article.title}
+      accessibilityLabel={filed ? `${article.title || t('kb.untitled')}, ${filed}` : article.title || t('kb.untitled')}
       style={({ pressed }) => [{ backgroundColor: pressed ? c.cardAlt : 'transparent' }]}
     >
       <View style={{
@@ -395,7 +397,7 @@ function ArticleRow({ article, onOpen }: { article: ArticleView; onOpen: () => v
       }}>
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md }}>
           <Txt size={font.body} weight="700" numberOfLines={2} style={{ flex: 1, lineHeight: 20 }}>
-            {article.title}
+            {article.title || t('kb.untitled')}
           </Txt>
           <Ionicons name="chevron-forward" size={16} color={c.faint} style={{ marginTop: 2 }} />
         </View>
@@ -466,7 +468,7 @@ function ReaderSheet({ article, onClose }: { article: ArticleView | null; onClos
     <Sheet
       visible={!!article}
       onClose={onClose}
-      title={shown?.title ?? ''}
+      title={shown ? shown.title || t('kb.untitled') : ''}
       subtitle={filed || undefined}
       height={640}
     >
@@ -474,10 +476,10 @@ function ReaderSheet({ article, onClose }: { article: ArticleView | null; onClos
         {failed ? (
           <Banner
             tone="offline"
-            title={blocks.length > 0 ? 'Could not refresh this article' : 'This article could not be opened'}
+            title={blocks.length > 0 ? t('kb.refreshFailed') : t('kb.openFailed')}
             message={blocks.length > 0
-              ? 'Showing the copy that arrived with the list. Check the review date before you quote it.'
-              : 'The server did not answer. Try again once you have a signal.'}
+              ? t('kb.cachedArticle')
+              : t('kb.signalRetry')}
             action={{ label: t('common.tryAgain'), onPress: () => { haptics.tap(); setAttempt((n) => n + 1); } }}
           />
         ) : null}
@@ -506,13 +508,12 @@ function ReaderSheet({ article, onClose }: { article: ArticleView | null; onClos
           </View>
         ) : !failed ? (
           <Txt size={font.sub} color={c.muted} style={{ lineHeight: 21 }}>
-            This entry carries a title but no body text. Ask your branch for the full circular.
-          </Txt>
+            {t('kb.noBody')}</Txt>
         ) : null}
 
         {shown && shown.examples.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <Txt size={font.cap} weight="700" color={c.muted}>Questions this answers</Txt>
+            <Txt size={font.cap} weight="700" color={c.muted}>{t('kb.questions')}</Txt>
             {shown.examples.map((e, i) => (
               <Txt key={i} size={font.sub} color={c.muted} style={{ lineHeight: 21 }}>{`"${e}"`}</Txt>
             ))}
@@ -529,19 +530,19 @@ function ReaderSheet({ article, onClose }: { article: ArticleView | null; onClos
 
         {shown ? (
           <ListSection
-            title="Where this comes from"
-            footer={shown.reviewed ? undefined : 'No review date is recorded on this entry.'}
+            title={t('kb.provenance')}
+            footer={shown.reviewed ? undefined : t('kb.noReviewDate')}
           >
-            {shown.topic ? <DataRow label="Topic" value={shown.topic} icon="bookmark-outline" /> : null}
-            {shown.domain ? <DataRow label="Domain" value={shown.domain} icon="albums-outline" /> : null}
-            {shown.category ? <DataRow label="Category" value={shown.category} icon="pricetag-outline" /> : null}
-            {shown.applicability ? <DataRow label="Applies to" value={shown.applicability} icon="people-outline" /> : null}
-            {shown.source ? <DataRow label="Source" value={shown.source} icon="link-outline" /> : null}
+            {shown.topic ? <DataRow label={t('kb.topic')} value={shown.topic} icon="bookmark-outline" /> : null}
+            {shown.domain ? <DataRow label={t('kb.domain')} value={shown.domain} icon="albums-outline" /> : null}
+            {shown.category ? <DataRow label={t('task.category')} value={shown.category} icon="pricetag-outline" /> : null}
+            {shown.applicability ? <DataRow label={t('kb.appliesTo')} value={shown.applicability} icon="people-outline" /> : null}
+            {shown.source ? <DataRow label={t('kb.source')} value={shown.source} icon="link-outline" /> : null}
             {shown.reviewed ? (
-              <DataRow label="Last reviewed" value={fmtDate(shown.reviewed)} icon="calendar-outline" numeric />
+              <DataRow label={t('kb.lastReviewed')} value={fmtDate(shown.reviewed)} icon="calendar-outline" numeric />
             ) : null}
             {shown.ref ? (
-              <DataRow label="Reference" value={shown.ref} icon="barcode-outline" numeric copyable />
+              <DataRow label={t('more.groupReference')} value={shown.ref} icon="barcode-outline" numeric copyable />
             ) : null}
           </ListSection>
         ) : null}
