@@ -1,3 +1,22 @@
+import * as phase119 from './generated/phase119';
+import * as phase118 from './generated/phase118';
+import * as phase117 from './generated/phase117';
+import { setCrashLanguage } from './crashCopy';
+import * as phase116 from './generated/phase116';
+import * as phase115 from './generated/phase115';
+import * as phase114 from './generated/phase114';
+import * as phase113 from './generated/phase113';
+import * as phase112 from './generated/phase112';
+import * as phase111 from './generated/phase111';
+import * as phase110 from './generated/phase110';
+import * as phase109 from './generated/phase109';
+import * as phase108 from './generated/phase108';
+import * as phase107 from './generated/phase107';
+import * as phase106 from './generated/phase106';
+import * as phase105 from './generated/phase105';
+import * as phase104 from './generated/phase104';
+import * as phase103 from './generated/phase103';
+import * as phase102 from './generated/phase102';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState } from 'react-native';
 import { storage } from '@/lib/storage';
@@ -59,6 +78,24 @@ const DEFAULT_LANG: Lang = 'en';
 // literals — every other dictionary is typed against them, so a missing or misspelled key
 // in any translation is a compile error rather than a blank label at runtime.
 const en = {
+  ...phase119.en,
+  ...phase118.en,
+  ...phase117.en,
+  ...phase116.en,
+  ...phase115.en,
+  ...phase114.en,
+  ...phase113.en,
+  ...phase112.en,
+  ...phase111.en,
+  ...phase110.en,
+  ...phase109.en,
+  ...phase108.en,
+  ...phase107.en,
+  ...phase106.en,
+  ...phase105.en,
+  ...phase104.en,
+  ...phase103.en,
+  ...phase102.en,
   'tab.home': 'Today', 'tab.tasks': 'Tasks', 'tab.leads': 'Leads', 'tab.clients': 'Clients', 'tab.claims': 'Claims', 'tab.search': 'Search', 'tab.more': 'More',
   'tasks.title': 'My Tasks', 'tasks.today': 'Today', 'tasks.overdue': 'Overdue', 'tasks.inProgress': 'In progress',
   'tasks.upcoming': 'Upcoming', 'tasks.doneLabel': 'Done', 'tasks.dueNow': 'due now', 'tasks.add': 'Add task',
@@ -608,6 +645,24 @@ export type TKey = keyof typeof en;
 type Dict = Record<TKey, string>;
 
 const gu: Dict = {
+  ...phase119.gu,
+  ...phase118.gu,
+  ...phase117.gu,
+  ...phase116.gu,
+  ...phase115.gu,
+  ...phase114.gu,
+  ...phase113.gu,
+  ...phase112.gu,
+  ...phase111.gu,
+  ...phase110.gu,
+  ...phase109.gu,
+  ...phase108.gu,
+  ...phase107.gu,
+  ...phase106.gu,
+  ...phase105.gu,
+  ...phase104.gu,
+  ...phase103.gu,
+  ...phase102.gu,
   'tab.home': 'આજે', 'tab.tasks': 'કાર્યો', 'tab.leads': 'લીડ્સ', 'tab.clients': 'ગ્રાહકો', 'tab.claims': 'ક્લેમ', 'tab.search': 'શોધો', 'tab.more': 'વધુ',
   'tasks.title': 'મારા કાર્યો', 'tasks.today': 'આજે', 'tasks.overdue': 'મુદત વીતી', 'tasks.inProgress': 'ચાલુ',
   'tasks.upcoming': 'આવનારા', 'tasks.doneLabel': 'પૂર્ણ', 'tasks.dueNow': 'બાકી', 'tasks.add': 'કાર્ય ઉમેરો',
@@ -1048,6 +1103,24 @@ const gu: Dict = {
 };
 
 const hi: Dict = {
+  ...phase119.hi,
+  ...phase118.hi,
+  ...phase117.hi,
+  ...phase116.hi,
+  ...phase115.hi,
+  ...phase114.hi,
+  ...phase113.hi,
+  ...phase112.hi,
+  ...phase111.hi,
+  ...phase110.hi,
+  ...phase109.hi,
+  ...phase108.hi,
+  ...phase107.hi,
+  ...phase106.hi,
+  ...phase105.hi,
+  ...phase104.hi,
+  ...phase103.hi,
+  ...phase102.hi,
   'tab.home': 'आज', 'tab.tasks': 'कार्य', 'tab.leads': 'लीड्स', 'tab.clients': 'ग्राहक', 'tab.claims': 'क्लेम', 'tab.search': 'खोजें', 'tab.more': 'और',
   'tasks.title': 'मेरे कार्य', 'tasks.today': 'आज', 'tasks.overdue': 'अतिदेय', 'tasks.inProgress': 'चालू',
   'tasks.upcoming': 'आगामी', 'tasks.doneLabel': 'पूर्ण', 'tasks.dueNow': 'बाकी', 'tasks.add': 'कार्य जोड़ें',
@@ -1493,6 +1566,24 @@ const hi: Dict = {
  * the Hindi copula (hai / hain). Business nouns stay English.
  */
 const hiEn: Dict = {
+  ...phase119.hiEn,
+  ...phase118.hiEn,
+  ...phase117.hiEn,
+  ...phase116.hiEn,
+  ...phase115.hiEn,
+  ...phase114.hiEn,
+  ...phase113.hiEn,
+  ...phase112.hiEn,
+  ...phase111.hiEn,
+  ...phase110.hiEn,
+  ...phase109.hiEn,
+  ...phase108.hiEn,
+  ...phase107.hiEn,
+  ...phase106.hiEn,
+  ...phase105.hiEn,
+  ...phase104.hiEn,
+  ...phase103.hiEn,
+  ...phase102.hiEn,
   'tab.home': 'Aaj', 'tab.tasks': 'Kaam', 'tab.leads': 'Leads', 'tab.clients': 'Client', 'tab.claims': 'Claim', 'tab.search': 'Search', 'tab.more': 'Aur',
   'tasks.title': 'Mere kaam', 'tasks.today': 'Aaj', 'tasks.overdue': 'Bakaya', 'tasks.inProgress': 'Chalu',
   'tasks.upcoming': 'Aane wale', 'tasks.doneLabel': 'Ho gaya', 'tasks.dueNow': 'baaki hain', 'tasks.add': 'Kaam jodein',
@@ -1940,6 +2031,24 @@ const hiEn: Dict = {
  * Gujarati copula (chhe) and the Gujarati negative (nathi). Business nouns stay English.
  */
 const guEn: Dict = {
+  ...phase119.guEn,
+  ...phase118.guEn,
+  ...phase117.guEn,
+  ...phase116.guEn,
+  ...phase115.guEn,
+  ...phase114.guEn,
+  ...phase113.guEn,
+  ...phase112.guEn,
+  ...phase111.guEn,
+  ...phase110.guEn,
+  ...phase109.guEn,
+  ...phase108.guEn,
+  ...phase107.guEn,
+  ...phase106.guEn,
+  ...phase105.guEn,
+  ...phase104.guEn,
+  ...phase103.guEn,
+  ...phase102.guEn,
   'tab.home': 'Aaje', 'tab.tasks': 'Kaam', 'tab.leads': 'Leads', 'tab.clients': 'Client', 'tab.claims': 'Claim', 'tab.search': 'Search', 'tab.more': 'Vadhu',
   'tasks.title': 'Mara kaam', 'tasks.today': 'Aaje', 'tasks.overdue': 'Mudat viti', 'tasks.inProgress': 'Chaalu',
   'tasks.upcoming': 'Aavnara', 'tasks.doneLabel': 'Thai gayu', 'tasks.dueNow': 'baaki chhe', 'tasks.add': 'Kaam umero',
@@ -2577,10 +2686,15 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
       const uid = await readUserId();
       if (!alive || mine !== seqRef.current) return;
       if (loadedRef.current && uid === uidRef.current) return; // same account, nothing to do
+      if (uid !== uidRef.current) {
+        setCrashLanguage(DEFAULT_LANG);
+        setLangState(DEFAULT_LANG);
+      }
       const next = await loadLang(uid);
       if (!alive || mine !== seqRef.current) return;
       uidRef.current = uid;
       loadedRef.current = true;
+      setCrashLanguage(next);
       setLangState(next);
     };
 
@@ -2601,6 +2715,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
    * overwriting the previous advisor's preference.
    */
   const setLang = useCallback((l: Lang) => {
+    setCrashLanguage(l);
     setLangState(l);
     loadedRef.current = true;
     seqRef.current++; // an explicit choice outranks any read still in flight

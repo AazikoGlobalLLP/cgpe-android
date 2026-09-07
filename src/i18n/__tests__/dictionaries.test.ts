@@ -1,7 +1,7 @@
 /**
  * PHASE 19 — dictionary parity, the permanent gate.
  *
- * The whole i18n system is 5 dictionaries × 111 flat keys (`src/i18n/index.tsx`). The single most
+ * The i18n system merges five dictionaries from the index and generated copy modules. The single most
  * common i18n regression is a key added to English and forgotten in one of the other four, which
  * ships as an English string leaking into a Gujarati screen. TypeScript already stops the crudest
  * form of this — `Dict = Record<TKey, string>` makes a MISSING or MISSPELLED key a compile error —
@@ -91,7 +91,8 @@ describe('i18n dictionaries — parity and value quality', () => {
     // standing permission, and DONE-4 above says an honest English fallback beats a wrong romanised
     // guess. Same sanctioned precedent as `tab.search`; owner copy requested as Batch 6h.
     // September 7: 32 account/privacy keys under the owner's pending-scope authorization.
-    expect(EN_KEYS.length).toBe(485);
+    // Phases 102–119: approved copy brings 485 → 2246 after unused proposals are pruned.
+    expect(EN_KEYS.length).toBe(2246);
     // No duplicate keys collapsed by the object literal.
     expect(new Set(EN_KEYS).size).toBe(EN_KEYS.length);
   });
@@ -111,6 +112,11 @@ describe('i18n dictionaries — parity and value quality', () => {
       it('has no empty or whitespace-only value', () => {
         const blank = EN_KEYS.filter((k) => isBlank(dict[k]));
         expect({ code, blank }).toEqual({ code, blank: [] });
+      });
+
+      it('has no text lost to character encoding', () => {
+        const corrupted = EN_KEYS.filter((key) => /\?{3,}|\uFFFD/.test(dict[key]));
+        expect({ code, corrupted }).toEqual({ code, corrupted: [] });
       });
 
       it('has no value left identical to its own key (raw key leak)', () => {
