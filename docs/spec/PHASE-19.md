@@ -1,14 +1,14 @@
 # PHASE 19 — Language toggle: verify + harden all 5 languages (incl. Hinglish / Gujlish)
 
-**Current update — 2026-09-07:** The toggle, persistence, interpolation and parity
-checks are already implemented. The owner has now explicitly authorized generated
-translations for the remaining pending scope in Gujarati, Hindi, Hinglish and
-Gujlish. Existing supplied copy stays intact. Phase 100 translates account/privacy
-and closes the five voice/update English fallbacks; Phases 102–119 cover remaining
-routes and shared message delivery. Human naturalness review, layout evidence and
-native process-death persistence remain acceptance gates. The historical status
-and original requirements below are preserved as the original plan, not today's
-implementation state. See the September 7 decision and current phase board.
+**Current update — 2026-09-07:** The approved pending translations are implemented
+through Phases 100 and 102–119, with 2,246 keys per language. This includes the
+remaining screens, local model defaults, shared/native messages and persistent
+notices. Existing supplied copy remains intact. TypeScript, dictionary/placeholder
+parity and local regression tests pass. See `docs/i18n/COMPLETION-2026-09-07.md` and
+the current handoff for final browser evidence and implementation details. Human
+naturalness review and native process-death/device acceptance remain open; source
+completion does not close this phase's full Done definition. The original plan and
+historical status below are preserved as dated history, not today's backlog.
 
 Session `cgpe-mobile`. Requested 2026-08-11 (Hinglish, verbatim intent):
 

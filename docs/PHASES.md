@@ -14,28 +14,30 @@ Each phase touches ≤8 files and produces one demoable thing.
 
 ## Now
 
-**2026-09-07 — owner-authorized completion is in progress.** The current audit
-supersedes the September 3 “app side caught up” statement: the new deletion-request
-contract and staff-export archive gap require mobile changes, and Phase 19 still
-has untranslated UI. The owner explicitly approved all remaining translation
-batches today. Preserve the historical entries below as dated evidence.
+**2026-09-07 — pending mobile implementation completed and locally verified.**
+Phases 100–119 are committed and pushed on `aaziko/Shivam`. The owner-approved
+translation scope is implemented; full device/human/production acceptance is separate.
+Historical entries below remain dated evidence, not the current implementation backlog.
 
 | Phase | Deliverable | Current gate |
 |---|---|---|
-| 100 | Account deletion request, review status, honest failure and session preservation | Locally verified: 32 API tests, 4 mocked browser scenarios, TypeScript and zero lint errors; native/production checks open |
-| 101 | Exclude staff exports from EAS uploads | Selector checks pass: 8 exclusions, 5 config controls, 290 source/asset files retained; no upload |
-| 102–107 | Home/profile, tasks, main tabs, settings, record details, tickets/notes/WhatsApp list | Approved translation proposal and source-wiring batches in progress |
-| 108–113 | WhatsApp detail, earnings/attendance, payroll/analytics, team/maps, campaigns/notices, prospect/reference screens | Approved translation proposal and source-wiring batches in progress |
-| 114–119 | Auth/API/native/error and shared-component message delivery, final callsite reconciliation | Approved translation proposal and source-wiring batches in progress |
-| 99 / Phase 19 device gates / Ω | Fleet rollout, physical-device checks, final production acceptance | Require actual server, policy, store and device evidence; not closed by source tests |
+| 100 | Account deletion request/status with session preservation | 32 API tests and 4 mocked browser scenarios pass; production/policy/device acceptance open |
+| 101 | Exclude staff exports from EAS uploads | Actual selector exclusions/controls pass; compatible new Android build required for rollout |
+| 102–107 | Home/profile, tasks, main tabs, settings, record details, tickets/notes/WhatsApp list | Source complete; five-language route and populated-copy checks pass |
+| 108–113 | Earnings/attendance, payroll/analytics, team/maps, campaigns/notices, prospect/reference screens | Source complete; five-language route checks pass |
+| 114–119 | Auth/API/native/crash, model provenance, jobs, shared components and persistent messages | Source complete; owner/concurrency/provenance and browser regressions pass; native acceptance open |
+| 19 full acceptance / 99 / Ω | Human translation review, physical-device verification, fleet rollout and final production acceptance | Open; requires actual owner/server/store/device evidence |
 
-Next implementation work: finish Phase 100 browser verification, checkpoint the
-archive fix, then complete the language groups. Backend `main` was verified at
-`99df14b5cd8cf0e321dbcf662e1fa3e2941f999a` and `Shivam` at
-`338724b317f4944569b498e9fa183f01792c71ed` on September 7. The old `0324dfc`
-comparison is historical, not a current deploy test. Deletion-request implementation
-`65e3894f28ab79ef56d5a5ead90882c6a7ef1989` is on the latter branch and absent
-from main at this audit. Production runtime/configuration remains unverified.
+Final local gates: TypeScript zero errors; 1,494 unit tests across 92 files; lint
+zero errors (12 existing warnings); web export exit 0. All 240 language-route renders
+pass without raw keys, crash screens or outage banners. The combined 17-test browser
+run and two additional injected-outage checks pass with synthetic APIs. See the current
+handoff and `docs/i18n/COMPLETION-2026-09-07.md` for evidence and limits.
+
+Backend refs were rechecked: main `99df14b5cd8cf0e321dbcf662e1fa3e2941f999a`,
+Shivam `338724b317f4944569b498e9fa183f01792c71ed`. Request implementation
+`65e3894f28ab79ef56d5a5ead90882c6a7ef1989` remains absent main. Git availability
+does not verify production runtime or configuration.
 
 ### Historical checkpoint — September 3
 
@@ -237,15 +239,14 @@ remains unrotated (owner-owned).
 
 ---
 
-## Next 3 — current September 7 completion run
+## Next 3 — current September 7 release acceptance
 
-1. Complete and verify Phase 100 account request/status adoption; preserve sessions
-   and classify unavailable/malformed replies honestly.
-2. Checkpoint Phase 101 staff-export archive exclusion and its new-build runtime
-   requirement.
-3. Finish approved Phases 102–119 translation wiring, then reconcile browser,
-   handset, server and policy evidence before release. Do not treat historical
-   copy waits or old backend branch hashes as current blockers.
+1. Verify the actual server release, deletion review/fulfillment policy, voice setup,
+   key rotation and seller/advisor assignments from current evidence.
+2. Prepare a compatible new Android build, then perform the physical-device checks
+   and fluent-language review in `TESTING_GUIDE.md` §6.
+3. Complete store/fleet acceptance before Phase 99 and Ω. Do not use local test passes
+   or the historical build-6 OTA round trip as proof of this release's compatibility.
 
 ### Historical next actions — September 2 (after Phase 98, OTA)
 

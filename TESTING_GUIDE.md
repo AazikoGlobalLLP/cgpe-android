@@ -123,3 +123,28 @@ code change to `API_BASE_URL`'s resolution logic, not a value to hand-edit per r
 - The back arrow returns you to the previous screen.
 
 If anything deviates, note the screen + action and I'll fix it.
+
+## 6. September 7 completion — physical-device acceptance
+
+Phases 100–119 are implemented and have local automated coverage. The browser tests
+use intercepted synthetic APIs; they do not perform the real-backend actions in the
+older guide above. **Every device row below remains unverified on a handset.** Use a
+compatible new Android build: the staff-export archive exclusion changes the runtime
+fingerprint, so an OTA cannot be assumed compatible with the existing build 6.
+
+| Check | Expected observation | Device status |
+|---|---|---|
+| Switch among all five languages in Settings, then force-stop and reopen | Chosen language persists; forms, empty/error states and shared controls use it | Pending |
+| Use two test advisors with different preferences on one handset | Each gets their own language; outgoing jobs, calendar ownership and notification snapshots do not leak | Pending |
+| Review longer Gujarati/Hindi labels and Hinglish/Gujlish phrasing on task, claim, More and Settings screens | Labels remain readable; a fluent reviewer confirms meaning and naturalness | Pending |
+| Trigger an app biometric prompt and app-authored permission explanation | App text uses the initiating language; OS-owned dialog text follows the OS | Pending |
+| Sync a test task/reminder, change language, then change account | Title/notes update without duplicate IDs; outgoing events are cleaned before the new account's events | Pending |
+| Change language while background tracking is already active | Recording continues without restart or a new permission prompt; the next natural start uses current owner/mode text | Pending |
+| Reopen after a consent read or native permission result was delayed across account switching | The outgoing account cannot arm tracking for the new account | Pending |
+| Inspect notification channel metadata and simulate a render failure in a controlled test build | App-owned channel/recovery copy uses the chosen language; crash diagnostics remain intact | Pending |
+| Submit/refresh an account deletion request using an approved test account after server readiness is confirmed | Request/review status is honest, authentication remains, and no erasure is promised | Pending |
+
+Capture the build/update identifier and observed result for each row. Do not mark a
+row passed from a source test, web screenshot or a Git branch. Running OS tracking
+notification text may remain unchanged until the recorder naturally restarts; a
+language switch deliberately does not stop the recorder to force a text refresh.

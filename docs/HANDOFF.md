@@ -1,44 +1,99 @@
-# HANDOFF — CGPE Connect (Android) — 2026-09-07 — completion run in progress
+# HANDOFF — CGPE Connect (Android) — Phases 100–119 — 2026-09-07
 
-The owner authorized all pending phases and explicitly approved remaining Gujarati,
-Hindi, Hinglish and Gujlish translations. Codex workflow initialization is recorded
-in `docs/CODEX_WORKFLOW.md`; previous handoffs are preserved below.
+## Done
 
-## Current verified work
+- The owner-authorized pending mobile implementation is complete in source and locally
+  verified. Account deletion is a request/status flow that preserves the session and
+  never promises erasure. Staff exports are excluded from the EAS archive selector.
+- The approved translation scope now has 2,246 keys in each of five languages. All
+  screen batches 102–119, shared errors, native prompts, local model defaults, persistent
+  notices and job logs are wired. Existing supplied copy retains precedence.
+- Local fallback metadata follows records through projections and cached drafts; raw
+  server/user prose and recipient-facing templates retain their original text. Language
+  changes relabel existing jobs without another send. Account changes invalidate the
+  outgoing runner and delayed native work.
+- Calendar sync serializes owner/language reconciliation and retries journal cleanup.
+  Tracker copy is owned by the account and ambient/shift mode; late permission responses
+  cannot overwrite a newer language or arm the outgoing owner. Copy refresh never
+  restarts a running recorder. The root crash screen works without its provider.
+- Final QA also repaired a roster read before session restore and rejected malformed
+  family statistics before they could crash the screen. Unknown counts remain unconfirmed.
 
-- Phase 100 implements POST/GET account deletion requests and review statuses,
-  preserving auth/biometric/draft state. It removes the old destructive context/API
-  route and guards delayed old-token 401 responses from expiring a new user.
-- Account/privacy has 32 new five-language keys and reuses two supplied keys; the
-  five voice/update English fallbacks are now translated under today's approval.
-- TypeScript passes; 32 new contract tests pass; full suite passes 1,422 tests
-  before the separately passing additional placeholder-parity test. Four mocked
-  browser scenarios pass, including refresh/reload with preserved authentication.
-  The splash-settled under-review screenshot was visually checked at 402 px.
-- Phase 101 mirrors staff-export exclusions into `.easignore`. Actual EAS selector
-  checks pass for eight exclusions, five config controls and 290 source/assets.
-  No sensitive contents read, archive created or upload performed.
-- The device sampling checklist now reflects the existing owner-selected hourly
-  profiles; the release guide no longer treats September 1 quota expiry as current.
+## Verified checks
 
-## Continue without restarting completed work
+| Check | Result |
+|---|---|
+| App TypeScript | Zero errors |
+| Full unit suite | 1,494 passed across 92 files |
+| Whole-project lint | Zero errors; 12 existing warnings remain |
+| Web production export | Exit 0 |
+| E2E TypeScript | Zero errors with the existing Node-resolution deprecation override |
+| Full language walk | 48 routes × 5 languages = 240 renders; zero crash screens, raw keys or outage banners |
+| Combined final browser run | 17 passed: 5 language walks, 5 populated-copy scenarios, 1 malformed-family scenario, 4 account-request scenarios and 2 job lifecycle scenarios |
+| Additional injected-outage checks | Server 500 and request timeout both passed; the translated alert detector recognizes the outage |
+| Archive selector, Phase 101 | 8 exclusion cases, 5 config controls and 290 source/asset files retained at that checkpoint; no archive/upload |
 
-Phases 102–119 are authorized translation batches in progress. Read the current
-board and proposed copy artifacts; source edits and final review remain with the
-main agent. Existing supplied translations stay intact. Preserve wire identifiers,
-backend/user content and explicit calendar-formatting decisions. Source and web
-checks do not close human naturalness or native cold-start/device acceptance.
+The browser suite intercepts all API traffic with synthetic responses. The language
+walk drives the real Settings toggle and reloads from persisted web storage. Populated
+record checks distinguish a missing local name from an authored name equal to an
+English default. Job tests navigate within the same document and require successful
+delayed responses; a page reload or request timeout cannot produce a false pass.
 
-## External limits
+Representative Gujarati claim/More and Hindi client layouts were visually reviewed
+at 402 px, with further long-copy screenshots in the completion run. Human naturalness
+and physical-device acceptance remain separate. Artifacts are ignored under
+`e2e/artifacts/`. Earlier failed attempts are superseded: the first full walk hit
+Metro's heap limit; stronger detectors then exposed outdated synthetic envelopes and
+the family-statistics crash. The final run uses an 8 GiB Node heap and corrected fixtures.
 
-September 7 backend live main was `99df14b5cd8cf0e321dbcf662e1fa3e2941f999a`;
-Shivam was `338724b317f4944569b498e9fa183f01792c71ed`. Deletion-request commit
-`65e3894f28ab79ef56d5a5ead90882c6a7ef1989` was absent main. These are Git facts,
-not production deployment proof. Voice configuration, deployment, secret rotation,
-seller/advisor assignments, review/fulfillment policy, store accounts and fleet
-device checks remain unverified. The archive exclusion changes the runtime
-fingerprint: a compatible new Android build is required before subsequent OTA
-rollout. Phase 99 and Ω remain gated accordingly.
+Reproduce from PowerShell: run `$env:HEADLESS='1'`, `$env:E2E_PORT='8092'` and
+`$env:NODE_OPTIONS='--max-old-space-size=8192'` for the test process, then run
+`npm run e2e -- e2e/tests/50-languages.spec.ts e2e/tests/51-local-copy.spec.ts e2e/tests/52-family-stats.spec.ts e2e/tests/60-account-deletion.spec.ts e2e/tests/70-jobs-lifecycle.spec.ts --fully-parallel --workers=2`.
+The E2E type check is `npx tsc --noEmit -p e2e/tsconfig.json --ignoreDeprecations 6.0`.
+
+## Files changed and durable decisions
+
+- `src/i18n/` — approved language modules, copy provenance, display helpers, crash
+  snapshot and dictionary/presentation tests.
+- `src/data/` and `src/store/` — local-copy metadata, unchanged wire values,
+  owner-scoped jobs, auth prompts and local layout headings.
+- `src/lib/`, `src/ui/`, `src/app/` and `src/screens/` — native
+  reconciliation, shared controls, complete screen wiring and persistent notices.
+- `e2e/` — all-language crash/outage detection, contract-valid synthetic fixtures
+  and populated-copy/job/account/family regressions.
+- `docs/i18n/COMPLETION-2026-09-07.md` — phase-to-surface map, provenance rules,
+  integration sizing exception and native limitations. `TESTING_GUIDE.md` §6 lists
+  device checks without marking any of them passed.
+
+Implementation is committed and pushed on `aaziko/Shivam` in reviewed units. The
+user's pre-existing `.claude/settings.json` edit is preserved and excluded from
+commits. `CLAUDE.md` and sibling repositories remain unchanged. The initial workflow
+adoption and the old handoffs remain available; do not restart completed phases.
+
+## Known limits and external gates
+
+Backend refs were rechecked at handoff: main
+`99df14b5cd8cf0e321dbcf662e1fa3e2941f999a` and Shivam
+`338724b317f4944569b498e9fa183f01792c71ed`. Deletion-request commit
+`65e3894f28ab79ef56d5a5ead90882c6a7ef1989` is absent main. This is Git evidence,
+not proof of production deployment. Review/fulfillment policy, server/voice setup,
+security-key rotation, seller/advisor assignments, store access and fleet observations
+still require current owner/server evidence. No production release, real message,
+real account request or sibling write was performed.
+
+Running OS tracking text can remain in the previous language until a natural recorder
+restart. Calendar/native storage is not a crash-atomic transaction. No source or web
+check proves permission dialogs, biometric behavior, process-death persistence or
+actual calendar/notification behavior on a phone. Phase 19's full acceptance, Phase 99
+and Ω therefore remain open. Generated translations still need fluent human review.
+
+## Next session starts here
+
+First command: **Run the boot workflow**. Reconcile current backend/release evidence
+and the handset checklist; do not regenerate translations or repeat implementation.
+The biggest trap is runtime compatibility: `.easignore` changes the fingerprint,
+so prepare a compatible new Android build before subsequent OTA rollout. Historical
+build-6 OTA success is not proof that this tree can update that installed build.
 
 ---
 

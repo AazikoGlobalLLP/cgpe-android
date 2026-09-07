@@ -6,6 +6,45 @@ Format: `## YYYY-MM-DD — <decision>` / **Context** / **Decision** / **Conseque
 
 ---
 
+## 2026-09-07 — Preserve copy provenance and owner identity
+
+**Context.** Completing translations exposed local fallback strings stored beside
+server/user prose, persistent notices and delayed jobs/native permission results.
+Comparing English text cannot distinguish a local fallback from an actual customer
+name. A delayed operation can also retain an outdated language or owner.
+
+**Decision.** Attach optional serializable local-copy metadata at the branch that
+creates app text, retain raw model values and resolve only presentation. Keep metadata
+out of API bodies. Persistent notices/jobs translate at render. Calendar work is
+serialized and journaled per owner; tracking snapshots carry owner and ambient/shift
+mode and accept the latest language without restarting the recorder. Ignore outgoing
+owner results. Crash recovery reads a provider-independent language snapshot.
+
+**Consequence.** Language changes do not replay writes or reset jobs/forms. Server/user
+content and recipient-facing templates remain authored text. Running OS notification
+text may wait for a natural recorder restart; native/storage work is not crash-atomic.
+Shared dictionary/data commits exceed the usual eight-file guideline where needed to
+keep five-language parity and coupled producers/consumers together. The phase surface
+boundaries and human/device acceptance remain explicit in the completion record.
+
+## 2026-09-07 — Browser evidence must detect translated failures
+
+**Context.** The old browser helper recognized only an English generic outage heading
+and omitted the caught root-crash titles. Stronger checks exposed invalid synthetic
+family/segment/payroll fixtures, a roster read before session restore, and a family
+statistics response that could reach number formatting without required counts.
+
+**Decision.** Match all five translated alert names and crash titles. Make healthy
+fixtures match the actual endpoint envelopes and require no outage in every language
+walk. Wait for auth readiness before the roster read. Reject malformed family counts
+as unconfirmed rather than producing zero KPIs or a crash.
+
+**Consequence.** The final 240-route run and malformed-response regression validate
+observable screens, while injected 500/timeout checks prove the detector sees failures.
+An initial Metro heap exhaustion is recorded as test infrastructure failure, followed
+by a complete successful run with an 8 GiB process heap. No runtime dependency or global
+Node setting was changed for this test-only adjustment.
+
 ## 2026-09-07 — Complete pending mobile implementation and translations
 
 **Context.** After workflow initialization, the owner asked: “go for all the pending

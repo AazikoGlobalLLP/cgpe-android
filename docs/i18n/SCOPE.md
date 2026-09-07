@@ -1,5 +1,12 @@
 # i18n coverage — scope & worklist (t() widening)
 
+**Current status — 7 September 2026:** The owner approved generated translations for
+the remaining pending scope. Phases 102–119 implement it with 2,246 keys per language,
+including shared errors, local model defaults and persistent messages. See
+[the completion record](COMPLETION-2026-09-07.md) and the current handoff for verification.
+Human naturalness and native-device acceptance remain open. The inventory and
+approval constraints below are historical; they are not today's implementation backlog.
+
 **Produced:** 2026-08-11 (scoping only — no code changed, no dictionary edited, no string translated).
 **Why this exists:** PHASES.md "Next 3" #3 — only the **74** `t()`-wired keys change with the language
 toggle; most of the app is hardcoded English and stays English in all 5 languages. This document scopes
